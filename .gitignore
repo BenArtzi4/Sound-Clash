@@ -21,8 +21,7 @@ wheels/
 *.egg
 
 # Virtual environments
-.env
-.venv
+.venv/
 env/
 venv/
 ENV/
@@ -54,3 +53,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Setup Scripts
+setup-foundation*
+
+# Personal Environment Variables - NEVER COMMIT
+.env
