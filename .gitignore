@@ -1,6 +1,3 @@
-# Setup Scripts
-setup-foundation*
-
 # Python
 __pycache__/
 *.py[cod]
