@@ -1252,3 +1252,73 @@
     max-width: 280px;
   }
 }
+
+/* Empty states styling */
+.empty-teams {
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-md);
+  color: var(--color-text-secondary);
+  background-color: var(--color-secondary-bg);
+  border-radius: var(--radius-sm);
+  border: 2px dashed var(--color-text-tertiary);
+}
+
+.empty-teams p:first-child {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-xs);
+}
+
+.no-genres {
+  text-align: center;
+  padding: var(--spacing-xl);
+  background-color: var(--color-secondary-bg);
+  border-radius: var(--radius-md);
+  border: 2px dashed var(--color-text-tertiary);
+}
+
+.no-genres p:first-child {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-xs);
+}
+
+.genre-loading {
+  text-align: center;
+  padding: var(--spacing-xl);
+  background-color: var(--color-secondary-bg);
+  border-radius: var(--radius-md);
+}
+
+/* Enhanced status indicators */
+.status-indicator-enhanced.connected {
+  background-color: var(--color-success);
+}
+
+.status-indicator-enhanced.disconnected {
+  background-color: var(--color-error);
+}
+
+/* Loading states */
+.genre-loading,
+.empty-teams,
+.no-genres {
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+/* Better disabled button states */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.btn:disabled:hover {
+  opacity: 0.5;
+  transform: none !important;
+}
