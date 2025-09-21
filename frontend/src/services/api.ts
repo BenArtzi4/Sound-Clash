@@ -135,6 +135,45 @@ class ApiService {
     }
   }
 
+  // Genre Management APIs - ADD THESE NEW METHODS
+  async getGenres(): Promise<ApiResponse<{ genres: any[], total_count: number }>> {
+    try {
+      const response = await this.client.get<ApiResponse<{ genres: any[], total_count: number }>>('/api/genres');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getGenreCategories(): Promise<ApiResponse<Record<string, any>>> {
+    try {
+      const response = await this.client.get<ApiResponse<Record<string, any>>>('/api/genres/categories');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getGenreDetails(genreSlug: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.client.get<ApiResponse<any>>(`/api/genres/${genreSlug}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getSongsByGenre(genreSlug: string, limit: number = 50, offset: number = 0): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.client.get<ApiResponse<any>>(`/api/genres/${genreSlug}/songs`, {
+        params: { limit, offset }
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Health check
   async healthCheck(): Promise<ApiResponse<{ status: string }>> {
     try {
