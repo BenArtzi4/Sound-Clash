@@ -23,6 +23,17 @@ export interface GameSettings {
   maxTeams?: number;
 }
 
+// Enhanced Game Settings for Task 1.7
+export interface CreateGameSettings {
+  selectedGenres: string[];
+  hostName: string;
+  gameName?: string;
+  maxTeams: number;
+  roundCount: number;
+  defaultDifficulty: 'easy' | 'medium' | 'hard' | 'mixed';
+  answerTimeLimit: number;
+}
+
 export interface Team {
   name: string;
   score: number;
@@ -95,6 +106,53 @@ export interface CreateGameForm {
   settings?: Partial<GameSettings>;
 }
 
+// Enhanced Create Game Form for Task 1.7
+export interface CreateGameFormV2 {
+  settings: CreateGameSettings;
+}
+
+// Genre Types for Task 1.7
+export interface GenreOption {
+  id: string;
+  label: string;
+  description: string;
+  song_count?: number;
+  is_active?: boolean;
+}
+
+export interface GenreCategory {
+  name: string;
+  description: string;
+  icon?: string;
+  genres: GenreOption[];
+  total_songs?: number;
+}
+
+export interface GenreListResponse {
+  genres: GenreOption[];
+  total_count: number;
+}
+
+// Song Types
+export interface Song {
+  id: number;
+  title: string;
+  artist: string;
+  album?: string;
+  release_year?: number;
+  duration_seconds?: number;
+  youtube_id?: string;
+  youtube_url?: string;
+  movie_tv_source?: string;
+  play_count?: number;
+  success_rate?: number;
+  difficulty_timestamps?: {
+    easy_start?: number;
+    medium_start?: number;
+    hard_start?: number;
+  };
+}
+
 // Error Types
 export interface ValidationError {
   field: string;
@@ -118,12 +176,12 @@ export interface GameContextType {
   loading: boolean;
 }
 
-// Genre Options
-export interface GenreOption {
-  id: string;
-  label: string;
-  description: string;
-  category?: string;
+// Genre Selector Props
+export interface GenreSelectorProps {
+  selectedGenres: string[];
+  onSelectionChange: (genres: string[]) => void;
+  loading?: boolean;
+  disabled?: boolean;
 }
 
 // Utility Types
@@ -132,3 +190,9 @@ export type GamePhase = 'landing' | 'joining' | 'creating' | 'waiting' | 'playin
 export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
 export type ButtonSize = 'small' | 'medium' | 'large';
 export type LogoSize = 'small' | 'medium' | 'large';
+
+// Game Creation Steps
+export type CreateGameStep = 'genres' | 'settings' | 'review';
+
+// Genre Categories
+export type GenreCategoryType = 'decades' | 'styles' | 'israeli' | 'media';
