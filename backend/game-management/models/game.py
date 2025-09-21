@@ -82,3 +82,45 @@ class GenreListResponse(BaseModel):
     """Response model for available genres"""
     genres: List[GenreResponse]
     total_count: int
+    
+class GenreCategoryResponse(BaseModel):
+    """Response model for genre category data"""
+    name: str
+    description: str
+    icon: Optional[str] = None
+    genres: List[GenreResponse]
+    total_songs: Optional[int] = 0
+
+class EnhancedGameSettings(BaseModel):
+    """Enhanced game configuration settings for Task 1.7"""
+    max_teams: int = Field(default=0, ge=0, le=20)
+    rounds_per_game: int = Field(default=10, ge=5, le=50)
+    default_difficulty: Difficulty = Difficulty.RANDOM
+    selected_genres: List[str] = []
+    enable_partial_scoring: bool = True
+    answer_time_limit: int = Field(default=10, ge=5, le=30)
+    host_name: Optional[str] = Field(None, max_length=50)
+    game_name: Optional[str] = Field(None, max_length=100)
+
+class CreateGameRequestV2(BaseModel):
+    """Enhanced request model for game creation"""
+    settings: Optional[EnhancedGameSettings] = None
+
+    @validator('settings', pre=True, always=True)
+    def set_default_settings(cls, v):
+        if v is None:
+            return EnhancedGameSettings()
+        return v
+
+class EnhancedGameResponse(BaseModel):
+    """Enhanced response model for game data"""
+    game_code: str
+    status: GameStatus
+    teams: List[Dict[str, Any]] = []  # Enhanced team data
+    team_count: int = 0
+    settings: EnhancedGameSettings
+    created_at: datetime
+    manager_url: str
+    public_display_url: str
+    time_remaining_hours: Optional[float] = None
+    can_start: bool = False
