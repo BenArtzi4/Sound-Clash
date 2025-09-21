@@ -1,59 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import Logo from '../components/Logo';
-
-interface Genre {
-  id: string;
-  label: string;
-  description: string;
-}
+import GenreSelector from '../components/GenreSelector';
+import type { CreateGameSettings } from '../types';
 
 const CreateGamePage: React.FC = () => {
   const navigate = useNavigate();
   const { createGame, state } = useGame();
   
-  const [genres, setGenres] = useState<Genre[]>([]);
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<CreateGameSettings>({
+    selectedGenres: [],
+    hostName: '',
+    gameName: '',
+    maxTeams: 0, // 0 = unlimited
+    roundCount: 10,
+    defaultDifficulty: 'mixed',
+    answerTimeLimit: 10
+  });
+  
+  const [currentStep, setCurrentStep] = useState<'genres' | 'settings' | 'review'>('genres');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
-  useEffect(() => {
-    // TODO: Replace with actual API call to fetch genres
-    const fetchGenres = async () => {
-      try {
-        setLoading(true);
-        // TODO: Implement actual API call
-        // const response = await fetch('/api/genres');
-        // const genresData = await response.json();
-        // setGenres(genresData);
-        
-        // For now, simulate loading and show empty state
-        setTimeout(() => {
-          setGenres([]); // Empty array to show "no genres available" state
-          setLoading(false);
-        }, 1000);
-      } catch (error) {
-        console.error('Failed to fetch genres:', error);
-        setError('Failed to load music genres. Please try again.');
-        setLoading(false);
-      }
-    };
-
-    fetchGenres();
-  }, []);
-
-  const toggleGenre = (genreId: string) => {
-    setSelectedGenres(prev => 
-      prev.includes(genreId) 
-        ? prev.filter(id => id !== genreId)
-        : [...prev, genreId]
-    );
+  const updateSettings = (updates: Partial<CreateGameSettings>) => {
+    setSettings(prev => ({ ...prev, ...updates }));
     setError(''); // Clear error when user makes changes
   };
 
+  const validateCurrentStep = (): boolean => {
+    switch (currentStep) {
+      case 'genres':
+        if (settings.selectedGenres.length === 0) {
+          setError('Please select at least one music genre');
+          return false;
+        }
+        return true;
+      case 'settings':
+        if (settings.hostName.trim().length < 2) {
+          setError('Host name must be at least 2 characters');
+          return false;
+        }
+        return true;
+      case 'review':
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  const nextStep = () => {
+    if (!validateCurrentStep()) return;
+    
+    if (currentStep === 'genres') setCurrentStep('settings');
+    else if (currentStep === 'settings') setCurrentStep('review');
+  };
+
+  const prevStep = () => {
+    if (currentStep === 'settings') setCurrentStep('genres');
+    else if (currentStep === 'review') setCurrentStep('settings');
+  };
+
   const generateGameCode = (): string => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let result = '';
     for (let i = 0; i < 6; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -62,30 +71,28 @@ const CreateGamePage: React.FC = () => {
   };
 
   const handleCreateGame = async () => {
-    // Validate at least one genre is selected (when genres are available)
-    if (genres.length > 0 && selectedGenres.length === 0) {
-      setError('Please select at least one music genre');
-      return;
-    }
+    if (!validateCurrentStep()) return;
 
     try {
+      setLoading(true);
+      setError('');
+      
       // Generate a unique game code
       const gameCode = generateGameCode();
       
       // TODO: Replace with actual API call to create game
-      // const response = await fetch('/api/games', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     gameCode,
-      //     settings: {
-      //       selectedGenres,
-      //       difficulty: 'mixed',
-      //       answerTime: 10,
-      //       maxTeams: 0 // unlimited
-      //     }
-      //   })
-      // });
+      const gameData = {
+        gameCode,
+        settings: {
+          selectedGenres: settings.selectedGenres,
+          hostName: settings.hostName,
+          gameName: settings.gameName,
+          maxTeams: settings.maxTeams,
+          roundCount: settings.roundCount,
+          defaultDifficulty: settings.defaultDifficulty,
+          answerTimeLimit: settings.answerTimeLimit
+        }
+      };
       
       // For now, just use the context
       createGame(gameCode);
@@ -94,6 +101,211 @@ const CreateGamePage: React.FC = () => {
       navigate(`/game/${gameCode}/lobby`);
     } catch (error) {
       setError('Failed to create game. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 'genres':
+        return (
+          <div className="create-step">
+            <div className="step-header">
+              <h2 className="title-2">Select Music Genres</h2>
+              <p className="body">Choose the types of music for your game</p>
+            </div>
+            
+            <GenreSelector
+              selectedGenres={settings.selectedGenres}
+              onSelectionChange={(genres) => updateSettings({ selectedGenres: genres })}
+              loading={loading}
+            />
+          </div>
+        );
+
+      case 'settings':
+        return (
+          <div className="create-step">
+            <div className="step-header">
+              <h2 className="title-2">Game Settings</h2>
+              <p className="body">Configure your game preferences</p>
+            </div>
+
+            <div className="settings-form">
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="hostName" className="form-label headline">
+                    Your Name (Host)
+                  </label>
+                  <input
+                    id="hostName"
+                    type="text"
+                    className="input"
+                    placeholder="Enter your name"
+                    value={settings.hostName}
+                    onChange={(e) => updateSettings({ hostName: e.target.value })}
+                    maxLength={50}
+                  />
+                  <div className="input-hint caption">
+                    This will be shown to players during the game
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="gameName" className="form-label headline">
+                    Game Name (Optional)
+                  </label>
+                  <input
+                    id="gameName"
+                    type="text"
+                    className="input"
+                    placeholder="Friday Night Trivia"
+                    value={settings.gameName}
+                    onChange={(e) => updateSettings({ gameName: e.target.value })}
+                    maxLength={100}
+                  />
+                  <div className="input-hint caption">
+                    Give your game a fun name
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="maxTeams" className="form-label headline">
+                    Max Teams
+                  </label>
+                  <select
+                    id="maxTeams"
+                    className="input"
+                    value={settings.maxTeams}
+                    onChange={(e) => updateSettings({ maxTeams: parseInt(e.target.value) })}
+                  >
+                    <option value={0}>Unlimited</option>
+                    <option value={4}>4 teams</option>
+                    <option value={6}>6 teams</option>
+                    <option value={8}>8 teams</option>
+                    <option value={10}>10 teams</option>
+                    <option value={12}>12 teams</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="roundCount" className="form-label headline">
+                    Number of Rounds
+                  </label>
+                  <select
+                    id="roundCount"
+                    className="input"
+                    value={settings.roundCount}
+                    onChange={(e) => updateSettings({ roundCount: parseInt(e.target.value) })}
+                  >
+                    <option value={5}>5 rounds</option>
+                    <option value={10}>10 rounds</option>
+                    <option value={15}>15 rounds</option>
+                    <option value={20}>20 rounds</option>
+                    <option value={25}>25 rounds</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="difficulty" className="form-label headline">
+                    Default Difficulty
+                  </label>
+                  <select
+                    id="difficulty"
+                    className="input"
+                    value={settings.defaultDifficulty}
+                    onChange={(e) => updateSettings({ defaultDifficulty: e.target.value as any })}
+                  >
+                    <option value="mixed">Mixed (Easy, Medium, Hard)</option>
+                    <option value="easy">Easy Only</option>
+                    <option value="medium">Medium Only</option>
+                    <option value="hard">Hard Only</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="answerTime" className="form-label headline">
+                    Answer Time Limit
+                  </label>
+                  <select
+                    id="answerTime"
+                    className="input"
+                    value={settings.answerTimeLimit}
+                    onChange={(e) => updateSettings({ answerTimeLimit: parseInt(e.target.value) })}
+                  >
+                    <option value={5}>5 seconds</option>
+                    <option value={10}>10 seconds</option>
+                    <option value={15}>15 seconds</option>
+                    <option value={20}>20 seconds</option>
+                    <option value={30}>30 seconds</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'review':
+        return (
+          <div className="create-step">
+            <div className="step-header">
+              <h2 className="title-2">Review & Create</h2>
+              <p className="body">Review your game settings before creating</p>
+            </div>
+
+            <div className="review-summary">
+              <div className="summary-section">
+                <h3 className="headline">Game Details</h3>
+                <div className="summary-grid">
+                  <div className="summary-item">
+                    <span className="summary-label">Host:</span>
+                    <span className="summary-value">{settings.hostName}</span>
+                  </div>
+                  {settings.gameName && (
+                    <div className="summary-item">
+                      <span className="summary-label">Game Name:</span>
+                      <span className="summary-value">{settings.gameName}</span>
+                    </div>
+                  )}
+                  <div className="summary-item">
+                    <span className="summary-label">Max Teams:</span>
+                    <span className="summary-value">
+                      {settings.maxTeams === 0 ? 'Unlimited' : settings.maxTeams}
+                    </span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Rounds:</span>
+                    <span className="summary-value">{settings.roundCount}</span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Difficulty:</span>
+                    <span className="summary-value">{settings.defaultDifficulty}</span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Answer Time:</span>
+                    <span className="summary-value">{settings.answerTimeLimit} seconds</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="summary-section">
+                <h3 className="headline">Selected Genres ({settings.selectedGenres.length})</h3>
+                <div className="genre-tags-review">
+                  {settings.selectedGenres.map(genreId => (
+                    <span key={genreId} className="genre-tag-review">
+                      {genreId}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
     }
   };
 
@@ -112,113 +324,70 @@ const CreateGamePage: React.FC = () => {
         </div>
       </header>
 
+      {/* Progress Indicator */}
+      <div className="progress-container">
+        <div className="container">
+          <div className="progress-steps">
+            <div className={`progress-step ${currentStep === 'genres' ? 'active' : 
+                           ['settings', 'review'].includes(currentStep) ? 'completed' : ''}`}>
+              <div className="step-number">1</div>
+              <span className="step-label">Genres</span>
+            </div>
+            <div className={`progress-step ${currentStep === 'settings' ? 'active' : 
+                           currentStep === 'review' ? 'completed' : ''}`}>
+              <div className="step-number">2</div>
+              <span className="step-label">Settings</span>
+            </div>
+            <div className={`progress-step ${currentStep === 'review' ? 'active' : ''}`}>
+              <div className="step-number">3</div>
+              <span className="step-label">Review</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main content */}
       <main className="page-main">
         <div className="form-container">
           <div className="create-form-card card">
-            <div className="form-header">
-              <h1 className="title-1">Create Game</h1>
-              <p className="subhead">Set up a new Sound Clash game for your group</p>
-            </div>
+            {renderStepContent()}
 
-            <div className="create-form">
-              {/* Genre Selection */}
-              <div className="form-section">
-                <h2 className="title-2">Select Music Genres</h2>
-                <p className="body">Choose the types of music for your game</p>
-                
-                {loading ? (
-                  <div className="genre-loading">
-                    <p className="body">Loading available genres...</p>
-                  </div>
-                ) : genres.length > 0 ? (
-                  <>
-                    <div className="genre-grid">
-                      {genres.map(genre => (
-                        <button
-                          key={genre.id}
-                          type="button"
-                          className={`genre-option ${selectedGenres.includes(genre.id) ? 'selected' : ''}`}
-                          onClick={() => toggleGenre(genre.id)}
-                        >
-                          <div className="genre-option-content">
-                            <span className="genre-label headline">{genre.label}</span>
-                            <span className="genre-description caption">{genre.description}</span>
-                          </div>
-                          <div className="genre-checkbox">
-                            {selectedGenres.includes(genre.id) && (
-                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path 
-                                  d="M13.5 4.5L6 12L2.5 8.5" 
-                                  stroke="currentColor" 
-                                  strokeWidth="2" 
-                                  strokeLinecap="round" 
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-
-                    {selectedGenres.length > 0 && (
-                      <div className="selected-summary">
-                        <p className="caption">
-                          Selected: {selectedGenres.length} genre{selectedGenres.length !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="no-genres">
-                    <p className="body">No music genres available at the moment.</p>
-                    <p className="caption">The game database is being set up. You can still create a game without genre selection.</p>
-                  </div>
-                )}
+            {/* Error Message */}
+            {error && (
+              <div className="error-message-container">
+                <span className="error-message caption error">{error}</span>
               </div>
+            )}
 
-              {/* Game Settings Preview */}
-              <div className="form-section">
-                <h2 className="title-2">Game Settings</h2>
-                <div className="settings-preview">
-                  <div className="setting-item">
-                    <span className="setting-label body">Difficulty:</span>
-                    <span className="setting-value">Mixed (Easy, Medium, Hard)</span>
-                  </div>
-                  <div className="setting-item">
-                    <span className="setting-label body">Round Timer:</span>
-                    <span className="setting-value">10 seconds per answer</span>
-                  </div>
-                  <div className="setting-item">
-                    <span className="setting-label body">Teams:</span>
-                    <span className="setting-value">Unlimited</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Error Message */}
-              {error && (
-                <div className="error-message-container">
-                  <span className="error-message caption error">{error}</span>
-                </div>
+            {/* Navigation Buttons */}
+            <div className="step-navigation">
+              {currentStep !== 'genres' && (
+                <button 
+                  className="btn btn-tertiary"
+                  onClick={prevStep}
+                  disabled={loading}
+                >
+                  ← Previous
+                </button>
               )}
-
-              {/* Create Button */}
-              <button 
-                className={`btn btn-primary btn-large ${state.loading || loading ? 'loading' : ''}`}
-                onClick={handleCreateGame}
-                disabled={state.loading || loading}
-              >
-                {state.loading || loading ? 'Creating Game...' : 'Create Game'}
-              </button>
-            </div>
-
-            {/* Help text */}
-            <div className="help-text">
-              <p className="caption">
-                You'll receive a 6-digit game code that players can use to join your game.
-              </p>
+              
+              {currentStep !== 'review' ? (
+                <button 
+                  className="btn btn-primary"
+                  onClick={nextStep}
+                  disabled={loading}
+                >
+                  Next →
+                </button>
+              ) : (
+                <button 
+                  className={`btn btn-primary btn-large ${loading ? 'loading' : ''}`}
+                  onClick={handleCreateGame}
+                  disabled={loading}
+                >
+                  {loading ? 'Creating Game...' : 'Create Game'}
+                </button>
+              )}
             </div>
           </div>
         </div>
