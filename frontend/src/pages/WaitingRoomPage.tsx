@@ -3,18 +3,28 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import Logo from '../components/Logo';
 
+interface Team {
+  name: string;
+  status: 'connected' | 'disconnected';
+  joinedAt: string;
+}
+
+interface GameSettings {
+  genres: string[];
+  difficulty: string;
+  answerTime: number;
+  maxTeams: number;
+}
+
 const WaitingRoomPage: React.FC = () => {
   const { gameCode } = useParams<{ gameCode: string }>();
   const navigate = useNavigate();
   const { state, dispatch, leaveGame } = useGame();
   
-  // Mock teams data - in real app this would come from WebSocket
-  const [teams] = useState<string[]>([
-    'Rock Stars',
-    'Music Masters',
-    'Quiz Kings'
-  ]);
-
+  // Dynamic state - will be populated from API/WebSocket
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -37,13 +47,59 @@ const WaitingRoomPage: React.FC = () => {
     }
   }, [gameCode, state.gameCode, navigate, dispatch]);
 
+  useEffect(() => {
+    // TODO: Replace with actual API calls
+    // This will fetch game data and set up WebSocket connection
+    const fetchGameData = async () => {
+      try {
+        setLoading(true);
+        // TODO: Implement actual API calls
+        // const gameData = await fetch(`/api/games/${gameCode}`);
+        // const teams = await fetch(`/api/games/${gameCode}/teams`);
+        // setGameSettings(gameData.settings);
+        // setTeams(teams);
+        
+        // For now, simulate loading and show empty state
+        setTimeout(() => {
+          setLoading(false);
+        }, 1000);
+      } catch (error) {
+        console.error('Failed to fetch game data:', error);
+        setLoading(false);
+      }
+    };
+
+    if (gameCode) {
+      fetchGameData();
+    }
+
+    // TODO: Set up WebSocket connection for real-time updates
+    // const ws = new WebSocket(`ws://localhost:8000/ws/game/${gameCode}`);
+    // ws.onmessage = (event) => {
+    //   const data = JSON.parse(event.data);
+    //   if (data.type === 'team_joined') {
+    //     setTeams(prev => [...prev, data.team]);
+    //   }
+    //   if (data.type === 'team_left') {
+    //     setTeams(prev => prev.filter(t => t.name !== data.teamName));
+    //   }
+    // };
+
+    // return () => ws.close();
+  }, [gameCode]);
+
   const handleLeaveGame = () => {
     leaveGame();
     navigate('/');
   };
 
   const handleStartGame = () => {
-    // In real app, this would call the API to start the game
+    if (teams.length === 0) {
+      showToastMessage('Wait for at least one team to join before starting!');
+      return;
+    }
+    
+    // TODO: Implement actual game start API call
     console.log('Starting game...');
     showToastMessage('Game starting functionality will be implemented with backend integration!');
   };
@@ -102,7 +158,7 @@ const WaitingRoomPage: React.FC = () => {
         <div className="container">
           <div className="waiting-room-content">
             
-            {/* Enhanced Game Code Section */}
+            {/* Game Code Section */}
             <div className="game-code-hero">
               <h1 className="title-1 text-center">Waiting Room</h1>
               
@@ -124,27 +180,33 @@ const WaitingRoomPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Enhanced Teams Section */}
+            {/* Teams Section */}
             <div className="teams-section card">
               <div className="teams-header">
-                <h2 className="title-2">Teams Joined</h2>
+                <h2 className="title-2">Teams</h2>
                 <span className="team-count caption">
-                  {teams.length} team{teams.length !== 1 ? 's' : ''} ready to play
+                  {teams.length} team{teams.length !== 1 ? 's' : ''} joined
                 </span>
               </div>
               
-              {teams.length > 0 ? (
+              {loading ? (
+                <div className="empty-teams">
+                  <p className="body">Loading teams...</p>
+                </div>
+              ) : teams.length > 0 ? (
                 <div className="teams-list">
                   {teams.map((team, index) => (
                     <div key={index} className="team-item-enhanced">
                       <div className="team-avatar-enhanced">
-                        {team.charAt(0).toUpperCase()}
+                        {team.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="team-info">
-                        <span className="team-name headline">{team}</span>
+                        <span className="team-name headline">{team.name}</span>
                         <div className="team-status">
-                          <span className="status-indicator-enhanced"></span>
-                          <span className="status-text caption">Connected & Ready</span>
+                          <span className={`status-indicator-enhanced ${team.status}`}></span>
+                          <span className="status-text caption">
+                            {team.status === 'connected' ? 'Connected & Ready' : 'Disconnected'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -152,8 +214,8 @@ const WaitingRoomPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="empty-teams">
-                  <p className="body">No teams have joined yet</p>
-                  <p className="caption">Share the game code to get started</p>
+                  <p className="body">Waiting for teams to join...</p>
+                  <p className="caption">Share the game code above to get started</p>
                 </div>
               )}
             </div>
@@ -161,24 +223,42 @@ const WaitingRoomPage: React.FC = () => {
             {/* Game Settings Preview */}
             <div className="settings-section card">
               <h2 className="title-2">Game Settings</h2>
-              <div className="settings-grid">
-                <div className="setting-item">
-                  <span className="setting-label subhead">Genres:</span>
-                  <span className="setting-value body">Rock, Pop, 80s</span>
+              {loading ? (
+                <div className="settings-grid">
+                  <div className="setting-item">
+                    <span className="setting-label subhead">Loading settings...</span>
+                  </div>
                 </div>
-                <div className="setting-item">
-                  <span className="setting-label subhead">Difficulty:</span>
-                  <span className="setting-value body">Mixed</span>
+              ) : gameSettings ? (
+                <div className="settings-grid">
+                  <div className="setting-item">
+                    <span className="setting-label subhead">Genres:</span>
+                    <span className="setting-value body">
+                      {gameSettings.genres.length > 0 ? gameSettings.genres.join(', ') : 'Not set'}
+                    </span>
+                  </div>
+                  <div className="setting-item">
+                    <span className="setting-label subhead">Difficulty:</span>
+                    <span className="setting-value body">{gameSettings.difficulty}</span>
+                  </div>
+                  <div className="setting-item">
+                    <span className="setting-label subhead">Answer Time:</span>
+                    <span className="setting-value body">{gameSettings.answerTime} seconds</span>
+                  </div>
+                  <div className="setting-item">
+                    <span className="setting-label subhead">Max Teams:</span>
+                    <span className="setting-value body">
+                      {gameSettings.maxTeams === 0 ? 'Unlimited' : gameSettings.maxTeams}
+                    </span>
+                  </div>
                 </div>
-                <div className="setting-item">
-                  <span className="setting-label subhead">Answer Time:</span>
-                  <span className="setting-value body">10 seconds</span>
+              ) : (
+                <div className="settings-grid">
+                  <div className="setting-item">
+                    <span className="setting-label subhead">Settings will load when available</span>
+                  </div>
                 </div>
-                <div className="setting-item">
-                  <span className="setting-label subhead">Max Teams:</span>
-                  <span className="setting-value body">Unlimited</span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Action Section */}
@@ -188,11 +268,11 @@ const WaitingRoomPage: React.FC = () => {
                   <button 
                     className="btn btn-primary btn-large btn-prominent"
                     onClick={handleStartGame}
-                    disabled={teams.length === 0}
+                    disabled={teams.length === 0 || loading}
                   >
                     🚀 Start Game
                   </button>
-                  {teams.length === 0 && (
+                  {teams.length === 0 && !loading && (
                     <p className="caption text-center">
                       Wait for at least one team to join
                     </p>

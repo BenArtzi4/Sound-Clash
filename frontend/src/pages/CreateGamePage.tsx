@@ -1,26 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import Logo from '../components/Logo';
 
-// Genre options
-const GENRE_OPTIONS = [
-  { id: 'rock', label: 'Rock', description: 'Classic and modern rock hits' },
-  { id: 'pop', label: 'Pop', description: 'Chart-topping pop songs' },
-  { id: '80s', label: '80s', description: 'Iconic 1980s hits' },
-  { id: '90s', label: '90s', description: 'Nostalgic 1990s favorites' },
-  { id: 'movies', label: 'Movies', description: 'Soundtrack and theme songs' },
-  { id: 'tv', label: 'TV Shows', description: 'Television theme songs' },
-  { id: 'jazz', label: 'Jazz', description: 'Classic jazz standards' },
-  { id: 'classical', label: 'Classical', description: 'Orchestral masterpieces' },
-];
+interface Genre {
+  id: string;
+  label: string;
+  description: string;
+}
 
 const CreateGamePage: React.FC = () => {
   const navigate = useNavigate();
   const { createGame, state } = useGame();
   
-  const [selectedGenres, setSelectedGenres] = useState<string[]>(['rock', 'pop']);
+  const [genres, setGenres] = useState<Genre[]>([]);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    // TODO: Replace with actual API call to fetch genres
+    const fetchGenres = async () => {
+      try {
+        setLoading(true);
+        // TODO: Implement actual API call
+        // const response = await fetch('/api/genres');
+        // const genresData = await response.json();
+        // setGenres(genresData);
+        
+        // For now, simulate loading and show empty state
+        setTimeout(() => {
+          setGenres([]); // Empty array to show "no genres available" state
+          setLoading(false);
+        }, 1000);
+      } catch (error) {
+        console.error('Failed to fetch genres:', error);
+        setError('Failed to load music genres. Please try again.');
+        setLoading(false);
+      }
+    };
+
+    fetchGenres();
+  }, []);
 
   const toggleGenre = (genreId: string) => {
     setSelectedGenres(prev => 
@@ -41,8 +62,8 @@ const CreateGamePage: React.FC = () => {
   };
 
   const handleCreateGame = async () => {
-    // Validate at least one genre is selected
-    if (selectedGenres.length === 0) {
+    // Validate at least one genre is selected (when genres are available)
+    if (genres.length > 0 && selectedGenres.length === 0) {
       setError('Please select at least one music genre');
       return;
     }
@@ -51,8 +72,22 @@ const CreateGamePage: React.FC = () => {
       // Generate a unique game code
       const gameCode = generateGameCode();
       
-      // Here we would call the API to create the game
-      // For now, we'll just use the context
+      // TODO: Replace with actual API call to create game
+      // const response = await fetch('/api/games', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     gameCode,
+      //     settings: {
+      //       selectedGenres,
+      //       difficulty: 'mixed',
+      //       answerTime: 10,
+      //       maxTeams: 0 // unlimited
+      //     }
+      //   })
+      // });
+      
+      // For now, just use the context
       createGame(gameCode);
       
       // Navigate to waiting room as manager
@@ -92,40 +127,53 @@ const CreateGamePage: React.FC = () => {
                 <h2 className="title-2">Select Music Genres</h2>
                 <p className="body">Choose the types of music for your game</p>
                 
-                <div className="genre-grid">
-                  {GENRE_OPTIONS.map(genre => (
-                    <button
-                      key={genre.id}
-                      type="button"
-                      className={`genre-option ${selectedGenres.includes(genre.id) ? 'selected' : ''}`}
-                      onClick={() => toggleGenre(genre.id)}
-                    >
-                      <div className="genre-option-content">
-                        <span className="genre-label headline">{genre.label}</span>
-                        <span className="genre-description caption">{genre.description}</span>
-                      </div>
-                      <div className="genre-checkbox">
-                        {selectedGenres.includes(genre.id) && (
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path 
-                              d="M13.5 4.5L6 12L2.5 8.5" 
-                              stroke="currentColor" 
-                              strokeWidth="2" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {loading ? (
+                  <div className="genre-loading">
+                    <p className="body">Loading available genres...</p>
+                  </div>
+                ) : genres.length > 0 ? (
+                  <>
+                    <div className="genre-grid">
+                      {genres.map(genre => (
+                        <button
+                          key={genre.id}
+                          type="button"
+                          className={`genre-option ${selectedGenres.includes(genre.id) ? 'selected' : ''}`}
+                          onClick={() => toggleGenre(genre.id)}
+                        >
+                          <div className="genre-option-content">
+                            <span className="genre-label headline">{genre.label}</span>
+                            <span className="genre-description caption">{genre.description}</span>
+                          </div>
+                          <div className="genre-checkbox">
+                            {selectedGenres.includes(genre.id) && (
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path 
+                                  d="M13.5 4.5L6 12L2.5 8.5" 
+                                  stroke="currentColor" 
+                                  strokeWidth="2" 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
 
-                {selectedGenres.length > 0 && (
-                  <div className="selected-summary">
-                    <p className="caption">
-                      Selected: {selectedGenres.length} genre{selectedGenres.length !== 1 ? 's' : ''}
-                    </p>
+                    {selectedGenres.length > 0 && (
+                      <div className="selected-summary">
+                        <p className="caption">
+                          Selected: {selectedGenres.length} genre{selectedGenres.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="no-genres">
+                    <p className="body">No music genres available at the moment.</p>
+                    <p className="caption">The game database is being set up. You can still create a game without genre selection.</p>
                   </div>
                 )}
               </div>
@@ -158,11 +206,11 @@ const CreateGamePage: React.FC = () => {
 
               {/* Create Button */}
               <button 
-                className={`btn btn-primary btn-large ${state.loading ? 'loading' : ''}`}
+                className={`btn btn-primary btn-large ${state.loading || loading ? 'loading' : ''}`}
                 onClick={handleCreateGame}
-                disabled={state.loading}
+                disabled={state.loading || loading}
               >
-                {state.loading ? 'Creating Game...' : 'Create Game'}
+                {state.loading || loading ? 'Creating Game...' : 'Create Game'}
               </button>
             </div>
 
