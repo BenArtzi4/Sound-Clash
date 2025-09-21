@@ -3,28 +3,43 @@ PostgreSQL database connection manager for persistent data
 """
 
 import os
+import sys
+from pathlib import Path
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
 from datetime import datetime
 
-# Database URL
+# Add shared models to path
+backend_dir = Path(__file__).parent.parent.parent
+shared_dir = backend_dir / "shared"
+sys.path.insert(0, str(shared_dir))
+
+# Import the centralized models
+from shared.database.models import Base, Song, Genre
+
+# Database URL for async operations
 DATABASE_URL = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
 
+# Database URL for sync operations (migrations)
+SYNC_DATABASE_URL = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
+
 # Create async engine
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=3600
+)
 
 # Create session maker
 AsyncSessionLocal = sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
 
-# Base class for models
-Base = declarative_base()
-
 class User(Base):
-    """User accounts table"""
+    """User accounts table for authenticated hosts"""
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -59,3 +74,18 @@ async def create_tables():
     """Create database tables"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+def get_database_url():
+    """Get synchronous database URL for migrations"""
+    return SYNC_DATABASE_URL
+
+async def test_connection():
+    """Test database connection"""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute("SELECT 1")
+            await session.commit()
+            return True
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        return False
