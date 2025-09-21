@@ -1,8 +1,8 @@
 """
-Database models for genres and songs
+Database models for genres and songs - Simplified Version
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -24,7 +24,7 @@ class Genre(Base):
     name = Column(String(100), nullable=False, unique=True)
     slug = Column(String(100), nullable=False, unique=True, index=True)
     description = Column(Text)
-    category = Column(String(50), nullable=False)  # 'decades', 'styles', 'media'
+    category = Column(String(50), nullable=False)  # 'decades', 'styles', 'israeli', 'media'
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -39,25 +39,28 @@ class Song(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
     artist = Column(String(200), nullable=False)
-    album = Column(String(200))
-    release_year = Column(Integer)
     duration_seconds = Column(Integer)
     
     # Media sources
     youtube_id = Column(String(20), index=True)
     youtube_url = Column(String(500))
-    spotify_id = Column(String(50))
     
-    # Game-specific data
+    # Game-specific difficulty timestamps
     difficulty_easy_start = Column(Integer)  # Timestamp in seconds
     difficulty_medium_start = Column(Integer)
     difficulty_hard_start = Column(Integer)
     
-    # Metadata
+    # YouTube heatmap data
+    heatmap_data = Column(Text)  # JSON string of heatmap segments
+    heatmap_last_updated = Column(DateTime)
+    
+    # Optional metadata
     movie_tv_source = Column(String(200))  # If from movie/TV
+    
+    # Status and stats
     is_active = Column(Boolean, default=True)
     play_count = Column(Integer, default=0)
-    success_rate = Column(Integer, default=0)  # Percentage
+    success_rate = Column(Float, default=0.0)  # Percentage as decimal (0.0-1.0)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
