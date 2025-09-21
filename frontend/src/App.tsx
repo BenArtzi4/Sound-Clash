@@ -4,7 +4,7 @@ import './styles/variables.css';
 import './styles/global.css';
 import './styles/components.css';
 
-// Import pages (we'll create these next)
+// Import pages
 import LandingPage from './pages/LandingPage';
 import JoinGamePage from './pages/JoinGamePage';
 import CreateGamePage from './pages/CreateGamePage';
