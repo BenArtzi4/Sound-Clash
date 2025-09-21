@@ -9,13 +9,13 @@ import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
+# Load environment variables
+load_dotenv('.env')
+
 from api.games import router as games_router
 from api.health import router as health_router
 from database.postgres import create_tables
 from database.redis import redis_manager
-
-# Load environment variables
-load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
