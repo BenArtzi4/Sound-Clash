@@ -67,13 +67,13 @@ const CreateGamePage: React.FC = () => {
       {/* Header */}
       <header className="page-header">
         <div className="container">
+          <Logo size="medium" />
           <button 
             className="btn btn-tertiary back-button"
             onClick={() => navigate('/')}
           >
             ← Back
           </button>
-          <Logo size="medium" />
         </div>
       </header>
 

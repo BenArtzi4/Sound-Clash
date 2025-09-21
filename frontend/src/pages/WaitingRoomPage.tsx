@@ -9,11 +9,14 @@ const WaitingRoomPage: React.FC = () => {
   const { state, dispatch, leaveGame } = useGame();
   
   // Mock teams data - in real app this would come from WebSocket
-  const [teams, setTeams] = useState<string[]>([
+  const [teams] = useState<string[]>([
     'Rock Stars',
     'Music Masters',
     'Quiz Kings'
   ]);
+
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     // If no game state, redirect to home
@@ -42,19 +45,23 @@ const WaitingRoomPage: React.FC = () => {
   const handleStartGame = () => {
     // In real app, this would call the API to start the game
     console.log('Starting game...');
-    // For now, just show an alert
-    alert('Game starting functionality will be implemented with backend integration!');
+    showToastMessage('Game starting functionality will be implemented with backend integration!');
+  };
+
+  const showToastMessage = (message: string) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
   };
 
   const copyGameCode = async () => {
     if (gameCode) {
       try {
         await navigator.clipboard.writeText(gameCode);
-        // Show temporary success message
-        alert('Game code copied to clipboard!');
+        showToastMessage('Game code copied to clipboard!');
       } catch (err) {
         // Fallback for older browsers
-        console.log('Game code:', gameCode);
+        showToastMessage(`Game code: ${gameCode}`);
       }
     }
   };
@@ -71,16 +78,22 @@ const WaitingRoomPage: React.FC = () => {
 
   return (
     <div className="waiting-room-page">
+      {/* Toast Notification */}
+      <div className={`toast ${showToast ? 'show' : ''}`}>
+        <span className="toast-icon">✓</span>
+        {toastMessage}
+      </div>
+
       {/* Header */}
       <header className="page-header">
         <div className="container">
+          <Logo size="medium" />
           <button 
             className="btn btn-tertiary back-button"
             onClick={handleLeaveGame}
           >
             ← Leave Game
           </button>
-          <Logo size="medium" />
         </div>
       </header>
 
@@ -89,48 +102,50 @@ const WaitingRoomPage: React.FC = () => {
         <div className="container">
           <div className="waiting-room-content">
             
-            {/* Game Code Section */}
-            <div className="game-code-section card">
+            {/* Enhanced Game Code Section */}
+            <div className="game-code-hero">
               <h1 className="title-1 text-center">Waiting Room</h1>
               
               <div className="game-code-display">
-                <span className="game-code-label subhead">Game Code</span>
+                <span className="game-code-label subhead">Share this code with players</span>
                 <div className="game-code-value">
-                  <span className="game-code-text large-title">{gameCode}</span>
-                  <button 
-                    className="btn btn-tertiary copy-button"
-                    onClick={copyGameCode}
-                    title="Copy game code"
-                  >
-                    📋 Copy
-                  </button>
+                  <div className="game-code-text">{gameCode}</div>
                 </div>
+                <button 
+                  className="copy-button-enhanced"
+                  onClick={copyGameCode}
+                  title="Copy game code"
+                >
+                  📋 Copy Code
+                </button>
                 <p className="game-code-help caption">
-                  Share this code with other players
+                  Players can join at any time before the game starts
                 </p>
               </div>
             </div>
 
-            {/* Teams Section */}
+            {/* Enhanced Teams Section */}
             <div className="teams-section card">
               <div className="teams-header">
                 <h2 className="title-2">Teams Joined</h2>
                 <span className="team-count caption">
-                  {teams.length} team{teams.length !== 1 ? 's' : ''} ready
+                  {teams.length} team{teams.length !== 1 ? 's' : ''} ready to play
                 </span>
               </div>
               
               {teams.length > 0 ? (
                 <div className="teams-list">
                   {teams.map((team, index) => (
-                    <div key={index} className="team-item">
-                      <div className="team-avatar">
+                    <div key={index} className="team-item-enhanced">
+                      <div className="team-avatar-enhanced">
                         {team.charAt(0).toUpperCase()}
                       </div>
-                      <span className="team-name headline">{team}</span>
-                      <div className="team-status">
-                        <span className="status-indicator ready"></span>
-                        <span className="status-text caption">Ready</span>
+                      <div className="team-info">
+                        <span className="team-name headline">{team}</span>
+                        <div className="team-status">
+                          <span className="status-indicator-enhanced"></span>
+                          <span className="status-text caption">Connected & Ready</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -159,6 +174,10 @@ const WaitingRoomPage: React.FC = () => {
                   <span className="setting-label subhead">Answer Time:</span>
                   <span className="setting-value body">10 seconds</span>
                 </div>
+                <div className="setting-item">
+                  <span className="setting-label subhead">Max Teams:</span>
+                  <span className="setting-value body">Unlimited</span>
+                </div>
               </div>
             </div>
 
@@ -167,15 +186,20 @@ const WaitingRoomPage: React.FC = () => {
               {state.isManager ? (
                 <div className="manager-actions">
                   <button 
-                    className="btn btn-primary btn-large"
+                    className="btn btn-primary btn-large btn-prominent"
                     onClick={handleStartGame}
                     disabled={teams.length === 0}
                   >
-                    Start Game
+                    🚀 Start Game
                   </button>
                   {teams.length === 0 && (
                     <p className="caption text-center">
                       Wait for at least one team to join
+                    </p>
+                  )}
+                  {teams.length > 0 && (
+                    <p className="caption text-center">
+                      {teams.length} team{teams.length !== 1 ? 's' : ''} ready to play!
                     </p>
                   )}
                 </div>

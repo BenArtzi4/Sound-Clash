@@ -1,8 +1,8 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import { ApiResponse, Game, CreateGameForm, JoinGameForm, ApiError } from '../types';
+import axios, { type AxiosInstance, AxiosError } from 'axios';
+import type { ApiResponse, Game, CreateGameForm, JoinGameForm, ApiError } from '../types';
 
 // API Configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 class ApiService {
   private client: AxiosInstance;

@@ -57,8 +57,9 @@
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
   
   /* Layout */
-  --max-width-content: 1200px;
-  --max-width-form: 600px;
+  --max-width-content: 1400px;  /* Increased from 1200px */
+  --max-width-form: 800px;      /* Increased from 600px */
+  --max-width-landing: 1000px;  /* New: wider landing content */
   --min-touch-target: 44px;
   
   /* Transitions */
@@ -72,4 +73,9 @@
   --z-modal: 1040;
   --z-popover: 1050;
   --z-tooltip: 1060;
+  
+  /* Toast notifications */
+  --toast-success: #d1f2eb;
+  --toast-success-border: #a7f3d0;
+  --toast-success-text: #065f46;
 }

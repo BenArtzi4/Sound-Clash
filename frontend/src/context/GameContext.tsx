@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, type ReactNode } from 'react';
 
 // Types for our game state
 export interface GameState {
@@ -14,7 +14,7 @@ export interface GameState {
 // Action types for state updates
 export type GameAction =
   | { type: 'SET_GAME_CODE'; payload: string }
-  | { type: 'SET_TEAM_NAME'; payload: string }
+  | { type: 'SET_TEAM_NAME'; payload: string | null }
   | { type: 'SET_IS_MANAGER'; payload: boolean }
   | { type: 'SET_GAME_STATUS'; payload: 'waiting' | 'active' | 'ended' }
   | { type: 'SET_TEAMS'; payload: string[] }

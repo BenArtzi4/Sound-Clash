@@ -18,17 +18,23 @@ const LandingPage: React.FC = () => {
       <main className="landing-main">
         <div className="container">
           <div className="landing-content">
-            {/* Subtitle */}
-            <p className="landing-subtitle subhead">
-              The ultimate music trivia buzzer game
-            </p>
+            {/* Enhanced subtitle with better hierarchy */}
+            <div className="landing-hero">
+              <p className="landing-subtitle headline">
+                The ultimate music trivia buzzer game
+              </p>
+              <p className="landing-description body">
+                Test your music knowledge in real-time with friends. Buzz in first to win points!
+              </p>
+            </div>
 
-            {/* Main action buttons */}
+            {/* Main action buttons with better spacing */}
             <div className="landing-actions">
               <button 
-                className="btn btn-primary btn-large"
+                className="btn btn-primary btn-large btn-prominent"
                 onClick={() => navigate('/join')}
               >
+                <span className="btn-icon">🎮</span>
                 Join Game
               </button>
               
@@ -36,12 +42,14 @@ const LandingPage: React.FC = () => {
                 className="btn btn-secondary btn-large"
                 onClick={() => navigate('/create')}
               >
+                <span className="btn-icon">🎵</span>
                 Create Game
               </button>
             </div>
 
-            {/* How it works */}
+            {/* Enhanced how it works section */}
             <div className="landing-info">
+              <h2 className="info-title title-2">How to Play</h2>
               <div className="info-grid">
                 <div className="info-item">
                   <div className="info-number">1</div>
