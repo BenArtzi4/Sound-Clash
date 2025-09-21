@@ -7,14 +7,31 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+
+from api.games import router as games_router
+from api.health import router as health_router
+from database.postgres import create_tables
+from database.redis import redis_manager
 
 # Load environment variables
 load_dotenv()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifecycle manager"""
+    # Startup
+    await redis_manager.connect()
+    await create_tables()
+    yield
+    # Shutdown
+    await redis_manager.disconnect()
+
 app = FastAPI(
     title="Sound Clash - Game Management Service",
     description="Manages game creation, team joining, and waiting room functionality",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -26,15 +43,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(health_router)
+app.include_router(games_router)
+
 @app.get("/")
 async def root():
-    return {"service": "Game Management", "status": "running"}
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for ALB"""
-    return {"status": "healthy", "service": "game-management"}
+    return {
+        "service": "Game Management", 
+        "status": "running",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "games": "/api/games",
+            "docs": "/docs"
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("GAME_MANAGEMENT_PORT", 8001)))
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=int(os.getenv("GAME_MANAGEMENT_PORT", 8001)),
+        reload=True
+    )
