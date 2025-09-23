@@ -116,7 +116,7 @@ class DatabaseStack(Stack):
             description="Subnet group for Sound Clash RDS PostgreSQL",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+                subnet_type=ec2.SubnetType.PUBLIC
             )
         )
         
