@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:production": "NODE_ENV=production tsc -b && vite build --mode production",
+    "build:production": "tsc -b && vite build --mode production",
     "lint": "eslint .",
     "preview": "vite preview",
     "analyze": "npm run build && npx vite-bundle-analyzer dist/stats.html",
-    "deploy": "npm run build:production && echo 'Build complete - ready for CDK deployment'"
+    "deploy": "npm run build:production && echo Build complete - ready for CDK deployment"
   },
   "dependencies": {
     "axios": "^1.7.7",

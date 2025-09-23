@@ -17,7 +17,7 @@ class FrontendStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
-        # S3 bucket for static website hosting
+        # S3 bucket for static website hosting (simplified config)
         self.website_bucket = s3.Bucket(
             self, "WebsiteBucket",
             bucket_name=f"sound-clash-frontend-{self.account}-{self.region}",
@@ -41,15 +41,6 @@ class FrontendStack(Stack):
                     ],
                     allowed_origins=["*"],
                     max_age=3600
-                )
-            ],
-            # Lifecycle rules for optimization
-            lifecycle_rules=[
-                s3.LifecycleRule(
-                    id="DeleteOldVersions",
-                    status=s3.LifecycleRuleStatus.ENABLED,
-                    noncurrent_version_expiration=Duration.days(30),
-                    abort_incomplete_multipart_uploads_after=Duration.days(1)
                 )
             ]
         )
@@ -146,37 +137,7 @@ class FrontendStack(Stack):
             ],
             
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe
-            comment="Sound Clash Frontend Distribution - Optimized",
-            
-            # Security headers
-            response_headers_policy=cloudfront.ResponseHeadersPolicy(
-                self, "SecurityHeaders",
-                comment="Security headers for Sound Clash",
-                cors_behavior=cloudfront.ResponseHeadersCorseBehavior(
-                    access_control_allow_credentials=False,
-                    access_control_allow_headers=["*"],
-                    access_control_allow_methods=["GET", "HEAD", "OPTIONS"],
-                    access_control_allow_origins=["*"],
-                    access_control_max_age=Duration.seconds(86400),
-                    origin_override=True
-                ),
-                security_headers_behavior=cloudfront.ResponseHeadersSecurityHeadersBehavior(
-                    content_type_options=cloudfront.ResponseHeadersContentTypeOptions(override=True),
-                    frame_options=cloudfront.ResponseHeadersFrameOptions(
-                        frame_option=cloudfront.HeadersFrameOption.DENY,
-                        override=True
-                    ),
-                    referrer_policy=cloudfront.ResponseHeadersReferrerPolicy(
-                        referrer_policy=cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
-                        override=True
-                    ),
-                    strict_transport_security=cloudfront.ResponseHeadersStrictTransportSecurity(
-                        access_control_max_age=Duration.seconds(31536000),
-                        include_subdomains=True,
-                        override=True
-                    )
-                )
-            )
+            comment="Sound Clash Frontend Distribution - Optimized"
         )
         
         # Deploy the frontend build to S3
@@ -189,22 +150,7 @@ class FrontendStack(Stack):
             distribution=self.distribution,
             distribution_paths=["/*"],  # Invalidate all paths
             memory_limit=1024,  # Increased memory for better performance
-            ephemeral_storage_size=Size.mebibytes(1024),
-            
-            # Cache control for different file types
-            cache_control=[
-                s3deploy.CacheControl.set_public(),
-                s3deploy.CacheControl.max_age(Duration.days(30))  # Default cache
-            ],
-            
-            # Content encoding
-            server_side_encryption=s3deploy.ServerSideEncryption.AES_256,
-            
-            # Metadata for better debugging
-            metadata={
-                "deployed-by": "aws-cdk",
-                "project": "sound-clash-frontend"
-            }
+            ephemeral_storage_size=Size.mebibytes(1024)
         )
         
         # Outputs
