@@ -7,7 +7,7 @@ import type { CreateGameSettings } from '../types';
 
 const CreateGamePage: React.FC = () => {
   const navigate = useNavigate();
-  const { createGame, state } = useGame();
+  const { createGame} = useGame();
   
   const [settings, setSettings] = useState<CreateGameSettings>({
     selectedGenres: [],
@@ -81,18 +81,18 @@ const CreateGamePage: React.FC = () => {
       const gameCode = generateGameCode();
       
       // TODO: Replace with actual API call to create game
-      const gameData = {
-        gameCode,
-        settings: {
-          selectedGenres: settings.selectedGenres,
-          hostName: settings.hostName,
-          gameName: settings.gameName,
-          maxTeams: settings.maxTeams,
-          roundCount: settings.roundCount,
-          defaultDifficulty: settings.defaultDifficulty,
-          answerTimeLimit: settings.answerTimeLimit
-        }
-      };
+      // const gameData = {
+      //   gameCode,
+      //   settings: {
+      //     selectedGenres: settings.selectedGenres,
+      //     hostName: settings.hostName,
+      //     gameName: settings.gameName,
+      //     maxTeams: settings.maxTeams,
+      //     roundCount: settings.roundCount,
+      //     defaultDifficulty: settings.defaultDifficulty,
+      //     answerTimeLimit: settings.answerTimeLimit
+      //   }
+      // };
       
       // For now, just use the context
       createGame(gameCode);

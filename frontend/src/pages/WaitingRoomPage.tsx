@@ -22,8 +22,8 @@ const WaitingRoomPage: React.FC = () => {
   const { state, dispatch, leaveGame } = useGame();
   
   // Dynamic state - will be populated from API/WebSocket
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
+  const [teams] = useState<Team[]>([]);
+  const [gameSettings] = useState<GameSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');

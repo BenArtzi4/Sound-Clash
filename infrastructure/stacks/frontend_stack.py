@@ -17,7 +17,7 @@ class FrontendStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
-        # S3 bucket for static website hosting
+        # S3 bucket for static website hosting (simplified config)
         self.website_bucket = s3.Bucket(
             self, "WebsiteBucket",
             bucket_name=f"sound-clash-frontend-{self.account}-{self.region}",
@@ -45,16 +45,43 @@ class FrontendStack(Stack):
             ]
         )
         
-        # CloudFront Origin Access Identity (not needed for static website origin)
-        # self.origin_access_identity = cloudfront.OriginAccessIdentity(
-        #     self, "OriginAccessIdentity",
-        #     comment=f"Sound Clash Frontend OAI"
-        # )
+        # Custom cache policies for different asset types
         
-        # Grant CloudFront access to S3 bucket (not needed for static website)
-        # self.website_bucket.grant_read(self.origin_access_identity)
+        # Cache policy for static assets (CSS, JS, images) - long cache
+        static_cache_policy = cloudfront.CachePolicy(
+            self, "StaticAssetsCachePolicy",
+            cache_policy_name=f"SoundClash-StaticAssets-{self.stack_name}",
+            comment="Cache policy for static assets with long TTL",
+            default_ttl=Duration.days(30),
+            max_ttl=Duration.days(365),
+            min_ttl=Duration.seconds(0),
+            cookie_behavior=cloudfront.CacheCookieBehavior.none(),
+            header_behavior=cloudfront.CacheHeaderBehavior.allow_list(
+                "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"
+            ),
+            query_string_behavior=cloudfront.CacheQueryStringBehavior.none(),
+            enable_accept_encoding_brotli=True,
+            enable_accept_encoding_gzip=True
+        )
         
-        # CloudFront distribution - using S3 static website origin
+        # Cache policy for HTML files - short cache for faster updates
+        html_cache_policy = cloudfront.CachePolicy(
+            self, "HTMLCachePolicy", 
+            cache_policy_name=f"SoundClash-HTML-{self.stack_name}",
+            comment="Cache policy for HTML files with short TTL",
+            default_ttl=Duration.minutes(5),
+            max_ttl=Duration.days(1),
+            min_ttl=Duration.seconds(0),
+            cookie_behavior=cloudfront.CacheCookieBehavior.none(),
+            header_behavior=cloudfront.CacheHeaderBehavior.allow_list(
+                "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"
+            ),
+            query_string_behavior=cloudfront.CacheQueryStringBehavior.none(),
+            enable_accept_encoding_brotli=True,
+            enable_accept_encoding_gzip=True
+        )
+        
+        # CloudFront distribution with optimized caching
         self.distribution = cloudfront.Distribution(
             self, "Distribution",
             default_behavior=cloudfront.BehaviorOptions(
@@ -64,10 +91,28 @@ class FrontendStack(Stack):
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
                 cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
-                cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
-                compress=True
+                cache_policy=html_cache_policy,  # Default for HTML
+                compress=True,
+                origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN
             ),
+            
+            # Additional behaviors for different asset types
+            additional_behaviors={
+                # Static assets (JS, CSS, images) - long cache
+                "/assets/*": cloudfront.BehaviorOptions(
+                    origin=origins.S3StaticWebsiteOrigin(bucket=self.website_bucket),
+                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+                    cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+                    cache_policy=static_cache_policy,
+                    compress=True,
+                    origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN
+                )
+            },
+            
             default_root_object="index.html",
+            
+            # Enhanced error responses for SPA
             error_responses=[
                 # SPA routing - redirect all 404s to index.html
                 cloudfront.ErrorResponse(
@@ -79,12 +124,20 @@ class FrontendStack(Stack):
                 cloudfront.ErrorResponse(
                     http_status=403,
                     response_http_status=200,
-                    response_page_path="/index.html",
+                    response_page_path="/index.html", 
                     ttl=Duration.minutes(0)
+                ),
+                # Handle other errors
+                cloudfront.ErrorResponse(
+                    http_status=500,
+                    response_http_status=500,
+                    response_page_path="/index.html",
+                    ttl=Duration.minutes(1)
                 )
             ],
-            price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe only
-            comment="Sound Clash Frontend Distribution"
+            
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # US, Canada, Europe
+            comment="Sound Clash Frontend Distribution - Optimized"
         )
         
         # Deploy the frontend build to S3
@@ -96,15 +149,15 @@ class FrontendStack(Stack):
             destination_bucket=self.website_bucket,
             distribution=self.distribution,
             distribution_paths=["/*"],  # Invalidate all paths
-            memory_limit=512,
-            ephemeral_storage_size=Size.mebibytes(512)
+            memory_limit=1024,  # Increased memory for better performance
+            ephemeral_storage_size=Size.mebibytes(1024)
         )
         
         # Outputs
         CfnOutput(
             self, "WebsiteBucketName",
             value=self.website_bucket.bucket_name,
-            description="Name of the S3 bucket hosting the website"
+            description="S3 bucket hosting the frontend"
         )
         
         CfnOutput(
@@ -122,11 +175,11 @@ class FrontendStack(Stack):
         CfnOutput(
             self, "WebsiteURL",
             value=f"https://{self.distribution.distribution_domain_name}",
-            description="Website URL"
+            description="Main Website URL (use this for production)"
         )
         
         CfnOutput(
             self, "S3WebsiteURL",
             value=self.website_bucket.bucket_website_url,
-            description="S3 Website URL (for testing)"
+            description="Direct S3 Website URL (for testing only)"
         )
