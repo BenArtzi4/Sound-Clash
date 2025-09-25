@@ -2,6 +2,7 @@ from aws_cdk import (
     Stack,
     aws_ecs as ecs,
     aws_ec2 as ec2,
+    aws_iam as iam,
     aws_autoscaling as autoscaling,
     CfnOutput
 )
@@ -24,27 +25,30 @@ class EcsStack(Stack):
             container_insights=True
         )
 
+        # Create IAM role for ECS instances
+        ecs_instance_role = iam.Role(
+            self, "EcsInstanceRole",
+            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonEC2ContainerServiceforEC2Role"
+                )
+            ]
+        )
+
+        # Create user data to join ECS cluster
+        user_data = ec2.UserData.for_linux()
+        user_data.add_commands(
+            f"echo ECS_CLUSTER={self.cluster.cluster_name} >> /etc/ecs/ecs.config"
+        )
+
         # Create Launch Template explicitly
         launch_template = ec2.LaunchTemplate(
             self, "EcsLaunchTemplate",
             instance_type=ec2.InstanceType("t3.micro"),
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
-            vpc=self.vpc,
-            user_data=ec2.UserData.for_linux(),
-            role=ec2.Role(
-                self, "EcsInstanceRole",
-                assumed_by=ec2.ServicePrincipal("ec2.amazonaws.com"),
-                managed_policies=[
-                    ec2.ManagedPolicy.from_aws_managed_policy_name(
-                        "service-role/AmazonEC2ContainerServiceforEC2Role"
-                    )
-                ]
-            )
-        )
-
-        # Add user data to join ECS cluster
-        launch_template.add_user_data(
-            f"echo ECS_CLUSTER={self.cluster.cluster_name} >> /etc/ecs/ecs.config"
+            role=ecs_instance_role,
+            user_data=user_data
         )
 
         # Create Auto Scaling Group with Launch Template
