@@ -38,7 +38,7 @@ class SongServiceStack(Stack):
         self.container = self.task_definition.add_container(
             "SongServiceContainer",
             image=ecs.ContainerImage.from_registry(
-                f"{self.account}.dkr.ecr.{self.region}.amazonaws.com/song-management:latest"
+                f"{self.account}.dkr.ecr.{self.region}.amazonaws.com/sound-clash/song-management:latest"
             ),
             memory_limit_mib=512,  # 512 MB memory
             cpu=256,  # 0.25 vCPU
