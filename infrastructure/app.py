@@ -7,6 +7,7 @@ from stacks.alb_stack import AlbStack
 from stacks.ecr_stack import EcrStack
 from stacks.logging_stack import LoggingStack
 from stacks.frontend_stack import FrontendStack
+from stacks.song_service_stack import SongServiceStack
 
 app = cdk.App()
 
@@ -18,21 +19,29 @@ env = cdk.Environment(
 
 # ===== DEPLOY STACKS IN DEPENDENCY ORDER =====
 
-# VPC and networking (no dependencies)
+# 1. Foundational Layer: VPC and ECR (completely independent)
 vpc_stack = VpcStack(app, "SoundClashVpcStack", env=env)
-
-# Data Layer: Databases (depends on VPC)
-database_stack = DatabaseStack(app, "SoundClashDatabaseStack", vpc_stack=vpc_stack, env=env)
-
-# Container Infrastructure: Independent stacks
-ecs_stack = EcsStack(app, "SoundClashEcsStack", vpc_stack=vpc_stack, env=env)
 ecr_stack = EcrStack(app, "SoundClashEcrStack", env=env)
-logging_stack = LoggingStack(app, "SoundClashLoggingStack", env=env)
 
-# Load Balancer: Routes traffic to containers (depends on VPC)
+# 2. Infrastructure Layer: ECS and ALB (depends on VPC only)
+ecs_stack = EcsStack(app, "SoundClashEcsStack", vpc_stack=vpc_stack, env=env)
 alb_stack = AlbStack(app, "SoundClashAlbStack", vpc_stack=vpc_stack, env=env)
 
-# Frontend: Static website hosting (independent)
+# 3. Data Layer: Databases (depends on VPC)
+database_stack = DatabaseStack(app, "SoundClashDatabaseStack", vpc_stack=vpc_stack, env=env)
+
+# 4. Application Layer: Services and Frontend (depend on previous layers)
+song_service_stack = SongServiceStack(
+    app, "SongServiceStack",
+    vpc_stack=vpc_stack,
+    ecs_stack=ecs_stack,
+    alb_stack=alb_stack,
+    database_stack=database_stack,
+    env=env
+)
+
+# 5. Other independent stacks
 frontend_stack = FrontendStack(app, "SoundClashFrontendStack", env=env)
+logging_stack = LoggingStack(app, "SoundClashLoggingStack", env=env)
 
 app.synth()
