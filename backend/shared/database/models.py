@@ -38,24 +38,11 @@ class Song(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
-    artist = Column(String(200), nullable=False)
-    duration_seconds = Column(Integer)
+    artist = Column(String(200), nullable=False)  # Also used for movie/TV show names
     
     # Media sources
     youtube_id = Column(String(20), index=True)
     youtube_url = Column(String(500))
-    
-    # Game-specific difficulty timestamps
-    difficulty_easy_start = Column(Integer)  # Timestamp in seconds
-    difficulty_medium_start = Column(Integer)
-    difficulty_hard_start = Column(Integer)
-    
-    # YouTube heatmap data
-    heatmap_data = Column(Text)  # JSON string of heatmap segments
-    heatmap_last_updated = Column(DateTime)
-    
-    # Optional metadata
-    movie_tv_source = Column(String(200))  # If from movie/TV
     
     # Status and stats
     is_active = Column(Boolean, default=True)
