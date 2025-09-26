@@ -1,5 +1,31 @@
 {
+  "name": "sound-clash",
+  "version": "1.0.0",
+  "description": "AWS-Native Multi-Room Pop Culture Buzzer Game",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "lint": "cd frontend && npm run lint",
+    "deploy:infra": "cd infrastructure && cdk deploy --all",
+    "deploy:services": "bash scripts/deployment/deploy-services.sh"
+  },
   "devDependencies": {
     "@types/node": "^24.5.2"
-  }
+  },
+  "keywords": [
+    "aws",
+    "microservices",
+    "fastapi",
+    "react",
+    "buzzer-game",
+    "typescript",
+    "cdk"
+  ],
+  "author": "Sound Clash Team",
+  "license": "MIT"
 }

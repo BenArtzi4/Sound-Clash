@@ -37,6 +37,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Frontend build
+/frontend/dist/
+/frontend/build/
+
 # IDEs
 .vscode/
 .idea/
@@ -54,9 +58,26 @@ Thumbs.db
 # Logs
 *.log
 
+# Environment Variables - Keep templates, ignore actual configs
+.env/local.env
+.env/production.env
+.env/game-management.env
+.env/song-management.env
+.env/*.env
+!.env.template
+
+# Legacy directories that have been reorganized
+config/
+docker/
+local_database/
+
+# Docker volumes
+postgres_data/
+
 # Setup Scripts
 setup-foundation*
 
-# Personal Environment Variables - NEVER COMMIT
-.env
-loacal_database
+# Temporary files
+*.tmp
+*.temp
+.cache/
