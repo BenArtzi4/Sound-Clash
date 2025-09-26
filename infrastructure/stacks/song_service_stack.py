@@ -1,5 +1,5 @@
 """
-ECS deployment configuration for Song Management Service
+ECS deployment configuration for Song Management Service using EC2
 """
 
 from aws_cdk import (
@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_elasticloadbalancingv2 as elbv2,
     aws_ecr as ecr,
     aws_iam as iam,
+    aws_ec2 as ec2,
     CfnOutput
 )
 from constructs import Construct
@@ -23,7 +24,6 @@ class SongServiceStack(Stack):
         self.alb = alb_stack.alb
 
         # CREATE THE TASK EXECUTION ROLE LOCALLY IN THIS STACK
-        # This breaks the cyclic dependency by keeping the role and log group in the same stack
         self.task_execution_role = iam.Role(
             self, "SongServiceTaskExecutionRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
@@ -50,7 +50,7 @@ class SongServiceStack(Stack):
             "sound-clash/song-management"
         )
         
-        # Task Definition for Song Management Service, using the LOCAL role
+        # Task Definition for Song Management Service using EC2
         self.task_definition = ecs.Ec2TaskDefinition(
             self, "SongServiceTaskDef",
             family="song-management",
@@ -86,7 +86,7 @@ class SongServiceStack(Stack):
             )
         )
         
-        # Port mapping
+        # Port mapping for EC2
         self.container.add_port_mappings(
             ecs.PortMapping(
                 container_port=8001,
@@ -95,7 +95,7 @@ class SongServiceStack(Stack):
             )
         )
         
-        # ECS Service
+        # ECS EC2 Service
         self.service = ecs.Ec2Service(
             self, "SongService",
             cluster=self.cluster,
