@@ -1,0 +1,8 @@
+/* Main styles entry point */
+/* Base styles */
+@import './base/variables.css';
+@import './base/global.css';
+
+/* Component styles */
+@import './components/components.css';
+@import './components/loading-styles.css';

@@ -32,7 +32,7 @@ class SongCreateRequest(BaseModel):
     """Request model for creating songs"""
     title: str = Field(..., min_length=1, max_length=200)
     artist: str = Field(..., min_length=1, max_length=200)
-    youtube_id: Optional[str] = Field(None, regex=r'^[a-zA-Z0-9_-]{11}$')
+    youtube_id: Optional[str] = Field(None, pattern=r'^[a-zA-Z0-9_-]{11}$')
     genres: List[str] = Field(..., min_items=1, description="Genre slugs")
     
     @validator('youtube_id')

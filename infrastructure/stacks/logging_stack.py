@@ -10,40 +10,37 @@ class LoggingStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
         
         # ===== CLOUDWATCH LOG GROUPS FOR MICROSERVICES =====
+        # Import existing log groups instead of creating new ones
         
         # Game Management Service Logs
-        self.game_management_logs = logs.LogGroup(
+        self.game_management_logs = logs.LogGroup.from_log_group_name(
             self, "GameManagementLogs",
-            log_group_name="/ecs/sound-clash/game-management",
-            retention=logs.RetentionDays.ONE_WEEK
+            log_group_name="/ecs/sound-clash/game-management"
         )
         
         # Game API Service Logs
-        self.game_api_logs = logs.LogGroup(
+        self.game_api_logs = logs.LogGroup.from_log_group_name(
             self, "GameApiLogs",
-            log_group_name="/ecs/sound-clash/game-api",
-            retention=logs.RetentionDays.ONE_WEEK
+            log_group_name="/ecs/sound-clash/game-api"
         )
         
         # WebSocket Service Logs
-        self.websocket_logs = logs.LogGroup(
+
+        self.websocket_logs = logs.LogGroup.from_log_group_name(
             self, "WebSocketLogs",
-            log_group_name="/ecs/sound-clash/websocket",
-            retention=logs.RetentionDays.ONE_WEEK
+            log_group_name="/ecs/sound-clash/websocket"
         )
         
         # Manager Console Service Logs
-        self.manager_console_logs = logs.LogGroup(
+        self.manager_console_logs = logs.LogGroup.from_log_group_name(
             self, "ManagerConsoleLogs",
-            log_group_name="/ecs/sound-clash/manager-console",
-            retention=logs.RetentionDays.ONE_WEEK
+            log_group_name="/ecs/sound-clash/manager-console"
         )
         
         # Public Display Service Logs
-        self.public_display_logs = logs.LogGroup(
+        self.public_display_logs = logs.LogGroup.from_log_group_name(
             self, "PublicDisplayLogs",
-            log_group_name="/ecs/sound-clash/public-display",
-            retention=logs.RetentionDays.ONE_WEEK
+            log_group_name="/ecs/sound-clash/public-display"
         )
         
         # ===== OUTPUTS =====

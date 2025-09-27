@@ -37,14 +37,16 @@ services:
     container_name: soundclash-game-management
     ports:
       - "8000:8000"
+    env_file:
+      - ./.env/local.env
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=soundclash_local
       - POSTGRES_USER=dev
       - POSTGRES_PASSWORD=devpass
-      - REDIS_URL=redis://redis:6379
-      - AWS_REGION=us-east-1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - PORT=8000
     depends_on:
       postgres:
@@ -57,7 +59,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # NEW: Song Management Service
+  # Song Management Service
   song-management:
     build:
       context: ./backend/song-management
@@ -65,6 +67,8 @@ services:
     container_name: soundclash-song-management
     ports:
       - "8001:8001"
+    env_file:
+      - ./.env/local.env
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -72,7 +76,6 @@ services:
       - POSTGRES_USER=dev
       - POSTGRES_PASSWORD=devpass
       - PORT=8001
-      - DEBUG=true
     depends_on:
       postgres:
         condition: service_healthy
