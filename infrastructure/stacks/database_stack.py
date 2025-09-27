@@ -12,7 +12,7 @@ from aws_cdk import (
 from constructs import Construct
 
 class DatabaseStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, vpc_stack, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, vpc_stack, ecs_stack, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
         self.vpc = vpc_stack.vpc
@@ -96,6 +96,38 @@ class DatabaseStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
         
+        # ===== DATABASE SECURITY GROUPS (CREATED HERE TO AVOID CYCLES) =====
+        
+        # RDS Security Group - allows access from ECS instances
+        self.rds_sg = ec2.SecurityGroup(
+            self, "RdsSecurityGroup",
+            vpc=self.vpc,
+            description="Security group for RDS PostgreSQL",
+            allow_all_outbound=False
+        )
+        
+        # Allow ECS instances to access RDS PostgreSQL
+        self.rds_sg.add_ingress_rule(
+            ecs_stack.ecs_sg,
+            ec2.Port.tcp(5432),
+            "PostgreSQL access from ECS instances"
+        )
+        
+        # Redis Security Group - allows access from ECS instances
+        self.redis_sg = ec2.SecurityGroup(
+            self, "RedisSecurityGroup",
+            vpc=self.vpc,
+            description="Security group for Redis ElastiCache",
+            allow_all_outbound=False
+        )
+        
+        # Allow ECS instances to access Redis
+        self.redis_sg.add_ingress_rule(
+            ecs_stack.ecs_sg,
+            ec2.Port.tcp(6379),
+            "Redis access from ECS instances"
+        )
+        
         # ===== RDS POSTGRESQL (Persistent Data) =====
         
         # Database credentials secret
@@ -120,7 +152,7 @@ class DatabaseStack(Stack):
             )
         )
         
-        # RDS PostgreSQL instance
+        # RDS PostgreSQL instance - using the security group created in this stack
         self.postgres_instance = rds.DatabaseInstance(
             self, "PostgresDatabase",
             engine=rds.DatabaseInstanceEngine.postgres(
@@ -137,7 +169,7 @@ class DatabaseStack(Stack):
             credentials=rds.Credentials.from_secret(self.db_secret),
             vpc=self.vpc,
             subnet_group=self.db_subnet_group,
-            security_groups=[vpc_stack.rds_sg],
+            security_groups=[self.rds_sg],  # Use the security group created in this stack
             multi_az=False,  # Single-AZ for development
             backup_retention=Duration.days(7),
             deletion_protection=False,  # Allow deletion for development
@@ -153,7 +185,7 @@ class DatabaseStack(Stack):
             subnet_ids=[subnet.subnet_id for subnet in self.vpc.private_subnets]
         )
         
-        # Redis cluster
+        # Redis cluster - using the security group created in this stack
         self.redis_cluster = elasticache.CfnCacheCluster(
             self, "RedisCluster",
             cache_node_type="cache.t3.micro",  # ~$12/month
@@ -161,7 +193,7 @@ class DatabaseStack(Stack):
             engine_version="7.0",
             num_cache_nodes=1,
             cache_subnet_group_name=self.cache_subnet_group.ref,
-            vpc_security_group_ids=[vpc_stack.redis_sg.security_group_id]
+            vpc_security_group_ids=[self.redis_sg.security_group_id]  # Use the security group created in this stack
         )
         
         # ===== OUTPUTS =====
