@@ -60,51 +60,6 @@ class VpcStack(Stack):
             "HTTPS access from internet"
         )
         
-        # ECS Security Group
-        self.ecs_sg = ec2.SecurityGroup(
-            self, "EcsSecurityGroup",
-            vpc=self.vpc,
-            description="Security group for ECS tasks",
-            allow_all_outbound=True
-        )
-        
-        # Allow ALB to reach ECS services (ports 8000-8004)
-        self.ecs_sg.add_ingress_rule(
-            self.alb_sg,
-            ec2.Port.tcp_range(8000, 8004),
-            "Allow ALB to reach microservices"
-        )
-        
-        # RDS Security Group
-        self.rds_sg = ec2.SecurityGroup(
-            self, "RdsSecurityGroup",
-            vpc=self.vpc,
-            description="Security group for RDS PostgreSQL",
-            allow_all_outbound=False
-        )
-        
-        # Allow ECS to reach PostgreSQL
-        self.rds_sg.add_ingress_rule(
-            self.ecs_sg,
-            ec2.Port.tcp(5432),
-            "PostgreSQL access from ECS only"
-        )
-        
-        # ElastiCache Security Group
-        self.redis_sg = ec2.SecurityGroup(
-            self, "RedisSecurityGroup",
-            vpc=self.vpc,
-            description="Security group for Redis ElastiCache",
-            allow_all_outbound=False
-        )
-        
-        # Allow ECS to reach Redis
-        self.redis_sg.add_ingress_rule(
-            self.ecs_sg,
-            ec2.Port.tcp(6379),
-            "Redis access from ECS only"
-        )
-        
         # Outputs for other stacks to use
         CfnOutput(
             self, "VpcId",
