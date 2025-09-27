@@ -37,7 +37,7 @@ class EcsStack(Stack):
         )
 
         # Create security group for ECS instances
-        ecs_sg = ec2.SecurityGroup(
+        self.ecs_sg = ec2.SecurityGroup(
             self, "EcsInstanceSecurityGroup",
             vpc=self.vpc,
             description="Security group for ECS instances",
@@ -45,7 +45,7 @@ class EcsStack(Stack):
         )
 
         # Allow ALB to reach ECS instances on ports 8000-8004
-        ecs_sg.add_ingress_rule(
+        self.ecs_sg.add_ingress_rule(
             vpc_stack.alb_sg,
             ec2.Port.tcp_range(8000, 8004),
             "Allow ALB to reach ECS services"
@@ -65,7 +65,7 @@ class EcsStack(Stack):
             instance_type=ec2.InstanceType("t3.small"),
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
             role=ecs_instance_role,
-            security_group=ecs_sg,
+            security_group=self.ecs_sg,
             user_data=user_data
         )
 
@@ -94,9 +94,15 @@ class EcsStack(Stack):
         # Add capacity provider to cluster
         self.cluster.add_asg_capacity_provider(capacity_provider)
 
-        # Output the cluster name
+        # Output the cluster name and security group for other stacks
         CfnOutput(
             self, "EcsClusterName",
             value=self.cluster.cluster_name,
             description="The name of the ECS cluster"
+        )
+        
+        CfnOutput(
+            self, "EcsSecurityGroupId",
+            value=self.ecs_sg.security_group_id,
+            description="Security group ID for ECS instances"
         )
