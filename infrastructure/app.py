@@ -17,7 +17,7 @@ env = cdk.Environment(
     region=app.node.try_get_context("region") or "us-east-1"
 )
 
-# ===== DEPLOY STACKS IN DEPENDENCY ORDER =====
+# ===== DEPLOY STACKS IN CORRECT ORDER TO AVOID CONFLICTS =====
 
 # 1. Foundational Layer: VPC and ECR (completely independent)
 vpc_stack = VpcStack(app, "SoundClashVpcStack", env=env)
@@ -27,8 +27,12 @@ ecr_stack = EcrStack(app, "SoundClashEcrStack", env=env)
 ecs_stack = EcsStack(app, "SoundClashEcsStack", vpc_stack=vpc_stack, env=env)
 alb_stack = AlbStack(app, "SoundClashAlbStack", vpc_stack=vpc_stack, env=env)
 
-# 3. Data Layer: Databases (depends on VPC)
-database_stack = DatabaseStack(app, "SoundClashDatabaseStack", vpc_stack=vpc_stack, env=env)
+# 3. Data Layer: Databases (force deployment of new version)
+# This creates new security groups and stops using VPC exports
+database_stack = DatabaseStack(app, "SoundClashDatabaseStack", 
+                              vpc_stack=vpc_stack, 
+                              ecs_stack=ecs_stack,
+                              env=env)
 
 # 4. Application Layer: Services and Frontend (depend on previous layers)
 song_service_stack = SongServiceStack(
