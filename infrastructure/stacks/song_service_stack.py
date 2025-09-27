@@ -44,6 +44,13 @@ class SongServiceStack(Stack):
             )
         )
 
+        # CREATE TASK ROLE FOR RUNTIME PERMISSIONS
+        self.task_role = iam.Role(
+            self, "SongServiceTaskRole",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            description="Task role for Song Service runtime permissions",
+        )
+
         # Use ECR Repository from its name
         self.song_repository = ecr.Repository.from_repository_name(
             self, "SongServiceRepository",
@@ -54,8 +61,8 @@ class SongServiceStack(Stack):
         self.task_definition = ecs.Ec2TaskDefinition(
             self, "SongServiceTaskDef",
             family="song-management",
-            # Use the task execution role created in THIS stack
-            execution_role=self.task_execution_role
+            execution_role=self.task_execution_role,
+            task_role=self.task_role
         )
         
         # Container Definition
@@ -63,7 +70,7 @@ class SongServiceStack(Stack):
             "SongServiceContainer",
             # Use the ECR Repository for the image
             image=ecs.ContainerImage.from_ecr_repository(self.song_repository),
-            memory_limit_mib=512,
+            memory_limit_mib=400,  # Reduced to fit available memory
             cpu=256,
             essential=True,
             environment={
@@ -101,7 +108,8 @@ class SongServiceStack(Stack):
             cluster=self.cluster,
             task_definition=self.task_definition,
             desired_count=1,
-            service_name="song-management"
+            service_name="song-management",
+            health_check_grace_period=Duration.minutes(2)  # Give more time for startup
         )
         
         # Auto Scaling configuration
@@ -129,10 +137,11 @@ class SongServiceStack(Stack):
                 enabled=True,
                 healthy_http_codes="200",
                 interval=Duration.seconds(30),
-                path="/health",
+                path="/health/",  # Fixed: Added trailing slash to match FastAPI redirect
                 protocol=elbv2.Protocol.HTTP,
-                timeout=Duration.seconds(5),
-                unhealthy_threshold_count=3
+                timeout=Duration.seconds(10),  # Increased from 5 to 10 seconds
+                unhealthy_threshold_count=3,
+                healthy_threshold_count=2
             )
         )
         
@@ -159,6 +168,6 @@ class SongServiceStack(Stack):
         
         CfnOutput(
             self, "SongServiceHealthCheck",
-            value=f"http://{alb_stack.alb.load_balancer_dns_name}/api/songs/health",
+            value=f"http://{alb_stack.alb.load_balancer_dns_name}/health",
             description="Song Service Health Check URL"
         )

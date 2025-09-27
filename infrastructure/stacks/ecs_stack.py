@@ -62,7 +62,7 @@ class EcsStack(Stack):
         # Create Launch Template using the high-level construct but with explicit configuration
         launch_template = ec2.LaunchTemplate(
             self, "EcsLaunchTemplate",
-            instance_type=ec2.InstanceType("t3.micro"),
+            instance_type=ec2.InstanceType("t3.small"),
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
             role=ecs_instance_role,
             security_group=ecs_sg,

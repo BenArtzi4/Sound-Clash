@@ -10,70 +10,36 @@ class EcrStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
         
         # ===== ECR REPOSITORIES FOR MICROSERVICES =====
+        # Use existing repositories by importing them by name
         
         # Game Management Service Repository
-        self.game_management_repo = ecr.Repository(
+        self.game_management_repo = ecr.Repository.from_repository_name(
             self, "GameManagementRepo",
-            repository_name="sound-clash/game-management",
-            lifecycle_rules=[
-                ecr.LifecycleRule(
-                    max_image_count=10,  # Keep only 10 most recent images
-                    rule_priority=1,
-                    description="Keep only 10 recent images to save storage costs"
-                )
-            ]
+            repository_name="sound-clash/game-management"
         )
         
         # Game API Service Repository
-        self.game_api_repo = ecr.Repository(
+        self.game_api_repo = ecr.Repository.from_repository_name(
             self, "GameApiRepo", 
-            repository_name="sound-clash/game-api",
-            lifecycle_rules=[
-                ecr.LifecycleRule(
-                    max_image_count=10,
-                    rule_priority=1,
-                    description="Keep only 10 recent images to save storage costs"
-                )
-            ]
+            repository_name="sound-clash/game-api"
         )
         
         # WebSocket Service Repository
-        self.websocket_repo = ecr.Repository(
+        self.websocket_repo = ecr.Repository.from_repository_name(
             self, "WebSocketRepo",
-            repository_name="sound-clash/websocket-service",
-            lifecycle_rules=[
-                ecr.LifecycleRule(
-                    max_image_count=10,
-                    rule_priority=1,
-                    description="Keep only 10 recent images to save storage costs"
-                )
-            ]
+            repository_name="sound-clash/websocket-service"
         )
         
         # Manager Console Service Repository
-        self.manager_console_repo = ecr.Repository(
+        self.manager_console_repo = ecr.Repository.from_repository_name(
             self, "ManagerConsoleRepo",
-            repository_name="sound-clash/manager-console",
-            lifecycle_rules=[
-                ecr.LifecycleRule(
-                    max_image_count=10,
-                    rule_priority=1,
-                    description="Keep only 10 recent images to save storage costs"
-                )
-            ]
+            repository_name="sound-clash/manager-console"
         )
         
         # Public Display Service Repository
-        self.public_display_repo = ecr.Repository(
+        self.public_display_repo = ecr.Repository.from_repository_name(
             self, "PublicDisplayRepo",
-            repository_name="sound-clash/public-display",
-            lifecycle_rules=[
-                ecr.LifecycleRule(
-                    max_image_count=10,
-                    rule_priority=1,
-                    description="Keep only 10 recent images to save storage costs"
-                )
-            ]
+            repository_name="sound-clash/public-display"
         )
         
         # ===== OUTPUTS =====
