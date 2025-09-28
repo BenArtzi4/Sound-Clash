@@ -1,1 +1,1 @@
-# Database connection managers
+# Database package for Game Management Service
