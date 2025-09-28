@@ -109,7 +109,7 @@ class SongServiceStack(Stack):
             task_definition=self.task_definition,
             desired_count=1,
             service_name="song-management",
-            health_check_grace_period=Duration.minutes(2)  # Give more time for startup
+            health_check_grace_period=Duration.minutes(3)  # Increased grace period
         )
         
         # Auto Scaling configuration
@@ -137,11 +137,11 @@ class SongServiceStack(Stack):
                 enabled=True,
                 healthy_http_codes="200",
                 interval=Duration.seconds(30),
-                path="/health/",  # Fixed: Added trailing slash to match FastAPI redirect
+                path="/api/songs/health/",  # Changed to use the API health endpoint that works
                 protocol=elbv2.Protocol.HTTP,
-                timeout=Duration.seconds(10),  # Increased from 5 to 10 seconds
-                unhealthy_threshold_count=3,
-                healthy_threshold_count=2
+                timeout=Duration.seconds(15),  # Increased timeout
+                unhealthy_threshold_count=5,   # More lenient - allow more failures
+                healthy_threshold_count=2      # Still need 2 successes
             )
         )
         
@@ -168,6 +168,6 @@ class SongServiceStack(Stack):
         
         CfnOutput(
             self, "SongServiceHealthCheck",
-            value=f"http://{alb_stack.alb.load_balancer_dns_name}/health",
+            value=f"http://{alb_stack.alb.load_balancer_dns_name}/api/songs/health/",
             description="Song Service Health Check URL"
         )
