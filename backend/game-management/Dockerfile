@@ -28,5 +28,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Run the simple application
-CMD ["python", "main_simple.py"]
+# Run the main application (not the simplified version)
+CMD ["python", "main.py"]
