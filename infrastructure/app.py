@@ -8,6 +8,7 @@ from stacks.ecr_stack import EcrStack
 from stacks.logging_stack import LoggingStack
 from stacks.frontend_stack import FrontendStack
 from stacks.song_service_stack import SongServiceStack
+from stacks.websocket_stack import WebSocketServiceStack
 
 app = cdk.App()
 
@@ -41,6 +42,14 @@ song_service_stack = SongServiceStack(
     ecs_stack=ecs_stack,
     alb_stack=alb_stack,
     database_stack=database_stack,
+    env=env
+)
+
+websocket_service_stack = WebSocketServiceStack(
+    app, "WebSocketServiceStack",
+    vpc_stack=vpc_stack,
+    ecs_stack=ecs_stack,
+    alb_stack=alb_stack,
     env=env
 )
 
