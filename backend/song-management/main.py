@@ -1,5 +1,5 @@
 """
-Song Management Service - With database connection test
+Song Management Service - Fixed version with proper health checks and robust database connection
 """
 
 from fastapi import FastAPI, HTTPException
@@ -8,6 +8,11 @@ import os
 import asyncio
 import asyncpg
 import traceback
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Song Management Service",
@@ -37,10 +42,10 @@ database_available = False
 last_error = None
 
 async def init_db():
-    """Initialize database connection"""
+    """Initialize database connection - non-blocking for startup"""
     global connection_pool, database_available, last_error
     try:
-        print(f"Attempting to connect to database at {DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}")
+        logger.info(f"Attempting to connect to database at {DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}")
         connection_pool = await asyncpg.create_pool(
             **DATABASE_CONFIG,
             min_size=1,
@@ -53,16 +58,22 @@ async def init_db():
             await conn.execute("SELECT 1")
             database_available = True
             last_error = None
-            print("✅ Database connected successfully")
+            logger.info("✅ Database connected successfully")
             
     except Exception as e:
-        print(f"❌ Database connection failed: {e}")
+        logger.error(f"❌ Database connection failed: {e}")
         database_available = False
         last_error = str(e)
 
+async def init_db_background():
+    """Initialize database connection in background"""
+    await asyncio.sleep(1)  # Small delay to let app start
+    await init_db()
+
 @app.on_event("startup")
 async def startup():
-    await init_db()
+    # Start database connection in background to not block app startup
+    asyncio.create_task(init_db_background())
 
 @app.get("/api/songs/")
 async def root():
@@ -72,20 +83,31 @@ async def root():
         "status": "running",
         "database_connected": database_available,
         "endpoints": {
-            "health": "/api/songs/health/",
+            "health": "/health",
             "status": "/api/songs/status",
             "test-connection": "/api/songs/test-connection",
-            "songs": "/api/songs/songs/" if database_available else None
+            "database-schema": "/api/songs/database-schema"
         }
     }
 
 @app.get("/api/songs/health/")
-async def health():
+async def health_with_slash():
+    """Health endpoint with slash for backward compatibility"""
     return {
         "status": "healthy",
         "service": "song-management", 
         "version": "1.0.0",
         "database": "connected" if database_available else "disconnected"
+    }
+
+@app.get("/health")
+async def health():
+    """Primary health endpoint for Docker health check"""
+    return {
+        "status": "healthy",
+        "service": "song-management", 
+        "version": "1.0.0",
+        "timestamp": asyncio.get_event_loop().time()
     }
 
 @app.get("/api/songs/status")
@@ -110,7 +132,7 @@ async def status():
 async def test_connection():
     """Test database connection with detailed error info"""
     try:
-        print("Testing database connection...")
+        logger.info("Testing database connection...")
         
         # Test connection with timeout
         conn = await asyncio.wait_for(
@@ -155,9 +177,39 @@ async def test_connection():
             }
         }
 
-@app.get("/health/")
-async def health_check():
-    return {"status": "healthy", "service": "song-management"}
+@app.get("/api/songs/database-schema")
+async def check_database_schema():
+    """Check if database tables exist"""
+    if not database_available:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        async with connection_pool.acquire() as conn:
+            # Check tables exist
+            tables_query = """
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_type = 'BASE TABLE'
+                ORDER BY table_name
+            """
+            tables = await conn.fetch(tables_query)
+            table_names = [row['table_name'] for row in tables]
+            
+            return {
+                "status": "success",
+                "tables_exist": table_names,
+                "expected_tables": ["songs", "genres", "song_genres"],
+                "missing_tables": [t for t in ["songs", "genres", "song_genres"] if t not in table_names],
+                "schema_ready": all(t in table_names for t in ["songs", "genres", "song_genres"])
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Schema check failed: {str(e)}",
+            "error_type": type(e).__name__
+        }
 
 if __name__ == "__main__":
     import uvicorn
