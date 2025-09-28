@@ -21,12 +21,12 @@ RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
 USER app
 
-# Health check
+# Health check - Updated to use port 8002
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8003/health || exit 1
+    CMD curl -f http://localhost:8002/health || exit 1
 
-# Expose port
-EXPOSE 8003
+# Expose port 8002
+EXPOSE 8002
 
 # Run application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
