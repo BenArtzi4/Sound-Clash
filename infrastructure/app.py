@@ -9,6 +9,7 @@ from stacks.logging_stack import LoggingStack
 from stacks.frontend_stack import FrontendStack
 from stacks.song_service_stack import SongServiceStack
 from stacks.websocket_stack import WebSocketServiceStack
+from stacks.game_management_service_stack import GameManagementServiceStack
 
 app = cdk.App()
 
@@ -50,6 +51,15 @@ websocket_service_stack = WebSocketServiceStack(
     vpc_stack=vpc_stack,
     ecs_stack=ecs_stack,
     alb_stack=alb_stack,
+    env=env
+)
+
+game_management_service_stack = GameManagementServiceStack(
+    app, "GameManagementServiceStack",
+    vpc_stack=vpc_stack,
+    ecs_stack=ecs_stack,
+    alb_stack=alb_stack,
+    database_stack=database_stack,
     env=env
 )
 
