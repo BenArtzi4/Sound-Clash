@@ -82,7 +82,8 @@ class GameManagementServiceStack(Stack):
                 "POSTGRES_HOST": database_stack.postgres_instance.instance_endpoint.hostname,
                 "POSTGRES_DB": "soundclash",
                 "POSTGRES_USER": "postgres",
-                "POSTGRES_PORT": "5432"
+                "POSTGRES_PORT": "5432",
+                "DATABASE_INTEGRATION": "enabled"  # Force task definition update
             },
             secrets={
                 "POSTGRES_PASSWORD": ecs.Secret.from_secrets_manager(
