@@ -133,13 +133,13 @@ class AlbStack(Stack):
         
         # ===== PATH-BASED ROUTING RULES =====
         
-        # Route /api/games/* to Game Management Service
+        # Route /api/games/* AND /api/games to Game Management Service
         elbv2.ApplicationListenerRule(
             self, "GameManagementRule",
             listener=self.http_listener,
             priority=100,
             conditions=[
-                elbv2.ListenerCondition.path_patterns(["/api/games/*"])
+                elbv2.ListenerCondition.path_patterns(["/api/games/*", "/api/games"])
             ],
             action=elbv2.ListenerAction.forward([self.game_management_tg])
         )
