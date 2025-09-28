@@ -100,6 +100,23 @@ class AlbStack(Stack):
             )
         )
         
+        # Song Service Target Group (port 8005) - using different name to avoid conflict
+        self.song_service_tg = elbv2.ApplicationTargetGroup(
+            self, "SongServiceTGNew",
+            vpc=self.vpc,
+            port=8005,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            target_group_name="song-service-new-tg",
+            health_check=elbv2.HealthCheck(
+                enabled=True,
+                healthy_http_codes="200",
+                path="/health",
+                protocol=elbv2.Protocol.HTTP,
+                timeout=Duration.seconds(5),
+                interval=Duration.seconds(30)
+            )
+        )
+        
         # Public Display Target Group (port 8004)
         self.public_display_tg = elbv2.ApplicationTargetGroup(
             self, "PublicDisplayTG",
@@ -133,6 +150,17 @@ class AlbStack(Stack):
         
         # ===== PATH-BASED ROUTING RULES =====
         
+        # Route /health to Game Management Service (highest priority) - using different ID to avoid conflict
+        elbv2.ApplicationListenerRule(
+            self, "HealthEndpointRuleNew",
+            listener=self.http_listener,
+            priority=60,
+            conditions=[
+                elbv2.ListenerCondition.path_patterns(["/health"])
+            ],
+            action=elbv2.ListenerAction.forward([self.game_management_tg])
+        )
+        
         # Route /api/games/* AND /api/games to Game Management Service
         elbv2.ApplicationListenerRule(
             self, "GameManagementRule",
@@ -142,6 +170,17 @@ class AlbStack(Stack):
                 elbv2.ListenerCondition.path_patterns(["/api/games/*", "/api/games"])
             ],
             action=elbv2.ListenerAction.forward([self.game_management_tg])
+        )
+        
+        # Route /api/songs/* to Song Service
+        elbv2.ApplicationListenerRule(
+            self, "SongServiceRule",
+            listener=self.http_listener,
+            priority=160,
+            conditions=[
+                elbv2.ListenerCondition.path_patterns(["/api/songs/*"])
+            ],
+            action=elbv2.ListenerAction.forward([self.song_service_tg])
         )
         
         # Route /api/gameplay/* to Game API Service  
@@ -212,6 +251,12 @@ class AlbStack(Stack):
             self, "GameApiTargetGroupArn",
             value=self.game_api_tg.target_group_arn,
             description="Game API Target Group ARN"
+        )
+        
+        CfnOutput(
+            self, "SongServiceTargetGroupArn",
+            value=self.song_service_tg.target_group_arn,
+            description="Song Service Target Group ARN"
         )
         
         CfnOutput(
