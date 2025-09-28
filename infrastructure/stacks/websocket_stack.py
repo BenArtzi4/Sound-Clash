@@ -49,10 +49,10 @@ class WebSocketServiceStack(Stack):
             )
         )
 
-        # ECR Repository
-        self.websocket_repository = ecr.Repository(
+        # Use existing ECR Repository (referenced, not created)
+        self.websocket_repository = ecr.Repository.from_repository_name(
             self, "WebSocketRepository",
-            repository_name="sound-clash/websocket-service"
+            "sound-clash/websocket-service"
         )
         
         # Task Definition
@@ -63,7 +63,7 @@ class WebSocketServiceStack(Stack):
             task_role=self.task_role
         )
         
-        # Container Definition
+        # Container Definition - Use port 8002 to match ALB target group
         self.container = self.task_definition.add_container(
             "WebSocketContainer",
             image=ecs.ContainerImage.from_ecr_repository(self.websocket_repository),
@@ -71,7 +71,7 @@ class WebSocketServiceStack(Stack):
             cpu=256,
             essential=True,
             environment={
-                "PORT": "8003",
+                "PORT": "8002",  # Changed to match ALB target group
                 "AWS_REGION": self.region,
                 "TEAM_CONNECTIONS_TABLE": "sound-clash-team-connections",
                 "ACTIVE_GAMES_TABLE": "sound-clash-active-games"
@@ -81,11 +81,11 @@ class WebSocketServiceStack(Stack):
             )
         )
         
-        # Port mapping
+        # Port mapping - Use port 8002 to match ALB target group
         self.container.add_port_mappings(
             ecs.PortMapping(
-                container_port=8003,
-                host_port=8003,
+                container_port=8002,
+                host_port=8002,
                 protocol=ecs.Protocol.TCP
             )
         )
@@ -100,39 +100,8 @@ class WebSocketServiceStack(Stack):
             health_check_grace_period=Duration.minutes(3)
         )
         
-        # Target Group for WebSocket connections
-        self.target_group = elbv2.ApplicationTargetGroup(
-            self, "WebSocketTargetGroup",
-            port=8003,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            vpc=self.vpc,
-            target_type=elbv2.TargetType.INSTANCE,
-            target_group_name="websocket-tg",
-            health_check=elbv2.HealthCheck(
-                enabled=True,
-                healthy_http_codes="200",
-                interval=Duration.seconds(30),
-                path="/health",
-                protocol=elbv2.Protocol.HTTP,
-                timeout=Duration.seconds(15),
-                unhealthy_threshold_count=5,
-                healthy_threshold_count=2
-            )
-        )
-        
-        # Register service with target group
-        self.service.attach_to_application_target_group(self.target_group)
-        
-        # ALB Listener Rule for WebSocket connections
-        self.listener_rule = elbv2.ApplicationListenerRule(
-            self, "WebSocketListenerRule",
-            listener=alb_stack.http_listener,
-            priority=100,  # Higher priority than song service
-            conditions=[
-                elbv2.ListenerCondition.path_patterns(["/ws/*", "/api/game/*"])
-            ],
-            action=elbv2.ListenerAction.forward([self.target_group])
-        )
+        # Use existing target group from ALB stack instead of creating new one
+        self.service.attach_to_application_target_group(alb_stack.websocket_tg)
         
         # Outputs
         CfnOutput(
@@ -148,7 +117,7 @@ class WebSocketServiceStack(Stack):
         )
         
         CfnOutput(
-            self, "ECRRepositoryURI",
-            value=self.websocket_repository.repository_uri,
-            description="ECR Repository URI for WebSocket Service"
+            self, "WebSocketServiceNote",
+            value="WebSocket service uses existing target group and listener rules from ALB stack",
+            description="Deployment Configuration"
         )
