@@ -4,9 +4,8 @@ uvicorn[standard]==0.24.0
 websockets==12.0
 pydantic==2.5.0
 
-# AWS Dependencies
+# AWS Dependencies - Use synchronous boto3 like other services
 boto3==1.34.0
-aioboto3==12.0.0
 
 # Utilities
 python-json-logger==2.0.7
