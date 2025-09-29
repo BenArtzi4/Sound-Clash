@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGame } from '../context/GameContext';
-import Logo from '../components/Logo';
+import { useGame } from '../../context/GameContext';
+import Logo from '../../components/common/Logo';
 
 const JoinGamePage: React.FC = () => {
   const navigate = useNavigate();

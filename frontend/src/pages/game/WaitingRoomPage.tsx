@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useGame } from '../context/GameContext';
-import Logo from '../components/Logo';
+import { useGame } from '../../context/GameContext';
+import Logo from '../../components/common/Logo';
 
 interface Team {
   name: string;

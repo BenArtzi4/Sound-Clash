@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 class WebSocketIntegration:
     def __init__(self):
-        self.websocket_url = os.getenv("WEBSOCKET_SERVICE_URL", "http://localhost:8002")
+        # In production, use the internal ALB DNS or service discovery
+        # For now, hardcode the ALB URL since both services are behind the same ALB
+        self.websocket_url = os.getenv("WEBSOCKET_SERVICE_URL", "http://sound-clash-alb-1680771077.us-east-1.elb.amazonaws.com")
         self.session: Optional[aiohttp.ClientSession] = None
     
     async def initialize(self):
@@ -30,8 +32,8 @@ class WebSocketIntegration:
         try:
             await self.initialize()
             
+            # Match the exact format the WebSocket service expects
             payload = {
-                "game_code": game_code,
                 "action": "game_created",
                 "settings": settings
             }

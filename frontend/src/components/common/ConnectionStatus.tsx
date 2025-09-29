@@ -1,5 +1,5 @@
 import React from 'react';
-import { useConnectionStatus } from '../hooks/useConnectionStatus';
+import { useConnectionStatus } from '../../hooks/useConnectionStatus';
 
 const ConnectionStatus: React.FC = () => {
   const { status, isOnline, retryConnection } = useConnectionStatus();

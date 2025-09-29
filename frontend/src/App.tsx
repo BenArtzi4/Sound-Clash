@@ -25,7 +25,6 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error('App Error:', error, errorInfo);
-    // Here you could send error to monitoring service
   }
 
   render() {
@@ -33,16 +32,16 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
       return (
         <div className="error-boundary">
           <div className="error-content">
-            <h2>🎵 Oops! Something went wrong</h2>
+            <h2>Oops! Something went wrong</h2>
             <p>The Sound Clash app encountered an unexpected error.</p>
             <button 
               onClick={() => window.location.reload()}
               className="btn btn-primary"
             >
-              🔄 Reload App
+              Reload App
             </button>
             <a href="/" className="btn btn-secondary">
-              🏠 Go Home
+              Go Home
             </a>
           </div>
         </div>
@@ -53,12 +52,15 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
   }
 }
 
-// Lazy load pages for better performance
+// Lazy load pages
 const LandingPage = lazy(() => import('./pages/LandingPage'));
-const JoinGamePage = lazy(() => import('./pages/JoinGamePage'));
-const CreateGamePage = lazy(() => import('./pages/CreateGamePage'));
-const WaitingRoomPage = lazy(() => import('./pages/WaitingRoomPage'));
+const JoinGamePage = lazy(() => import('./pages/game/JoinGamePage'));
+const CreateGamePage = lazy(() => import('./pages/game/CreateGamePage'));
+const WaitingRoomPage = lazy(() => import('./pages/game/WaitingRoomPage'));
+const WaitingRoom = lazy(() => import('./pages/game/WaitingRoom'));
+const ManagerConsole = lazy(() => import('./pages/manager/ManagerConsole'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const WebSocketTester = lazy(() => import('./components/WebSocketTester'));
 
 // Loading component
 const PageLoadingSpinner = () => (
@@ -78,7 +80,7 @@ function App() {
           <div className="App">
             <Suspense fallback={<PageLoadingSpinner />}>
               <Routes>
-                {/* Landing page - choose to join or create */}
+                {/* Landing page */}
                 <Route path="/" element={<LandingPage />} />
                 
                 {/* Join existing game flow */}
@@ -89,6 +91,15 @@ function App() {
                 
                 {/* Waiting room for both creators and joiners */}
                 <Route path="/game/:gameCode/lobby" element={<WaitingRoomPage />} />
+                
+                {/* Task 2.3 - New Waiting Room with WebSocket */}
+                <Route path="/game/:gameCode/waiting" element={<WaitingRoom />} />
+                
+                {/* Task 2.3 - Manager Console */}
+                <Route path="/manager/:gameCode" element={<ManagerConsole />} />
+                
+                {/* WebSocket Phase 2 Testing */}
+                <Route path="/test/websocket" element={<WebSocketTester />} />
                 
                 {/* 404 page */}
                 <Route path="*" element={<NotFoundPage />} />

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGame } from '../context/GameContext';
-import Logo from '../components/Logo';
-import GenreSelector from '../components/GenreSelector';
-import type { CreateGameSettings } from '../types';
+import { useGame } from '../../context/GameContext';
+import Logo from '../../components/common/Logo';
+import GenreSelector from '../../components/game/GenreSelector';
+import type { CreateGameSettings } from '../../types';
 
 const CreateGamePage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ const CreateGamePage: React.FC = () => {
   const [error, setError] = useState<string>('');
 
   const updateSettings = (updates: Partial<CreateGameSettings>) => {
-    setSettings(prev => ({ ...prev, ...updates }));
+    setSettings((prev: CreateGameSettings) => ({ ...prev, ...updates }));
     setError(''); // Clear error when user makes changes
   };
 
@@ -118,7 +118,7 @@ const CreateGamePage: React.FC = () => {
             
             <GenreSelector
               selectedGenres={settings.selectedGenres}
-              onSelectionChange={(genres) => updateSettings({ selectedGenres: genres })}
+              onSelectionChange={(genres: string[]) => updateSettings({ selectedGenres: genres })}
               loading={loading}
             />
           </div>
@@ -296,7 +296,7 @@ const CreateGamePage: React.FC = () => {
               <div className="summary-section">
                 <h3 className="headline">Selected Genres ({settings.selectedGenres.length})</h3>
                 <div className="genre-tags-review">
-                  {settings.selectedGenres.map(genreId => (
+                  {settings.selectedGenres.map((genreId: string) => (
                     <span key={genreId} className="genre-tag-review">
                       {genreId}
                     </span>
