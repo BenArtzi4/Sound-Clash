@@ -1,0 +1,334 @@
+.waiting-room-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.waiting-room,
+.join-form-container,
+.game-starting {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 100%;
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.waiting-room-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.waiting-room-header h1 {
+  margin: 0 0 10px 0;
+  font-size: 2.5rem;
+  color: #333;
+}
+
+.game-code {
+  font-size: 1.1rem;
+  color: #666;
+  margin: 10px 0;
+}
+
+.game-code strong {
+  color: #667eea;
+  font-size: 1.5rem;
+  letter-spacing: 2px;
+}
+
+.connection-status {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.status-connected {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.status-connecting {
+  color: #f59e0b;
+  font-weight: 600;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.your-team-info {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.your-team-info h2 {
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.team-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 15px 30px;
+  border-radius: 50px;
+  font-size: 1.3rem;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.teams-section {
+  margin-bottom: 30px;
+}
+
+.teams-section h2 {
+  font-size: 1.5rem;
+  color: #333;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.team-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px 20px;
+  background: #f3f4f6;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.team-item:hover {
+  background: #e5e7eb;
+  transform: translateX(5px);
+}
+
+.team-item.current-team {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.team-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: white;
+  color: #667eea;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.team-item.current-team .team-number {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.team-name {
+  flex: 1;
+  font-size: 1.1rem;
+}
+
+.team-connected {
+  color: #10b981;
+  font-size: 1.2rem;
+  animation: blink 2s infinite;
+}
+
+.team-item.current-team .team-connected {
+  color: #a7f3d0;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.waiting-message {
+  text-align: center;
+  color: #999;
+  font-style: italic;
+  padding: 30px;
+}
+
+.waiting-message-box {
+  text-align: center;
+  background: #fef3c7;
+  border: 2px solid #fbbf24;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.waiting-message-box p {
+  margin: 0;
+  color: #92400e;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.join-form-container h1 {
+  text-align: center;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.join-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #333;
+}
+
+.form-group input {
+  padding: 15px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 15px 30px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #666;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+.error-message {
+  background: #fee2e2;
+  border: 2px solid #ef4444;
+  color: #991b1b;
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.game-starting {
+  text-align: center;
+  padding: 60px 40px;
+}
+
+.game-starting h1 {
+  font-size: 3rem;
+  margin-bottom: 20px;
+  color: #667eea;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.game-starting p {
+  font-size: 1.3rem;
+  color: #666;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .waiting-room,
+  .join-form-container,
+  .game-starting {
+    padding: 30px 20px;
+  }
+
+  .waiting-room-header h1 {
+    font-size: 2rem;
+  }
+
+  .game-code strong {
+    font-size: 1.2rem;
+  }
+
+  .team-badge {
+    font-size: 1.1rem;
+    padding: 12px 25px;
+  }
+
+  .team-item {
+    padding: 12px 15px;
+  }
+
+  .game-starting h1 {
+    font-size: 2rem;
+  }
+}
