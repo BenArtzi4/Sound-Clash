@@ -77,13 +77,14 @@ class GameManagementServiceStack(Stack):
             cpu=256,
             memory_limit_mib=512,
             environment={
-                "PORT": "8000",  # Changed to match ALB target group port
+                "PORT": "8000",
                 "AWS_REGION": self.region,
                 "POSTGRES_HOST": database_stack.postgres_instance.instance_endpoint.hostname,
                 "POSTGRES_DB": "soundclash",
                 "POSTGRES_USER": "postgres",
                 "POSTGRES_PORT": "5432",
-                "DATABASE_INTEGRATION": "enabled"  # Force task definition update
+                "DATABASE_INTEGRATION": "enabled",
+                "WEBSOCKET_SERVICE_URL": f"http://{alb_stack.alb.load_balancer_dns_name}/ws"
             },
             secrets={
                 "POSTGRES_PASSWORD": ecs.Secret.from_secrets_manager(
