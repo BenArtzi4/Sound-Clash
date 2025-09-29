@@ -27,15 +27,15 @@ export default defineConfig({
           // Vendor chunks
           'react-vendor': ['react', 'react-dom'],
           'router-vendor': ['react-router-dom'],
-          'socket-vendor': ['socket.io-client'],
-          'http-vendor': ['axios'],
           
-          // Feature chunks
+          // Feature chunks - updated paths
           'pages': [
             './src/pages/LandingPage.tsx',
-            './src/pages/JoinGamePage.tsx', 
-            './src/pages/CreateGamePage.tsx',
-            './src/pages/WaitingRoomPage.tsx',
+            './src/pages/game/JoinGamePage.tsx', 
+            './src/pages/game/CreateGamePage.tsx',
+            './src/pages/game/WaitingRoomPage.tsx',
+            './src/pages/game/WaitingRoom.tsx',
+            './src/pages/manager/ManagerConsole.tsx',
             './src/pages/NotFoundPage.tsx'
           ]
         },
