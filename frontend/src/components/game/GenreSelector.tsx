@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/api';
-import type { GenreCategory, GenreOption } from '../types';
+import { apiService } from '../../services/api';
+import type { GenreCategory, GenreOption } from '../../types';
 
 interface GenreSelectorProps {
   selectedGenres: string[];
@@ -162,7 +162,7 @@ const GenreSelector: React.FC<GenreSelectorProps> = ({
       <div className="genre-categories">
         {Object.entries(categories).map(([categoryId, category]) => {
           const categoryGenres = category.genres;
-          const selectedInCategory = categoryGenres.filter(g => selectedGenres.includes(g.id)).length;
+          const selectedInCategory = categoryGenres.filter((g: GenreOption) => selectedGenres.includes(g.id)).length;
           const allSelected = selectedInCategory === categoryGenres.length;
           const someSelected = selectedInCategory > 0;
 
@@ -190,7 +190,7 @@ const GenreSelector: React.FC<GenreSelectorProps> = ({
               </div>
 
               <div className="genre-grid">
-                {categoryGenres.map(genre => (
+                {categoryGenres.map((genre: GenreOption) => (
                   <button
                     key={genre.id}
                     type="button"
