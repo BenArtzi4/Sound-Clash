@@ -98,7 +98,7 @@ class DatabaseStack(Stack):
         
         # ===== DATABASE SECURITY GROUPS (CREATED HERE TO AVOID CYCLES) =====
         
-        # RDS Security Group - allows access from ECS instances
+        # RDS Security Group - allows access from ECS instances AND development machines
         self.rds_sg = ec2.SecurityGroup(
             self, "RdsSecurityGroup",
             vpc=self.vpc,
@@ -111,6 +111,14 @@ class DatabaseStack(Stack):
             ecs_stack.ecs_sg,
             ec2.Port.tcp(5432),
             "PostgreSQL access from ECS instances"
+        )
+        
+        # ADDED: Allow development access from anywhere (for song management)
+        # In production, you would restrict this to specific IPs
+        self.rds_sg.add_ingress_rule(
+            ec2.Peer.any_ipv4(),
+            ec2.Port.tcp(5432),
+            "PostgreSQL access for development (restrict in production)"
         )
         
         # Redis Security Group - allows access from ECS instances
@@ -142,7 +150,7 @@ class DatabaseStack(Stack):
             )
         )
         
-        # Database subnet group (isolated subnets)
+        # Database subnet group (PUBLIC subnets for development access)
         self.db_subnet_group = rds.SubnetGroup(
             self, "DatabaseSubnetGroup",
             description="Subnet group for Sound Clash RDS PostgreSQL",
@@ -152,7 +160,7 @@ class DatabaseStack(Stack):
             )
         )
         
-        # RDS PostgreSQL instance - using the security group created in this stack
+        # RDS PostgreSQL instance - publicly accessible for development
         self.postgres_instance = rds.DatabaseInstance(
             self, "PostgresDatabase",
             engine=rds.DatabaseInstanceEngine.postgres(
@@ -169,11 +177,12 @@ class DatabaseStack(Stack):
             credentials=rds.Credentials.from_secret(self.db_secret),
             vpc=self.vpc,
             subnet_group=self.db_subnet_group,
-            security_groups=[self.rds_sg],  # Use the security group created in this stack
+            security_groups=[self.rds_sg],
             multi_az=False,  # Single-AZ for development
             backup_retention=Duration.days(7),
             deletion_protection=False,  # Allow deletion for development
-            removal_policy=RemovalPolicy.DESTROY
+            removal_policy=RemovalPolicy.DESTROY,
+            publicly_accessible=True  # ADDED: Allow public access for development
         )
         
         # ===== ELASTICACHE REDIS (Caching) =====
@@ -193,7 +202,7 @@ class DatabaseStack(Stack):
             engine_version="7.0",
             num_cache_nodes=1,
             cache_subnet_group_name=self.cache_subnet_group.ref,
-            vpc_security_group_ids=[self.redis_sg.security_group_id]  # Use the security group created in this stack
+            vpc_security_group_ids=[self.redis_sg.security_group_id]
         )
         
         # ===== OUTPUTS =====
