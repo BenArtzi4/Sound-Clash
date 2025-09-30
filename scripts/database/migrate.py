@@ -171,15 +171,14 @@ async def seed_genres():
                 INSERT INTO genres (name, slug, description, category, sort_order, is_active) VALUES
                 ('Rock', 'rock', 'Classic and modern rock music', 'styles', 1, true),
                 ('Pop', 'pop', 'Popular music across all eras', 'styles', 2, true),
-                ('Alternative Rock', 'alternative-rock', 'Alternative and grunge rock', 'styles', 3, true),
-                ('Hip-Hop', 'hip-hop', 'Hip-hop and rap music', 'styles', 4, true),
-                ('Electronic', 'electronic', 'Electronic dance music and EDM', 'styles', 5, true),
-                ('Soundtracks', 'soundtracks', 'Movie and TV soundtrack songs', 'media', 6, true),
-                ('Mizrahit', 'mizrahit', 'Israeli Middle Eastern pop music', 'israeli', 7, true),
-                ('Israeli Rock Pop', 'israeli-rock-pop', 'Israeli rock and pop fusion', 'israeli', 8, true),
-                ('Israeli Pop', 'israeli-pop', 'Contemporary Israeli pop music', 'israeli', 9, true),
-                ('Israeli Rap Hip-Hop', 'israeli-rap-hip-hop', 'Israeli rap and hip-hop', 'israeli', 10, true),
-                ('Israeli Cover', 'israeli-cover', 'Israeli cover versions and interpretations', 'israeli', 11, true)
+                ('Hip-Hop', 'hip-hop', 'Hip-hop and rap music', 'styles', 3, true),
+                ('Electronic', 'electronic', 'Electronic dance music and EDM', 'styles', 4, true),
+                ('Soundtracks', 'soundtracks', 'Movie and TV soundtrack songs', 'media', 5, true),
+                ('Mizrahit', 'mizrahit', 'Israeli Middle Eastern pop music', 'israeli', 6, true),
+                ('Israeli Rock Pop', 'israeli-rock-pop', 'Israeli rock and pop fusion', 'israeli', 7, true),
+                ('Israeli Pop', 'israeli-pop', 'Contemporary Israeli pop music', 'israeli', 8, true),
+                ('Israeli Rap Hip-Hop', 'israeli-rap-hip-hop', 'Israeli rap and hip-hop', 'israeli', 9, true),
+                ('Israeli Cover', 'israeli-cover', 'Israeli cover versions and interpretations', 'israeli', 10, true)
                 ON CONFLICT (slug) DO NOTHING;
             """
             
