@@ -1,0 +1,64 @@
+/* Round Info Component */
+.round-info-display {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.round-number {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.round-label {
+  font-size: 24px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.round-value {
+  font-size: 48px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.component-status {
+  text-align: center;
+}
+
+.status-text {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1f2937;
+  padding: 16px 24px;
+  background: #f3f4f6;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+/* TV/Projector Optimization */
+@media (min-width: 1920px) {
+  .round-info-display {
+    padding: 48px;
+  }
+
+  .round-label {
+    font-size: 32px;
+  }
+
+  .round-value {
+    font-size: 64px;
+  }
+
+  .status-text {
+    font-size: 36px;
+    padding: 20px 32px;
+  }
+}

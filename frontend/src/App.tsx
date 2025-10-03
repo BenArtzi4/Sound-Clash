@@ -59,7 +59,6 @@ const TeamGameplay = lazy(() => import('./pages/team/TeamGameplay'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TestPage = lazy(() => import('./pages/TestPage'));
 
-// Placeholder pages (to be built in later days)
 // Manager pages
 const ManagerConsoleNew = lazy(() => import('./pages/manager/ManagerConsoleNew'));
 const CreateGamePage = lazy(() => import('./pages/game/CreateGamePage'));
@@ -67,17 +66,9 @@ const WaitingRoomPage = lazy(() => import('./pages/game/WaitingRoomPage'));
 
 // Display pages
 const DisplayJoin = lazy(() => import('./pages/display/DisplayJoin'));
-
-// Placeholder pages (to be built later)
-const DisplayJoinPlaceholder = lazy(() => Promise.resolve({
-  default: () => (
-    <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <h1>Display Screen</h1>
-      <p>Display interface coming in Day 5</p>
-      <a href="/">← Back to Home</a>
-    </div>
-  )
-}));
+const DisplayLobby = lazy(() => import('./pages/display/DisplayLobby'));
+const DisplayGame = lazy(() => import('./pages/display/DisplayGame'));
+const DisplayWinner = lazy(() => import('./pages/display/DisplayWinner'));
 
 // Loading component
 const PageLoadingSpinner = () => (
@@ -109,11 +100,11 @@ function App() {
                 <Route path="/game/:gameCode/lobby" element={<WaitingRoomPage />} />
                 <Route path="/manager/game/:gameCode" element={<ManagerConsoleNew />} />
                 
-                {/* Display screens */}
+                {/* Display screens - COMPLETE */}
                 <Route path="/display/join" element={<DisplayJoin />} />
-                <Route path="/display/join/:gameCode" element={<DisplayJoinPlaceholder />} />
-                <Route path="/display/game/:gameCode" element={<DisplayJoinPlaceholder />} />
-                <Route path="/display/winner/:gameCode" element={<DisplayJoinPlaceholder />} />
+                <Route path="/display/join/:gameCode" element={<DisplayLobby />} />
+                <Route path="/display/game/:gameCode" element={<DisplayGame />} />
+                <Route path="/display/winner/:gameCode" element={<DisplayWinner />} />
                 
                 {/* Test Page */}
                 <Route path="/test" element={<TestPage />} />
