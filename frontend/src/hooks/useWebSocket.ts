@@ -1,225 +1,143 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
-export interface Team {
-  name: string;
-  joined_at: string;
-  connected: boolean;
-}
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
-export interface WebSocketMessage {
-  type: string;
-  [key: string]: any;
-}
-
-export interface UseWebSocketReturn {
-  isConnected: boolean;
-  teams: Team[];
-  totalTeams: number;
-  error: string | null;
-  sendMessage: (message: WebSocketMessage) => void;
-  connect: () => void;
-  disconnect: () => void;
-}
-
-interface UseWebSocketProps {
+interface UseWebSocketOptions {
   gameCode: string;
-  teamName?: string;
-  isManager?: boolean;
-  onMessage?: (message: WebSocketMessage) => void;
-  autoConnect?: boolean;
+  teamName: string;
+  role: 'team' | 'manager' | 'display';
+  onMessage?: (data: any) => void;
+  onConnected?: () => void;
+  onDisconnected?: () => void;
+  onError?: (error: Event) => void;
 }
 
-export const useWebSocket = ({
-  gameCode,
-  teamName,
-  isManager = false,
-  onMessage,
-  autoConnect = true
-}: UseWebSocketProps): UseWebSocketReturn => {
-  const [isConnected, setIsConnected] = useState(false);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [totalTeams, setTotalTeams] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  
-  const ws = useRef<WebSocket | null>(null);
-  const reconnectTimeout = useRef<NodeJS.Timeout>();
-  const heartbeatInterval = useRef<NodeJS.Timeout>();
+interface UseWebSocketReturn {
+  connectionStatus: ConnectionStatus;
+  sendMessage: (message: any) => void;
+  isConnected: boolean;
+}
 
-  const getWebSocketUrl = () => {
-    // Use the ALB directly with ws:// protocol (CloudFront doesn't support WebSocket upgrades)
-    // Always use ws:// since our ALB only supports HTTP
-    const wsProtocol = 'ws://';
-    const albHost = 'sound-clash-alb-1680771077.us-east-1.elb.amazonaws.com';
-    const endpoint = isManager ? 'manager' : 'team';
-    return `${wsProtocol}${albHost}/ws/${endpoint}/${gameCode.toUpperCase()}`;
-  };
+export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn => {
+  const {
+    gameCode,
+    teamName,
+    role,
+    onMessage,
+    onConnected,
+    onDisconnected,
+    onError,
+  } = options;
 
-  const startHeartbeat = useCallback(() => {
-    if (heartbeatInterval.current) {
-      clearInterval(heartbeatInterval.current);
-    }
-    
-    heartbeatInterval.current = setInterval(() => {
-      if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({ type: 'ping' }));
-      }
-    }, 25000); // Ping every 25 seconds
-  }, []);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
 
-  const stopHeartbeat = useCallback(() => {
-    if (heartbeatInterval.current) {
-      clearInterval(heartbeatInterval.current);
-    }
-  }, []);
-
-  const handleMessage = useCallback((event: MessageEvent) => {
-    try {
-      const message: WebSocketMessage = JSON.parse(event.data);
-      console.log('[WebSocket] Received:', message);
-
-      // Update teams list on team updates
-      if (message.type === 'team_update' || message.type === 'teams_list') {
-        if (message.teams) {
-          setTeams(message.teams);
-          setTotalTeams(message.total_teams || message.teams.length);
-        }
-      }
-
-      // Handle connection acknowledgment
-      if (message.type === 'connection_ack' || message.type === 'manager_connected') {
-        setIsConnected(true);
-        setError(null);
-        if (message.teams) {
-          setTeams(message.teams);
-          setTotalTeams(message.teams_count || message.total_teams || message.teams.length);
-        }
-      }
-
-      // Handle errors
-      if (message.type === 'error') {
-        setError(message.message);
-        setIsConnected(false);
-      }
-
-      // Handle kicked
-      if (message.type === 'kicked') {
-        setError(message.message);
-        disconnect();
-      }
-
-      // Forward message to parent component
-      if (onMessage) {
-        onMessage(message);
-      }
-    } catch (err) {
-      console.error('[WebSocket] Failed to parse message:', err);
-    }
-  }, [onMessage]);
+  // Get WebSocket URL from environment or use default
+  const getWebSocketUrl = useCallback(() => {
+    // TODO: Replace with actual ALB WebSocket URL
+    const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8001';
+    return `${baseUrl}/ws/game/${gameCode}?role=${role}&teamName=${encodeURIComponent(teamName)}`;
+  }, [gameCode, role, teamName]);
 
   const connect = useCallback(() => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      console.log('[WebSocket] Already connected');
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
 
+    setConnectionStatus('connecting');
+
     try {
-      const wsUrl = getWebSocketUrl();
-      console.log('[WebSocket] Connecting to:', wsUrl);
-      
-      ws.current = new WebSocket(wsUrl);
+      const ws = new WebSocket(getWebSocketUrl());
 
-      ws.current.onopen = () => {
-        console.log('[WebSocket] Connected');
-        setError(null);
-        
-        // Send initial message
-        if (!isManager && teamName) {
-          ws.current?.send(JSON.stringify({
-            type: 'team_join',
-            team_name: teamName,
-            game_code: gameCode.toUpperCase()
-          }));
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setConnectionStatus('connected');
+        reconnectAttemptsRef.current = 0;
+        onConnected?.();
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('WebSocket message:', data);
+          onMessage?.(data);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
         }
-        
-        startHeartbeat();
       };
 
-      ws.current.onmessage = handleMessage;
-
-      ws.current.onerror = (event) => {
-        console.error('[WebSocket] Error:', event);
-        setError('WebSocket connection error');
-        setIsConnected(false);
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setConnectionStatus('error');
+        onError?.(error);
       };
 
-      ws.current.onclose = () => {
-        console.log('[WebSocket] Disconnected');
-        setIsConnected(false);
-        stopHeartbeat();
-        
-        // Auto-reconnect after 3 seconds if not manually disconnected
-        if (autoConnect) {
-          reconnectTimeout.current = setTimeout(() => {
-            console.log('[WebSocket] Attempting reconnection...');
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setConnectionStatus('disconnected');
+        onDisconnected?.();
+
+        // Attempt to reconnect
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectAttemptsRef.current += 1;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+          
+          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
+          setConnectionStatus('reconnecting');
+
+          reconnectTimeoutRef.current = setTimeout(() => {
             connect();
-          }, 3000);
+          }, delay);
+        } else {
+          console.error('Max reconnection attempts reached');
+          setConnectionStatus('error');
         }
       };
-    } catch (err) {
-      console.error('[WebSocket] Connection failed:', err);
-      setError('Failed to connect to WebSocket');
+
+      wsRef.current = ws;
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error);
+      setConnectionStatus('error');
     }
-  }, [gameCode, teamName, isManager, autoConnect, handleMessage, startHeartbeat, stopHeartbeat]);
+  }, [getWebSocketUrl, onConnected, onMessage, onDisconnected, onError]);
 
   const disconnect = useCallback(() => {
-    console.log('[WebSocket] Disconnecting...');
-    
-    if (reconnectTimeout.current) {
-      clearTimeout(reconnectTimeout.current);
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
-    
-    stopHeartbeat();
-    
-    if (ws.current) {
-      // Send leave message if team
-      if (!isManager && teamName && ws.current.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({ type: 'team_leave' }));
-      }
-      
-      ws.current.close();
-      ws.current = null;
-    }
-    
-    setIsConnected(false);
-  }, [isManager, teamName, stopHeartbeat]);
 
-  const sendMessage = useCallback((message: WebSocketMessage) => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      console.log('[WebSocket] Sending:', message);
-      ws.current.send(JSON.stringify(message));
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    setConnectionStatus('disconnected');
+  }, []);
+
+  const sendMessage = useCallback((message: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
     } else {
-      console.warn('[WebSocket] Cannot send message, not connected');
+      console.warn('WebSocket is not connected. Message not sent:', message);
     }
   }, []);
 
-  // Auto-connect on mount if enabled
+  // Connect on mount, disconnect on unmount
   useEffect(() => {
-    if (autoConnect) {
-      connect();
-    }
+    connect();
 
     return () => {
       disconnect();
     };
-  }, [autoConnect]); // Only run on mount/unmount
+  }, [connect, disconnect]);
 
   return {
-    isConnected,
-    teams,
-    totalTeams,
-    error,
+    connectionStatus,
     sendMessage,
-    connect,
-    disconnect
+    isConnected: connectionStatus === 'connected',
   };
 };

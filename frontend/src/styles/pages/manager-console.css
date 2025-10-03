@@ -1,0 +1,249 @@
+/* Manager Console Page Styles */
+
+.manager-console-page {
+  min-height: 100vh;
+  background: var(--background-primary);
+}
+
+.console-header {
+  background: var(--surface-color);
+  border-bottom: 2px solid var(--border-color);
+  padding: 1.5rem 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.header-content {
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.console-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.game-code-display {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.game-code-display strong {
+  color: var(--primary-color);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.connection-indicator {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-connected {
+  color: #4caf50;
+}
+
+.status-connecting {
+  color: #ffa726;
+}
+
+.btn-back {
+  padding: 0.75rem 1.5rem;
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-primary);
+}
+
+.btn-back:hover {
+  background: var(--surface-color);
+  border-color: var(--primary-color);
+}
+
+.error-banner {
+  background: #ffebee;
+  color: #c62828;
+  padding: 1rem 2rem;
+  text-align: center;
+  border-bottom: 2px solid #ef5350;
+}
+
+.console-main {
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.console-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.console-left,
+.console-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Sections */
+.player-section {
+  background: var(--surface-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.teams-section,
+.instructions-section {
+  background: var(--surface-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.section-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Teams List */
+.teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.team-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.team-item:hover {
+  background: var(--surface-color);
+  border-color: var(--primary-color);
+}
+
+.team-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.team-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.team-status-dot {
+  width: 8px;
+  height: 8px;
+  background: #4caf50;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.team-score {
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--primary-color);
+}
+
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* Instructions */
+.instructions-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.instructions-list li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+/* Error Message */
+.error-message {
+  padding: 2rem;
+  text-align: center;
+  color: #c62828;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .console-container {
+    grid-template-columns: 1fr;
+  }
+
+  .console-right {
+    order: -1; /* Move controls to top on mobile */
+  }
+}
+
+@media (max-width: 768px) {
+  .console-header {
+    padding: 1rem;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .console-main {
+    padding: 1rem;
+  }
+
+  .console-container {
+    gap: 1rem;
+  }
+
+  .console-title {
+    font-size: 1.5rem;
+  }
+}

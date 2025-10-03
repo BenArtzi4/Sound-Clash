@@ -53,14 +53,31 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 }
 
 // Lazy load pages
-const LandingPage = lazy(() => import('./pages/LandingPage'));
-const JoinGamePage = lazy(() => import('./pages/game/JoinGamePage'));
+const HomePage = lazy(() => import('./pages/HomePage'));
+const TeamJoin = lazy(() => import('./pages/team/TeamJoin'));
+const TeamGameplay = lazy(() => import('./pages/team/TeamGameplay'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const TestPage = lazy(() => import('./pages/TestPage'));
+
+// Placeholder pages (to be built in later days)
+// Manager pages
+const ManagerConsoleNew = lazy(() => import('./pages/manager/ManagerConsoleNew'));
 const CreateGamePage = lazy(() => import('./pages/game/CreateGamePage'));
 const WaitingRoomPage = lazy(() => import('./pages/game/WaitingRoomPage'));
-const WaitingRoom = lazy(() => import('./pages/game/WaitingRoom'));
-const ManagerConsole = lazy(() => import('./pages/manager/ManagerConsole'));
-const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
-const WebSocketTester = lazy(() => import('./components/WebSocketTester'));
+
+// Display pages
+const DisplayJoin = lazy(() => import('./pages/display/DisplayJoin'));
+
+// Placeholder pages (to be built later)
+const DisplayJoinPlaceholder = lazy(() => Promise.resolve({
+  default: () => (
+    <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <h1>Display Screen</h1>
+      <p>Display interface coming in Day 5</p>
+      <a href="/">← Back to Home</a>
+    </div>
+  )
+}));
 
 // Loading component
 const PageLoadingSpinner = () => (
@@ -80,26 +97,26 @@ function App() {
           <div className="App">
             <Suspense fallback={<PageLoadingSpinner />}>
               <Routes>
-                {/* Landing page */}
-                <Route path="/" element={<LandingPage />} />
+                {/* Homepage - Three role selection buttons */}
+                <Route path="/" element={<HomePage />} />
                 
-                {/* Join existing game flow */}
-                <Route path="/join" element={<JoinGamePage />} />
+                {/* Team screens */}
+                <Route path="/team/join" element={<TeamJoin />} />
+                <Route path="/team/game/:gameCode" element={<TeamGameplay />} />
                 
-                {/* Create new game flow */}
-                <Route path="/create" element={<CreateGamePage />} />
-                
-                {/* Waiting room for both creators and joiners */}
+                {/* Manager screens */}
+                <Route path="/manager/create" element={<CreateGamePage />} />
                 <Route path="/game/:gameCode/lobby" element={<WaitingRoomPage />} />
+                <Route path="/manager/game/:gameCode" element={<ManagerConsoleNew />} />
                 
-                {/* Task 2.3 - New Waiting Room with WebSocket */}
-                <Route path="/game/:gameCode/waiting" element={<WaitingRoom />} />
+                {/* Display screens */}
+                <Route path="/display/join" element={<DisplayJoin />} />
+                <Route path="/display/join/:gameCode" element={<DisplayJoinPlaceholder />} />
+                <Route path="/display/game/:gameCode" element={<DisplayJoinPlaceholder />} />
+                <Route path="/display/winner/:gameCode" element={<DisplayJoinPlaceholder />} />
                 
-                {/* Task 2.3 - Manager Console */}
-                <Route path="/manager/:gameCode" element={<ManagerConsole />} />
-                
-                {/* WebSocket Phase 2 Testing */}
-                <Route path="/test/websocket" element={<WebSocketTester />} />
+                {/* Test Page */}
+                <Route path="/test" element={<TestPage />} />
                 
                 {/* 404 page */}
                 <Route path="*" element={<NotFoundPage />} />

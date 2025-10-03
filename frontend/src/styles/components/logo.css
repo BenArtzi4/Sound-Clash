@@ -1,0 +1,175 @@
+/* Logo Component Styles */
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-text {
+  font-weight: 700;
+  font-size: 2rem;
+  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.logo.logo-small .logo-text {
+  font-size: 1.25rem;
+}
+
+.logo.logo-medium .logo-text {
+  font-size: 2rem;
+}
+
+.logo.logo-large .logo-text {
+  font-size: 3rem;
+}
+
+/* Extra large for big displays */
+@media (min-width: 1400px) {
+  .logo.logo-large .logo-text {
+    font-size: 4rem;
+  }
+  
+  .logo.logo-large {
+    gap: 16px;
+  }
+  
+  .sound-wave-icon.large {
+    height: 72px;
+    gap: 5px;
+  }
+  
+  .sound-wave-icon.large .wave-bar {
+    width: 10px;
+  }
+  
+  .sound-wave-icon.large .wave-bar:nth-child(1) {
+    height: 36px;
+  }
+  
+  .sound-wave-icon.large .wave-bar:nth-child(2) {
+    height: 54px;
+  }
+  
+  .sound-wave-icon.large .wave-bar:nth-child(3) {
+    height: 72px;
+  }
+  
+  .sound-wave-icon.large .wave-bar:nth-child(4) {
+    height: 46px;
+  }
+}
+
+/* Animated Sound Wave Icon */
+.sound-wave-icon {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 40px;
+}
+
+.sound-wave-icon.small {
+  height: 24px;
+  gap: 2px;
+}
+
+.sound-wave-icon.medium {
+  height: 40px;
+  gap: 3px;
+}
+
+.sound-wave-icon.large {
+  height: 56px;
+  gap: 4px;
+}
+
+.wave-bar {
+  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  border-radius: 3px;
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.sound-wave-icon.small .wave-bar {
+  width: 4px;
+}
+
+.sound-wave-icon.medium .wave-bar {
+  width: 6px;
+}
+
+.sound-wave-icon.large .wave-bar {
+  width: 8px;
+}
+
+/* Wave heights and animation delays */
+.sound-wave-icon.small .wave-bar:nth-child(1) {
+  height: 12px;
+  animation-delay: 0s;
+}
+
+.sound-wave-icon.small .wave-bar:nth-child(2) {
+  height: 18px;
+  animation-delay: 0.1s;
+}
+
+.sound-wave-icon.small .wave-bar:nth-child(3) {
+  height: 24px;
+  animation-delay: 0.2s;
+}
+
+.sound-wave-icon.small .wave-bar:nth-child(4) {
+  height: 16px;
+  animation-delay: 0.3s;
+}
+
+.sound-wave-icon.medium .wave-bar:nth-child(1) {
+  height: 20px;
+  animation-delay: 0s;
+}
+
+.sound-wave-icon.medium .wave-bar:nth-child(2) {
+  height: 30px;
+  animation-delay: 0.1s;
+}
+
+.sound-wave-icon.medium .wave-bar:nth-child(3) {
+  height: 40px;
+  animation-delay: 0.2s;
+}
+
+.sound-wave-icon.medium .wave-bar:nth-child(4) {
+  height: 26px;
+  animation-delay: 0.3s;
+}
+
+.sound-wave-icon.large .wave-bar:nth-child(1) {
+  height: 28px;
+  animation-delay: 0s;
+}
+
+.sound-wave-icon.large .wave-bar:nth-child(2) {
+  height: 42px;
+  animation-delay: 0.1s;
+}
+
+.sound-wave-icon.large .wave-bar:nth-child(3) {
+  height: 56px;
+  animation-delay: 0.2s;
+}
+
+.sound-wave-icon.large .wave-bar:nth-child(4) {
+  height: 36px;
+  animation-delay: 0.3s;
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.5);
+  }
+}
