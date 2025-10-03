@@ -65,6 +65,9 @@ const ManagerConsoleNew = lazy(() => import('./pages/manager/ManagerConsoleNew')
 const CreateGamePage = lazy(() => import('./pages/game/CreateGamePage'));
 const WaitingRoomPage = lazy(() => import('./pages/game/WaitingRoomPage'));
 
+// Display pages
+const DisplayJoin = lazy(() => import('./pages/display/DisplayJoin'));
+
 // Placeholder pages (to be built later)
 const DisplayJoinPlaceholder = lazy(() => Promise.resolve({
   default: () => (
@@ -107,7 +110,7 @@ function App() {
                 <Route path="/manager/game/:gameCode" element={<ManagerConsoleNew />} />
                 
                 {/* Display screens */}
-                <Route path="/display/join" element={<DisplayJoinPlaceholder />} />
+                <Route path="/display/join" element={<DisplayJoin />} />
                 <Route path="/display/join/:gameCode" element={<DisplayJoinPlaceholder />} />
                 <Route path="/display/game/:gameCode" element={<DisplayJoinPlaceholder />} />
                 <Route path="/display/winner/:gameCode" element={<DisplayJoinPlaceholder />} />

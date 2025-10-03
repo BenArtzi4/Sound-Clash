@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Logo from '../../components/Logo';
+import Logo from '../../components/common/Logo';
 import '../../styles/pages/team-join.css';
 import '../../styles/themes/minimal-clean.css';
 
