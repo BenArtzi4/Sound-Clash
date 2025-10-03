@@ -1,0 +1,434 @@
+/* Waiting Room Page Styles - Matching Homepage Style */
+
+.waiting-room-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #fff 100%);
+}
+
+.waiting-room-page .page-header {
+  padding: 1.5rem 0;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 2px solid rgba(59, 130, 246, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.waiting-room-page .header-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.waiting-room-page .btn-leave {
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 2px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--color-text-primary, #000);
+  font-size: 1rem;
+}
+
+.waiting-room-page .btn-leave:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(240, 249, 255, 0.8);
+  transform: translateX(-4px);
+}
+
+.waiting-room-page .page-main {
+  flex: 1;
+  padding: 3rem 2rem 4rem;
+}
+
+.waiting-container {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Game Code Section */
+.game-code-section {
+  text-align: center;
+}
+
+.page-title {
+  margin: 0 0 2rem 0;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--color-text-primary, #000);
+}
+
+.game-code-card {
+  background: white;
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.12);
+  border: 2px solid rgba(59, 130, 246, 0.1);
+}
+
+.code-label {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #8e8e93);
+}
+
+.code-display {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #3b82f6;
+  margin: 1rem 0 1.5rem 0;
+  letter-spacing: 0.15em;
+  font-family: 'Courier New', monospace;
+}
+
+.btn-copy {
+  padding: 0.875rem 2rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-copy:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.code-help {
+  margin: 1rem 0 0 0;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary, #8e8e93);
+}
+
+/* Teams Section */
+.teams-section,
+.settings-section {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.12);
+  border: 2px solid rgba(59, 130, 246, 0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.1);
+}
+
+.section-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #000);
+}
+
+.team-count {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #8e8e93);
+}
+
+.teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.team-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(240, 249, 255, 0.5);
+  border: 2px solid rgba(59, 130, 246, 0.15);
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.team-item:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: translateX(4px);
+}
+
+.team-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.team-info {
+  flex: 1;
+}
+
+.team-name {
+  display: block;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #000);
+  margin-bottom: 0.25rem;
+}
+
+.team-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.status-dot.disconnected {
+  background: #ef4444;
+}
+
+.status-text {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #8e8e93);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--color-text-secondary, #8e8e93);
+}
+
+.empty-state p {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.empty-hint {
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+/* Settings Section */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.setting-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #8e8e93);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.setting-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #000);
+}
+
+/* Action Section */
+.action-section {
+  text-align: center;
+}
+
+.manager-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-start-game {
+  padding: 1.125rem 3.5rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 14px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+  min-width: 280px;
+}
+
+.btn-start-game:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.btn-start-game:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-hint {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-text-secondary, #8e8e93);
+}
+
+.player-status {
+  display: flex;
+  justify-content: center;
+}
+
+.status-card {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.12);
+  border: 2px solid rgba(59, 130, 246, 0.1);
+  text-align: center;
+  max-width: 400px;
+}
+
+.status-card h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #000);
+}
+
+.status-card p {
+  margin: 0 0 1.5rem 0;
+  font-size: 1rem;
+  color: var(--color-text-secondary, #8e8e93);
+}
+
+.loading-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.loading-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 1rem 2rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+}
+
+.toast-icon {
+  color: #10b981;
+  font-size: 1.25rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .waiting-room-page .page-main {
+    padding: 2rem 1rem 3rem;
+  }
+
+  .page-title {
+    font-size: 2rem;
+  }
+
+  .game-code-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .code-display {
+    font-size: 2rem;
+  }
+
+  .teams-section,
+  .settings-section {
+    padding: 1.5rem;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .btn-start-game {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .waiting-room-page .header-content {
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 480px) {
+  .code-display {
+    font-size: 1.75rem;
+  }
+
+  .game-code-card {
+    padding: 1.5rem 1rem;
+  }
+}
