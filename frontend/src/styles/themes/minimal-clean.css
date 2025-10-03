@@ -1,0 +1,233 @@
+/* Theme: Minimal Clean with Subtle Colors - Professional with personality */
+
+.theme-minimal-clean {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-accent: #f0f4ff;
+  --text-primary: #1a202c;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #06b6d4;
+  --accent-success: #10b981;
+  --accent-warning: #f59e0b;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+.theme-minimal-clean .landing-page,
+.theme-minimal-clean .team-join-page {
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+  color: #1a202c;
+}
+
+.theme-minimal-clean .landing-main {
+  background: linear-gradient(135deg, #f0f4ff 0%, #f8f9fa 50%, #fff 100%);
+}
+
+.theme-minimal-clean .landing-header,
+.theme-minimal-clean .team-join-header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.theme-minimal-clean .landing-subtitle {
+  color: #1a202c;
+  font-weight: 700;
+}
+
+.theme-minimal-clean .landing-description,
+.theme-minimal-clean .team-join-subtitle {
+  color: #64748b;
+}
+
+.theme-minimal-clean .team-join-title {
+  color: #1a202c;
+}
+
+.theme-minimal-clean .team-join-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Role buttons with subtle colors */
+.theme-minimal-clean .role-btn {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  color: #1a202c;
+  transition: all 0.3s ease;
+}
+
+.theme-minimal-clean .role-btn:hover {
+  border-color: #3b82f6;
+  background: #f0f4ff;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 12px rgba(59, 130, 246, 0.12);
+}
+
+.theme-minimal-clean .btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.theme-minimal-clean .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+.theme-minimal-clean .btn-secondary {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+.theme-minimal-clean .btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+.theme-minimal-clean .btn-accent {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 4px rgba(6, 182, 212, 0.2);
+}
+
+.theme-minimal-clean .btn-accent:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+  box-shadow: 0 4px 8px rgba(6, 182, 212, 0.3);
+}
+
+.theme-minimal-clean .info-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.theme-minimal-clean .info-item:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.1);
+  transform: translateY(-2px);
+}
+
+.theme-minimal-clean .info-item h3 {
+  color: #1a202c;
+}
+
+.theme-minimal-clean .info-item p {
+  color: #64748b;
+}
+
+.theme-minimal-clean .info-number {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.25);
+}
+
+.theme-minimal-clean .form-label {
+  color: #1a202c;
+  font-weight: 600;
+}
+
+.theme-minimal-clean .form-input {
+  border: 2px solid #e2e8f0;
+  background: #ffffff;
+  color: #1a202c;
+  transition: all 0.2s ease;
+}
+
+.theme-minimal-clean .form-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: #f0f4ff;
+}
+
+.theme-minimal-clean .form-input::placeholder {
+  color: #94a3b8;
+}
+
+.theme-minimal-clean .form-hint {
+  color: #64748b;
+}
+
+.theme-minimal-clean .form-error {
+  color: #ef4444;
+}
+
+/* Success states */
+.theme-minimal-clean .form-input.success {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+/* Hover effects for interactive elements */
+.theme-minimal-clean .link-button {
+  color: #3b82f6;
+  transition: all 0.2s ease;
+}
+
+.theme-minimal-clean .link-button:hover:not(:disabled) {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* Loading spinner */
+.theme-minimal-clean .spinner-small {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+}
+
+/* Add subtle accent to header logo area */
+.theme-minimal-clean .landing-header::after,
+.theme-minimal-clean .team-join-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #10b981 100%);
+  opacity: 0.6;
+}
+
+.theme-minimal-clean .landing-header,
+.theme-minimal-clean .team-join-header {
+  position: relative;
+}
+
+/* Subtle background pattern */
+.theme-minimal-clean .landing-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(6, 182, 212, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.theme-minimal-clean .landing-main,
+.theme-minimal-clean .team-join-main {
+  position: relative;
+  z-index: 1;
+}
+
+/* Smooth transitions */
+.theme-minimal-clean * {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
