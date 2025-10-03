@@ -52,7 +52,7 @@ const HomePage: React.FC = () => {
                 <span className="btn-icon">🎮</span>
                 <div className="btn-content">
                   <span className="btn-title">Manager Console</span>
-                  <span className="btn-subtitle">Control the game</span>
+                  <span className="btn-subtitle">Create new game</span>
                 </div>
               </button>
 
@@ -91,7 +91,7 @@ const HomePage: React.FC = () => {
                   <div className="info-number">3</div>
                   <div className="info-content">
                     <h3>Manager Evaluates</h3>
-                    <p>Manager approves or declines verbal answers</p>
+                    <p>Manager approve or decline answers</p>
                   </div>
                 </div>
               </div>
