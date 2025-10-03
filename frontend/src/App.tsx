@@ -57,7 +57,7 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 const TeamJoin = lazy(() => import('./pages/team/TeamJoin'));
 const TeamGameplay = lazy(() => import('./pages/team/TeamGameplay'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
-const Day1ValidationTest = lazy(() => import('./pages/Day1ValidationTest'));
+const TestPage = lazy(() => import('./pages/TestPage'));
 
 // Placeholder pages (to be built in later days)
 // Manager pages
@@ -112,8 +112,8 @@ function App() {
                 <Route path="/display/game/:gameCode" element={<DisplayJoinPlaceholder />} />
                 <Route path="/display/winner/:gameCode" element={<DisplayJoinPlaceholder />} />
                 
-                {/* Day 1 Validation Test */}
-                <Route path="/test/day1" element={<Day1ValidationTest />} />
+                {/* Test Page */}
+                <Route path="/test" element={<TestPage />} />
                 
                 {/* 404 page */}
                 <Route path="*" element={<NotFoundPage />} />
