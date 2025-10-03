@@ -6,23 +6,18 @@ import '../../styles/pages/create-game.css';
 
 const ALB_URL = import.meta.env.VITE_ALB_URL || 'http://localhost:8002';
 
-// Simplified genre list
-const GENRE_OPTIONS = [
-  { id: 'israeli-rock', name: 'Israeli Rock', category: 'Israeli' },
-  { id: 'israeli-pop', name: 'Israeli Pop', category: 'Israeli' },
-  { id: 'hafla', name: 'Hafla', category: 'Israeli' },
-  { id: 'israeli-classics', name: 'Israeli Classics', category: 'Israeli' },
-  { id: 'rock', name: 'Rock', category: 'Styles' },
-  { id: 'pop', name: 'Pop', category: 'Styles' },
-  { id: 'hip-hop', name: 'Hip-Hop', category: 'Styles' },
-  { id: 'electronic', name: 'Electronic', category: 'Styles' },
-  { id: '60s-70s', name: '60s-70s', category: 'Decades' },
-  { id: '80s', name: '80s', category: 'Decades' },
-  { id: '90s', name: '90s', category: 'Decades' },
-  { id: '2000s', name: '2000s', category: 'Decades' },
-  { id: 'movies', name: 'Movie Soundtracks', category: 'Media' },
-  { id: 'tv', name: 'TV Themes', category: 'Media' },
-  { id: 'disney', name: 'Disney', category: 'Media' },
+// Actual genres from songs_converted.csv - NO CATEGORIES
+const AVAILABLE_GENRES = [
+  'rock',
+  'pop',
+  'electronic',
+  'hip-hop',
+  'soundtracks',
+  'mizrahit',
+  'israeli-rock-pop',
+  'israeli-cover',
+  'israeli-pop',
+  'israeli-rap-hip-hop'
 ];
 
 const CreateGamePage: React.FC = () => {
@@ -42,11 +37,11 @@ const CreateGamePage: React.FC = () => {
     return result;
   };
 
-  const toggleGenre = (genreId: string) => {
+  const toggleGenre = (genre: string) => {
     setSelectedGenres(prev => 
-      prev.includes(genreId) 
-        ? prev.filter(g => g !== genreId)
-        : [...prev, genreId]
+      prev.includes(genre) 
+        ? prev.filter(g => g !== genre)
+        : [...prev, genre]
     );
     setError('');
   };
@@ -95,14 +90,13 @@ const CreateGamePage: React.FC = () => {
     }
   };
 
-  // Group genres by category
-  const genresByCategory: Record<string, typeof GENRE_OPTIONS> = {};
-  GENRE_OPTIONS.forEach(genre => {
-    if (!genresByCategory[genre.category]) {
-      genresByCategory[genre.category] = [];
-    }
-    genresByCategory[genre.category].push(genre);
-  });
+  // Format genre names for display (replace hyphens with spaces, capitalize)
+  const formatGenreName = (genre: string): string => {
+    return genre
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   return (
     <div className="create-game-page">
@@ -128,25 +122,20 @@ const CreateGamePage: React.FC = () => {
             )}
 
             <div className="genres-section">
-              {Object.entries(genresByCategory).map(([category, genres]) => (
-                <div key={category} className="genre-category">
-                  <h3 className="category-title">{category}</h3>
-                  <div className="genre-grid">
-                    {genres.map(genre => (
-                      <button
-                        key={genre.id}
-                        className={`genre-chip ${selectedGenres.includes(genre.id) ? 'selected' : ''}`}
-                        onClick={() => toggleGenre(genre.id)}
-                      >
-                        <span className="genre-name">{genre.name}</span>
-                        {selectedGenres.includes(genre.id) && (
-                          <span className="check-icon">✓</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <div className="genre-grid-flat">
+                {AVAILABLE_GENRES.map(genre => (
+                  <button
+                    key={genre}
+                    className={`genre-chip ${selectedGenres.includes(genre) ? 'selected' : ''}`}
+                    onClick={() => toggleGenre(genre)}
+                  >
+                    <span className="genre-name">{formatGenreName(genre)}</span>
+                    {selectedGenres.includes(genre) && (
+                      <span className="check-icon">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="selected-summary">

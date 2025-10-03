@@ -113,6 +113,13 @@
   margin-bottom: 2rem;
 }
 
+/* Flat genre grid (no categories) */
+.genre-grid-flat {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
 .genre-category {
   background: rgba(240, 249, 255, 0.5);
   border-radius: 16px;
