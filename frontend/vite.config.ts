@@ -30,12 +30,12 @@ export default defineConfig({
           
           // Feature chunks - updated paths
           'pages': [
-            './src/pages/LandingPage.tsx',
-            './src/pages/game/JoinGamePage.tsx', 
+            './src/pages/HomePage.tsx',
+            './src/pages/team/TeamJoin.tsx',
+            './src/pages/team/TeamGameplay.tsx', 
             './src/pages/game/CreateGamePage.tsx',
             './src/pages/game/WaitingRoomPage.tsx',
-            './src/pages/game/WaitingRoom.tsx',
-            './src/pages/manager/ManagerConsole.tsx',
+            './src/pages/manager/ManagerConsoleNew.tsx',
             './src/pages/NotFoundPage.tsx'
           ]
         },
