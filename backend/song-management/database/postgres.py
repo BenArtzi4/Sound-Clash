@@ -1,8 +1,6 @@
 """
 Database configuration and connection management
 """
-import os
-import asyncio
 import asyncpg
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional, Dict, Any, List
@@ -12,43 +10,14 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database configuration
-DATABASE_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "port": int(os.getenv("DB_PORT", "5432")),
-    "database": os.getenv("DB_NAME", "buzzer_game_db"),
-    "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", "password"),
-    "min_size": 1,
-    "max_size": 5,
-    "command_timeout": 30,
-}
-
-# Global connection pool
+# Global connection pool - will be set by main.py
 connection_pool: Optional[asyncpg.Pool] = None
 
-async def init_db():
-    """Initialize database connection pool"""
+def set_connection_pool(pool: asyncpg.Pool):
+    """Set the connection pool from main app"""
     global connection_pool
-    try:
-        connection_pool = await asyncpg.create_pool(**DATABASE_CONFIG)
-        logger.info("Database connection pool created successfully")
-        
-        # Test connection
-        async with connection_pool.acquire() as conn:
-            await conn.execute("SELECT 1")
-            logger.info("Database connection test successful")
-            
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
-
-async def close_db():
-    """Close database connection pool"""
-    global connection_pool
-    if connection_pool:
-        await connection_pool.close()
-        logger.info("Database connection pool closed")
+    connection_pool = pool
+    logger.info("Database connection pool set in postgres.py")
 
 @asynccontextmanager
 async def get_db_connection() -> AsyncGenerator[asyncpg.Connection, None]:
@@ -77,6 +46,11 @@ class SongRepository:
         """
         rows = await self.conn.fetch(query, limit, offset)
         return [dict(row) for row in rows]
+    
+    async def count_all_songs(self) -> int:
+        """Get total count of active songs"""
+        query = "SELECT COUNT(*) FROM songs_master WHERE is_active = true"
+        return await self.conn.fetchval(query)
     
     async def get_song_by_id(self, song_id: int) -> Optional[Dict[str, Any]]:
         """Get song by ID"""

@@ -15,41 +15,60 @@ from models.song_models import (
 
 router = APIRouter()
 
-# Helper function to get repositories
-async def get_song_repo(conn=Depends(get_db_connection)):
-    async for connection in conn:
+# Status and utility endpoints - MUST be before generic /{song_id} route
+@router.get("/status")
+async def get_status():
+    """Get service status - moved here to avoid route conflict"""
+    from database.postgres import connection_pool
+    return {
+        "service": "operational",
+        "version": "1.0.0",
+        "database": "connected" if connection_pool else "unavailable",
+        "features": {
+            "basic_endpoints": True,
+            "song_operations": bool(connection_pool)
+        }
+    }
+
+# Helper function to get repositories - FIXED VERSION
+async def get_song_repo():
+    """Get song repository with database connection"""
+    async with get_db_connection() as connection:
         yield SongRepository(connection)
 
-async def get_genre_repo(conn=Depends(get_db_connection)):
-    async for connection in conn:
+async def get_genre_repo():
+    """Get genre repository with database connection"""
+    async with get_db_connection() as connection:
         yield GenreRepository(connection)
 
-@router.get("/", response_model=List[SongDetailResponse])
+@router.get("/", response_model=SongSearchResponse)
 async def get_all_songs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    per_page: int = Query(None),  # Support per_page alias
     repo: SongRepository = Depends(get_song_repo)
 ):
     """Get all songs with pagination"""
     try:
-        offset = (page - 1) * page_size
-        songs = await repo.get_all_songs(limit=page_size, offset=offset)
-        return [SongDetailResponse(**song) for song in songs]
+        # Support both page_size and per_page params
+        limit = per_page if per_page is not None else page_size
+        offset = (page - 1) * limit
+        
+        # Get songs and total count
+        songs = await repo.get_all_songs(limit=limit, offset=offset)
+        total_count = await repo.count_all_songs()
+        
+        total_pages = (total_count + limit - 1) // limit
+        
+        return SongSearchResponse(
+            songs=[SongDetailResponse(**song) for song in songs],
+            total_songs=total_count,
+            page=page,
+            page_size=limit,
+            total_pages=total_pages
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch songs: {str(e)}")
-
-@router.get("/{song_id}", response_model=SongDetailResponse)
-async def get_song(song_id: int, repo: SongRepository = Depends(get_song_repo)):
-    """Get song by ID"""
-    try:
-        song = await repo.get_song_by_id(song_id)
-        if not song:
-            raise HTTPException(status_code=404, detail="Song not found")
-        return SongDetailResponse(**song)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch song: {str(e)}")
 
 @router.post("/search", response_model=SongSearchResponse)
 async def search_songs(
@@ -156,6 +175,21 @@ async def select_songs(
         raise HTTPException(status_code=500, detail=f"Song selection failed: {str(e)}")
 
 # Genre endpoints
+@router.get("/genres/stats")
+async def get_genre_stats(repo: GenreRepository = Depends(get_genre_repo)):
+    """Get genre statistics with song counts"""
+    try:
+        genres = await repo.get_all_genres()
+        stats = []
+        for genre in genres:
+            stats.append({
+                "genre": genre['slug'],
+                "count": genre.get('song_count', 0)
+            })
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch genre stats: {str(e)}")
+
 @router.get("/genres/all", response_model=GenreListResponse)
 async def get_all_genres(repo: GenreRepository = Depends(get_genre_repo)):
     """Get all genres with song counts"""
@@ -192,6 +226,80 @@ async def get_genres_by_category(
         raise HTTPException(status_code=500, detail=f"Failed to fetch category: {str(e)}")
 
 # Bulk operations
+@router.post("/bulk-import")
+async def bulk_import_songs(
+    request: dict,
+    repo: SongRepository = Depends(get_song_repo)
+):
+    """Bulk import songs from CSV data"""
+    import csv
+    import io
+    import time
+    
+    start_time = time.time()
+    csv_data = request.get('csv_data', '')
+    
+    if not csv_data:
+        raise HTTPException(status_code=400, detail="No CSV data provided")
+    
+    successful = 0
+    errors = []
+    
+    try:
+        # Parse CSV
+        csv_file = io.StringIO(csv_data)
+        reader = csv.DictReader(csv_file)
+        
+        for row_num, row in enumerate(reader, start=2):  # Start at 2 (row 1 is header)
+            try:
+                # Validate required fields
+                if not row.get('title') or not row.get('artist') or not row.get('youtube_id'):
+                    errors.append(f"Row {row_num}: Missing required fields (title, artist, or youtube_id)")
+                    continue
+                
+                # Parse genres
+                genres_str = row.get('genres', '')
+                genres = [g.strip() for g in genres_str.split(',') if g.strip()]
+                
+                if not genres:
+                    errors.append(f"Row {row_num}: At least one genre is required")
+                    continue
+                
+                # Parse duration
+                duration = None
+                if row.get('duration_seconds'):
+                    try:
+                        duration = int(row['duration_seconds'])
+                    except ValueError:
+                        errors.append(f"Row {row_num}: Invalid duration_seconds value")
+                        continue
+                
+                # Create song data
+                song_data = {
+                    'title': row['title'].strip(),
+                    'artist': row['artist'].strip(),
+                    'youtube_id': row['youtube_id'].strip(),
+                    'duration_seconds': duration,
+                    'genres': genres,
+                    'is_active': True
+                }
+                
+                # Create song
+                await repo.create_song(song_data)
+                successful += 1
+                
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+        
+        return {
+            "success": successful,
+            "errors": errors,
+            "processing_time_seconds": time.time() - start_time
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
 @router.post("/bulk/activate", response_model=BulkOperationResponse)
 async def bulk_activate_songs(
     song_ids: List[int],
@@ -249,3 +357,17 @@ async def bulk_deactivate_songs(
         errors=errors,
         processing_time_seconds=time.time() - start_time
     )
+
+# IMPORTANT: Generic path parameter route MUST be last to avoid catching specific routes
+@router.get("/{song_id}", response_model=SongDetailResponse)
+async def get_song(song_id: int, repo: SongRepository = Depends(get_song_repo)):
+    """Get song by ID"""
+    try:
+        song = await repo.get_song_by_id(song_id)
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
+        return SongDetailResponse(**song)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch song: {str(e)}")
