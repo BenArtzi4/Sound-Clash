@@ -24,19 +24,28 @@ logger = logging.getLogger(__name__)
 # In-memory storage for WebSocket connections and game state
 class GameRoom:
     """Represents a game room with teams and connections"""
-    
+
     def __init__(self, game_code: str, settings: Dict[str, Any]):
         self.game_code = game_code
         self.settings = settings
         self.status = 'waiting'
         self.created_at = datetime.utcnow().isoformat()
-        
+
         # Team connections: {team_name: websocket}
         self.team_connections: Dict[str, WebSocket] = {}
         # Manager connections: [websocket1, websocket2, ...]
         self.manager_connections: List[WebSocket] = []
+        # Display connections: [websocket1, websocket2, ...]
+        self.display_connections: List[WebSocket] = []
         # Track join times
         self.team_join_times: Dict[str, str] = {}
+
+        # Gameplay state
+        self.current_round: Optional[Dict[str, Any]] = None
+        self.buzzed_team: Optional[str] = None
+        self.locked_components = {"song_name": False, "artist_content": False}
+        self.team_scores: Dict[str, int] = {}
+        self.round_number = 0
     
     def add_team(self, team_name: str, websocket: WebSocket) -> bool:
         """Add team to room"""
@@ -65,6 +74,17 @@ class GameRoom:
         if websocket in self.manager_connections:
             self.manager_connections.remove(websocket)
             logger.info(f"Manager left game {self.game_code}")
+
+    def add_display(self, websocket: WebSocket):
+        """Add display connection"""
+        self.display_connections.append(websocket)
+        logger.info(f"Display joined game {self.game_code}")
+
+    def remove_display(self, websocket: WebSocket):
+        """Remove display connection"""
+        if websocket in self.display_connections:
+            self.display_connections.remove(websocket)
+            logger.info(f"Display left game {self.game_code}")
     
     def get_teams_list(self) -> List[Dict[str, Any]]:
         """Get list of teams with metadata"""
@@ -107,10 +127,30 @@ class GameRoom:
             except Exception as e:
                 logger.error(f"Failed to send to manager: {e}")
                 disconnected.append(websocket)
-        
+
         # Clean up disconnected managers
         for websocket in disconnected:
             self.remove_manager(websocket)
+
+    async def broadcast_to_displays(self, message: Dict[str, Any]):
+        """Broadcast message to all displays"""
+        disconnected = []
+        for websocket in self.display_connections:
+            try:
+                await websocket.send_text(json.dumps(message))
+            except Exception as e:
+                logger.error(f"Failed to send to display: {e}")
+                disconnected.append(websocket)
+
+        # Clean up disconnected displays
+        for websocket in disconnected:
+            self.remove_display(websocket)
+
+    async def broadcast_to_all(self, message: Dict[str, Any]):
+        """Broadcast message to everyone (teams, managers, displays)"""
+        await self.broadcast_to_teams(message)
+        await self.broadcast_to_managers(message)
+        await self.broadcast_to_displays(message)
     
     async def broadcast_team_update(self, event_type: str, team_name: str):
         """Broadcast team list update to all connected clients"""
@@ -188,11 +228,13 @@ async def root():
         "active_games": len(storage.rooms),
         "total_teams": sum(len(room.team_connections) for room in storage.rooms.values()),
         "total_managers": sum(len(room.manager_connections) for room in storage.rooms.values()),
+        "total_displays": sum(len(room.display_connections) for room in storage.rooms.values()),
         "endpoints": {
             "health": "/health",
             "debug": "/debug",
             "team_websocket": "/ws/team/{game_code}",
             "manager_websocket": "/ws/manager/{game_code}",
+            "display_websocket": "/ws/display/{game_code}",
             "game_status": "/api/game/{game_code}/status",
             "game_notify": "/api/game/{game_code}/notify",
             "kick_team": "/api/game/{game_code}/kick/{team_name}"
@@ -223,7 +265,11 @@ async def debug_info():
                 "teams": room.get_teams_list(),
                 "team_count": len(room.team_connections),
                 "manager_count": len(room.manager_connections),
+                "display_count": len(room.display_connections),
                 "status": room.status,
+                "round_number": room.round_number,
+                "buzzed_team": room.buzzed_team,
+                "team_scores": room.team_scores,
                 "created_at": room.created_at
             }
             for game_code, room in storage.rooms.items()
@@ -394,13 +440,26 @@ async def websocket_team_endpoint(websocket: WebSocket, game_code: str):
                 
                 elif msg_type == 'team_leave':
                     break
-                
+
                 elif msg_type == 'get_teams':
                     await websocket.send_text(json.dumps({
                         "type": "teams_list",
                         "teams": room.get_teams_list(),
                         "total_teams": len(room.team_connections)
                     }))
+
+                elif msg_type == 'buzz_pressed':
+                    # Handle team buzzing
+                    if room.buzzed_team is None and room.status == 'playing':
+                        room.buzzed_team = team_name
+                        # Broadcast buzzer locked to everyone
+                        await room.broadcast_to_all({
+                            "type": "buzzer_locked",
+                            "team_name": team_name,
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "reaction_time_ms": 0  # TODO: Calculate actual reaction time
+                        })
+                        logger.info(f"Team '{team_name}' buzzed first in game {game_code}")
         
         except asyncio.TimeoutError:
             logger.warning(f"Team {team_name} connection timed out")
@@ -476,7 +535,10 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
                 
                 elif msg_type == 'start_game':
                     room.status = 'playing'
-                    await room.broadcast_to_teams({
+                    # Initialize team scores
+                    for team_name in room.team_connections.keys():
+                        room.team_scores[team_name] = 0
+                    await room.broadcast_to_all({
                         "type": "game_started",
                         "message": "Game is starting!",
                         "timestamp": datetime.utcnow().isoformat()
@@ -485,6 +547,101 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
                         "type": "game_started",
                         "success": True
                     }))
+
+                elif msg_type == 'start_round':
+                    # Manager starts a new round
+                    song_data = message.get('song', {})
+                    room.round_number += 1
+                    room.current_round = song_data
+                    room.buzzed_team = None
+                    room.locked_components = {"song_name": False, "artist_content": False}
+
+                    await room.broadcast_to_all({
+                        "type": "round_started",
+                        "round_number": room.round_number,
+                        "song": song_data,
+                        "is_soundtrack": song_data.get('is_soundtrack', False),
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                    logger.info(f"Round {room.round_number} started in game {game_code}")
+
+                elif msg_type == 'evaluate_answer':
+                    # Manager evaluates team's answer
+                    song_correct = message.get('song_correct', False)
+                    artist_correct = message.get('artist_correct', False)
+                    wrong_answer = message.get('wrong_answer', False)
+
+                    if room.buzzed_team:
+                        # Update component locks
+                        if song_correct:
+                            room.locked_components["song_name"] = True
+                            room.team_scores[room.buzzed_team] = room.team_scores.get(room.buzzed_team, 0) + 10
+                        if artist_correct:
+                            room.locked_components["artist_content"] = True
+                            room.team_scores[room.buzzed_team] = room.team_scores.get(room.buzzed_team, 0) + 5
+                        if wrong_answer:
+                            room.team_scores[room.buzzed_team] = room.team_scores.get(room.buzzed_team, 0) - 2
+
+                        # Reset buzzed team
+                        room.buzzed_team = None
+
+                        # Check if round is complete
+                        round_complete = room.locked_components["song_name"] and room.locked_components["artist_content"]
+
+                        # Broadcast answer evaluation
+                        await room.broadcast_to_all({
+                            "type": "answer_evaluated",
+                            "locked_components": room.locked_components,
+                            "team_scores": room.team_scores,
+                            "timestamp": datetime.utcnow().isoformat()
+                        })
+
+                        # If round complete, broadcast that
+                        if round_complete:
+                            await room.broadcast_to_all({
+                                "type": "round_completed",
+                                "team_scores": room.team_scores,
+                                "timestamp": datetime.utcnow().isoformat()
+                            })
+
+                elif msg_type == 'restart_song':
+                    # Manager restarts the song
+                    room.buzzed_team = None
+                    await room.broadcast_to_all({
+                        "type": "song_restarted",
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+                elif msg_type == 'skip_round':
+                    # Manager skips current round
+                    room.buzzed_team = None
+                    room.locked_components = {"song_name": False, "artist_content": False}
+                    await room.broadcast_to_all({
+                        "type": "round_completed",
+                        "team_scores": room.team_scores,
+                        "skipped": True,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+                elif msg_type == 'end_game':
+                    # Manager ends the game
+                    room.status = 'finished'
+                    # Determine winner
+                    if room.team_scores:
+                        winner = max(room.team_scores.items(), key=lambda x: x[1])
+                        await room.broadcast_to_all({
+                            "type": "game_ended",
+                            "winner": winner[0],
+                            "final_scores": room.team_scores,
+                            "rounds_played": room.round_number,
+                            "timestamp": datetime.utcnow().isoformat()
+                        })
+                    else:
+                        await room.broadcast_to_all({
+                            "type": "game_ended",
+                            "message": "Game ended with no scores",
+                            "timestamp": datetime.utcnow().isoformat()
+                        })
         
         except asyncio.TimeoutError:
             logger.warning(f"Manager connection timed out for game {game_code}")
@@ -500,6 +657,79 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
         room = storage.get_room(game_code)
         if room:
             room.remove_manager(websocket)
+
+@app.websocket("/ws/display/{game_code}")
+async def websocket_display_endpoint(websocket: WebSocket, game_code: str):
+    """WebSocket endpoint for display screens to show game state"""
+    game_code = game_code.upper()
+
+    try:
+        await websocket.accept()
+        logger.info(f"Display WebSocket connection accepted for game {game_code}")
+
+        # Get game room
+        room = storage.get_room(game_code)
+        if not room:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "message": "Game not found"
+            }))
+            return
+
+        # Add display to room
+        room.add_display(websocket)
+
+        # Send initial state
+        await websocket.send_text(json.dumps({
+            "type": "display_connected",
+            "success": True,
+            "game_code": game_code,
+            "teams": room.get_teams_list(),
+            "total_teams": len(room.team_connections),
+            "status": room.status,
+            "team_scores": room.team_scores
+        }))
+
+        logger.info(f"Display successfully connected to game {game_code}")
+
+        # Main message loop
+        try:
+            while True:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                message = json.loads(data)
+
+                msg_type = message.get('type')
+
+                if msg_type == 'ping':
+                    await websocket.send_text(json.dumps({
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat()
+                    }))
+
+                elif msg_type == 'get_status':
+                    await websocket.send_text(json.dumps({
+                        "type": "status",
+                        "teams": room.get_teams_list(),
+                        "total_teams": len(room.team_connections),
+                        "status": room.status,
+                        "team_scores": room.team_scores,
+                        "round_number": room.round_number
+                    }))
+
+        except asyncio.TimeoutError:
+            logger.warning(f"Display connection timed out for game {game_code}")
+        except WebSocketDisconnect:
+            logger.info(f"Display disconnected from game {game_code}")
+
+    except WebSocketDisconnect:
+        logger.info(f"Display WebSocket disconnected from game {game_code}")
+    except Exception as e:
+        logger.error(f"Display WebSocket error: {e}")
+    finally:
+        # Cleanup
+        room = storage.get_room(game_code)
+        if room:
+            room.remove_display(websocket)
 
 if __name__ == "__main__":
     uvicorn.run(
