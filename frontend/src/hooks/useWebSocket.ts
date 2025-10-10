@@ -37,8 +37,7 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
 
   // Get WebSocket URL from environment or use default
   const getWebSocketUrl = useCallback(() => {
-    // TODO: Replace with actual ALB WebSocket URL
-    const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8001';
+    const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8002';
     return `${baseUrl}/ws/game/${gameCode}?role=${role}&teamName=${encodeURIComponent(teamName)}`;
   }, [gameCode, role, teamName]);
 
