@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 
 tsconfig.app.tsbuildinfo
+
+# Environment variables - ignore production config
+.env
+.env.production
+.env.local
