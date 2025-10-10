@@ -1,9 +1,9 @@
 import axios, { type AxiosInstance, AxiosError } from 'axios';
 import type { ApiResponse, Game, CreateGameForm, JoinGameForm, ApiError } from '../types';
 
-// API Configuration - Updated for microservices
-const GAME_API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const SONG_API_BASE_URL = import.meta.env.VITE_SONG_API_URL || 'http://localhost:8001';
+// API Configuration - Hardcoded HTTPS for production
+const GAME_API_BASE_URL = 'https://api.soundclash.org';
+const SONG_API_BASE_URL = 'https://api.soundclash.org';
 
 class ApiService {
   private gameClient: AxiosInstance;

@@ -29,8 +29,7 @@ ecr_stack = EcrStack(app, "SoundClashEcrStack", env=env)
 ecs_stack = EcsStack(app, "SoundClashEcsStack", vpc_stack=vpc_stack, env=env)
 alb_stack = AlbStack(app, "SoundClashAlbStack", vpc_stack=vpc_stack, env=env)
 
-# 3. Data Layer: Databases (force deployment of new version)
-# This creates new security groups and stops using VPC exports
+# 3. Data Layer: Databases
 database_stack = DatabaseStack(app, "SoundClashDatabaseStack", 
                               vpc_stack=vpc_stack, 
                               ecs_stack=ecs_stack,

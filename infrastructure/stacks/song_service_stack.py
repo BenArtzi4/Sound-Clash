@@ -10,6 +10,7 @@ from aws_cdk import (
     aws_ecr as ecr,
     aws_iam as iam,
     aws_ec2 as ec2,
+    aws_logs as logs,
     CfnOutput
 )
 from constructs import Construct
@@ -54,7 +55,7 @@ class SongServiceStack(Stack):
         # Use ECR Repository from its name
         self.song_repository = ecr.Repository.from_repository_name(
             self, "SongServiceRepository",
-            "sound-clash/song-management"
+            "sound-clash-song-management"
         )
         
         # Task Definition for Song Management Service using EC2
@@ -70,8 +71,8 @@ class SongServiceStack(Stack):
             "SongServiceContainer",
             # Use the ECR Repository for the image
             image=ecs.ContainerImage.from_ecr_repository(self.song_repository),
-            memory_limit_mib=400,  # Reduced to fit available memory
-            cpu=256,
+            memory_limit_mib=256,  # Reduced to fit available memory
+            cpu=128,
             essential=True,
             environment={
                 "PORT": "8001",
@@ -87,18 +88,40 @@ class SongServiceStack(Stack):
                     field="password"
                 )
             },
-            # Logging - now both role and log group are in the same stack
+            # Logging
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="song-service"
             )
         )
         
-        # Port mapping for EC2
+        # Port mapping for EC2 with DYNAMIC port mapping (prevents conflicts)
         self.container.add_port_mappings(
             ecs.PortMapping(
                 container_port=8001,
-                host_port=8001,
+                host_port=0,  # Dynamic port assignment
                 protocol=ecs.Protocol.TCP
+            )
+        )
+        
+        # Create dedicated target group with proper dynamic port configuration
+        self.target_group = elbv2.ApplicationTargetGroup(
+            self, "SongServiceTargetGroup",
+            port=8001,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            vpc=self.vpc,
+            target_type=elbv2.TargetType.INSTANCE,
+            target_group_name="song-service-final-tg",
+            deregistration_delay=Duration.seconds(30),
+            health_check=elbv2.HealthCheck(
+                enabled=True,
+                healthy_http_codes="200",
+                interval=Duration.seconds(30),
+                path="/health",
+                protocol=elbv2.Protocol.HTTP,
+                port="traffic-port",  # Use actual dynamic port
+                timeout=Duration.seconds(5),
+                unhealthy_threshold_count=3,
+                healthy_threshold_count=2
             )
         )
         
@@ -108,8 +131,22 @@ class SongServiceStack(Stack):
             cluster=self.cluster,
             task_definition=self.task_definition,
             desired_count=1,
-            service_name="song-management",
-            health_check_grace_period=Duration.minutes(3)  # Increased grace period
+            service_name="song-management-service",
+            health_check_grace_period=Duration.minutes(3)
+        )
+        
+        # Attach service to our target group
+        self.service.attach_to_application_target_group(self.target_group)
+        
+        # Create ALB listener rule at priority 155
+        self.listener_rule = elbv2.ApplicationListenerRule(
+            self, "SongServiceListenerRule",
+            listener=alb_stack.http_listener,
+            priority=155,
+            conditions=[
+                elbv2.ListenerCondition.path_patterns(["/api/songs/*"])
+            ],
+            action=elbv2.ListenerAction.forward([self.target_group])
         )
         
         # Auto Scaling configuration
@@ -125,40 +162,6 @@ class SongServiceStack(Stack):
             scale_out_cooldown=Duration.minutes(2)
         )
         
-        # Create our own target group (separate from ALB stack)
-        self.target_group = elbv2.ApplicationTargetGroup(
-            self, "SongServiceTargetGroup",
-            port=8001,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            vpc=self.vpc,
-            target_type=elbv2.TargetType.INSTANCE,
-            target_group_name="song-service-tg",
-            health_check=elbv2.HealthCheck(
-                enabled=True,
-                healthy_http_codes="200",
-                interval=Duration.seconds(30),
-                path="/api/songs/health/",  # Changed to use the API health endpoint that works
-                protocol=elbv2.Protocol.HTTP,
-                timeout=Duration.seconds(15),  # Increased timeout
-                unhealthy_threshold_count=5,   # More lenient - allow more failures
-                healthy_threshold_count=2      # Still need 2 successes
-            )
-        )
-        
-        # Register service with our target group
-        self.service.attach_to_application_target_group(self.target_group)
-        
-        # Create ALB listener rule (add to existing listener)
-        self.listener_rule = elbv2.ApplicationListenerRule(
-            self, "SongServiceListenerRule",
-            listener=alb_stack.http_listener,
-            priority=150,
-            conditions=[
-                elbv2.ListenerCondition.path_patterns(["/api/songs/*"])
-            ],
-            action=elbv2.ListenerAction.forward([self.target_group])
-        )
-        
         # Outputs
         CfnOutput(
             self, "SongServiceURL",
@@ -168,6 +171,6 @@ class SongServiceStack(Stack):
         
         CfnOutput(
             self, "SongServiceHealthCheck",
-            value=f"http://{alb_stack.alb.load_balancer_dns_name}/api/songs/health/",
+            value=f"http://{alb_stack.alb.load_balancer_dns_name}/health",
             description="Song Service Health Check URL"
         )

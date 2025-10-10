@@ -4,11 +4,16 @@ Song Management Service - Fixed version with proper health checks and robust dat
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import os
 import asyncio
 import asyncpg
 import traceback
 import logging
+
+# Import API routers and database module
+from api import songs
+from database import postgres
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Song Management Service",
-    version="1.0.0"
+    version="1.0.0",
+    redirect_slashes=False  # Disable automatic trailing slash redirects
 )
 
 app.add_middleware(
@@ -26,6 +32,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routers
+app.include_router(songs.router, prefix="/api/songs", tags=["songs"])
 
 # Database config
 DATABASE_CONFIG = {
@@ -58,10 +67,14 @@ async def init_db():
             await conn.execute("SELECT 1")
             database_available = True
             last_error = None
-            logger.info("✅ Database connected successfully")
+            logger.info("Database connected successfully")
+            
+        # Set the pool in postgres module so API endpoints can use it
+        postgres.set_connection_pool(connection_pool)
+        logger.info("Database pool shared with postgres module")
             
     except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}")
+        logger.error(f"Database connection failed: {e}")
         database_available = False
         last_error = str(e)
 
@@ -110,23 +123,7 @@ async def health():
         "timestamp": asyncio.get_event_loop().time()
     }
 
-@app.get("/api/songs/status")
-async def status():
-    return {
-        "service": "operational",
-        "version": "1.0.0",
-        "database": "connected" if database_available else "unavailable",
-        "features": {
-            "basic_endpoints": True,
-            "song_operations": database_available
-        },
-        "config": {
-            "database_host": DATABASE_CONFIG["host"],
-            "database_name": DATABASE_CONFIG["database"]
-        },
-        "last_error": last_error,
-        "message": "All systems operational" if database_available else "Database connection failed"
-    }
+# Note: /status endpoint moved to songs router to avoid route conflict with /{song_id}
 
 @app.get("/api/songs/test-connection")
 async def test_connection():

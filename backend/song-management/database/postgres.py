@@ -1,8 +1,6 @@
 """
 Database configuration and connection management
 """
-import os
-import asyncio
 import asyncpg
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional, Dict, Any, List
@@ -12,43 +10,14 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database configuration
-DATABASE_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "port": int(os.getenv("DB_PORT", "5432")),
-    "database": os.getenv("DB_NAME", "buzzer_game_db"),
-    "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", "password"),
-    "min_size": 1,
-    "max_size": 5,
-    "command_timeout": 30,
-}
-
-# Global connection pool
+# Global connection pool - will be set by main.py
 connection_pool: Optional[asyncpg.Pool] = None
 
-async def init_db():
-    """Initialize database connection pool"""
+def set_connection_pool(pool: asyncpg.Pool):
+    """Set the connection pool from main app"""
     global connection_pool
-    try:
-        connection_pool = await asyncpg.create_pool(**DATABASE_CONFIG)
-        logger.info("Database connection pool created successfully")
-        
-        # Test connection
-        async with connection_pool.acquire() as conn:
-            await conn.execute("SELECT 1")
-            logger.info("Database connection test successful")
-            
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
-
-async def close_db():
-    """Close database connection pool"""
-    global connection_pool
-    if connection_pool:
-        await connection_pool.close()
-        logger.info("Database connection pool closed")
+    connection_pool = pool
+    logger.info("Database connection pool set in postgres.py")
 
 @asynccontextmanager
 async def get_db_connection() -> AsyncGenerator[asyncpg.Connection, None]:
@@ -66,17 +35,26 @@ class SongRepository:
         self.conn = connection
     
     async def get_all_songs(self, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
-        """Get all songs with pagination"""
+        """Get all songs with pagination and genres"""
         query = """
-            SELECT id, title, artist, album, youtube_id, spotify_id, duration_seconds,
-                   release_year, is_active, created_at, updated_at
-            FROM songs_master 
-            WHERE is_active = true
-            ORDER BY title
+            SELECT s.id, s.title, s.artist, s.album, s.youtube_id, s.spotify_id, s.duration_seconds,
+                   s.release_year, s.is_active, s.created_at, s.updated_at,
+                   COALESCE(ARRAY_AGG(g.slug) FILTER (WHERE g.slug IS NOT NULL), ARRAY[]::text[]) as genres
+            FROM songs_master s
+            LEFT JOIN song_genres sg ON s.id = sg.song_id
+            LEFT JOIN genres g ON sg.genre_id = g.id
+            WHERE s.is_active = true
+            GROUP BY s.id
+            ORDER BY s.title
             LIMIT $1 OFFSET $2
         """
         rows = await self.conn.fetch(query, limit, offset)
         return [dict(row) for row in rows]
+    
+    async def count_all_songs(self) -> int:
+        """Get total count of active songs"""
+        query = "SELECT COUNT(*) FROM songs_master WHERE is_active = true"
+        return await self.conn.fetchval(query)
     
     async def get_song_by_id(self, song_id: int) -> Optional[Dict[str, Any]]:
         """Get song by ID"""
@@ -131,14 +109,15 @@ class SongRepository:
         return songs, total_count
     
     async def create_song(self, song_data: Dict[str, Any]) -> int:
-        """Create new song"""
+        """Create new song with genres"""
+        # Insert song
         query = """
             INSERT INTO songs_master (title, artist, album, youtube_id, spotify_id, 
                                     duration_seconds, release_year, is_active)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """
-        return await self.conn.fetchval(
+        song_id = await self.conn.fetchval(
             query,
             song_data.get("title"),
             song_data.get("artist"),
@@ -149,6 +128,24 @@ class SongRepository:
             song_data.get("release_year"),
             song_data.get("is_active", True)
         )
+        
+        # Insert genres if provided
+        genres = song_data.get("genres", [])
+        if genres:
+            for genre_slug in genres:
+                # Get genre_id from slug
+                genre_id = await self.conn.fetchval(
+                    "SELECT id FROM genres WHERE slug = $1",
+                    genre_slug
+                )
+                if genre_id:
+                    # Insert into song_genres
+                    await self.conn.execute(
+                        "INSERT INTO song_genres (song_id, genre_id) VALUES ($1, $2)",
+                        song_id, genre_id
+                    )
+        
+        return song_id
     
     async def update_song(self, song_id: int, song_data: Dict[str, Any]) -> bool:
         """Update existing song"""

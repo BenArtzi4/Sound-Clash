@@ -44,11 +44,11 @@ class EcsStack(Stack):
             allow_all_outbound=True
         )
 
-        # Allow ALB to reach ECS instances on ports 8000-8004
+        # Allow ALB to reach ECS instances on dynamic ports (for dynamic port mapping)
         self.ecs_sg.add_ingress_rule(
             vpc_stack.alb_sg,
-            ec2.Port.tcp_range(8000, 8004),
-            "Allow ALB to reach ECS services"
+            ec2.Port.tcp_range(32768, 65535),
+            "Allow ALB to reach ECS services on dynamic ports"
         )
 
         # Create user data script

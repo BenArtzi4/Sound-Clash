@@ -4,12 +4,11 @@
 
 import axios, { AxiosResponse } from 'axios';
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api/songs' 
-  : 'http://localhost:8001/api/songs';
+// Hardcoded HTTPS for production
+const API_BASE_URL = 'https://api.soundclash.org';
 
 const songApi = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: `${API_BASE_URL}/api/songs`,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

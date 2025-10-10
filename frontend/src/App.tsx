@@ -7,6 +7,8 @@ import './styles/loading-styles.css';
 
 // Import context providers
 import { GameProvider } from './context/GameContext';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Error Boundary Component
 interface ErrorBoundaryState {
@@ -70,6 +72,14 @@ const DisplayLobby = lazy(() => import('./pages/display/DisplayLobby'));
 const DisplayGame = lazy(() => import('./pages/display/DisplayGame'));
 const DisplayWinner = lazy(() => import('./pages/display/DisplayWinner'));
 
+// Admin pages
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminSongList = lazy(() => import('./pages/admin/AdminSongList'));
+const AdminSongForm = lazy(() => import('./pages/admin/AdminSongForm'));
+const AdminBulkImport = lazy(() => import('./pages/admin/AdminBulkImport'));
+const AdminGenres = lazy(() => import('./pages/admin/AdminGenres'));
+
 // Loading component
 const PageLoadingSpinner = () => (
   <div className="page-loading">
@@ -83,7 +93,8 @@ const PageLoadingSpinner = () => (
 function App() {
   return (
     <AppErrorBoundary>
-      <GameProvider>
+      <AuthProvider>
+        <GameProvider>
         <Router>
           <div className="App">
             <Suspense fallback={<PageLoadingSpinner />}>
@@ -100,11 +111,20 @@ function App() {
                 <Route path="/game/:gameCode/lobby" element={<WaitingRoomPage />} />
                 <Route path="/manager/game/:gameCode" element={<ManagerConsoleNew />} />
                 
-                {/* Display screens - COMPLETE */}
+                {/* Display screens */}
                 <Route path="/display/join" element={<DisplayJoin />} />
                 <Route path="/display/join/:gameCode" element={<DisplayLobby />} />
                 <Route path="/display/game/:gameCode" element={<DisplayGame />} />
                 <Route path="/display/winner/:gameCode" element={<DisplayWinner />} />
+                
+                {/* Admin screens */}
+                <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+                <Route path="/admin/songs" element={<ProtectedRoute><AdminSongList /></ProtectedRoute>} />
+                <Route path="/admin/songs/new" element={<ProtectedRoute><AdminSongForm /></ProtectedRoute>} />
+                <Route path="/admin/songs/:id/edit" element={<ProtectedRoute><AdminSongForm /></ProtectedRoute>} />
+                <Route path="/admin/songs/import" element={<ProtectedRoute><AdminBulkImport /></ProtectedRoute>} />
+                <Route path="/admin/genres" element={<ProtectedRoute><AdminGenres /></ProtectedRoute>} />
                 
                 {/* Test Page */}
                 <Route path="/test" element={<TestPage />} />
@@ -115,7 +135,8 @@ function App() {
             </Suspense>
           </div>
         </Router>
-      </GameProvider>
+        </GameProvider>
+      </AuthProvider>
     </AppErrorBoundary>
   );
 }

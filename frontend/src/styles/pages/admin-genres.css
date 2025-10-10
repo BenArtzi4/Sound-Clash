@@ -1,0 +1,160 @@
+/* Admin Genres Styles */
+
+.admin-genres-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #fff 100%);
+}
+
+.stats-summary {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.stats-summary h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.stats-summary p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 1.125rem;
+}
+
+.genre-stats-list {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  margin-bottom: 2rem;
+}
+
+.genre-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.genre-stat-item:last-child {
+  border-bottom: none;
+}
+
+.genre-stat-item:hover {
+  background: #f9fafb;
+}
+
+.genre-rank {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.genre-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.genre-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.genre-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.genre-count {
+  color: #6b7280;
+}
+
+.genre-percentage {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.genre-bar-container {
+  flex: 1;
+  height: 12px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.genre-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  border-radius: 6px;
+  transition: width 0.6s ease;
+}
+
+.genre-info-box {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.genre-info-box h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.genre-info-box p {
+  margin: 0 0 1.5rem 0;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.genre-info-box ul {
+  margin: 0;
+  padding: 0 0 0 1.5rem;
+}
+
+.genre-info-box li {
+  margin-bottom: 0.75rem;
+  color: #374151;
+}
+
+.genre-info-box li strong {
+  color: #1f2937;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .genre-stat-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .genre-bar-container {
+    width: 100%;
+  }
+
+  .genre-details {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
