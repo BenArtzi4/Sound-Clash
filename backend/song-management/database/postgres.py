@@ -109,14 +109,15 @@ class SongRepository:
         return songs, total_count
     
     async def create_song(self, song_data: Dict[str, Any]) -> int:
-        """Create new song"""
+        """Create new song with genres"""
+        # Insert song
         query = """
             INSERT INTO songs_master (title, artist, album, youtube_id, spotify_id, 
                                     duration_seconds, release_year, is_active)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """
-        return await self.conn.fetchval(
+        song_id = await self.conn.fetchval(
             query,
             song_data.get("title"),
             song_data.get("artist"),
@@ -127,6 +128,24 @@ class SongRepository:
             song_data.get("release_year"),
             song_data.get("is_active", True)
         )
+        
+        # Insert genres if provided
+        genres = song_data.get("genres", [])
+        if genres:
+            for genre_slug in genres:
+                # Get genre_id from slug
+                genre_id = await self.conn.fetchval(
+                    "SELECT id FROM genres WHERE slug = $1",
+                    genre_slug
+                )
+                if genre_id:
+                    # Insert into song_genres
+                    await self.conn.execute(
+                        "INSERT INTO song_genres (song_id, genre_id) VALUES ($1, $2)",
+                        song_id, genre_id
+                    )
+        
+        return song_id
     
     async def update_song(self, song_id: int, song_data: Dict[str, Any]) -> bool:
         """Update existing song"""
