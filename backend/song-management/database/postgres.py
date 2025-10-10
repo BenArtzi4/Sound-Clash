@@ -35,13 +35,17 @@ class SongRepository:
         self.conn = connection
     
     async def get_all_songs(self, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
-        """Get all songs with pagination"""
+        """Get all songs with pagination and genres"""
         query = """
-            SELECT id, title, artist, album, youtube_id, spotify_id, duration_seconds,
-                   release_year, is_active, created_at, updated_at
-            FROM songs_master 
-            WHERE is_active = true
-            ORDER BY title
+            SELECT s.id, s.title, s.artist, s.album, s.youtube_id, s.spotify_id, s.duration_seconds,
+                   s.release_year, s.is_active, s.created_at, s.updated_at,
+                   COALESCE(ARRAY_AGG(g.slug) FILTER (WHERE g.slug IS NOT NULL), ARRAY[]::text[]) as genres
+            FROM songs_master s
+            LEFT JOIN song_genres sg ON s.id = sg.song_id
+            LEFT JOIN genres g ON sg.genre_id = g.id
+            WHERE s.is_active = true
+            GROUP BY s.id
+            ORDER BY s.title
             LIMIT $1 OFFSET $2
         """
         rows = await self.conn.fetch(query, limit, offset)
