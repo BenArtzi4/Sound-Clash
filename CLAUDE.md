@@ -274,19 +274,209 @@ Services use health checks to ensure proper startup order.
 - Schema changes should be applied via migration scripts in `scripts/database/`
 - Test locally with docker-compose before deploying to production
 
-### AWS Infrastructure
-The project uses AWS CDK for infrastructure (infrastructure/ directory):
-- ECS for container orchestration
-- ALB for load balancing with path-based routing
-- VPC with public/private subnets
-- RDS PostgreSQL for persistent storage
-- ElastiCache Redis for caching
-- CloudFront + S3 for frontend hosting
+### AWS Infrastructure (IaC with CDK)
 
-Path-based ALB routing:
-- `/api/games/*` → Game Management Service
-- `/api/songs/*` → Song Management Service
-- `/ws/*` → WebSocket Service
+The project uses **AWS CDK** (Cloud Development Kit) for Infrastructure as Code in Python. All infrastructure is defined in the `infrastructure/` directory.
+
+#### Infrastructure Stack Deployment Order
+
+The CDK stacks are deployed in a specific order to avoid circular dependencies:
+
+1. **Foundational Layer** (independent):
+   - `VpcStack` - Networking foundation
+   - `EcrStack` - Docker image registry
+
+2. **Infrastructure Layer** (depends on VPC):
+   - `EcsStack` - Container orchestration cluster
+   - `AlbStack` - Load balancer and routing
+
+3. **Data Layer** (depends on VPC + ECS):
+   - `DatabaseStack` - RDS PostgreSQL, DynamoDB, ElastiCache Redis
+
+4. **Application Layer** (depends on all previous):
+   - `SongServiceStack` - Song management service
+   - `WebSocketServiceStack` - Real-time communication
+   - `GameManagementServiceStack` - Game lifecycle management
+
+5. **Frontend Layer** (independent):
+   - `FrontendStack` - CloudFront + S3 hosting
+
+#### VPC Network Architecture
+
+**CIDR Block**: `10.0.0.0/16`
+**Availability Zones**: 3 (for high availability)
+**NAT Gateways**: 1 (cost optimization - $45/month)
+
+**Subnet Configuration**:
+
+1. **Public Subnets** (`10.0.0.0/24`, `10.0.1.0/24`, `10.0.2.0/24`):
+   - Internet-facing Application Load Balancer (ALB)
+   - RDS PostgreSQL (development only - publicly accessible)
+   - NAT Gateway for private subnet internet access
+
+2. **Private Subnets with Egress** (`10.0.3.0/24`, `10.0.4.0/24`, `10.0.5.0/24`):
+   - ECS tasks (backend services)
+   - ElastiCache Redis
+   - Internet access via NAT Gateway (for pulling Docker images, calling external APIs)
+
+3. **Isolated Subnets** (`10.0.6.0/24`, `10.0.7.0/24`, `10.0.8.0/24`):
+   - Reserved for production databases (no internet access)
+   - Currently unused (RDS in public subnet for development)
+
+#### Security Groups
+
+**ALB Security Group**:
+- Ingress: Port 80 (HTTP) from `0.0.0.0/0`
+- Ingress: Port 443 (HTTPS) from `0.0.0.0/0`
+- Egress: All traffic allowed
+
+**ECS Security Group**:
+- Ingress: Port range 32768-65535 (dynamic port mapping) from ALB SG
+- Egress: All traffic allowed
+
+**RDS Security Group**:
+- Ingress: Port 5432 (PostgreSQL) from ECS SG
+- Ingress: Port 5432 from `0.0.0.0/0` (development only - **restrict in production**)
+- Egress: None
+
+**Redis Security Group**:
+- Ingress: Port 6379 (Redis) from ECS SG
+- Egress: None
+
+#### Application Load Balancer (ALB)
+
+**Load Balancer**:
+- Name: `sound-clash-alb`
+- Type: Application Load Balancer (Layer 7)
+- Scheme: Internet-facing
+- Subnets: Public subnets across 3 AZs
+- DNS: `sound-clash-alb-1979152152.us-east-1.elb.amazonaws.com`
+
+**Listeners**:
+- **HTTP (Port 80)**: Default 404 response (should redirect to HTTPS)
+- **HTTPS (Port 443)**: SSL certificate from ACM, path-based routing
+
+**Path-based Routing Rules** (priority order):
+
+| Priority | Path Pattern | Target Service | Port |
+|----------|-------------|----------------|------|
+| 60 | `/health` | Game Management | 8000 |
+| 100 | `/api/games/*`, `/api/games` | Game Management | 8000 |
+| 155 | `/api/songs/*` | Song Management | 8001 |
+| 200 | `/api/gameplay/*` | Game API | 8001 |
+| 300 | `/ws/*`, `/socket.io/*` | WebSocket | 8002 |
+| 400 | `/api/manager/*` | Manager Console | 8003 |
+| 500 | `/api/display/*` | Public Display | 8004 |
+
+**Target Groups**:
+- All use HTTP protocol with health checks on `/health` endpoint
+- Health check: 5s timeout, 30s interval, 2 healthy / 3 unhealthy threshold
+- WebSocket TG has sticky sessions (1 hour duration)
+
+#### ECS Cluster Configuration
+
+**Cluster**: `sound-clash-cluster` with Container Insights enabled
+
+**Capacity**:
+- Instance Type: `t3.small` (2 vCPU, 2GB RAM)
+- AMI: ECS-optimized Amazon Linux 2
+- Auto Scaling Group: Min 1, Desired 2, Max 5
+- Subnets: Private subnets with egress
+- Launch Template (not Launch Configuration)
+
+**ECS Services** (EC2 launch type, not Fargate):
+- Dynamic port mapping (32768-65535 range)
+- Service discovery via ALB target groups
+- Auto-scaling based on CPU/memory utilization
+
+#### Database Configuration
+
+**RDS PostgreSQL**:
+- Engine: PostgreSQL 14
+- Instance: `db.t4g.micro` (free tier eligible)
+- Storage: 20GB GP3 (auto-scaling to 100GB max)
+- Database name: `soundclash`
+- Multi-AZ: Disabled (development)
+- Backup retention: 7 days
+- **Publicly accessible**: Yes (development only - **change in production**)
+- Endpoint: Available via CloudFormation outputs
+- Credentials: Stored in AWS Secrets Manager
+
+**DynamoDB Tables** (Ephemeral data with 4-hour TTL):
+
+1. `sound-clash-active-games`:
+   - Partition key: `gameCode` (String)
+   - GSI: `StatusIndex` on `game_status` + `created_at`
+   - Billing: Pay-per-request
+
+2. `sound-clash-game-sessions`:
+   - Partition key: `gameCode` (String)
+   - Sort key: `roundId` (String)
+   - Billing: Pay-per-request
+
+3. `sound-clash-buzz-events`:
+   - Partition key: `gameCodeRoundId` (String)
+   - Sort key: `timestamp` (String)
+   - Billing: Pay-per-request
+
+4. `sound-clash-team-connections`:
+   - Partition key: `gameCode` (String)
+   - Sort key: `teamName` (String)
+   - Billing: Pay-per-request
+
+**ElastiCache Redis**:
+- Node type: `cache.t3.micro` (~$12/month)
+- Engine: Redis 7.0
+- Nodes: 1 (single-node cluster)
+- Subnets: Private subnets
+- Used for: Caching, session management
+
+#### CloudFront + S3 (Frontend)
+
+**S3 Bucket**:
+- Name: `sound-clash-frontend-381492257993-us-east-1`
+- Purpose: Static hosting for React frontend
+- Access: Via CloudFront only (private bucket)
+
+**CloudFront Distribution**:
+- Distribution ID: `E3DNQ80BLT42Z2`
+- Origin: S3 bucket
+- Default root object: `index.html`
+- Custom domain: `www.soundclash.org`
+- SSL Certificate: AWS ACM (free)
+- Also accessible via: `https://de6s05e4lozs6.cloudfront.net`
+
+#### Cost Breakdown (Monthly Estimates)
+
+| Resource | Type | Cost |
+|----------|------|------|
+| ECS EC2 Instances | 2x t3.small | ~$30 |
+| NAT Gateway | Single AZ | ~$45 |
+| ALB | Application LB | ~$16 |
+| RDS PostgreSQL | db.t4g.micro | Free tier* |
+| ElastiCache Redis | cache.t3.micro | ~$12 |
+| CloudFront | Pay-as-you-go | ~$1 |
+| DynamoDB | Pay-per-request | ~$1 |
+| **Total** | | **~$105/month** |
+
+*Free tier: 750 hours/month for first 12 months
+
+#### Monitoring & Logging
+
+**CloudWatch Logs**:
+- Log groups per ECS service
+- Retention: 7 days (configurable)
+- Real-time log streaming
+
+**Container Insights**:
+- Enabled on ECS cluster
+- Metrics: CPU, memory, network, task count
+- Dashboards: Auto-generated
+
+**Health Checks**:
+- ALB target health checks every 30s
+- ECS task health checks
+- Application `/health` endpoints
 
 ## Production Deployment
 
