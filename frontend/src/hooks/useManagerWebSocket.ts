@@ -133,37 +133,32 @@ export const useManagerWebSocket = ({
 
           switch (message.type) {
             case 'manager_connected':
+              // Backend sends teams as array of objects: [{name, joined_at, connected}]
               setGameState(prev => ({
                 ...prev,
-                state: message.game_state,
-                teams: message.teams?.map((name: string) => ({
-                  name,
-                  score: 0,
-                  connected: true
+                state: message.status || 'waiting',
+                teams: message.teams?.map((team: any) => ({
+                  name: team.name,
+                  score: message.team_scores?.[team.name] || 0,
+                  connected: team.connected
                 })) || []
               }));
+              console.log('[Manager WS] Initial teams loaded:', message.teams?.length || 0);
               break;
 
             case 'team_joined':
-              setGameState(prev => ({
-                ...prev,
-                teams: message.teams?.map((name: string) => ({
-                  name,
-                  score: prev.teams.find(t => t.name === name)?.score || 0,
-                  connected: true
-                })) || prev.teams
-              }));
-              break;
-
             case 'team_left':
+            case 'team_update':
+              // Backend sends teams as array of objects: [{name, joined_at, connected}]
               setGameState(prev => ({
                 ...prev,
-                teams: message.teams?.map((name: string) => ({
-                  name,
-                  score: prev.teams.find(t => t.name === name)?.score || 0,
-                  connected: true
+                teams: message.teams?.map((team: any) => ({
+                  name: team.name,
+                  score: prev.teams.find(t => t.name === team.name)?.score || 0,
+                  connected: team.connected
                 })) || prev.teams
               }));
+              console.log('[Manager WS] Teams updated:', message.event, message.teams?.length || 0);
               break;
 
             case 'game_started':
