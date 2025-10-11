@@ -4,6 +4,7 @@ from aws_cdk import (
     aws_s3_deployment as s3deploy,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
+    aws_certificatemanager as acm,
     aws_iam as iam,
     CfnOutput,
     RemovalPolicy,
@@ -66,7 +67,7 @@ class FrontendStack(Stack):
         
         # Cache policy for HTML files - short cache for faster updates
         html_cache_policy = cloudfront.CachePolicy(
-            self, "HTMLCachePolicy", 
+            self, "HTMLCachePolicy",
             cache_policy_name=f"SoundClash-HTML-{self.stack_name}",
             comment="Cache policy for HTML files with short TTL",
             default_ttl=Duration.minutes(5),
@@ -80,8 +81,15 @@ class FrontendStack(Stack):
             enable_accept_encoding_brotli=True,
             enable_accept_encoding_gzip=True
         )
-        
-        # CloudFront distribution with optimized caching
+
+        # Import existing ACM certificate for custom domain
+        # Certificate covers soundclash.org and *.soundclash.org
+        certificate = acm.Certificate.from_certificate_arn(
+            self, "SoundClashCertificate",
+            certificate_arn="arn:aws:acm:us-east-1:381492257993:certificate/545b6731-5363-4c1d-873b-4eaaaffd69da"
+        )
+
+        # CloudFront distribution with optimized caching and custom domain
         self.distribution = cloudfront.Distribution(
             self, "Distribution",
             default_behavior=cloudfront.BehaviorOptions(
@@ -111,7 +119,11 @@ class FrontendStack(Stack):
             },
             
             default_root_object="index.html",
-            
+
+            # Custom domain configuration
+            domain_names=["www.soundclash.org", "soundclash.org"],
+            certificate=certificate,
+
             # Enhanced error responses for SPA
             error_responses=[
                 # SPA routing - redirect all 404s to index.html

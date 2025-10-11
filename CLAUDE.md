@@ -481,16 +481,38 @@ The CDK stacks are deployed in a specific order to avoid circular dependencies:
 ## Production Deployment
 
 ### Production URLs
-- **Frontend**: https://www.soundclash.org (also: https://soundclash.org redirects)
+- **Frontend**: https://www.soundclash.org
+- **Root Domain**: https://soundclash.org (redirects to www via Namecheap)
 - **Backend API**: https://api.soundclash.org
 - **Status Endpoint**: https://api.soundclash.org/api/songs/status
 - **WebSocket**: wss://api.soundclash.org/ws/...
 
 ### Domain Configuration
-- **Domain**: soundclash.org (registered via Namecheap)
-- **SSL Certificate**: AWS ACM (free, auto-renewing)
-- **CDN**: CloudFront for frontend
-- **Load Balancer**: ALB with HTTPS listener on port 443
+
+**Domain Registrar**: Namecheap (soundclash.org)
+
+**ACM Certificate**:
+- ARN: `arn:aws:acm:us-east-1:381492257993:certificate/545b6731-5363-4c1d-873b-4eaaaffd69da`
+- Status: ISSUED (auto-renewing)
+- Covers: `soundclash.org` and `*.soundclash.org` (wildcard)
+- Validated via: DNS (CNAME records)
+
+**Namecheap DNS Records**:
+
+| Type | Host | Value | Description |
+|------|------|-------|-------------|
+| CNAME | `_adcfa3d788ab1485dd1e175226cd19e1` | `_5366633a774b6350d0a761a379e1deab.xlfgrmvvlj.acm-validations.aws.` | ACM certificate validation |
+| CNAME | `api` | `sound-clash-alb-1979152152.us-east-1.elb.amazonaws.com.` | Backend API (ALB) |
+| CNAME | `www` | `de6s05e4lozs6.cloudfront.net.` | Frontend (CloudFront) |
+| URL Redirect | `@` (root) | `https://www.soundclash.org` | Permanent 301 redirect |
+
+**CloudFront Configuration**:
+- Distribution ID: `E3DNQ80BLT42Z2`
+- Alternate domain names (CNAMEs): `www.soundclash.org`, `soundclash.org`
+- SSL Certificate: ACM certificate (arn above)
+- Origin: S3 static website (`sound-clash-frontend-381492257993-us-east-1`)
+
+**Important**: CloudFront requires both `domain_names` and `certificate` parameters in CDK stack for custom domains to work. Without these, CloudFront returns 403 errors for custom domain requests.
 
 ### Deployment Commands
 ```bash
