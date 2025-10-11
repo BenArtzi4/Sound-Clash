@@ -194,6 +194,24 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
     };
   }, [gameCode, role, teamName]); // Only reconnect when essential params change, NOT when callbacks change
 
+  // Heartbeat - send ping every 10 seconds to keep connection alive
+  useEffect(() => {
+    if (connectionStatus !== 'connected' || !wsRef.current) return;
+
+    console.log('[WebSocket] Starting heartbeat...');
+    const interval = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        console.log('[WebSocket] Sending ping...');
+        wsRef.current.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 10000); // Every 10 seconds
+
+    return () => {
+      console.log('[WebSocket] Stopping heartbeat...');
+      clearInterval(interval);
+    };
+  }, [connectionStatus]);
+
   return {
     connectionStatus,
     sendMessage,

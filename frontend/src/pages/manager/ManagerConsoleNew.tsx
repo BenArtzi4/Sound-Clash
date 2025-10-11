@@ -159,6 +159,14 @@ const ManagerConsoleNew: React.FC = () => {
     setLockedComponents({ song_name: false, artist_content: false });
   }, []);
 
+  // Start game - send WebSocket message to transition from waiting to playing
+  const startGame = useCallback(() => {
+    console.log('[Manager] Starting game');
+    sendMessage({
+      type: 'start_game',
+    });
+  }, [sendMessage]);
+
   // End game - send WebSocket message
   const endGame = useCallback(() => {
     console.log('[Manager] Ending game');
@@ -270,6 +278,7 @@ const ManagerConsoleNew: React.FC = () => {
               roundNumber={gameState.currentRound?.round_number || null}
               gameState={gameState.state}
               roundState={roundState}
+              onStartGame={startGame}
               onStartRound={startRound}
               onNextRound={nextRound}
               onRestartSong={restartSong}

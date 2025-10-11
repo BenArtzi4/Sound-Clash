@@ -5,6 +5,7 @@ interface RoundControlsProps {
   roundNumber: number | null;
   gameState: 'waiting' | 'playing' | 'finished';
   roundState: 'idle' | 'active' | 'completed';
+  onStartGame?: () => void;
   onStartRound: () => void;
   onNextRound: () => void;
   onRestartSong: () => void;
@@ -17,6 +18,7 @@ const RoundControls: React.FC<RoundControlsProps> = ({
   roundNumber,
   gameState,
   roundState,
+  onStartGame,
   onStartRound,
   onNextRound,
   onRestartSong,
@@ -79,10 +81,25 @@ const RoundControls: React.FC<RoundControlsProps> = ({
         </div>
       )}
 
-      {/* Round Management Controls */}
+      {/* Game/Round Management Controls */}
       <div className="control-section">
-        <h4 className="section-title">Round Management</h4>
+        <h4 className="section-title">
+          {gameState === 'waiting' ? 'Game Management' : 'Round Management'}
+        </h4>
         <div className="control-buttons">
+          {/* Start Game button - appears when game is in waiting state */}
+          {gameState === 'waiting' && onStartGame && (
+            <button
+              className="control-btn primary large"
+              onClick={onStartGame}
+              disabled={disabled}
+            >
+              <span className="btn-icon">🎮</span>
+              Start Game
+            </button>
+          )}
+
+          {/* Start Round button - appears when game is playing and no round is active */}
           {gameState === 'playing' && roundState === 'idle' && (
             <button
               className="control-btn primary large"
@@ -94,6 +111,7 @@ const RoundControls: React.FC<RoundControlsProps> = ({
             </button>
           )}
 
+          {/* Next Round button - appears after a round is completed */}
           {gameState === 'playing' && roundState === 'completed' && (
             <button
               className="control-btn primary large"
@@ -105,6 +123,7 @@ const RoundControls: React.FC<RoundControlsProps> = ({
             </button>
           )}
 
+          {/* End Game button - appears when game is playing */}
           {gameState === 'playing' && (
             <button
               className="control-btn danger"

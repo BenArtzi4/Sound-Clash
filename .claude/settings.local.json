@@ -3,7 +3,23 @@
     "allow": [
       "Bash(curl:*)",
       "Bash(git add:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(npm run build:production:*)",
+      "Bash(aws s3 sync:*)",
+      "Bash(aws cloudfront create-invalidation:*)",
+      "Bash(git log:*)",
+      "Bash(git push:*)",
+      "Bash(aws cloudfront get-invalidation:*)",
+      "Bash(git commit:*)",
+      "Bash(aws elbv2 describe-target-groups:*)",
+      "Bash(aws elbv2 create-rule:*)",
+      "Bash(aws elbv2 describe-rules:*)",
+      "Bash(aws ecs describe-services:*)",
+      "Bash(aws ecs list-tasks:*)",
+      "Bash(python:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git branch:*)"
     ],
     "deny": [],
     "ask": []
