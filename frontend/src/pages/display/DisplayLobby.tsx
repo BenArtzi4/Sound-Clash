@@ -23,8 +23,9 @@ const DisplayLobby: React.FC<DisplayLobbyProps> = ({ wsUrl }) => {
     if (!gameCode) return;
 
     // Connect to WebSocket as display
+    const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8002';
     const websocket = new WebSocket(
-      wsUrl || `ws://localhost:8001/ws/game/${gameCode}?role=display`
+      wsUrl || `${baseUrl}/ws/display/${gameCode}`
     );
 
     websocket.onopen = () => {
