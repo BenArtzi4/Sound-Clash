@@ -29,6 +29,12 @@ const WaitingRoomPage: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  const showToastMessage = useCallback((message: string) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  }, []);
+
   // WebSocket message handler
   const handleWebSocketMessage = useCallback((data: any) => {
     console.log('[WaitingRoom] Received message:', data);
@@ -63,7 +69,7 @@ const WaitingRoomPage: React.FC = () => {
       default:
         console.log('[WaitingRoom] Unhandled message type:', data.type);
     }
-  }, []);
+  }, [showToastMessage]);
 
   // WebSocket connection
   const { connectionStatus } = useWebSocket({
@@ -118,15 +124,9 @@ const WaitingRoomPage: React.FC = () => {
       showToastMessage('Wait for at least one team to join before starting!');
       return;
     }
-    
+
     console.log('Starting game...');
     navigate(`/manager/game/${gameCode}`);
-  };
-
-  const showToastMessage = (message: string) => {
-    setToastMessage(message);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
   };
 
   const copyGameCode = async () => {
