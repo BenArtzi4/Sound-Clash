@@ -171,13 +171,13 @@ class AlbStack(Stack):
             action=elbv2.ListenerAction.forward([self.game_api_tg])
         )
         
-        # Route WebSocket connections to WebSocket Service
+        # Route WebSocket connections AND game management endpoints to WebSocket Service
         elbv2.ApplicationListenerRule(
             self, "WebSocketRule",
             listener=self.http_listener,
             priority=300,
             conditions=[
-                elbv2.ListenerCondition.path_patterns(["/ws/*", "/socket.io/*"])
+                elbv2.ListenerCondition.path_patterns(["/ws/*", "/socket.io/*", "/api/game/*"])
             ],
             action=elbv2.ListenerAction.forward([self.websocket_tg])
         )
