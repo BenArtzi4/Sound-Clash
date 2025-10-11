@@ -38,7 +38,8 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
   // Get WebSocket URL from environment or use default
   const getWebSocketUrl = useCallback(() => {
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8002';
-    return `${baseUrl}/ws/game/${gameCode}?role=${role}&teamName=${encodeURIComponent(teamName)}`;
+    // Backend endpoints: /ws/team/{code}, /ws/manager/{code}, /ws/display/{code}
+    return `${baseUrl}/ws/${role}/${gameCode}`;
   }, [gameCode, role, teamName]);
 
   const connect = useCallback(() => {
@@ -53,6 +54,15 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
 
       ws.onopen = () => {
         console.log('WebSocket connected');
+
+        // Send team_join message after connection (required by backend)
+        if (role === 'team') {
+          ws.send(JSON.stringify({
+            type: 'team_join',
+            team_name: teamName
+          }));
+        }
+
         setConnectionStatus('connected');
         reconnectAttemptsRef.current = 0;
         onConnected?.();
@@ -101,7 +111,7 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
       console.error('Failed to create WebSocket:', error);
       setConnectionStatus('error');
     }
-  }, [getWebSocketUrl, onConnected, onMessage, onDisconnected, onError]);
+  }, [getWebSocketUrl, onConnected, onMessage, onDisconnected, onError, role, teamName]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
