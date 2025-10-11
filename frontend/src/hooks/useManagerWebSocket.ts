@@ -73,11 +73,42 @@ export const useManagerWebSocket = ({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const shouldConnectRef = useRef(true);
+  const isConnectingRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+
+  // Store callbacks in refs to avoid reconnection when they change
+  const onGameStartedRef = useRef(onGameStarted);
+  const onRoundStartedRef = useRef(onRoundStarted);
+  const onBuzzerLockedRef = useRef(onBuzzerLocked);
+  const onRoundCompletedRef = useRef(onRoundCompleted);
+  const onGameFinishedRef = useRef(onGameFinished);
+
+  // Update callback refs when they change (without triggering reconnection)
+  useEffect(() => {
+    onGameStartedRef.current = onGameStarted;
+    onRoundStartedRef.current = onRoundStarted;
+    onBuzzerLockedRef.current = onBuzzerLocked;
+    onRoundCompletedRef.current = onRoundCompleted;
+    onGameFinishedRef.current = onGameFinished;
+  }, [onGameStarted, onRoundStarted, onBuzzerLocked, onRoundCompleted, onGameFinished]);
 
   const connect = useCallback(() => {
-    if (!shouldConnectRef.current || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    // Prevent multiple simultaneous connections
+    if (isConnectingRef.current) {
+      console.log('[Manager WS] Already connecting, skipping...');
       return;
     }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+      console.log('[Manager WS] Already connected or connecting, skipping...');
+      return;
+    }
+
+    if (!shouldConnectRef.current || reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      return;
+    }
+
+    isConnectingRef.current = true;
 
     try {
       const wsUrl = `${WS_URL}/ws/manager/${gameCode}`;
@@ -90,7 +121,9 @@ export const useManagerWebSocket = ({
         console.log('[Manager WS] Connected');
         setIsConnected(true);
         setError(null);
+        reconnectAttemptsRef.current = 0;
         setReconnectAttempts(0);
+        isConnectingRef.current = false;
       };
 
       ws.onmessage = (event) => {
@@ -135,7 +168,7 @@ export const useManagerWebSocket = ({
 
             case 'game_started':
               setGameState(prev => ({ ...prev, state: 'playing' }));
-              onGameStarted?.();
+              onGameStartedRef.current?.();
               break;
 
             case 'round_started':
@@ -148,7 +181,7 @@ export const useManagerWebSocket = ({
                 currentRound: roundInfo,
                 buzzedTeam: null
               }));
-              onRoundStarted?.(roundInfo);
+              onRoundStartedRef.current?.(roundInfo);
               break;
 
             case 'buzzer_locked':
@@ -161,7 +194,7 @@ export const useManagerWebSocket = ({
                 ...prev,
                 buzzedTeam: buzzInfo
               }));
-              onBuzzerLocked?.(buzzInfo);
+              onBuzzerLockedRef.current?.(buzzInfo);
               break;
 
             case 'round_completed':
@@ -176,12 +209,12 @@ export const useManagerWebSocket = ({
                   buzzedTeam: null
                 }));
               }
-              onRoundCompleted?.();
+              onRoundCompletedRef.current?.();
               break;
 
             case 'game_finished':
               setGameState(prev => ({ ...prev, state: 'finished' }));
-              onGameFinished?.(message);
+              onGameFinishedRef.current?.(message);
               break;
 
             case 'error':
@@ -208,15 +241,17 @@ export const useManagerWebSocket = ({
       ws.onclose = () => {
         console.log('[Manager WS] Disconnected');
         setIsConnected(false);
+        isConnectingRef.current = false;
         wsRef.current = null;
 
         // Attempt reconnection
-        if (shouldConnectRef.current && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          const delay = RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts);
-          console.log(`[Manager WS] Reconnecting in ${delay}ms... (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
-          
+        if (shouldConnectRef.current && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttemptsRef.current += 1;
+          const delay = RECONNECT_DELAY_MS * Math.pow(2, reconnectAttemptsRef.current - 1);
+          console.log(`[Manager WS] Reconnecting in ${delay}ms... (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
+
           reconnectTimeoutRef.current = setTimeout(() => {
-            setReconnectAttempts(prev => prev + 1);
+            setReconnectAttempts(reconnectAttemptsRef.current);
             connect();
           }, delay);
         }
@@ -225,26 +260,31 @@ export const useManagerWebSocket = ({
     } catch (err) {
       console.error('[Manager WS] Connection error:', err);
       setError('Failed to connect to game server');
+      isConnectingRef.current = false;
     }
-  }, [gameCode, reconnectAttempts, onGameStarted, onRoundStarted, onBuzzerLocked, onRoundCompleted, onGameFinished]);
+  }, [gameCode]); // Only gameCode - callbacks and reconnectAttempts are now in refs
 
-  // Initial connection
+  // Initial connection - only reconnect when gameCode changes
   useEffect(() => {
+    console.log('[Manager WS] useEffect triggered - connecting...');
     shouldConnectRef.current = true;
     connect();
 
     // Cleanup
     return () => {
+      console.log('[Manager WS] useEffect cleanup - disconnecting...');
       shouldConnectRef.current = false;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
+      isConnectingRef.current = false;
     };
-  }, [connect]);
+  }, [gameCode]); // Only reconnect when gameCode changes, NOT when connect function changes
 
   // Send message function
   const sendMessage = useCallback((message: any) => {
