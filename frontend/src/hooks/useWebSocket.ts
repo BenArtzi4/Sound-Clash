@@ -53,28 +53,45 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
       const ws = new WebSocket(getWebSocketUrl());
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('[WebSocket] Connection opened, waiting for authentication...');
+        setConnectionStatus('connecting');
 
         // Send team_join message after connection (required by backend)
         if (role === 'team') {
+          console.log('[WebSocket] Sending team_join:', { type: 'team_join', team_name: teamName });
           ws.send(JSON.stringify({
             type: 'team_join',
             team_name: teamName
           }));
         }
 
-        setConnectionStatus('connected');
-        reconnectAttemptsRef.current = 0;
-        onConnected?.();
+        // Don't set connected status here - wait for connection_ack from backend
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('WebSocket message:', data);
+          console.log('[WebSocket] Received message:', data);
+
+          // Handle connection acknowledgment
+          if (data.type === 'connection_ack' || data.type === 'manager_connected' || data.type === 'display_connected') {
+            console.log('[WebSocket] Connection acknowledged by backend');
+            setConnectionStatus('connected');
+            reconnectAttemptsRef.current = 0;
+            onConnected?.();
+          }
+
+          // Handle errors
+          if (data.type === 'error') {
+            console.error('[WebSocket] Backend error:', data.message);
+            setConnectionStatus('error');
+            ws.close();
+            return;
+          }
+
           onMessage?.(data);
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
+          console.error('[WebSocket] Failed to parse message:', error);
         }
       };
 
