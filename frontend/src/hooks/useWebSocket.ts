@@ -34,6 +34,21 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
+  const isConnectingRef = useRef(false);
+
+  // Store callbacks in refs to avoid reconnection when they change
+  const onMessageRef = useRef(onMessage);
+  const onConnectedRef = useRef(onConnected);
+  const onDisconnectedRef = useRef(onDisconnected);
+  const onErrorRef = useRef(onError);
+
+  // Update callback refs when they change (without triggering reconnection)
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    onConnectedRef.current = onConnected;
+    onDisconnectedRef.current = onDisconnected;
+    onErrorRef.current = onError;
+  }, [onMessage, onConnected, onDisconnected, onError]);
 
   // Get WebSocket URL from environment or use default
   const getWebSocketUrl = useCallback(() => {
@@ -43,10 +58,18 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
   }, [gameCode, role, teamName]);
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    // Prevent multiple simultaneous connections
+    if (isConnectingRef.current) {
+      console.log('[WebSocket] Already connecting, skipping...');
       return;
     }
 
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+      console.log('[WebSocket] Already connected or connecting, skipping...');
+      return;
+    }
+
+    isConnectingRef.current = true;
     setConnectionStatus('connecting');
 
     try {
@@ -78,33 +101,37 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
             console.log('[WebSocket] Connection acknowledged by backend');
             setConnectionStatus('connected');
             reconnectAttemptsRef.current = 0;
-            onConnected?.();
+            isConnectingRef.current = false;
+            onConnectedRef.current?.();
           }
 
           // Handle errors
           if (data.type === 'error') {
             console.error('[WebSocket] Backend error:', data.message);
             setConnectionStatus('error');
+            isConnectingRef.current = false;
             ws.close();
             return;
           }
 
-          onMessage?.(data);
+          onMessageRef.current?.(data);
         } catch (error) {
           console.error('[WebSocket] Failed to parse message:', error);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[WebSocket] Error:', error);
         setConnectionStatus('error');
-        onError?.(error);
+        isConnectingRef.current = false;
+        onErrorRef.current?.(error);
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
+        console.log('[WebSocket] Connection closed');
         setConnectionStatus('disconnected');
-        onDisconnected?.();
+        isConnectingRef.current = false;
+        onDisconnectedRef.current?.();
 
         // Attempt to reconnect
         if (reconnectAttemptsRef.current < maxReconnectAttempts) {
@@ -125,12 +152,15 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
 
       wsRef.current = ws;
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
+      console.error('[WebSocket] Failed to create connection:', error);
       setConnectionStatus('error');
+      isConnectingRef.current = false;
     }
-  }, [getWebSocketUrl, onConnected, onMessage, onDisconnected, onError, role, teamName]);
+  }, [getWebSocketUrl, role, teamName]); // Removed callbacks from dependencies - they're now in refs
 
   const disconnect = useCallback(() => {
+    console.log('[WebSocket] Disconnecting...');
+
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -141,6 +171,7 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
       wsRef.current = null;
     }
 
+    isConnectingRef.current = false;
     setConnectionStatus('disconnected');
   }, []);
 
@@ -152,14 +183,16 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
     }
   }, []);
 
-  // Connect on mount, disconnect on unmount
+  // Connect on mount and when essential params change, disconnect on unmount
   useEffect(() => {
+    console.log('[WebSocket] useEffect triggered - connecting...');
     connect();
 
     return () => {
+      console.log('[WebSocket] useEffect cleanup - disconnecting...');
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, [gameCode, role, teamName]); // Only reconnect when essential params change, NOT when callbacks change
 
   return {
     connectionStatus,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import BuzzerButton, { BuzzerState } from '../../components/BuzzerButton';
@@ -38,9 +38,9 @@ const TeamGameplay: React.FC = () => {
     }
   }, [teamName, gameCode, navigate]);
 
-  // WebSocket message handler
-  const handleWebSocketMessage = (data: any) => {
-    console.log('Received message:', data);
+  // WebSocket message handler - wrapped in useCallback to prevent reconnection loop
+  const handleWebSocketMessage = useCallback((data: any) => {
+    console.log('[Team] Received message:', data);
 
     switch (data.type) {
       case 'game_started':
@@ -67,7 +67,7 @@ const TeamGameplay: React.FC = () => {
 
       case 'answer_evaluated':
         setComponentStatus(data.locked_components);
-        
+
         // Re-enable buzzer if not all components are locked
         const allLocked = data.locked_components.song_name && data.locked_components.artist_content;
         if (!allLocked) {
@@ -85,9 +85,9 @@ const TeamGameplay: React.FC = () => {
         break;
 
       default:
-        console.log('Unhandled message type:', data.type);
+        console.log('[Team] Unhandled message type:', data.type);
     }
-  };
+  }, [teamName]); // Only teamName is used in the handler
 
   // WebSocket connection
   const { connectionStatus, sendMessage, isConnected } = useWebSocket({
