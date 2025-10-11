@@ -58,23 +58,31 @@ const CreateGamePage: React.FC = () => {
       
       const gameCode = generateGameCode();
       
-      // Call backend API to create game
+      // Call backend API to notify WebSocket service about new game
       try {
         const response = await fetch(`${ALB_URL}/api/game/${gameCode}/notify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            max_rounds: 10,
-            genres: selectedGenres,
+            action: 'game_created',
+            settings: {
+              max_rounds: 10,
+              genres: selectedGenres,
+            },
           }),
         });
 
         if (!response.ok) {
-          console.warn('Backend API call failed, continuing anyway');
+          const errorText = await response.text();
+          console.error('Backend API call failed:', response.status, errorText);
+          throw new Error(`Failed to create game: ${response.statusText}`);
         }
+
+        const result = await response.json();
+        console.log('Game created in WebSocket service:', result);
       } catch (err) {
-        console.warn('Could not connect to backend:', err);
-        // Continue anyway for offline development
+        console.error('Failed to notify WebSocket service:', err);
+        throw err; // Don't continue if we can't create the game
       }
 
       // Store in context
