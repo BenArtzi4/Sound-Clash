@@ -4,7 +4,7 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 're
 
 interface UseWebSocketOptions {
   gameCode: string;
-  teamName: string;
+  teamName?: string;  // Optional - only required for 'team' role
   role: 'team' | 'manager' | 'display';
   onMessage?: (data: any) => void;
   onConnected?: () => void;

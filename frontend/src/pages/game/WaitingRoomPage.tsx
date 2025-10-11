@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGame } from '../../context/GameContext';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import Logo from '../../components/common/Logo';
 import '../../styles/pages/waiting-room.css';
 
@@ -21,12 +22,64 @@ const WaitingRoomPage: React.FC = () => {
   const { gameCode } = useParams<{ gameCode: string }>();
   const navigate = useNavigate();
   const { state, dispatch, leaveGame } = useGame();
-  
-  const [teams] = useState<Team[]>([]);
-  const [gameSettings] = useState<GameSettings | null>(null);
+
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
+  // WebSocket message handler
+  const handleWebSocketMessage = useCallback((data: any) => {
+    console.log('[WaitingRoom] Received message:', data);
+
+    switch (data.type) {
+      case 'manager_connected':
+        // Initial connection - receive current teams list
+        if (data.teams) {
+          setTeams(data.teams.map((team: any) => ({
+            name: team.name,
+            status: team.connected ? 'connected' : 'disconnected',
+            joinedAt: team.joined_at
+          })));
+        }
+        setLoading(false);
+        break;
+
+      case 'team_update':
+        // Team joined or left
+        if (data.teams) {
+          setTeams(data.teams.map((team: any) => ({
+            name: team.name,
+            status: team.connected ? 'connected' : 'disconnected',
+            joinedAt: team.joined_at
+          })));
+        }
+        if (data.event === 'team_joined') {
+          showToastMessage(`${data.team_name} joined the game!`);
+        }
+        break;
+
+      default:
+        console.log('[WaitingRoom] Unhandled message type:', data.type);
+    }
+  }, []);
+
+  // WebSocket connection
+  const { connectionStatus } = useWebSocket({
+    gameCode: gameCode || '',
+    role: 'manager',
+    onMessage: handleWebSocketMessage,
+    onConnected: () => {
+      console.log('[WaitingRoom] Manager connected to WebSocket');
+    },
+    onDisconnected: () => {
+      console.log('[WaitingRoom] Manager disconnected from WebSocket');
+    },
+    onError: (error) => {
+      console.error('[WaitingRoom] WebSocket error:', error);
+    }
+  });
 
   useEffect(() => {
     if (!state.gameCode && gameCode) {
@@ -45,20 +98,13 @@ const WaitingRoomPage: React.FC = () => {
   }, [gameCode, state.gameCode, navigate, dispatch]);
 
   useEffect(() => {
-    const fetchGameData = async () => {
-      try {
-        setLoading(true);
-        setTimeout(() => {
-          setLoading(false);
-        }, 1000);
-      } catch (error) {
-        console.error('Failed to fetch game data:', error);
-        setLoading(false);
+    // Load game settings from localStorage
+    const savedGame = localStorage.getItem('sound-clash-game');
+    if (savedGame) {
+      const { settings } = JSON.parse(savedGame);
+      if (settings) {
+        setGameSettings(settings);
       }
-    };
-
-    if (gameCode) {
-      fetchGameData();
     }
   }, [gameCode]);
 
@@ -116,9 +162,20 @@ const WaitingRoomPage: React.FC = () => {
       <header className="page-header">
         <div className="header-content">
           <Logo size="medium" />
-          <button className="btn-leave" onClick={handleLeaveGame}>
-            ← Leave Game
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {connectionStatus === 'connected' && (
+              <span style={{ color: '#4caf50', fontSize: '0.875rem' }}>● Connected</span>
+            )}
+            {connectionStatus === 'connecting' && (
+              <span style={{ color: '#ff9800', fontSize: '0.875rem' }}>● Connecting...</span>
+            )}
+            {connectionStatus === 'disconnected' && (
+              <span style={{ color: '#f44336', fontSize: '0.875rem' }}>● Disconnected</span>
+            )}
+            <button className="btn-leave" onClick={handleLeaveGame}>
+              ← Leave Game
+            </button>
+          </div>
         </div>
       </header>
 
