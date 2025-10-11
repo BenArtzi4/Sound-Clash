@@ -44,6 +44,7 @@ interface UseManagerWebSocketReturn {
   gameState: GameState;
   error: string | null;
   reconnectAttempts: number;
+  sendMessage: (message: any) => void;
 }
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8002';
@@ -245,6 +246,16 @@ export const useManagerWebSocket = ({
     };
   }, [connect]);
 
+  // Send message function
+  const sendMessage = useCallback((message: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log('[Manager WS] Sending:', message);
+      wsRef.current.send(JSON.stringify(message));
+    } else {
+      console.error('[Manager WS] Cannot send message - not connected');
+    }
+  }, []);
+
   // Heartbeat
   useEffect(() => {
     if (!isConnected || !wsRef.current) return;
@@ -263,5 +274,6 @@ export const useManagerWebSocket = ({
     gameState,
     error,
     reconnectAttempts,
+    sendMessage,
   };
 };

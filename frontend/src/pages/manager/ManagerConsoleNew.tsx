@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useManagerWebSocket } from '../../hooks/useManagerWebSocket';
 import YouTubePlayer from '../../components/manager/YouTubePlayer';
@@ -7,31 +7,42 @@ import EvaluationPanel from '../../components/manager/EvaluationPanel';
 import RoundControls from '../../components/manager/RoundControls';
 import '../../styles/pages/manager-console.css';
 
-const ALB_URL = import.meta.env.VITE_ALB_URL || 'http://localhost:8002';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 type RoundState = 'idle' | 'active' | 'completed';
+
+interface Song {
+  id: number;
+  title: string;
+  artist: string;
+  youtube_id: string;
+  start_time: number;
+  is_soundtrack?: boolean;
+}
 
 const ManagerConsoleNew: React.FC = () => {
   const { gameCode } = useParams<{ gameCode: string }>();
   const navigate = useNavigate();
 
   const [roundState, setRoundState] = useState<RoundState>('idle');
-  const [currentSong, setCurrentSong] = useState<any>(null);
+  const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [lockedComponents, setLockedComponents] = useState({
     song_name: false,
     artist_content: false,
   });
   const [evaluating, setEvaluating] = useState(false);
+  const [availableSongs, setAvailableSongs] = useState<Song[]>([]);
+  const [loadingSongs, setLoadingSongs] = useState(false);
 
-  // WebSocket connection
-  const { isConnected, gameState, error } = useManagerWebSocket({
+  // WebSocket connection with sendMessage
+  const { isConnected, gameState, error, sendMessage } = useManagerWebSocket({
     gameCode: gameCode || '',
     onGameStarted: () => {
       console.log('[Manager] Game started');
     },
     onRoundStarted: (round) => {
       console.log('[Manager] Round started:', round);
-      setCurrentSong(round.song);
+      setCurrentSong(round.song as Song);
       setRoundState('active');
       setLockedComponents({ song_name: false, artist_content: false });
     },
@@ -49,106 +60,112 @@ const ManagerConsoleNew: React.FC = () => {
     },
   });
 
-  // API calls
-  const startRound = useCallback(async () => {
-    try {
-      const response = await fetch(`${ALB_URL}/api/game/${gameCode}/round/start`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to start round');
+  // Fetch songs on mount
+  useEffect(() => {
+    const fetchSongs = async () => {
+      setLoadingSongs(true);
+      try {
+        const response = await fetch(`${API_URL}/api/songs/?page=1&page_size=100`);
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableSongs(data.songs || []);
+          console.log('[Manager] Loaded', data.songs?.length || 0, 'songs');
+        }
+      } catch (err) {
+        console.error('[Manager] Failed to fetch songs:', err);
+      } finally {
+        setLoadingSongs(false);
       }
-      const data = await response.json();
-      console.log('[Manager] Round started:', data);
-    } catch (err) {
-      console.error('[Manager] Error starting round:', err);
-      alert('Failed to start round. Please try again.');
-    }
-  }, [gameCode]);
+    };
+    fetchSongs();
+  }, []);
 
+  // Start round - select random song and send WebSocket message
+  const startRound = useCallback(() => {
+    if (availableSongs.length === 0) {
+      alert('No songs available. Please add songs to the database first.');
+      return;
+    }
+
+    // Select random song
+    const randomIndex = Math.floor(Math.random() * availableSongs.length);
+    const selectedSong = availableSongs[randomIndex];
+
+    console.log('[Manager] Starting round with song:', selectedSong.title);
+
+    // Send WebSocket message to start round
+    sendMessage({
+      type: 'start_round',
+      song: {
+        id: selectedSong.id,
+        title: selectedSong.title,
+        artist: selectedSong.artist,
+        youtube_id: selectedSong.youtube_id,
+        start_time: selectedSong.start_time || 5,
+        is_soundtrack: selectedSong.is_soundtrack || false,
+      },
+    });
+  }, [availableSongs, sendMessage]);
+
+  // Evaluate answer - send WebSocket message
   const evaluateAnswer = useCallback(
-    async (songCorrect: boolean, artistCorrect: boolean, _wrongAnswer: boolean) => {
+    (songCorrect: boolean, artistCorrect: boolean, wrongAnswer: boolean) => {
       if (!gameState.buzzedTeam) return;
 
       setEvaluating(true);
-      try {
-        const response = await fetch(`${ALB_URL}/api/game/${gameCode}/evaluate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            song_correct: songCorrect,
-            artist_correct: artistCorrect,
-            movie_tv_correct: false, // Not used in simplified version
-          }),
-        });
+      console.log('[Manager] Evaluating answer:', { songCorrect, artistCorrect, wrongAnswer });
 
-        if (!response.ok) {
-          throw new Error('Failed to evaluate answer');
-        }
+      // Send WebSocket message
+      sendMessage({
+        type: 'evaluate_answer',
+        song_correct: songCorrect,
+        artist_correct: artistCorrect,
+        wrong_answer: wrongAnswer,
+      });
 
-        // Update locked components
-        setLockedComponents((prev) => ({
-          song_name: prev.song_name || songCorrect,
-          artist_content: prev.artist_content || artistCorrect,
-        }));
+      // Update locked components locally (will be confirmed by server)
+      setLockedComponents((prev) => ({
+        song_name: prev.song_name || songCorrect,
+        artist_content: prev.artist_content || artistCorrect,
+      }));
 
-        console.log('[Manager] Answer evaluated');
-      } catch (err) {
-        console.error('[Manager] Error evaluating answer:', err);
-        alert('Failed to evaluate answer. Please try again.');
-      } finally {
-        setEvaluating(false);
-      }
+      setEvaluating(false);
     },
-    [gameCode, gameState.buzzedTeam]
+    [gameState.buzzedTeam, sendMessage]
   );
 
-  const restartSong = useCallback(async () => {
-    try {
-      // Just restart the YouTube player
-      // The backend will handle buzzer re-enabling
-      alert('Song restarted! Buzzers are now available again.');
-    } catch (err) {
-      console.error('[Manager] Error restarting song:', err);
-    }
-  }, []);
+  // Restart song - send WebSocket message
+  const restartSong = useCallback(() => {
+    console.log('[Manager] Restarting song');
+    sendMessage({
+      type: 'restart_song',
+    });
+    alert('Song restarted! Buzzers are now available again.');
+  }, [sendMessage]);
 
-  const skipRound = useCallback(async () => {
-    try {
-      const response = await fetch(`${ALB_URL}/api/game/${gameCode}/timeout`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to skip round');
-      }
-      setRoundState('completed');
-      console.log('[Manager] Round skipped');
-    } catch (err) {
-      console.error('[Manager] Error skipping round:', err);
-      alert('Failed to skip round. Please try again.');
-    }
-  }, [gameCode]);
+  // Skip round - send WebSocket message
+  const skipRound = useCallback(() => {
+    console.log('[Manager] Skipping round');
+    sendMessage({
+      type: 'skip_round',
+    });
+    setRoundState('completed');
+  }, [sendMessage]);
 
+  // Next round - reset local state
   const nextRound = useCallback(() => {
     setRoundState('idle');
     setCurrentSong(null);
     setLockedComponents({ song_name: false, artist_content: false });
   }, []);
 
-  const endGame = useCallback(async () => {
-    try {
-      const response = await fetch(`${ALB_URL}/api/game/${gameCode}/end`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to end game');
-      }
-      console.log('[Manager] Game ended');
-    } catch (err) {
-      console.error('[Manager] Error ending game:', err);
-      alert('Failed to end game. Please try again.');
-    }
-  }, [gameCode]);
+  // End game - send WebSocket message
+  const endGame = useCallback(() => {
+    console.log('[Manager] Ending game');
+    sendMessage({
+      type: 'end_game',
+    });
+  }, [sendMessage]);
 
   const handleApproveSong = () => {
     evaluateAnswer(true, false, false);
@@ -202,6 +219,12 @@ const ManagerConsoleNew: React.FC = () => {
         </div>
       )}
 
+      {loadingSongs && (
+        <div className="info-banner">
+          <span>Loading songs...</span>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="console-main">
         <div className="console-container">
@@ -221,7 +244,7 @@ const ManagerConsoleNew: React.FC = () => {
               <CorrectAnswersCard
                 songName={currentSong.title}
                 artistOrContent={currentSong.artist}
-                isSoundtrack={false} // TODO: Get from song metadata
+                isSoundtrack={currentSong.is_soundtrack || false}
                 lockedComponents={lockedComponents}
                 visible={true}
               />
@@ -231,7 +254,7 @@ const ManagerConsoleNew: React.FC = () => {
             {gameState.buzzedTeam && roundState === 'active' && (
               <EvaluationPanel
                 buzzedTeamName={gameState.buzzedTeam.team_name}
-                isSoundtrack={false} // TODO: Get from song metadata
+                isSoundtrack={currentSong?.is_soundtrack || false}
                 onApproveSong={handleApproveSong}
                 onApproveArtistContent={handleApproveArtist}
                 onWrongAnswer={handleWrongAnswer}
@@ -252,7 +275,7 @@ const ManagerConsoleNew: React.FC = () => {
               onRestartSong={restartSong}
               onSkipRound={skipRound}
               onEndGame={endGame}
-              disabled={!isConnected}
+              disabled={!isConnected || loadingSongs}
             />
 
             {/* Teams List */}
@@ -285,12 +308,13 @@ const ManagerConsoleNew: React.FC = () => {
             <section className="instructions-section">
               <h3 className="section-title">💡 How to Use</h3>
               <ul className="instructions-list">
-                <li>Start a round to select a random song</li>
+                <li>Click "Start Round" to select a random song</li>
                 <li>Teams will buzz when they know the answer</li>
                 <li>Listen to their verbal answer</li>
                 <li>Approve correct components or mark wrong</li>
-                <li>Restart song to re-enable buzzers</li>
-                <li>Skip round if no one can answer</li>
+                <li>Use "Restart Song" to re-enable buzzers</li>
+                <li>Click "Skip Round" if no one can answer</li>
+                <li>Songs available: {availableSongs.length}</li>
               </ul>
             </section>
           </div>
