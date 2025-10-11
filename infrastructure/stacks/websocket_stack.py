@@ -81,11 +81,11 @@ class WebSocketServiceStack(Stack):
             )
         )
         
-        # Port mapping - Use port 8002 to match ALB target group
+        # Port mapping - Dynamic port assignment to avoid conflicts
         self.container.add_port_mappings(
             ecs.PortMapping(
                 container_port=8002,
-                host_port=8002,
+                host_port=0,  # Dynamic port assignment
                 protocol=ecs.Protocol.TCP
             )
         )
