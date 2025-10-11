@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import '../../styles/components/youtube-player.css';
 
 interface YouTubePlayerProps {
@@ -7,6 +7,15 @@ interface YouTubePlayerProps {
   autoplay?: boolean;
   onReady?: (player: any) => void;
   onStateChange?: (state: number) => void;
+}
+
+export interface YouTubePlayerHandle {
+  play: () => void;
+  pause: () => void;
+  stop: () => void;
+  seekTo: (seconds: number) => void;
+  restart: () => void;
+  getPlayer: () => any;
 }
 
 // YouTube Player States
@@ -19,13 +28,13 @@ export const YT_PLAYER_STATES = {
   CUED: 5,
 };
 
-const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
+const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(({
   videoId,
   startTime = 5,
   autoplay = false,
   onReady,
   onStateChange,
-}) => {
+}, ref) => {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
@@ -146,7 +155,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   };
 
   // Expose control methods to parent via ref
-  React.useImperativeHandle((playerRef as any).current, () => ({
+  useImperativeHandle(ref, () => ({
     play,
     pause,
     stop,
@@ -218,6 +227,8 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       </div>
     </div>
   );
-};
+});
+
+YouTubePlayer.displayName = 'YouTubePlayer';
 
 export default YouTubePlayer;

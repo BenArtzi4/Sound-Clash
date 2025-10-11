@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useManagerWebSocket } from '../../hooks/useManagerWebSocket';
-import YouTubePlayer from '../../components/manager/YouTubePlayer';
+import YouTubePlayer, { YouTubePlayerHandle } from '../../components/manager/YouTubePlayer';
 import CorrectAnswersCard from '../../components/manager/CorrectAnswersCard';
 import EvaluationPanel from '../../components/manager/EvaluationPanel';
 import RoundControls from '../../components/manager/RoundControls';
@@ -34,6 +34,9 @@ const ManagerConsoleNew: React.FC = () => {
   const [availableSongs, setAvailableSongs] = useState<Song[]>([]);
   const [loadingSongs, setLoadingSongs] = useState(false);
 
+  // Ref for YouTube player controls
+  const youtubePlayerRef = useRef<YouTubePlayerHandle>(null);
+
   // WebSocket connection with sendMessage
   const { isConnected, gameState, error, sendMessage } = useManagerWebSocket({
     gameCode: gameCode || '',
@@ -48,6 +51,11 @@ const ManagerConsoleNew: React.FC = () => {
     },
     onBuzzerLocked: (buzz) => {
       console.log('[Manager] Buzzer locked:', buzz);
+      // Pause the YouTube player when a team buzzes
+      if (youtubePlayerRef.current) {
+        console.log('[Manager] Pausing YouTube player due to buzz');
+        youtubePlayerRef.current.pause();
+      }
     },
     onRoundCompleted: () => {
       console.log('[Manager] Round completed');
@@ -241,6 +249,7 @@ const ManagerConsoleNew: React.FC = () => {
             {/* YouTube Player */}
             <section className="player-section">
               <YouTubePlayer
+                ref={youtubePlayerRef}
                 videoId={currentSong?.youtube_id || null}
                 startTime={currentSong?.start_time || 5}
                 autoplay={true}

@@ -192,6 +192,28 @@ export const useManagerWebSocket = ({
               onBuzzerLockedRef.current?.(buzzInfo);
               break;
 
+            case 'answer_evaluated':
+              // Update team scores after manager evaluates answer
+              if (message.team_scores) {
+                setGameState(prev => ({
+                  ...prev,
+                  teams: prev.teams.map(team => ({
+                    ...team,
+                    score: message.team_scores[team.name] || team.score
+                  }))
+                }));
+              }
+              break;
+
+            case 'song_restarted':
+              // Clear buzzed team when song is restarted
+              setGameState(prev => ({
+                ...prev,
+                buzzedTeam: null
+              }));
+              console.log('[Manager WS] Song restarted, buzzers re-enabled');
+              break;
+
             case 'round_completed':
               // Update team scores
               if (message.team_scores) {
