@@ -8,6 +8,7 @@ interface EvaluationPanelProps {
   onApproveArtistContent: () => void;
   onWrongAnswer: () => void;
   disabled?: boolean;
+  lockedComponents?: { song_name: boolean; artist_content: boolean };
 }
 
 const EvaluationPanel: React.FC<EvaluationPanelProps> = ({
@@ -17,6 +18,7 @@ const EvaluationPanel: React.FC<EvaluationPanelProps> = ({
   onApproveArtistContent,
   onWrongAnswer,
   disabled = false,
+  lockedComponents = { song_name: false, artist_content: false },
 }) => {
   if (!buzzedTeamName) {
     return null;
@@ -41,11 +43,14 @@ const EvaluationPanel: React.FC<EvaluationPanelProps> = ({
         <button
           className="eval-btn approve-song"
           onClick={onApproveSong}
-          disabled={disabled}
+          disabled={disabled || lockedComponents.song_name}
+          title={lockedComponents.song_name ? 'Song name already answered correctly' : 'Approve if song name is correct'}
         >
-          <span className="btn-icon">✓</span>
+          <span className="btn-icon">{lockedComponents.song_name ? '✓' : '✓'}</span>
           <span className="btn-text">
-            <span className="btn-label">Approve Song</span>
+            <span className="btn-label">
+              {lockedComponents.song_name ? 'Song ✓ Locked' : 'Approve Song'}
+            </span>
             <span className="btn-points">+10 pts</span>
           </span>
         </button>
@@ -53,12 +58,16 @@ const EvaluationPanel: React.FC<EvaluationPanelProps> = ({
         <button
           className="eval-btn approve-artist"
           onClick={onApproveArtistContent}
-          disabled={disabled}
+          disabled={disabled || lockedComponents.artist_content}
+          title={lockedComponents.artist_content ? `${isSoundtrack ? 'Content' : 'Artist'} already answered correctly` : `Approve if ${isSoundtrack ? 'content' : 'artist'} is correct`}
         >
-          <span className="btn-icon">✓</span>
+          <span className="btn-icon">{lockedComponents.artist_content ? '✓' : '✓'}</span>
           <span className="btn-text">
             <span className="btn-label">
-              Approve {isSoundtrack ? 'Content' : 'Artist'}
+              {lockedComponents.artist_content
+                ? `${isSoundtrack ? 'Content' : 'Artist'} ✓ Locked`
+                : `Approve ${isSoundtrack ? 'Content' : 'Artist'}`
+              }
             </span>
             <span className="btn-points">+5 pts</span>
           </span>

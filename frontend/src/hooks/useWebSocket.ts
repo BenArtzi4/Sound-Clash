@@ -194,10 +194,11 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
     };
   }, [gameCode, role, teamName]); // Only reconnect when essential params change, NOT when callbacks change
 
-  // Heartbeat - send ping every 5 seconds to keep connection alive
-  // Backend has 30-second timeout, so 5 seconds provides good buffer
+  // Heartbeat - send ping every 3 seconds to keep connection alive
+  // Backend has 300-second (5 min) timeout via cleanup_stale_connections
+  // Ping more frequently to ensure connection stays active even during idle gameplay
   useEffect(() => {
-    if (connectionStatus !== 'connected' || !wsRef.current) return;
+    if (!wsRef.current) return;
 
     console.log('[WebSocket] Starting heartbeat...');
     const interval = setInterval(() => {
@@ -205,13 +206,13 @@ export const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn =
         console.log('[WebSocket] Sending ping...');
         wsRef.current.send(JSON.stringify({ type: 'ping' }));
       }
-    }, 5000); // Every 5 seconds (backend timeout is 30 seconds)
+    }, 3000); // Every 3 seconds for better reliability during idle periods
 
     return () => {
       console.log('[WebSocket] Stopping heartbeat...');
       clearInterval(interval);
     };
-  }, [connectionStatus]);
+  }, []); // Empty dependency - ping always, regardless of connection status
 
   return {
     connectionStatus,

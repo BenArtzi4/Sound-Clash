@@ -148,7 +148,27 @@ const ManagerConsoleNew: React.FC = () => {
     sendMessage({
       type: 'restart_song',
     });
-    alert('Song restarted! Buzzers are now available again.');
+    // Restart the YouTube player from the start time
+    if (youtubePlayerRef.current) {
+      youtubePlayerRef.current.restart();
+    }
+  }, [sendMessage]);
+
+  // Continue song - resume playback after buzz
+  const continueSong = useCallback(() => {
+    console.log('[Manager] Continuing song');
+    if (youtubePlayerRef.current) {
+      youtubePlayerRef.current.play();
+    }
+  }, []);
+
+  // Finish round - complete round when both components are answered
+  const finishRound = useCallback(() => {
+    console.log('[Manager] Finishing round - both components answered');
+    sendMessage({
+      type: 'skip_round',  // Uses same backend message as skip
+    });
+    setRoundState('completed');
   }, [sendMessage]);
 
   // Skip round - send WebSocket message
@@ -276,6 +296,7 @@ const ManagerConsoleNew: React.FC = () => {
                 onApproveArtistContent={handleApproveArtist}
                 onWrongAnswer={handleWrongAnswer}
                 disabled={evaluating}
+                lockedComponents={lockedComponents}
               />
             )}
           </div>
@@ -291,9 +312,12 @@ const ManagerConsoleNew: React.FC = () => {
               onStartRound={startRound}
               onNextRound={nextRound}
               onRestartSong={restartSong}
+              onContinueSong={continueSong}
+              onFinishRound={finishRound}
               onSkipRound={skipRound}
               onEndGame={endGame}
               disabled={!isConnected || loadingSongs}
+              lockedComponents={lockedComponents}
             />
 
             {/* Teams List */}

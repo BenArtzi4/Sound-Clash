@@ -193,15 +193,15 @@ class ConnectionManager:
         """Update last ping time for connection"""
         self.last_ping[connection_id] = datetime.now(timezone.utc)
 
-    async def cleanup_stale_connections(self, timeout_seconds: int = 300):
-        """Remove connections that haven't pinged recently"""
+    async def cleanup_stale_connections(self, timeout_seconds: int = 600):
+        """Remove connections that haven't pinged recently (default 10 minutes)"""
         current_time = datetime.now(timezone.utc)
         stale_connections = []
-        
+
         for connection_id, last_ping in self.last_ping.items():
             if (current_time - last_ping).total_seconds() > timeout_seconds:
                 stale_connections.append(connection_id)
-        
+
         for connection_id in stale_connections:
             logger.info(f"Cleaning up stale connection: {connection_id}")
             await self.disconnect(connection_id)

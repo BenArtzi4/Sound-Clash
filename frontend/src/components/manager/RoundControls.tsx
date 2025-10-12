@@ -9,9 +9,12 @@ interface RoundControlsProps {
   onStartRound: () => void;
   onNextRound: () => void;
   onRestartSong: () => void;
+  onContinueSong: () => void;
+  onFinishRound: () => void;
   onSkipRound: () => void;
   onEndGame: () => void;
   disabled?: boolean;
+  lockedComponents?: { song_name: boolean; artist_content: boolean };
 }
 
 const RoundControls: React.FC<RoundControlsProps> = ({
@@ -22,9 +25,12 @@ const RoundControls: React.FC<RoundControlsProps> = ({
   onStartRound,
   onNextRound,
   onRestartSong,
+  onContinueSong,
+  onFinishRound,
   onSkipRound,
   onEndGame,
   disabled = false,
+  lockedComponents = { song_name: false, artist_content: false },
 }) => {
   const [showEndGameConfirm, setShowEndGameConfirm] = useState(false);
 
@@ -71,11 +77,28 @@ const RoundControls: React.FC<RoundControlsProps> = ({
             </button>
             <button
               className="control-btn secondary"
+              onClick={onContinueSong}
+              disabled={disabled}
+            >
+              <span className="btn-icon">▶️</span>
+              Continue Song
+            </button>
+            <button
+              className="control-btn secondary"
               onClick={onSkipRound}
               disabled={disabled}
             >
               <span className="btn-icon">⏭</span>
               Skip Round
+            </button>
+            <button
+              className="control-btn primary"
+              onClick={onFinishRound}
+              disabled={disabled || !(lockedComponents.song_name && lockedComponents.artist_content)}
+              title={!(lockedComponents.song_name && lockedComponents.artist_content) ? 'Both components must be answered correctly first' : 'Complete this round'}
+            >
+              <span className="btn-icon">✓</span>
+              Finish Round
             </button>
           </div>
         </div>
