@@ -19,7 +19,12 @@
       "Bash(python:*)",
       "Bash(git checkout:*)",
       "Bash(git merge:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(npm run build)",
+      "Bash(npm search:*)",
+      "Bash(npm install:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

@@ -15,7 +15,9 @@
     "deploy:services": "bash scripts/deployment/deploy-services.sh"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2"
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.5.2",
+    "playwright": "^1.56.0"
   },
   "keywords": [
     "aws",

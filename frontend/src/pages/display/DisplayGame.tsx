@@ -41,18 +41,23 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
     );
 
     websocket.onopen = () => {
-      console.log('Display Game WebSocket connected');
+      console.log('[Display Game] WebSocket connected');
     };
 
     websocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('Display Game received:', data);
+        console.log('[Display Game] Received:', data);
 
         switch (data.type) {
-          case 'game_state':
+          case 'display_connected':
+            // Initial connection - receive current game state
             if (data.teams) {
-              setTeams(data.teams);
+              console.log('[Display Game] Initial teams:', data.teams);
+              setTeams(data.teams.map((t: any) => ({
+                name: typeof t === 'string' ? t : t.name,
+                score: typeof t === 'object' ? (t.score || 0) : 0
+              })));
             }
             if (data.current_round) {
               setCurrentRound({
@@ -66,7 +71,40 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
             }
             break;
 
+          case 'game_state':
+            // Full game state update
+            if (data.teams) {
+              console.log('[Display Game] Game state teams:', data.teams);
+              setTeams(data.teams.map((t: any) => ({
+                name: typeof t === 'string' ? t : t.name,
+                score: typeof t === 'object' ? (t.score || 0) : 0
+              })));
+            }
+            if (data.current_round) {
+              setCurrentRound({
+                roundNumber: data.current_round.round_number || 1,
+                songName: data.current_round.song_name || '',
+                artistOrContent: data.current_round.artist_or_content || '',
+                isSoundtrack: data.current_round.is_soundtrack || false,
+                songLocked: data.current_round.locked_components?.song_name || false,
+                artistLocked: data.current_round.locked_components?.artist_content || false,
+              });
+            }
+            break;
+
+          case 'team_update':
+            // Team scores updated
+            if (data.teams) {
+              console.log('[Display Game] Team scores updated:', data.teams);
+              setTeams(data.teams.map((t: any) => ({
+                name: typeof t === 'string' ? t : t.name,
+                score: typeof t === 'object' ? (t.score || 0) : 0
+              })));
+            }
+            break;
+
           case 'round_started':
+            console.log('[Display Game] Round started:', data);
             setCurrentRound({
               roundNumber: data.round_number || 1,
               songName: data.song_name || '',
@@ -76,17 +114,31 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
               artistLocked: false,
             });
             setShowRoundComplete(false);
+            setBuzzedTeam(null);
+            setShowBuzzNotification(false);
             break;
 
           case 'buzzer_locked':
+            console.log('[Display Game] Buzzer locked:', data.team_name);
             setBuzzedTeam(data.team_name);
             setShowBuzzNotification(true);
+            // Auto-hide buzz notification after 3 seconds
+            setTimeout(() => setShowBuzzNotification(false), 3000);
             break;
 
           case 'answer_evaluated':
-            if (data.scores) {
-              setTeams(data.scores);
+            console.log('[Display Game] Answer evaluated:', data);
+            // Update team scores
+            if (data.team_scores) {
+              const updatedTeams = teams.map(team => ({
+                ...team,
+                score: data.team_scores[team.name] !== undefined
+                  ? data.team_scores[team.name]
+                  : team.score
+              }));
+              setTeams(updatedTeams);
             }
+            // Update locked components
             if (data.locked_components && currentRound) {
               setCurrentRound({
                 ...currentRound,
@@ -95,36 +147,70 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
               });
             }
             // Highlight the team that just scored
-            setHighlightTeam(data.team_name);
-            setTimeout(() => setHighlightTeam(null), 2000);
+            if (data.team_name) {
+              setHighlightTeam(data.team_name);
+              setTimeout(() => setHighlightTeam(null), 2000);
+            }
+            break;
+
+          case 'song_restarted':
+            console.log('[Display Game] Song restarted');
+            // Clear buzz notification when song restarts
+            setBuzzedTeam(null);
+            setShowBuzzNotification(false);
             break;
 
           case 'round_completed':
+            console.log('[Display Game] Round completed');
             setShowRoundComplete(true);
+            setBuzzedTeam(null);
+            setShowBuzzNotification(false);
+            break;
+
+          case 'game_started':
+            console.log('[Display Game] Game started');
+            // Game transitioned from waiting to playing
             break;
 
           case 'game_ended':
+            console.log('[Display Game] Game ended');
             // Navigate to winner screen
             window.location.href = `/display/winner/${gameCode}`;
             break;
+
+          case 'pong':
+            // Heartbeat response
+            break;
+
+          default:
+            console.log('[Display Game] Unhandled message type:', data.type);
         }
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        console.error('[Display Game] Error parsing WebSocket message:', error);
       }
     };
 
     websocket.onerror = (error) => {
-      console.error('Display Game WebSocket error:', error);
+      console.error('[Display Game] WebSocket error:', error);
     };
 
     websocket.onclose = () => {
-      console.log('Display Game WebSocket disconnected');
+      console.log('[Display Game] WebSocket disconnected');
     };
 
+    // Heartbeat to keep connection alive (backend has 10-minute timeout)
+    const heartbeatInterval = setInterval(() => {
+      if (websocket.readyState === WebSocket.OPEN) {
+        console.log('[Display Game] Sending heartbeat ping');
+        websocket.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 3000); // Every 3 seconds
+
     return () => {
+      clearInterval(heartbeatInterval);
       websocket.close();
     };
-  }, [gameCode, wsUrl]);
+  }, [gameCode, wsUrl, teams, currentRound]);
 
   return (
     <div className="display-game-page">

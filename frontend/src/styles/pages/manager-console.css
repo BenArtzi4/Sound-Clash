@@ -178,14 +178,16 @@
 }
 
 .error-banner {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  background: linear-gradient(135deg, rgba(254, 226, 226, 0.8) 0%, rgba(254, 202, 202, 0.8) 100%);
   color: #991b1b;
-  padding: 1rem 2rem;
+  padding: 0.75rem 2rem;
   text-align: center;
-  border-bottom: 2px solid #ef4444;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  box-shadow: 0 1px 4px rgba(239, 68, 68, 0.1);
   animation: slideDown 0.4s ease-out;
+  backdrop-filter: blur(8px);
 }
 
 .info-banner {
@@ -312,7 +314,10 @@
   margin: 0 0 1.5rem 0;
   font-size: 1.35rem;
   font-weight: 700;
-  color: #0f172a;
+  background: linear-gradient(120deg, #1e40af 0%, #059669 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
