@@ -39,24 +39,57 @@ const DisplayLobby: React.FC<DisplayLobbyProps> = ({ wsUrl }) => {
         console.log('Display received:', data);
 
         switch (data.type) {
+          case 'display_connected':
+            // Initial connection - receive current teams list
+            if (data.teams) {
+              console.log('Display: Initial teams loaded:', data.teams);
+              setTeams(data.teams.map((t: any) => ({
+                name: typeof t === 'string' ? t : t.name
+              })));
+            }
+            break;
+
           case 'team_joined':
-            setTeams((prev) => {
-              if (!prev.find((t) => t.name === data.team_name)) {
-                return [...prev, { name: data.team_name }];
-              }
-              return prev;
-            });
+          case 'team_update':
+            // Team joined or updated
+            if (data.teams) {
+              console.log('Display: Teams updated:', data.teams);
+              setTeams(data.teams.map((t: any) => ({
+                name: typeof t === 'string' ? t : t.name
+              })));
+            } else if (data.team_name) {
+              // Single team joined event
+              setTeams((prev) => {
+                if (!prev.find((t) => t.name === data.team_name)) {
+                  return [...prev, { name: data.team_name }];
+                }
+                return prev;
+              });
+            }
+            break;
+
+          case 'team_left':
+            if (data.team_name) {
+              setTeams((prev) => prev.filter((t) => t.name !== data.team_name));
+            }
             break;
 
           case 'game_state':
             if (data.teams) {
-              setTeams(data.teams.map((t: any) => ({ name: t.name })));
+              console.log('Display: Game state teams:', data.teams);
+              setTeams(data.teams.map((t: any) => ({
+                name: typeof t === 'string' ? t : t.name
+              })));
             }
             break;
 
           case 'game_started':
             // Navigate to game screen
             window.location.href = `/display/game/${gameCode}`;
+            break;
+
+          case 'pong':
+            // Heartbeat response
             break;
         }
       } catch (error) {
@@ -74,7 +107,16 @@ const DisplayLobby: React.FC<DisplayLobbyProps> = ({ wsUrl }) => {
       setConnectionStatus('disconnected');
     };
 
+    // Heartbeat to keep connection alive (backend has 30-second timeout)
+    const heartbeatInterval = setInterval(() => {
+      if (websocket.readyState === WebSocket.OPEN) {
+        console.log('Display: Sending heartbeat ping');
+        websocket.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 5000); // Every 5 seconds
+
     return () => {
+      clearInterval(heartbeatInterval);
       websocket.close();
     };
   }, [gameCode, wsUrl]);
