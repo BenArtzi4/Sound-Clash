@@ -211,15 +211,16 @@ class SongRepository:
 
         # Build query based on whether we're filtering by genre
         if genre_slugs and len(genre_slugs) > 0:
+            # Use DISTINCT ON with explicit column in ORDER BY to avoid DISTINCT + RANDOM() conflict
             query = f"""
-                SELECT DISTINCT s.id, s.title, s.artist, s.album, s.youtube_id,
+                SELECT DISTINCT ON (s.id) s.id, s.title, s.artist, s.album, s.youtube_id,
                        s.spotify_id, s.duration_seconds, s.release_year, s.is_active,
-                       s.created_at, s.updated_at
+                       s.created_at, s.updated_at, RANDOM() as random_order
                 FROM songs_master s
                 JOIN song_genres sg ON s.id = sg.song_id
                 JOIN genres g ON sg.genre_id = g.id
                 WHERE {genre_condition} AND {where_clause}
-                ORDER BY RANDOM()
+                ORDER BY s.id, RANDOM()
                 LIMIT ${param_count + 1}
             """
         else:
@@ -237,7 +238,8 @@ class SongRepository:
         params.append(limit)
 
         rows = await self.conn.fetch(query, *params)
-        return [dict(row) for row in rows]
+        # Remove random_order field if it exists
+        return [dict((k, v) for k, v in dict(row).items() if k != 'random_order') for row in rows]
 
 class GenreRepository:
     """Repository for genre operations"""
