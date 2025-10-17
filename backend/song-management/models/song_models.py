@@ -94,7 +94,7 @@ class GenreListResponse(BaseModel):
 
 class SongSelectionRequest(BaseModel):
     """Simple song selection request"""
-    genres: List[str] = Field(..., min_items=1)
+    genres: List[str] = Field(default=[], description="Genre slugs to filter by (empty=all songs)")
     exclude_song_ids: Optional[List[int]] = []
     limit: int = Field(default=10, ge=1, le=50)
 
