@@ -352,11 +352,11 @@ async def bulk_deactivate_songs(
     """Bulk deactivate songs"""
     import time
     start_time = time.time()
-    
+
     successful = 0
     failed = 0
     errors = []
-    
+
     for song_id in song_ids:
         try:
             await repo.update_song(song_id, {"is_active": False})
@@ -364,7 +364,7 @@ async def bulk_deactivate_songs(
         except Exception as e:
             failed += 1
             errors.append(f"Song {song_id}: {str(e)}")
-    
+
     return BulkOperationResponse(
         processed=len(song_ids),
         successful=successful,
@@ -372,6 +372,82 @@ async def bulk_deactivate_songs(
         errors=errors,
         processing_time_seconds=time.time() - start_time
     )
+
+@router.post("/remove-duplicates")
+async def remove_duplicate_songs(repo: SongRepository = Depends(get_song_repo)):
+    """Remove duplicate songs, keeping only the oldest version of each"""
+    import time
+    start_time = time.time()
+
+    try:
+        # Find duplicates
+        find_duplicates_query = """
+        SELECT
+            title,
+            artist,
+            youtube_id,
+            COUNT(*) as duplicate_count,
+            ARRAY_AGG(id ORDER BY created_at ASC) as all_ids
+        FROM songs_master
+        GROUP BY title, artist, youtube_id
+        HAVING COUNT(*) > 1
+        ORDER BY COUNT(*) DESC, title;
+        """
+
+        duplicates = await repo.conn.fetch(find_duplicates_query)
+
+        if not duplicates:
+            return {
+                "message": "No duplicate songs found",
+                "duplicates_found": 0,
+                "removed_count": 0,
+                "processing_time_seconds": time.time() - start_time
+            }
+
+        removed_count = 0
+        duplicate_details = []
+
+        for row in duplicates:
+            title = row['title']
+            artist = row['artist']
+            duplicate_count = row['duplicate_count']
+            all_ids = row['all_ids']
+
+            # Keep first ID (oldest), delete the rest
+            ids_to_delete = all_ids[1:]
+
+            if ids_to_delete:
+                # Delete from song_genres junction table first
+                await repo.conn.execute("""
+                    DELETE FROM song_genres
+                    WHERE song_id = ANY($1)
+                """, ids_to_delete)
+
+                # Delete from songs_master
+                await repo.conn.execute("""
+                    DELETE FROM songs_master
+                    WHERE id = ANY($1)
+                """, ids_to_delete)
+
+                removed_count += len(ids_to_delete)
+                duplicate_details.append({
+                    "title": title,
+                    "artist": artist,
+                    "duplicate_count": duplicate_count,
+                    "removed": len(ids_to_delete),
+                    "kept_id": all_ids[0]
+                })
+
+        return {
+            "message": f"Successfully removed {removed_count} duplicate songs",
+            "duplicates_found": len(duplicates),
+            "removed_count": removed_count,
+            "details": duplicate_details,
+            "processing_time_seconds": time.time() - start_time
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove duplicates: {str(e)}")
 
 # IMPORTANT: Generic path parameter route MUST be last to avoid catching specific routes
 @router.get("/{song_id}", response_model=SongDetailResponse)
