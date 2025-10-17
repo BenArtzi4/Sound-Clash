@@ -47,15 +47,21 @@ class GameRoom:
         self.team_scores: Dict[str, int] = {}
         self.round_number = 0
     
-    def add_team(self, team_name: str, websocket: WebSocket) -> bool:
-        """Add team to room"""
-        if team_name in self.team_connections:
-            return False
-        
+    def add_team(self, team_name: str, websocket: WebSocket) -> tuple[bool, bool]:
+        """Add team to room
+        Returns: (success, is_reconnection)
+        """
+        is_reconnection = team_name in self.team_connections
+
+        if is_reconnection:
+            logger.info(f"Team '{team_name}' is reconnecting to game {self.game_code}")
+            # Allow reconnection - replace the old websocket with the new one
+
         self.team_connections[team_name] = websocket
-        self.team_join_times[team_name] = datetime.utcnow().isoformat()
-        logger.info(f"Team '{team_name}' joined game {self.game_code}")
-        return True
+        if not is_reconnection:
+            self.team_join_times[team_name] = datetime.utcnow().isoformat()
+        logger.info(f"Team '{team_name}' {'reconnected to' if is_reconnection else 'joined'} game {self.game_code}")
+        return True, is_reconnection
     
     def remove_team(self, team_name: str):
         """Remove team from room"""
@@ -399,39 +405,43 @@ async def websocket_team_endpoint(websocket: WebSocket, game_code: str):
             }))
             return
         
-        # Try to add team
-        success = room.add_team(team_name, websocket)
-        
-        if not success:
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": "Team name already taken"
-            }))
-            return
-        
-        # Send success response
+        # Try to add team (or reconnect)
+        success, is_reconnection = room.add_team(team_name, websocket)
+
+        # Get existing score if reconnecting
+        existing_score = room.team_scores.get(team_name, 0) if is_reconnection else 0
+
+        # Send success response with score restoration
         await websocket.send_text(json.dumps({
             "type": "connection_ack",
             "success": True,
             "team_name": team_name,
             "game_code": game_code,
             "teams": room.get_teams_list(),
-            "teams_count": len(room.team_connections)
+            "teams_count": len(room.team_connections),
+            "is_reconnection": is_reconnection,
+            "current_score": existing_score,
+            "game_status": room.status
         }))
-        
-        logger.info(f"Team '{team_name}' successfully joined game {game_code}")
-        
-        # Broadcast to others that new team joined
-        await room.broadcast_team_update("team_joined", team_name)
+
+        if is_reconnection:
+            logger.info(f"Team '{team_name}' successfully reconnected to game {game_code} with score {existing_score}")
+        else:
+            logger.info(f"Team '{team_name}' successfully joined game {game_code}")
+
+        # Broadcast to others that team joined (or reconnected)
+        event_type = "team_reconnected" if is_reconnection else "team_joined"
+        await room.broadcast_team_update(event_type, team_name)
         
         # Main message loop with heartbeat
         try:
             while True:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # Timeout set to 60s - frontend pings every 3s, so this gives plenty of buffer
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
                 message = json.loads(data)
-                
+
                 msg_type = message.get('type')
-                
+
                 if msg_type == 'ping':
                     await websocket.send_text(json.dumps({
                         "type": "pong",
@@ -515,11 +525,12 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
         # Main message loop
         try:
             while True:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # Timeout set to 60s - frontend pings every 3s, so this gives plenty of buffer
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
                 message = json.loads(data)
-                
+
                 msg_type = message.get('type')
-                
+
                 if msg_type == 'ping':
                     await websocket.send_text(json.dumps({
                         "type": "pong",
@@ -572,32 +583,44 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
                     wrong_answer = message.get('wrong_answer', False)
 
                     if room.buzzed_team:
-                        # Update component locks
+                        # Store the team name for scoring
+                        evaluated_team = room.buzzed_team
+
+                        # Update component locks and scores
                         if song_correct:
                             room.locked_components["song_name"] = True
-                            room.team_scores[room.buzzed_team] = room.team_scores.get(room.buzzed_team, 0) + 10
+                            room.team_scores[evaluated_team] = room.team_scores.get(evaluated_team, 0) + 10
                         if artist_correct:
                             room.locked_components["artist_content"] = True
-                            room.team_scores[room.buzzed_team] = room.team_scores.get(room.buzzed_team, 0) + 5
+                            room.team_scores[evaluated_team] = room.team_scores.get(evaluated_team, 0) + 5
                         if wrong_answer:
-                            room.team_scores[room.buzzed_team] = room.team_scores.get(room.buzzed_team, 0) - 2
-
-                        # Reset buzzed team
-                        room.buzzed_team = None
+                            room.team_scores[evaluated_team] = room.team_scores.get(evaluated_team, 0) - 2
 
                         # Check if round is complete
                         round_complete = room.locked_components["song_name"] and room.locked_components["artist_content"]
 
+                        # DO NOT reset buzzed_team here - keep it set so manager can approve multiple components
+                        # from the same buzz. It will be reset when:
+                        # - Manager restarts song (restart_song)
+                        # - Manager skips round (skip_round)
+                        # - Manager starts next round (start_round)
+                        # - New round starts and both components are answered
+
                         # Broadcast answer evaluation
                         await room.broadcast_to_all({
                             "type": "answer_evaluated",
+                            "team_name": evaluated_team,
                             "locked_components": room.locked_components,
                             "team_scores": room.team_scores,
+                            "song_correct": song_correct,
+                            "artist_correct": artist_correct,
+                            "wrong_answer": wrong_answer,
                             "timestamp": datetime.utcnow().isoformat()
                         })
 
-                        # If round complete, broadcast that
+                        # If round complete, broadcast that and reset buzzed team
                         if round_complete:
+                            room.buzzed_team = None  # Reset only when round is fully complete
                             await room.broadcast_to_all({
                                 "type": "round_completed",
                                 "team_scores": room.team_scores,
@@ -611,6 +634,12 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
                         "type": "song_restarted",
                         "timestamp": datetime.utcnow().isoformat()
                     })
+
+                elif msg_type == 'continue_song':
+                    # Manager continues/resumes the song - reset buzzers so teams can buzz again
+                    room.buzzed_team = None
+                    logger.info(f"Manager continued song in game {game_code}, buzzers re-enabled")
+                    # No need to broadcast - buzzers will work again when buzzed_team is None
 
                 elif msg_type == 'skip_round':
                     # Manager skips current round
@@ -687,6 +716,8 @@ async def websocket_display_endpoint(websocket: WebSocket, game_code: str):
             "teams": room.get_teams_list(),
             "total_teams": len(room.team_connections),
             "status": room.status,
+            "state": room.status,  # Also send as 'state' for frontend compatibility
+            "game_state": room.status,  # Also send as 'game_state' for frontend compatibility
             "team_scores": room.team_scores
         }))
 
@@ -695,7 +726,8 @@ async def websocket_display_endpoint(websocket: WebSocket, game_code: str):
         # Main message loop
         try:
             while True:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # Timeout set to 60s - frontend pings every 3s, so this gives plenty of buffer
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
                 message = json.loads(data)
 
                 msg_type = message.get('type')

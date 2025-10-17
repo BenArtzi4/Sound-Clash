@@ -40,6 +40,9 @@ export interface ConnectionAckMessage extends BaseMessage {
   team_name: string;
   game_code: string;
   teams_count: number;
+  is_reconnection?: boolean;
+  current_score?: number;
+  game_status?: string;
 }
 
 // Pong response (server -> client)
@@ -117,4 +120,5 @@ export interface WebSocketCallbacks {
   onTeamsUpdate?: (teams: string[]) => void;
   onError?: (error: string) => void;
   onKicked?: (reason: string) => void;
+  onScoreRestored?: (score: number) => void;
 }

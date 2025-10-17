@@ -199,10 +199,20 @@ export class TeamWebSocketClient {
     if (message.success) {
       this.connectionState = ConnectionState.CONNECTED;
       this.reconnectAttempts = 0;
-      console.log(`Connected as ${message.team_name} to game ${message.game_code}`);
+
+      if (message.is_reconnection && message.current_score !== undefined) {
+        console.log(`Reconnected as ${message.team_name} to game ${message.game_code} with score ${message.current_score}`);
+      } else {
+        console.log(`Connected as ${message.team_name} to game ${message.game_code}`);
+      }
 
       // Start ping timer
       this.startPingTimer();
+
+      // Notify score restoration if reconnecting
+      if (message.is_reconnection && message.current_score !== undefined && this.callbacks.onScoreRestored) {
+        this.callbacks.onScoreRestored(message.current_score);
+      }
 
       // Notify callback
       if (this.callbacks.onConnected) {
