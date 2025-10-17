@@ -229,6 +229,15 @@
   align-items: start;
 }
 
+/* NEW: Single column layout for reorganized manager page */
+.console-container-single {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
 .console-left,
 .console-right {
   display: flex;

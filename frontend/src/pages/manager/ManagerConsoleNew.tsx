@@ -68,16 +68,42 @@ const ManagerConsoleNew: React.FC = () => {
     },
   });
 
-  // Fetch songs on mount
+  // Fetch songs filtered by game genres
   useEffect(() => {
     const fetchSongs = async () => {
+      // Wait for game settings to be available
+      if (!gameCode) return;
+
       setLoadingSongs(true);
       try {
-        const response = await fetch(`${API_URL}/api/songs/?page=1&page_size=100`);
+        // First, get game settings to retrieve selected genres
+        const ALB_URL = import.meta.env.VITE_ALB_URL || 'http://localhost:8002';
+        const gameStatusResponse = await fetch(`${ALB_URL}/api/game/${gameCode}/status`);
+
+        if (!gameStatusResponse.ok) {
+          console.error('[Manager] Failed to fetch game status');
+          return;
+        }
+
+        const gameStatus = await gameStatusResponse.json();
+        const selectedGenres = gameStatus.settings?.genres || [];
+
+        console.log('[Manager] Game genres:', selectedGenres);
+
+        // Use /select endpoint with genre filtering
+        const response = await fetch(`${API_URL}/api/songs/select`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            genres: selectedGenres,
+            limit: 100
+          })
+        });
+
         if (response.ok) {
           const data = await response.json();
           setAvailableSongs(data.songs || []);
-          console.log('[Manager] Loaded', data.songs?.length || 0, 'songs');
+          console.log('[Manager] Loaded', data.songs?.length || 0, 'songs filtered by genres:', selectedGenres);
         }
       } catch (err) {
         console.error('[Manager] Failed to fetch songs:', err);
@@ -86,7 +112,7 @@ const ManagerConsoleNew: React.FC = () => {
       }
     };
     fetchSongs();
-  }, []);
+  }, [gameCode]);
 
   // Start round - select random song and send WebSocket message
   const startRound = useCallback(() => {
@@ -154,13 +180,18 @@ const ManagerConsoleNew: React.FC = () => {
     }
   }, [sendMessage]);
 
-  // Continue song - resume playback after buzz
+  // Continue song - resume playback after buzz and reset buzzers
   const continueSong = useCallback(() => {
     console.log('[Manager] Continuing song');
+    // Send WebSocket message to reset buzzers on backend
+    sendMessage({
+      type: 'continue_song',
+    });
+    // Resume YouTube playback
     if (youtubePlayerRef.current) {
       youtubePlayerRef.current.play();
     }
-  }, []);
+  }, [sendMessage]);
 
   // Finish round - complete round when both components are answered
   const finishRound = useCallback(() => {
@@ -230,9 +261,12 @@ const ManagerConsoleNew: React.FC = () => {
         <div className="header-content">
           <div className="header-left">
             <h1 className="console-title">🎮 Manager Console</h1>
-            <p className="game-code-display">
-              Game Code: <strong>{gameCode}</strong>
-            </p>
+            {/* Only show game code in waiting state */}
+            {gameState.state === 'waiting' && (
+              <p className="game-code-display">
+                Game Code: <strong>{gameCode}</strong>
+              </p>
+            )}
           </div>
           <div className="header-right">
             <div className="connection-indicator">
@@ -261,105 +295,100 @@ const ManagerConsoleNew: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content - Single column layout */}
       <main className="console-main">
-        <div className="console-container">
-          {/* Left Column - YouTube Player & Answers */}
-          <div className="console-left">
-            {/* YouTube Player */}
-            <section className="player-section">
-              <YouTubePlayer
-                ref={youtubePlayerRef}
-                videoId={currentSong?.youtube_id || null}
-                startTime={currentSong?.start_time || 5}
-                autoplay={true}
-              />
-            </section>
+        <div className="console-container-single">
+          {/* 1. YouTube Player */}
+          <section className="player-section">
+            <YouTubePlayer
+              ref={youtubePlayerRef}
+              videoId={currentSong?.youtube_id || null}
+              startTime={currentSong?.start_time || 5}
+              autoplay={true}
+            />
+          </section>
 
-            {/* Correct Answers Card */}
-            {currentSong && roundState === 'active' && (
-              <CorrectAnswersCard
-                songName={currentSong.title}
-                artistOrContent={currentSong.artist}
-                isSoundtrack={currentSong.is_soundtrack || false}
-                lockedComponents={lockedComponents}
-                visible={true}
-              />
-            )}
+          {/* 2. Correct Answers Card */}
+          {currentSong && roundState === 'active' && (
+            <CorrectAnswersCard
+              songName={currentSong.title}
+              artistOrContent={currentSong.artist}
+              isSoundtrack={currentSong?.is_soundtrack || false}
+              lockedComponents={lockedComponents}
+              visible={true}
+            />
+          )}
 
-            {/* Evaluation Panel */}
-            {gameState.buzzedTeam && roundState === 'active' && (
-              <EvaluationPanel
-                buzzedTeamName={gameState.buzzedTeam.team_name}
-                isSoundtrack={currentSong?.is_soundtrack || false}
-                onApproveSong={handleApproveSong}
-                onApproveArtistContent={handleApproveArtist}
-                onWrongAnswer={handleWrongAnswer}
-                disabled={evaluating}
-                lockedComponents={lockedComponents}
-              />
-            )}
-          </div>
-
-          {/* Right Column - Controls & Teams */}
-          <div className="console-right">
-            {/* Round Controls */}
-            <RoundControls
-              roundNumber={gameState.currentRound?.round_number || null}
-              gameState={gameState.state}
-              roundState={roundState}
-              onStartGame={startGame}
-              onStartRound={startRound}
-              onNextRound={nextRound}
-              onRestartSong={restartSong}
-              onContinueSong={continueSong}
-              onFinishRound={finishRound}
-              onSkipRound={skipRound}
-              onEndGame={endGame}
-              disabled={!isConnected || loadingSongs}
+          {/* 3. Evaluation Panel */}
+          {gameState.buzzedTeam && roundState === 'active' && (
+            <EvaluationPanel
+              buzzedTeamName={gameState.buzzedTeam.team_name}
+              isSoundtrack={currentSong?.is_soundtrack || false}
+              onApproveSong={handleApproveSong}
+              onApproveArtistContent={handleApproveArtist}
+              onWrongAnswer={handleWrongAnswer}
+              disabled={evaluating}
               lockedComponents={lockedComponents}
             />
+          )}
 
-            {/* Teams List */}
-            <section className="teams-section">
-              <h3 className="section-title">Teams ({gameState.teams.length})</h3>
-              {gameState.teams.length === 0 ? (
-                <div className="empty-state">
-                  <p>No teams connected</p>
-                </div>
-              ) : (
-                <div className="teams-list">
-                  {gameState.teams.map((team) => (
-                    <div key={team.name} className="team-item">
-                      <div className="team-info">
-                        <span className="team-name">{team.name}</span>
-                        {team.connected && (
-                          <span className="team-status-dot" title="Connected">
-                            ●
-                          </span>
-                        )}
-                      </div>
-                      <span className="team-score">{team.score} pts</span>
+          {/* 4. Round Controls (Playback controls) */}
+          <RoundControls
+            roundNumber={gameState.currentRound?.round_number || null}
+            gameState={gameState.state}
+            roundState={roundState}
+            onStartGame={startGame}
+            onStartRound={startRound}
+            onNextRound={nextRound}
+            onRestartSong={restartSong}
+            onContinueSong={continueSong}
+            onFinishRound={finishRound}
+            onSkipRound={skipRound}
+            onEndGame={endGame}
+            disabled={!isConnected || loadingSongs}
+            lockedComponents={lockedComponents}
+          />
+
+          {/* 5. Teams List */}
+          <section className="teams-section">
+            <h3 className="section-title">Teams ({gameState.teams.length})</h3>
+            {gameState.teams.length === 0 ? (
+              <div className="empty-state">
+                <p>No teams connected</p>
+              </div>
+            ) : (
+              <div className="teams-list">
+                {gameState.teams.map((team) => (
+                  <div key={team.name} className="team-item">
+                    <div className="team-info">
+                      <span className="team-name">{team.name}</span>
+                      {team.connected && (
+                        <span className="team-status-dot" title="Connected">
+                          ●
+                        </span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
+                    <span className="team-score">{team.score} pts</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
-            {/* Instructions */}
-            <section className="instructions-section">
-              <h3 className="section-title">💡 How to Use</h3>
-              <ul className="instructions-list">
-                <li>Click "Start Round" to select a random song</li>
-                <li>Teams will buzz when they know the answer</li>
-                <li>Listen to their verbal answer</li>
-                <li>Approve correct components or mark wrong</li>
-                <li>Use "Restart Song" to re-enable buzzers</li>
-                <li>Click "Skip Round" if no one can answer</li>
-                <li>Songs available: {availableSongs.length}</li>
-              </ul>
-            </section>
-          </div>
+          {/* 6. Instructions */}
+          <section className="instructions-section">
+            <h3 className="section-title">💡 How to Use</h3>
+            <ul className="instructions-list">
+              <li>Click "Start Round" to select a random song</li>
+              <li>Teams will buzz when they know the answer</li>
+              <li>Listen to their verbal answer</li>
+              <li>Approve correct components or mark wrong</li>
+              <li>Use "Continue" to resume song and re-enable buzzers</li>
+              <li>Use "Restart Song" to play from beginning</li>
+              <li>Click "Skip Round" if no one can answer</li>
+              <li>Songs available: {availableSongs.length}</li>
+            </ul>
+          </section>
         </div>
       </main>
     </div>

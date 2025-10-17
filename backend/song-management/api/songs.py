@@ -46,20 +46,35 @@ async def get_all_songs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     per_page: int = Query(None),  # Support per_page alias
+    search: str = Query(None),  # Search term for title/artist
+    genre: str = Query(None),  # Genre filter
+    sort_by: str = Query('title'),  # Sort field
+    sort_order: str = Query('asc'),  # Sort order
     repo: SongRepository = Depends(get_song_repo)
 ):
-    """Get all songs with pagination"""
+    """Get all songs with pagination and optional filtering"""
     try:
         # Support both page_size and per_page params
         limit = per_page if per_page is not None else page_size
         offset = (page - 1) * limit
-        
-        # Get songs and total count
-        songs = await repo.get_all_songs(limit=limit, offset=offset)
-        total_count = await repo.count_all_songs()
-        
+
+        # If search or genre filter is provided, use search_songs method
+        if search or genre:
+            genres = [genre] if genre else []
+            songs, total_count = await repo.search_songs(
+                search_term=search,
+                genres=genres,
+                is_active=True,  # Only show active songs
+                limit=limit,
+                offset=offset
+            )
+        else:
+            # Get all songs without filtering
+            songs = await repo.get_all_songs(limit=limit, offset=offset)
+            total_count = await repo.count_all_songs()
+
         total_pages = (total_count + limit - 1) // limit
-        
+
         return SongSearchResponse(
             songs=[SongDetailResponse(**song) for song in songs],
             total_songs=total_count,

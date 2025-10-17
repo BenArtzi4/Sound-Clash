@@ -54,10 +54,16 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
             // Initial connection - receive current game state
             if (data.teams) {
               console.log('[Display Game] Initial teams:', data.teams);
-              setTeams(data.teams.map((t: any) => ({
-                name: typeof t === 'string' ? t : t.name,
-                score: typeof t === 'object' ? (t.score || 0) : 0
-              })));
+              console.log('[Display Game] Initial team_scores:', data.team_scores);
+              const initialTeams = data.teams.map((t: any) => {
+                const teamName = typeof t === 'string' ? t : t.name;
+                return {
+                  name: teamName,
+                  score: data.team_scores?.[teamName] || 0
+                };
+              });
+              console.log('[Display Game] Setting initial teams with scores:', initialTeams);
+              setTeams(initialTeams);
             }
             if (data.current_round) {
               setCurrentRound({
@@ -130,21 +136,21 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
             console.log('[Display Game] Answer evaluated:', data);
             // Update team scores
             if (data.team_scores) {
-              const updatedTeams = teams.map(team => ({
+              console.log('[Display Game] Updating team scores:', data.team_scores);
+              setTeams(prevTeams => prevTeams.map(team => ({
                 ...team,
                 score: data.team_scores[team.name] !== undefined
                   ? data.team_scores[team.name]
                   : team.score
-              }));
-              setTeams(updatedTeams);
+              })));
             }
             // Update locked components
-            if (data.locked_components && currentRound) {
-              setCurrentRound({
-                ...currentRound,
+            if (data.locked_components) {
+              setCurrentRound(prevRound => prevRound ? {
+                ...prevRound,
                 songLocked: data.locked_components.song_name,
                 artistLocked: data.locked_components.artist_content,
-              });
+              } : null);
             }
             // Highlight the team that just scored
             if (data.team_name) {
@@ -210,7 +216,7 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
       clearInterval(heartbeatInterval);
       websocket.close();
     };
-  }, [gameCode, wsUrl, teams, currentRound]);
+  }, [gameCode, wsUrl]);
 
   return (
     <div className="display-game-page">

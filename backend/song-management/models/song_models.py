@@ -13,11 +13,12 @@ class SongResponse(BaseModel):
     artist: str
     youtube_id: Optional[str] = None
     youtube_url: Optional[str] = None
+    duration_seconds: Optional[int] = None
     play_count: int = 0
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -33,6 +34,7 @@ class SongCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     artist: str = Field(..., min_length=1, max_length=200)
     youtube_id: Optional[str] = Field(None, pattern=r'^[a-zA-Z0-9_-]{11}$')
+    duration_seconds: Optional[int] = Field(None, ge=0, description="Song duration in seconds")
     genres: List[str] = Field(..., min_items=1, description="Genre slugs")
     
     @validator('youtube_id')
@@ -51,6 +53,7 @@ class SongUpdateRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     artist: Optional[str] = Field(None, min_length=1, max_length=200)
     youtube_id: Optional[str] = None
+    duration_seconds: Optional[int] = Field(None, ge=0, description="Song duration in seconds")
     genres: Optional[List[str]] = None
     is_active: Optional[bool] = None
 

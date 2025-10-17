@@ -164,9 +164,29 @@
 }
 
 .eval-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
-  filter: grayscale(0.4);
+  filter: grayscale(0.6);
+  transform: none !important;
+}
+
+.eval-btn.locked {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%) !important;
+  border-color: #9ca3af;
+  opacity: 0.7;
+}
+
+.eval-btn.locked:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.eval-btn.locked .btn-icon {
+  opacity: 0.8;
+}
+
+.eval-btn.locked .btn-points {
+  opacity: 0.9;
+  text-decoration: line-through;
 }
 
 .approve-song {

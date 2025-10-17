@@ -40,12 +40,18 @@ const DisplayLobby: React.FC<DisplayLobbyProps> = ({ wsUrl }) => {
 
         switch (data.type) {
           case 'display_connected':
-            // Initial connection - receive current teams list
+            // Initial connection - receive current teams list and game state
+            console.log('[Display Lobby] Display connected:', data);
             if (data.teams) {
-              console.log('Display: Initial teams loaded:', data.teams);
+              console.log('[Display Lobby] Initial teams loaded:', data.teams);
               setTeams(data.teams.map((t: any) => ({
                 name: typeof t === 'string' ? t : t.name
               })));
+            }
+            // Check if game is already started (joined mid-game)
+            if (data.game_state === 'playing' || data.state === 'playing') {
+              console.log('[Display Lobby] Game already started! Redirecting to game screen...');
+              window.location.href = `/display/game/${gameCode}`;
             }
             break;
 
@@ -53,7 +59,7 @@ const DisplayLobby: React.FC<DisplayLobbyProps> = ({ wsUrl }) => {
           case 'team_update':
             // Team joined or updated
             if (data.teams) {
-              console.log('Display: Teams updated:', data.teams);
+              console.log('[Display Lobby] Teams updated:', data.teams);
               setTeams(data.teams.map((t: any) => ({
                 name: typeof t === 'string' ? t : t.name
               })));
@@ -75,22 +81,31 @@ const DisplayLobby: React.FC<DisplayLobbyProps> = ({ wsUrl }) => {
             break;
 
           case 'game_state':
+            console.log('[Display Lobby] Game state update:', data);
             if (data.teams) {
-              console.log('Display: Game state teams:', data.teams);
               setTeams(data.teams.map((t: any) => ({
                 name: typeof t === 'string' ? t : t.name
               })));
+            }
+            // Check if game state changed to playing
+            if (data.state === 'playing' || data.game_state === 'playing') {
+              console.log('[Display Lobby] Game state changed to playing! Redirecting...');
+              window.location.href = `/display/game/${gameCode}`;
             }
             break;
 
           case 'game_started':
             // Navigate to game screen
+            console.log('[Display Lobby] Game started event received! Redirecting...');
             window.location.href = `/display/game/${gameCode}`;
             break;
 
           case 'pong':
             // Heartbeat response
             break;
+
+          default:
+            console.log('[Display Lobby] Unhandled message type:', data.type);
         }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);

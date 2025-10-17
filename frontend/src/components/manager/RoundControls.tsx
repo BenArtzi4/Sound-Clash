@@ -145,9 +145,13 @@ const RoundControls: React.FC<RoundControlsProps> = ({
               Next Round
             </button>
           )}
+        </div>
+      </div>
 
-          {/* End Game button - appears when game is playing */}
-          {gameState === 'playing' && (
+      {/* End Game button - ALWAYS at the bottom when game is playing */}
+      {gameState === 'playing' && (
+        <div className="control-section">
+          <div className="control-buttons">
             <button
               className="control-btn danger"
               onClick={handleEndGameClick}
@@ -156,9 +160,9 @@ const RoundControls: React.FC<RoundControlsProps> = ({
               <span className="btn-icon">🏁</span>
               End Game
             </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* End Game Confirmation Modal */}
       {showEndGameConfirm && (

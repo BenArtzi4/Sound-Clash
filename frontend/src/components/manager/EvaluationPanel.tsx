@@ -41,35 +41,39 @@ const EvaluationPanel: React.FC<EvaluationPanelProps> = ({
 
       <div className="evaluation-buttons">
         <button
-          className="eval-btn approve-song"
+          className={`eval-btn approve-song ${lockedComponents.song_name ? 'locked' : ''}`}
           onClick={onApproveSong}
           disabled={disabled || lockedComponents.song_name}
-          title={lockedComponents.song_name ? 'Song name already answered correctly' : 'Approve if song name is correct'}
+          title={lockedComponents.song_name ? 'Song name already awarded points' : 'Approve if song name is correct'}
         >
           <span className="btn-icon">{lockedComponents.song_name ? '✓' : '✓'}</span>
           <span className="btn-text">
             <span className="btn-label">
-              {lockedComponents.song_name ? 'Song ✓ Locked' : 'Approve Song'}
+              {lockedComponents.song_name ? '✓ Already Awarded' : 'Approve Song'}
             </span>
-            <span className="btn-points">+10 pts</span>
+            <span className="btn-points">
+              {lockedComponents.song_name ? 'Given +10 pts' : '+10 pts'}
+            </span>
           </span>
         </button>
 
         <button
-          className="eval-btn approve-artist"
+          className={`eval-btn approve-artist ${lockedComponents.artist_content ? 'locked' : ''}`}
           onClick={onApproveArtistContent}
           disabled={disabled || lockedComponents.artist_content}
-          title={lockedComponents.artist_content ? `${isSoundtrack ? 'Content' : 'Artist'} already answered correctly` : `Approve if ${isSoundtrack ? 'content' : 'artist'} is correct`}
+          title={lockedComponents.artist_content ? `${isSoundtrack ? 'Content' : 'Artist'} already awarded points` : `Approve if ${isSoundtrack ? 'content' : 'artist'} is correct`}
         >
           <span className="btn-icon">{lockedComponents.artist_content ? '✓' : '✓'}</span>
           <span className="btn-text">
             <span className="btn-label">
               {lockedComponents.artist_content
-                ? `${isSoundtrack ? 'Content' : 'Artist'} ✓ Locked`
+                ? '✓ Already Awarded'
                 : `Approve ${isSoundtrack ? 'Content' : 'Artist'}`
               }
             </span>
-            <span className="btn-points">+5 pts</span>
+            <span className="btn-points">
+              {lockedComponents.artist_content ? 'Given +5 pts' : '+5 pts'}
+            </span>
           </span>
         </button>
 
@@ -77,6 +81,7 @@ const EvaluationPanel: React.FC<EvaluationPanelProps> = ({
           className="eval-btn wrong-answer"
           onClick={onWrongAnswer}
           disabled={disabled}
+          title="Deduct points for incorrect answer"
         >
           <span className="btn-icon">✗</span>
           <span className="btn-text">
