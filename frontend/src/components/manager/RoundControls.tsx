@@ -8,7 +8,6 @@ interface RoundControlsProps {
   onStartGame?: () => void;
   onStartRound: () => void;
   onNextRound: () => void;
-  onRestartSong: () => void;
   onContinueSong: () => void;
   onFinishRound: () => void;
   onSkipRound: () => void;
@@ -24,7 +23,6 @@ const RoundControls: React.FC<RoundControlsProps> = ({
   onStartGame,
   onStartRound,
   onNextRound,
-  onRestartSong,
   onContinueSong,
   onFinishRound,
   onSkipRound,

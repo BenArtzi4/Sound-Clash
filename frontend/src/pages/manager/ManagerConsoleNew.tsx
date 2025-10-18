@@ -181,18 +181,6 @@ const ManagerConsoleNew: React.FC = () => {
     [gameState.buzzedTeam, sendMessage]
   );
 
-  // Restart song - send WebSocket message
-  const restartSong = useCallback(() => {
-    console.log('[Manager] Restarting song');
-    sendMessage({
-      type: 'restart_song',
-    });
-    // Restart the YouTube player from the start time
-    if (youtubePlayerRef.current) {
-      youtubePlayerRef.current.restart();
-    }
-  }, [sendMessage]);
-
   // Continue song - resume playback after buzz and reset buzzers
   const continueSong = useCallback(() => {
     console.log('[Manager] Continuing song');
@@ -353,7 +341,6 @@ const ManagerConsoleNew: React.FC = () => {
             onStartGame={startGame}
             onStartRound={startRound}
             onNextRound={nextRound}
-            onRestartSong={restartSong}
             onContinueSong={continueSong}
             onFinishRound={finishRound}
             onSkipRound={skipRound}
