@@ -285,9 +285,9 @@
 
 .btn-cancel {
   padding: 0.75rem 1.5rem;
-  background: var(--background-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: #f3f4f6;
+  color: #1f2937;
+  border: 2px solid #d1d5db;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
@@ -295,8 +295,9 @@
 }
 
 .btn-cancel:hover {
-  background: var(--surface-color);
-  border-color: var(--primary-color);
+  background: #e5e7eb;
+  border-color: #3b82f6;
+  color: #1f2937;
 }
 
 /* Responsive */

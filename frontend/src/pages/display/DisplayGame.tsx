@@ -249,9 +249,12 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
                 isSoundtrack={currentRound.isSoundtrack}
               />
 
-              {showRoundComplete && (
+              {/* Show correct answers when both components are locked (manager approved both) */}
+              {currentRound.songLocked && currentRound.artistLocked && (
                 <div className="round-complete-card">
-                  <h3 className="round-complete-title">Round Complete! ✓</h3>
+                  <h3 className="round-complete-title">
+                    {showRoundComplete ? 'Round Complete! ✓' : 'Correct Answers ✓'}
+                  </h3>
                   <div className="correct-answers">
                     <div className="answer-row">
                       <span className="answer-label">Song:</span>
