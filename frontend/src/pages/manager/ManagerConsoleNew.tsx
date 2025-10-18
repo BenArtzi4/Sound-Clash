@@ -33,6 +33,7 @@ const ManagerConsoleNew: React.FC = () => {
   const [evaluating, setEvaluating] = useState(false);
   const [availableSongs, setAvailableSongs] = useState<Song[]>([]);
   const [loadingSongs, setLoadingSongs] = useState(false);
+  const [playedSongIds, setPlayedSongIds] = useState<Set<number>>(new Set());
 
   // Ref for YouTube player controls
   const youtubePlayerRef = useRef<YouTubePlayerHandle>(null);
@@ -121,11 +122,23 @@ const ManagerConsoleNew: React.FC = () => {
       return;
     }
 
-    // Select random song
-    const randomIndex = Math.floor(Math.random() * availableSongs.length);
-    const selectedSong = availableSongs[randomIndex];
+    // Filter out already played songs
+    const unplayedSongs = availableSongs.filter(song => !playedSongIds.has(song.id));
+
+    if (unplayedSongs.length === 0) {
+      alert('All songs have been played! No more unique songs available.');
+      return;
+    }
+
+    // Select random song from unplayed songs
+    const randomIndex = Math.floor(Math.random() * unplayedSongs.length);
+    const selectedSong = unplayedSongs[randomIndex];
 
     console.log('[Manager] Starting round with song:', selectedSong.title);
+    console.log('[Manager] Played songs:', playedSongIds.size, 'Unplayed:', unplayedSongs.length);
+
+    // Add to played songs
+    setPlayedSongIds(prev => new Set(prev).add(selectedSong.id));
 
     // Send WebSocket message to start round
     sendMessage({
@@ -139,7 +152,7 @@ const ManagerConsoleNew: React.FC = () => {
         is_soundtrack: selectedSong.is_soundtrack || false,
       },
     });
-  }, [availableSongs, sendMessage]);
+  }, [availableSongs, playedSongIds, sendMessage]);
 
   // Evaluate answer - send WebSocket message
   const evaluateAnswer = useCallback(

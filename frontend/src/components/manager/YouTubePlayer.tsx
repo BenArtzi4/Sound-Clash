@@ -203,24 +203,21 @@ const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(({
         <span className="player-status">{getStateText()}</span>
         {isPlayerReady && (
           <div className="player-controls">
+            {playerState !== YT_PLAYER_STATES.PLAYING ? (
+              <button className="control-btn play-btn" onClick={play} title="Play">
+                ▶️ Play
+              </button>
+            ) : (
+              <button className="control-btn pause-btn" onClick={pause} title="Pause">
+                ⏸ Pause
+              </button>
+            )}
             <button
-              className="control-btn"
+              className="control-btn restart-btn"
               onClick={() => seekTo(startTime)}
               title="Restart from start time"
             >
               ⏮ Restart
-            </button>
-            {playerState !== YT_PLAYER_STATES.PLAYING ? (
-              <button className="control-btn" onClick={play} title="Play">
-                ▶️ Play
-              </button>
-            ) : (
-              <button className="control-btn" onClick={pause} title="Pause">
-                ⏸ Pause
-              </button>
-            )}
-            <button className="control-btn" onClick={stop} title="Stop">
-              ⏹ Stop
             </button>
           </div>
         )}

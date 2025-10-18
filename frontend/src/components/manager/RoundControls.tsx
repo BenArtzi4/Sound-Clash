@@ -69,24 +69,18 @@ const RoundControls: React.FC<RoundControlsProps> = ({
           <div className="control-buttons">
             <button
               className="control-btn secondary"
-              onClick={onRestartSong}
-              disabled={disabled}
-            >
-              <span className="btn-icon">⏮</span>
-              Restart Song
-            </button>
-            <button
-              className="control-btn secondary"
               onClick={onContinueSong}
               disabled={disabled}
+              title="Continue song and re-enable all buzzers"
             >
               <span className="btn-icon">▶️</span>
-              Continue Song
+              Continue Round
             </button>
             <button
               className="control-btn secondary"
               onClick={onSkipRound}
               disabled={disabled}
+              title="Skip this song and move to next round"
             >
               <span className="btn-icon">⏭</span>
               Skip Round
@@ -95,7 +89,7 @@ const RoundControls: React.FC<RoundControlsProps> = ({
               className="control-btn primary"
               onClick={onFinishRound}
               disabled={disabled || !(lockedComponents.song_name && lockedComponents.artist_content)}
-              title={!(lockedComponents.song_name && lockedComponents.artist_content) ? 'Both components must be answered correctly first' : 'Complete this round'}
+              title={!(lockedComponents.song_name && lockedComponents.artist_content) ? 'Both components must be answered correctly first' : 'Complete this round and move to next'}
             >
               <span className="btn-icon">✓</span>
               Finish Round

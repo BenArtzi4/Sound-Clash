@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Scoreboard from '../../components/display/Scoreboard';
 import BuzzNotification from '../../components/display/BuzzNotification';
 import RoundInfo from '../../components/display/RoundInfo';
+import YouTubePlayer from '../../components/manager/YouTubePlayer';
 import '../../styles/pages/display-game.css';
 
 interface Team {
@@ -17,6 +18,7 @@ interface RoundData {
   isSoundtrack: boolean;
   songLocked: boolean;
   artistLocked: boolean;
+  youtubeId?: string;
 }
 
 interface DisplayGameProps {
@@ -118,6 +120,7 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
               isSoundtrack: data.is_soundtrack || false,
               songLocked: false,
               artistLocked: false,
+              youtubeId: data.youtube_id || '',
             });
             setShowRoundComplete(false);
             setBuzzedTeam(null);
@@ -261,6 +264,17 @@ const DisplayGame: React.FC<DisplayGameProps> = ({ wsUrl }) => {
                       <span className="answer-value">{currentRound.artistOrContent}</span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* YouTube Player - shown after both components are locked */}
+              {currentRound.songLocked && currentRound.artistLocked && currentRound.youtubeId && (
+                <div className="youtube-player-display">
+                  <YouTubePlayer
+                    videoId={currentRound.youtubeId}
+                    startTime={5}
+                    autoplay={false}
+                  />
                 </div>
               )}
             </>
