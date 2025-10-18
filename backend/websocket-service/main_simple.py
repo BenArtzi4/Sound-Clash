@@ -46,6 +46,7 @@ class GameRoom:
         self.locked_components = {"song_name": False, "artist_content": False}
         self.team_scores: Dict[str, int] = {}
         self.round_number = 0
+        self.used_song_ids: Set[int] = set()  # Track songs already played in this game
     
     def add_team(self, team_name: str, websocket: WebSocket) -> tuple[bool, bool]:
         """Add team to room
@@ -568,6 +569,12 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
                     room.current_round = song_data
                     room.buzzed_team = None
                     room.locked_components = {"song_name": False, "artist_content": False}
+
+                    # Track this song as used to prevent duplicates
+                    song_id = song_data.get('id')
+                    if song_id:
+                        room.used_song_ids.add(song_id)
+                        logger.info(f"Added song {song_id} to used songs. Total used: {len(room.used_song_ids)}")
 
                     await room.broadcast_to_all({
                         "type": "round_started",
