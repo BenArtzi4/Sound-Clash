@@ -124,6 +124,7 @@ npm run deploy:services
 ## 📚 Documentation
 
 ### Architecture & Planning
+- [**Services Architecture**](docs/SERVICES_ARCHITECTURE.md) - **Complete guide to all services**
 - [Architecture Overview](docs/architecture.md)
 - [Simplified Architecture](docs/SIMPLIFIED_ARCHITECTURE.md)
 - [Project Structure](docs/SIMPLIFIED_PROJECT_STRUCTURE.md)
