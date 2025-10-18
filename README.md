@@ -53,13 +53,10 @@ Sound-Clash/
 │   ├── game-management.env   # Service-specific config
 │   └── song-management.env   # Service-specific config
 ├── backend/                   # FastAPI microservices
-│   ├── shared/               # Shared utilities
-│   ├── game-management/      # Game lifecycle service
-│   ├── song-management/      # Song and genre management
-│   ├── game-api/            # Buzzer and scoring logic
-│   ├── websocket-service/   # Real-time communication
-│   ├── manager-console/     # Host interface
-│   └── public-display/      # Spectator interface
+│   ├── shared/               # Shared utilities and models
+│   ├── game-management/      # Game lifecycle service (Port 8000)
+│   ├── song-management/      # Song and genre management (Port 8001)
+│   └── websocket-service/    # Real-time communication (Port 8003)
 ├── frontend/                 # React TypeScript app
 ├── infrastructure/          # AWS CDK stacks
 ├── data/                   # Sample data and imports
@@ -69,16 +66,15 @@ Sound-Clash/
 └── docker-compose.yml     # Development environment
 ```
 
-## 🔧 Services
+## 🔧 Backend Services
 
 | Service | Port | Description |
 |---------|------|-------------|
-| Game Management | 8000 | Game lifecycle, team joining |
+| Game Management | 8000 | Game lifecycle, team management |
 | Song Management | 8001 | Song database, genres, selection |
-| Game API | 8002 | Buzzer logic, scoring |
-| WebSocket Service | 8003 | Real-time communication |
-| Manager Console | 8004 | Host interface |
-| Public Display | 8005 | Spectator interface |
+| WebSocket Service | 8003 | Real-time communication for all clients |
+
+**Note**: Manager and display interfaces are served by the React frontend, not separate backend services.
 
 ## 🎯 Features
 

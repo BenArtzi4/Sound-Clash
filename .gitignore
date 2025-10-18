@@ -70,10 +70,8 @@ Thumbs.db
 .env/*.env
 !.env.template
 
-# Legacy directories that have been reorganized
-config/
-docker/
-local_database/
+# Legacy directories (removed from project)
+# config/, docker/, local_database/ - no longer exist
 
 # Docker volumes
 postgres_data/
