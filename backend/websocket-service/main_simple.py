@@ -641,7 +641,11 @@ async def websocket_manager_endpoint(websocket: WebSocket, game_code: str):
                     # Manager continues/resumes the song - reset buzzers so teams can buzz again
                     room.buzzed_team = None
                     logger.info(f"Manager continued song in game {game_code}, buzzers re-enabled")
-                    # No need to broadcast - buzzers will work again when buzzed_team is None
+                    # Broadcast to all teams that buzzers are now enabled
+                    await room.broadcast_to_all({
+                        "type": "buzzers_enabled",
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
 
                 elif msg_type == 'skip_round':
                     # Manager skips current round

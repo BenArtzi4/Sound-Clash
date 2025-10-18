@@ -67,12 +67,12 @@ const TeamGameplay: React.FC = () => {
 
       case 'answer_evaluated':
         setComponentStatus(data.locked_components);
+        // Do NOT re-enable buzzer here - only manager's "Continue Round" should enable it
+        break;
 
-        // Re-enable buzzer if not all components are locked
-        const allLocked = data.locked_components.song_name && data.locked_components.artist_content;
-        if (!allLocked) {
-          setBuzzerState('enabled');
-        }
+      case 'buzzers_enabled':
+        // Manager pressed "Continue Round" - re-enable buzzers for all teams
+        setBuzzerState('enabled');
         break;
 
       case 'round_completed':
