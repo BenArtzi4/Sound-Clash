@@ -169,11 +169,13 @@ class GameRoom:
             "total_teams": len(teams_list),
             "timestamp": datetime.utcnow().isoformat()
         }
-        
+
         # Send to all teams
         await self.broadcast_to_teams(update_message)
         # Send to all managers
         await self.broadcast_to_managers(update_message)
+        # Send to all displays
+        await self.broadcast_to_displays(update_message)
 
 
 class MemoryStorage:
