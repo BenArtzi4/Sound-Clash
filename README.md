@@ -127,9 +127,16 @@ npm run deploy:services
 
 ## 📚 Documentation
 
-- [Architecture Guide](docs/architecture.md)
-- [API Documentation](docs/api-documentation.md)
-- [Deployment Guide](docs/deployment-guide.md)
+### Architecture & Planning
+- [Architecture Overview](docs/architecture.md)
+- [Simplified Architecture](docs/SIMPLIFIED_ARCHITECTURE.md)
+- [Project Structure](docs/SIMPLIFIED_PROJECT_STRUCTURE.md)
+- [Domain & HTTPS Setup](docs/DOMAIN_AND_HTTPS_SETUP.md)
+
+### Development
+- [Recent Changes](docs/development/CHANGES_SUMMARY.md)
+- [Task Breakdown](docs/SIMPLIFIED_TASK_BREAKDOWN.md)
+- [Phase 3 Implementation](docs/PHASE_3_IMPLEMENTATION.md)
 
 ## 🤝 Contributing
 
