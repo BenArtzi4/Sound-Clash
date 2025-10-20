@@ -81,6 +81,7 @@ setup-foundation*
 
 # Cost optimization and operational scripts (private, not for public repo)
 docs/operations/
+docs/ARCHITECTURE_QA.md
 scripts/cost-optimization/
 scripts/cloudshell/deploy-*.sh
 scripts/deployment/shutdown-*.sh
