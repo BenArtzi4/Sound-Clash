@@ -419,9 +419,12 @@ async def get_game(game_code: str):
                         for team in game.teams if team.is_active
                     ],
                     "max_teams": game.max_teams,
-                    "current_round": game.current_round,
-                    "total_rounds": game.total_rounds,
+                    "max_rounds": game.max_rounds,
+                    "host_name": game.host_name,
+                    "selected_genres": game.selected_genres,
                     "created_at": game.created_at.isoformat() if game.created_at else None,
+                    "started_at": game.started_at.isoformat() if game.started_at else None,
+                    "ended_at": game.ended_at.isoformat() if game.ended_at else None,
                     "database_source": True
                 }
             else:
@@ -458,6 +461,7 @@ async def create_full_game(request: Dict[str, Any]):
         game_code = generate_game_code()
         
         # Parse request (handle both Pydantic and dict)
+        host_name = request.get('host_name', 'Unknown Host')
         max_teams = request.get('max_teams', 8)
         max_rounds = request.get('max_rounds', 20)
         selected_genres = request.get('selected_genres', [])
@@ -493,7 +497,13 @@ async def create_full_game(request: Dict[str, Any]):
         postgres_stored = False
         if DATABASE_CONNECTED:
             try:
-                db_game = await GameService.create_game(game_code, max_teams)
+                db_game = await GameService.create_game(
+                    game_code=game_code,
+                    host_name=host_name,
+                    selected_genres=selected_genres,
+                    max_teams=max_teams,
+                    max_rounds=max_rounds
+                )
                 if db_game:
                     logger.info(f"Created game {game_code} in PostgreSQL")
                     postgres_stored = True
@@ -600,8 +610,6 @@ async def get_game_state(game_code: str):
         return {
             "game_code": game.game_code,
             "status": game.status.value,
-            "current_round": game.current_round,
-            "total_rounds": game.total_rounds,
             "teams": [{
                 "team_name": team.team_name,
                 "score": team.score,

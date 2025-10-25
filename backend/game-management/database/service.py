@@ -15,13 +15,22 @@ class GameService:
     """Service class for game-related database operations"""
     
     @staticmethod
-    async def create_game(game_code: str, max_teams: int = 8) -> Optional[Game]:
+    async def create_game(
+        game_code: str,
+        host_name: str,
+        selected_genres: List[str],
+        max_teams: int = 8,
+        max_rounds: int = 20
+    ) -> Optional[Game]:
         """Create a new game"""
         try:
             async with get_db_session() as session:
                 game = Game(
                     game_code=game_code,
+                    host_name=host_name,
+                    selected_genres=selected_genres,
                     max_teams=max_teams,
+                    max_rounds=max_rounds,
                     status="waiting"
                 )
                 session.add(game)

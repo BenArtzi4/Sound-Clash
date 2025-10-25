@@ -3,6 +3,7 @@ Database models for Game Management Service
 Phase 2: Basic models for games and teams
 """
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database.config import Base
@@ -10,18 +11,19 @@ from database.config import Base
 class Game(Base):
     """Game model - represents a game session"""
     __tablename__ = "games"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     game_code = Column(String(10), unique=True, index=True, nullable=False)
+    host_name = Column(String(100), nullable=False)
     status = Column(String(20), default="waiting", nullable=False)  # waiting, in_progress, completed
+    selected_genres = Column(ARRAY(Text))  # TEXT[] array type
+    max_teams = Column(Integer, default=8)
+    max_rounds = Column(Integer, default=20)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Game settings
-    max_teams = Column(Integer, default=8)
-    current_round = Column(Integer, default=0)
-    total_rounds = Column(Integer, default=10)
-    
+    started_at = Column(DateTime(timezone=True))
+    ended_at = Column(DateTime(timezone=True))
+
     # Relationships
     teams = relationship("Team", back_populates="game", cascade="all, delete-orphan")
 

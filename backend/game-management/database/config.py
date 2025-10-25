@@ -61,8 +61,8 @@ async def init_database():
         logger.error(f"Failed to initialize database: {e}")
         return False
 
-async def get_db_session():
-    """Get database session"""
+def get_db_session():
+    """Get database session - returns async context manager"""
     if not AsyncSessionLocal:
         raise Exception("Database not initialized")
     return AsyncSessionLocal()
