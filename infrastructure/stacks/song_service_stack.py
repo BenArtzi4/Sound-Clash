@@ -55,7 +55,7 @@ class SongServiceStack(Stack):
         # Use ECR Repository from its name
         self.song_repository = ecr.Repository.from_repository_name(
             self, "SongServiceRepository",
-            "sound-clash-song-management"
+            "sound-clash/song-management"
         )
         
         # Task Definition for Song Management Service using EC2
@@ -69,8 +69,10 @@ class SongServiceStack(Stack):
         # Container Definition
         self.container = self.task_definition.add_container(
             "SongServiceContainer",
-            # Use the ECR Repository for the image
-            image=ecs.ContainerImage.from_ecr_repository(self.song_repository),
+            # Use specific digest to force new deployment with genre selection fix
+            image=ecs.ContainerImage.from_registry(
+                f"{self.account}.dkr.ecr.{self.region}.amazonaws.com/sound-clash/song-management@sha256:0877809c2dda8b5571fb05d4b3c5a641e1ba5526c5d4af60bec429aeb5a51b60"
+            ),
             memory_limit_mib=256,  # Reduced to fit available memory
             cpu=128,
             essential=True,
@@ -138,10 +140,10 @@ class SongServiceStack(Stack):
         # Attach service to our target group
         self.service.attach_to_application_target_group(self.target_group)
         
-        # Create ALB listener rule at priority 155
+        # Create ALB listener rule at priority 155 (HTTPS listener)
         self.listener_rule = elbv2.ApplicationListenerRule(
             self, "SongServiceListenerRule",
-            listener=alb_stack.http_listener,
+            listener=alb_stack.https_listener,
             priority=155,
             conditions=[
                 elbv2.ListenerCondition.path_patterns(["/api/songs/*"])

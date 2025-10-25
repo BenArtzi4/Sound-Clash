@@ -72,7 +72,7 @@ class GameManagementServiceStack(Stack):
         self.container = self.task_definition.add_container(
             "GameManagementContainer",
             image=ecs.ContainerImage.from_registry(
-                f"{self.account}.dkr.ecr.{self.region}.amazonaws.com/sound-clash/game-management:latest"
+                f"{self.account}.dkr.ecr.{self.region}.amazonaws.com/sound-clash/game-management@sha256:7094fdc2dbbf0f42b890f1d44456766c6a458324fa6b65b27452353d1739feab"
             ),
             cpu=256,
             memory_limit_mib=512,
@@ -98,8 +98,8 @@ class GameManagementServiceStack(Stack):
             ),
             port_mappings=[
                 ecs.PortMapping(
-                    container_port=8000,  # Changed to match ALB target group
-                    host_port=8000,      # Changed to match ALB target group
+                    container_port=8000,
+                    host_port=0,  # Dynamic port mapping (32768-65535)
                     protocol=ecs.Protocol.TCP
                 )
             ]

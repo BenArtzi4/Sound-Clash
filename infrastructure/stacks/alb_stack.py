@@ -2,6 +2,7 @@ from aws_cdk import (
     Stack,
     aws_elasticloadbalancingv2 as elbv2,
     aws_ec2 as ec2,
+    aws_certificatemanager as acm,
     CfnOutput,
     Duration
 )
@@ -25,6 +26,12 @@ class AlbStack(Stack):
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PUBLIC
             )
+        )
+
+        # Import existing ACM certificate for soundclash.org
+        self.certificate = acm.Certificate.from_certificate_arn(
+            self, "SoundClashCertificate",
+            certificate_arn="arn:aws:acm:us-east-1:381492257993:certificate/545b6731-5363-4c1d-873b-4eaaaffd69da"
         )
         
         # ===== TARGET GROUPS FOR MICROSERVICES =====
@@ -121,7 +128,7 @@ class AlbStack(Stack):
         )
         
         # ===== HTTP LISTENER WITH ROUTING RULES =====
-        
+
         # Create HTTP listener with default 404 response
         self.http_listener = self.alb.add_listener(
             "HttpListener",
@@ -133,24 +140,39 @@ class AlbStack(Stack):
                 message_body='{"error": "Service not found"}'
             )
         )
+
+        # ===== HTTPS LISTENER =====
+
+        # Create HTTPS listener with SSL certificate
+        self.https_listener = self.alb.add_listener(
+            "HttpsListener",
+            port=443,
+            protocol=elbv2.ApplicationProtocol.HTTPS,
+            certificates=[self.certificate],
+            default_action=elbv2.ListenerAction.fixed_response(
+                status_code=404,
+                content_type="application/json",
+                message_body='{"error": "Service not found"}'
+            )
+        )
         
-        # ===== PATH-BASED ROUTING RULES =====
-        
-        # Route /health to Game Management Service (highest priority) - using different ID to avoid conflict
+        # ===== PATH-BASED ROUTING RULES (HTTPS) =====
+
+        # Route /health to Game Management Service (highest priority)
         elbv2.ApplicationListenerRule(
-            self, "HealthEndpointRuleNew",
-            listener=self.http_listener,
+            self, "HealthEndpointRule",
+            listener=self.https_listener,
             priority=60,
             conditions=[
                 elbv2.ListenerCondition.path_patterns(["/health"])
             ],
             action=elbv2.ListenerAction.forward([self.game_management_tg])
         )
-        
+
         # Route /api/games/* AND /api/games to Game Management Service
         elbv2.ApplicationListenerRule(
             self, "GameManagementRule",
-            listener=self.http_listener,
+            listener=self.https_listener,
             priority=100,
             conditions=[
                 elbv2.ListenerCondition.path_patterns(["/api/games/*", "/api/games"])
@@ -159,44 +181,44 @@ class AlbStack(Stack):
         )
         
         # NOTE: Song Service rule is created by SongServiceStack at priority 155
-        
-        # Route /api/gameplay/* to Game API Service  
+
+        # Route /api/gameplay/* to Game API Service
         elbv2.ApplicationListenerRule(
             self, "GameApiRule",
-            listener=self.http_listener,
+            listener=self.https_listener,
             priority=200,
             conditions=[
                 elbv2.ListenerCondition.path_patterns(["/api/gameplay/*"])
             ],
             action=elbv2.ListenerAction.forward([self.game_api_tg])
         )
-        
+
         # Route WebSocket connections AND game management endpoints to WebSocket Service
         elbv2.ApplicationListenerRule(
             self, "WebSocketRule",
-            listener=self.http_listener,
+            listener=self.https_listener,
             priority=300,
             conditions=[
                 elbv2.ListenerCondition.path_patterns(["/ws/*", "/socket.io/*", "/api/game/*"])
             ],
             action=elbv2.ListenerAction.forward([self.websocket_tg])
         )
-        
+
         # Route /api/manager/* to Manager Console
         elbv2.ApplicationListenerRule(
             self, "ManagerConsoleRule",
-            listener=self.http_listener,
+            listener=self.https_listener,
             priority=400,
             conditions=[
                 elbv2.ListenerCondition.path_patterns(["/api/manager/*"])
             ],
             action=elbv2.ListenerAction.forward([self.manager_console_tg])
         )
-        
+
         # Route /api/display/* to Public Display
         elbv2.ApplicationListenerRule(
             self, "PublicDisplayRule",
-            listener=self.http_listener,
+            listener=self.https_listener,
             priority=500,
             conditions=[
                 elbv2.ListenerCondition.path_patterns(["/api/display/*"])
@@ -209,8 +231,15 @@ class AlbStack(Stack):
         CfnOutput(
             self, "HttpListenerArn",
             value=self.http_listener.listener_arn,
-            description="HTTP Listener ARN",
+            description="HTTP Listener ARN (redirects to HTTPS)",
             export_name=f"{self.stack_name}:HttpListenerArn"
+        )
+
+        CfnOutput(
+            self, "HttpsListenerArn",
+            value=self.https_listener.listener_arn,
+            description="HTTPS Listener ARN",
+            export_name=f"{self.stack_name}:HttpsListenerArn"
         )
         
         CfnOutput(
