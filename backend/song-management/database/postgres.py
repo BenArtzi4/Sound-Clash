@@ -189,18 +189,14 @@ class SongRepository:
     async def get_songs_by_genres(self, genre_slugs: List[str],
                                  limit: int = 50,
                                  exclude_ids: List[int] = None) -> List[Dict[str, Any]]:
-        """Get songs by genre slugs - returns all active songs if no genres specified"""
+        """
+        Get random songs from ANY of the specified genres (not all genres).
+        Songs are selected randomly across all provided genres.
+        The exclude_ids parameter prevents selecting the same song twice in a game.
+        """
         conditions = ["s.is_active = true"]
         params = []
         param_count = 0
-
-        # If no genres specified, return all active songs
-        if genre_slugs and len(genre_slugs) > 0:
-            param_count += 1
-            genre_condition = f"g.slug = ANY(${param_count})"
-            params.append(genre_slugs)
-        else:
-            genre_condition = "1=1"  # Always true - no filtering
 
         if exclude_ids:
             param_count += 1
@@ -211,20 +207,26 @@ class SongRepository:
 
         # Build query based on whether we're filtering by genre
         if genre_slugs and len(genre_slugs) > 0:
-            # Use DISTINCT ON with explicit column in ORDER BY to avoid DISTINCT + RANDOM() conflict
+            param_count += 1
+            # Use subquery to get distinct songs, then randomize the order
+            # This allows songs from different genres to be mixed randomly in the result
             query = f"""
                 SELECT DISTINCT ON (s.id) s.id, s.title, s.artist, s.album, s.youtube_id,
                        s.spotify_id, s.duration_seconds, s.release_year, s.is_active,
-                       s.created_at, s.updated_at, RANDOM() as random_order
+                       s.created_at, s.updated_at, RANDOM() as rand
                 FROM songs_master s
-                JOIN song_genres sg ON s.id = sg.song_id
-                JOIN genres g ON sg.genre_id = g.id
-                WHERE {genre_condition} AND {where_clause}
+                WHERE {where_clause}
+                  AND EXISTS (
+                      SELECT 1 FROM song_genres sg
+                      JOIN genres g ON sg.genre_id = g.id
+                      WHERE sg.song_id = s.id AND g.slug = ANY(${param_count})
+                  )
                 ORDER BY s.id, RANDOM()
                 LIMIT ${param_count + 1}
             """
+            params.append(genre_slugs)
         else:
-            # No genre filtering - get all active songs
+            # No genre filtering - get all active songs randomly
             query = f"""
                 SELECT s.id, s.title, s.artist, s.album, s.youtube_id,
                        s.spotify_id, s.duration_seconds, s.release_year, s.is_active,
@@ -238,8 +240,8 @@ class SongRepository:
         params.append(limit)
 
         rows = await self.conn.fetch(query, *params)
-        # Remove random_order field if it exists
-        return [dict((k, v) for k, v in dict(row).items() if k != 'random_order') for row in rows]
+        # Remove the rand column if it exists
+        return [dict((k, v) for k, v in dict(row).items() if k != 'rand') for row in rows]
 
 class GenreRepository:
     """Repository for genre operations"""
