@@ -1,0 +1,9 @@
+# Default owner for everything
+* @BenArtzi4
+
+# Critical-path files require explicit attention
+/db/migrations/      @BenArtzi4
+/backend/app/middleware/admin_auth.py  @BenArtzi4
+/.github/workflows/  @BenArtzi4
+/docs/security-rls.md @BenArtzi4
+/docs/realtime-design.md @BenArtzi4
