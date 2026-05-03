@@ -2,7 +2,7 @@
 # See docs/tech-stack.md and docs/local-development.md for context.
 
 # ---- builder ----
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 RUN python -m venv /opt/venv
@@ -13,7 +13,7 @@ COPY app ./app
 RUN pip install --no-cache-dir -e .
 
 # ---- runtime ----
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # Non-root user
 RUN useradd --create-home --shell /bin/bash app
