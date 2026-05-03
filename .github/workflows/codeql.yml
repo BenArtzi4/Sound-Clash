@@ -3,12 +3,14 @@ name: CodeQL
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     # Weekly scan on Monday 06:00 UTC
     - cron: "0 6 * * 1"
   workflow_dispatch:
+
+# NOTE: this workflow does NOT run on pull_request because CodeQL requires
+# "Code scanning" to be enabled in repo Settings → Code security → Code scanning.
+# Once that's enabled, you can add `pull_request: { branches: [main] }` back.
 
 concurrency:
   group: codeql-${{ github.ref }}
