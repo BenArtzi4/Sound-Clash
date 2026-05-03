@@ -1,0 +1,102 @@
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: lint + type + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier check
+        run: npm run format:check
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Reject skipped tests
+        run: |
+          if grep -rEn "(it|test)\.skip\(|@pytest\.mark\.skip|xfail" src/; then
+            echo "::error::Found skipped tests — banned per docs/testing-strategy.md §6"
+            exit 1
+          fi
+
+      - name: vitest with coverage
+        run: npm run test:coverage
+
+      - name: Verify no service-role key leaked into bundle
+        run: |
+          npm run build
+          if grep -rE "SUPABASE_SERVICE_ROLE" dist/ 2>/dev/null; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY appears in frontend bundle"
+            exit 1
+          fi
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: frontend/coverage/lcov.info
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+
+  deploy:
+    name: deploy (Cloudflare Pages)
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci || npm install
+      - run: npm run build
+      - name: Deploy to Cloudflare Pages
+        run: |
+          if [ -z "${{ secrets.CF_API_TOKEN }}" ]; then
+            echo "::warning::CF_API_TOKEN not set; skipping deploy"
+            exit 0
+          fi
+          npx wrangler@latest pages deploy dist --project-name=sound-clash --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}

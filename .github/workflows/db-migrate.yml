@@ -1,0 +1,48 @@
+name: DB Migrate
+
+# Manual dispatch only. Applies migrations to the chosen Supabase project.
+# See docs/runbook.md §1.3 for the deploy-with-migration playbook.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - preview
+          - prod
+      confirm:
+        description: 'Type "MIGRATE" to confirm'
+        required: true
+        type: string
+
+jobs:
+  migrate:
+    if: github.event.inputs.confirm == 'MIGRATE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ github.event.inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::SUPABASE_DATABASE_URL secret not set for environment ${{ github.event.inputs.target }}"
+            exit 1
+          fi
+          ./db/migrate.sh "$DATABASE_URL"
+
+      - name: Verify migrations idempotent (re-apply)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          ./db/migrate.sh "$DATABASE_URL"
+          echo "::notice::Migrations applied successfully and are idempotent on re-run."

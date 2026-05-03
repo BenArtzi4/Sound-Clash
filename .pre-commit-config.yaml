@@ -1,0 +1,43 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
+    hooks:
+      - id: ruff
+        args: ['--fix']
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      - id: no-jwt-leak
+        name: Detect committed JWT-shaped strings (potential service-role leak)
+        language: pygrep
+        entry: 'eyJhbGciOi'
+        exclude: '^(docs/|Sound-Clash-Plan/|\.pre-commit-config\.yaml)'
+
+      - id: no-skip-tests
+        name: Reject `it.skip` / `test.skip` / `xfail` outside generated code
+        language: pygrep
+        entry: '(it|test)\.skip\(|@pytest\.mark\.skip[^i]|xfail'
+        files: '^(tests/|frontend/src/.*\.test\.(ts|tsx))'
+
+      - id: no-pragma-no-cover
+        name: Reject coverage pragmas in app code
+        language: pygrep
+        entry: 'pragma:\s*no cover'
+        files: '^backend/app/'

@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+.pnpm-store/
+.npm/
+*.tsbuildinfo
+
+# Vite
+frontend/dist/
+frontend/.vite/
+
+# Environment files (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Claude Code local-only settings (project rules in CLAUDE.md are committed; local settings are not)
+.claude/settings.local.json
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Sentry
+.sentryclirc
+
+# Logs
+*.log
+logs/
