@@ -48,6 +48,11 @@ jobs:
           # Use the security-and-quality query suite (broader than default).
           queries: security-and-quality
 
+      # The upload step inside `analyze` will fail until "Code scanning" is
+      # enabled in repo Settings → Code security & analysis. Mark as
+      # continue-on-error so the workflow stays green; the analysis still runs
+      # and surfaces issues in the run log. Remove this once code scanning is on.
       - uses: github/codeql-action/analyze@v3
+        continue-on-error: true
         with:
           category: "/language:${{ matrix.language }}"
