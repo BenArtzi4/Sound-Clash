@@ -34,8 +34,8 @@ The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Soun
 - [ ] **AUTH-01** Implement `backend/app/middleware/admin_auth.py`: header check `X-Admin-Password` vs env var, **constant-time comparison** (`secrets.compare_digest`)
 - [ ] **AUTH-02** Apply admin middleware to `/admin/*` and `POST /games`, `POST /games/*/select-song`, `POST /games/*/award-points`, `POST /games/*/end`, `DELETE /games/*/teams/*`
 - [ ] **AUTH-03** Frontend: keep existing `AuthContext.tsx` pattern; on admin pages, send `X-Admin-Password` header on every API call via `frontend/src/lib/api.ts` interceptor
-- [ ] **AUTH-04** RLS policies SQL — see `security-rls.md` §2
-- [ ] **AUTH-05** Function grants: `GRANT EXECUTE ON FUNCTION buzz_in TO anon`; revoke all others from PUBLIC
+- [x] **AUTH-04** RLS policies SQL — see `security-rls.md` §2
+- [x] **AUTH-05** Function grants: `GRANT EXECUTE ON FUNCTION buzz_in TO anon`; revoke all others from PUBLIC
 - [ ] **AUTH-06** CSP `_headers` file in frontend — see `security-rls.md` §7
 - [ ] **AUTH-07** Backend security headers (HSTS, X-Content-Type-Options) via FastAPI middleware
 - [ ] **AUTH-08** Verify in CI: no `SUPABASE_SERVICE_ROLE_*` env vars are exposed to the frontend bundle. Add a check that fails the frontend build if found.
@@ -45,16 +45,16 @@ The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Soun
 
 ## Database — Postgres
 
-- [ ] **DB-01** `db/migrations/001_extensions.sql` — `CREATE EXTENSION IF NOT EXISTS pg_cron, pgcrypto`
-- [ ] **DB-02** `db/migrations/002_durable_tables.sql` — `songs`, `genres`, `song_genres` (per `data-model.md` §2)
-- [ ] **DB-03** `db/migrations/003_ephemeral_tables.sql` — `active_games`, `game_teams`, `game_rounds`, deferred FKs
-- [ ] **DB-04** `db/migrations/004_indexes.sql` — per `data-model.md` §3
-- [ ] **DB-05** `db/migrations/005_rpc_functions.sql` — `buzz_in`, `start_round`, `award_points`, `end_game`, `cleanup_expired_games` (full bodies in `rpc-functions.md`)
-- [ ] **DB-06** `db/migrations/006_rls_policies.sql` — enable RLS, anon SELECT policies, function grants
-- [ ] **DB-07** `db/migrations/007_cron_jobs.sql` — `cron.schedule('cleanup-expired-games', '0 * * * *', ...)`
-- [ ] **DB-08** `db/seed/genres.sql` — initial genre list (rock, pop, hiphop, classical, soundtrack, jazz, electronic, ...)
-- [ ] **DB-09** `db/migrate.sh` — applies migrations in order via `psql`; supports `local`/`preview`/`prod` targets
-- [ ] **DB-10** `.github/workflows/db-migrate.yml` — manual-dispatch workflow that applies migrations to chosen environment
+- [x] **DB-01** `db/migrations/001_extensions.sql` — `CREATE EXTENSION IF NOT EXISTS pg_cron, pgcrypto`
+- [x] **DB-02** `db/migrations/002_durable_tables.sql` — `songs`, `genres`, `song_genres` (per `data-model.md` §2)
+- [x] **DB-03** `db/migrations/003_ephemeral_tables.sql` — `active_games`, `game_teams`, `game_rounds`, deferred FKs
+- [x] **DB-04** `db/migrations/004_indexes.sql` — per `data-model.md` §3
+- [x] **DB-05** `db/migrations/005_rpc_functions.sql` — `buzz_in`, `start_round`, `award_points`, `end_game`, `cleanup_expired_games` (full bodies in `rpc-functions.md`)
+- [x] **DB-06** `db/migrations/006_rls_policies.sql` — enable RLS, anon SELECT policies, function grants
+- [x] **DB-07** `db/migrations/007_cron_jobs.sql` — `cron.schedule('cleanup-expired-games', '0 * * * *', ...)`
+- [x] **DB-08** `db/migrations/008_seed_genres.sql` — initial genre list (rock, pop, hip-hop, classical, soundtrack, jazz, electronic, country, R&B, metal); seeded via migration per `data-model.md` §7
+- [x] **DB-09** `db/migrate.sh` — applies migrations in order via `psql`
+- [x] **DB-10** `.github/workflows/db-migrate.yml` — manual-dispatch workflow that applies migrations to chosen environment
 
 ## Backend — Python (FastAPI)
 
@@ -104,11 +104,11 @@ The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Soun
 
 ## Testing
 
-- [ ] **TEST-01** `tests/db/test_buzz_in_race.py` — testcontainers Postgres + 10 concurrent `buzz_in` calls; exactly one wins; **must pass 100 consecutive runs** (Phase 3 exit criterion)
-- [ ] **TEST-02** `tests/db/test_buzz_in_edge_cases.py` — buzz when game waiting; buzz when game ended; buzz with bad UUID; lock-already-held returns false
-- [ ] **TEST-03** `tests/db/test_rls_policies.py` — connects as `anon`; asserts allowed SELECTs and denied mutations
-- [ ] **TEST-04** `tests/db/test_cron_cleanup.py` — insert game with past `expires_at`; manually invoke `cleanup_expired_games()`; assert deletion + cascade
-- [ ] **TEST-05** `tests/db/test_award_points_idempotency.py` — call `award_points` twice on same round; second call raises `round_already_ended`
+- [x] **TEST-01** `tests/db/test_buzz_in_race.py` — testcontainers Postgres + 10 concurrent `buzz_in` calls; exactly one wins; **must pass 100 consecutive runs** (Phase 3 exit criterion)
+- [x] **TEST-02** `tests/db/test_buzz_in_edge_cases.py` — buzz when game waiting; buzz when game ended; buzz with bad UUID; lock-already-held returns false
+- [x] **TEST-03** `tests/db/test_rls_policies.py` — split into `test_rls_anon.py` (table SELECT/INSERT/UPDATE/DELETE matrix) and `test_rls_function_grants.py` (RPC EXECUTE matrix)
+- [x] **TEST-04** `tests/db/test_cron_cleanup.py` — implemented as `test_cleanup_expired_games.py`; insert game with past `expires_at`; manually invoke `cleanup_expired_games()`; assert deletion + cascade
+- [x] **TEST-05** `tests/db/test_award_points_idempotency.py` — covered by `test_award_points.py::test_award_points_idempotency_raises_on_second_call`; second call raises `round_already_ended`
 - [ ] **TEST-06** `tests/backend/test_games_router.py` — full happy path: create → join × 2 → start round × 3 → award × 3 → end
 - [ ] **TEST-07** `tests/backend/test_admin_auth.py` — 401 without header; 200 with correct; 401 with wrong; constant-time comparison
 - [ ] **TEST-08** `tests/backend/test_rate_limits.py` — exceed `POST /games` rate limit; assert 429
