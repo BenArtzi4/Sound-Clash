@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
@@ -35,12 +33,4 @@ def install(app: FastAPI) -> None:
 
 def reset() -> None:
     """Clear the in-memory storage. Tests use this between cases."""
-    reset_method = getattr(limiter, "reset", None)
-    if callable(reset_method):
-        reset_method()
-        return
-    storage: Any = getattr(limiter, "_storage", None)
-    if storage is not None:
-        inner = getattr(storage, "reset", None) or getattr(storage, "clear", None)
-        if callable(inner):
-            inner()
+    limiter.reset()
