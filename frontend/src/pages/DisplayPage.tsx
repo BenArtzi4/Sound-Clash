@@ -177,6 +177,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
             {teams.map((t, i) => (
               <li
                 key={t.id}
+                data-team-id={t.id}
                 className={`${styles.bigRow} ${
                   t.id === game.buzzed_team_id ? styles.bigRowBuzzed : ""
                 }`}
