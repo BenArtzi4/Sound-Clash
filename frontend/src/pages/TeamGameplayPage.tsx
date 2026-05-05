@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton } from "../components/BuzzButton";
 import { Scoreboard } from "../components/Scoreboard";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
+import { serverTimeNow } from "../hooks/useServerTime";
 import styles from "./TeamGameplayPage.module.css";
+
+const ROUND_DURATION_SEC = 20;
 
 interface StoredTeam {
   id: string;
@@ -32,6 +35,7 @@ export function TeamGameplayPage() {
   const navigate = useNavigate();
   const stored = useMemo(() => readStoredTeam(gameCode), [gameCode]);
   const [hydratedOnce, setHydratedOnce] = useState(false);
+  const [now, setNow] = useState(() => serverTimeNow().getTime());
 
   useEffect(() => {
     if (!stored) {
@@ -45,6 +49,12 @@ export function TeamGameplayPage() {
   useEffect(() => {
     if (state) setHydratedOnce(true);
   }, [state]);
+
+  // Tick every second so the round timer re-renders.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(serverTimeNow().getTime()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // After hydrate, if our team isn't in the room, we've been kicked or the
   // game is gone. Clean up storage and bounce home.
@@ -78,6 +88,20 @@ export function TeamGameplayPage() {
   const lockedTeam =
     game?.buzzed_team_id != null ? (state?.teams.get(game.buzzed_team_id) ?? null) : null;
 
+  const roundStartedAt = state?.currentRound?.started_at;
+  const elapsedSec = roundStartedAt
+    ? Math.max(0, Math.floor((now - Date.parse(roundStartedAt)) / 1000))
+    : 0;
+  const remainingSec = roundStartedAt
+    ? Math.max(0, ROUND_DURATION_SEC - elapsedSec)
+    : ROUND_DURATION_SEC;
+  const timerActive =
+    game?.status === "playing" && lockedTeam == null && state?.currentRound != null;
+  const timerPct = Math.max(
+    0,
+    Math.min(100, (remainingSec / ROUND_DURATION_SEC) * 100),
+  );
+
   let bannerClass = styles.statusBanner;
   let bannerText = "Waiting for the host to start…";
   if (game?.status === "ended") {
@@ -92,7 +116,7 @@ export function TeamGameplayPage() {
       bannerText = `${lockedTeam.name} locked it.`;
     } else {
       bannerClass = `${styles.statusBanner} ${styles.statusPlaying}`;
-      bannerText = `Round ${game.round_number} — buzz when you know it!`;
+      bannerText = "Buzz when you know it!";
     }
   }
 
@@ -136,6 +160,20 @@ export function TeamGameplayPage() {
       <div className={bannerClass} role="status" aria-live="polite">
         {bannerText}
       </div>
+
+      {timerActive ? (
+        <div
+          className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}
+          style={{ "--timer-pct": `${timerPct}%` } as CSSProperties}
+          role="timer"
+          aria-label={`${remainingSec} seconds remaining`}
+        >
+          <div className={styles.timerBar}>
+            <div className={styles.timerFill} />
+          </div>
+          <span className={styles.timerValue}>{remainingSec}s</span>
+        </div>
+      ) : null}
 
       <div className={styles.buzzZone}>
         <BuzzButton
