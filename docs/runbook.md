@@ -54,6 +54,8 @@ GitHub Actions → "db-migrate" workflow → Run workflow → choose env (previe
 
 The workflow runs `db/migrate.sh` against the chosen Supabase project URL. Migrations are idempotent — running twice is safe.
 
+**Connection-string gotcha**: the `SUPABASE_DATABASE_URL` secret for each environment must use Supabase's **Session pooler** URL, not the **Direct connection** URL. GitHub Actions runners have no IPv6 connectivity, and direct connections to `db.<ref>.supabase.co:5432` are IPv6-only on the free tier. The pooler URL looks like `postgresql://postgres.<ref>:[password]@aws-0-<region>.pooler.supabase.com:5432/postgres` and is IPv4-reachable. Find it in: Supabase project → Project Settings → Database → Connection string → choose **Session pooler**.
+
 **Order of operations for a deploy that includes a migration**:
 1. Open PR with backend code + new migration file.
 2. Merge PR (do NOT deploy backend yet — Render is paused or manual).
