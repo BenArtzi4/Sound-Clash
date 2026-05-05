@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { EndScreen } from "../components/EndScreen";
 import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useGameSounds } from "../hooks/useGameSounds";
@@ -126,12 +127,17 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   });
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
 
+  if (game.status === "ended") {
+    return (
+      <main className={styles.shell}>
+        <EndScreen teams={teams} gameCode={gameCode} />
+      </main>
+    );
+  }
+
   let bannerClass = styles.banner;
   let bannerText = "Waiting for the host…";
-  if (game.status === "ended") {
-    bannerClass = `${styles.banner} ${styles.bannerEnded}`;
-    bannerText = "Game over";
-  } else if (lockedTeam) {
+  if (lockedTeam) {
     bannerClass = `${styles.banner} ${styles.bannerLocked}`;
     bannerText = `${lockedTeam.name} buzzed in!`;
   } else if (game.status === "playing") {

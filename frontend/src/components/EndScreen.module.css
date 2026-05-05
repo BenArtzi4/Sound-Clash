@@ -1,0 +1,413 @@
+.shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.5rem;
+  padding: 2.5rem 1.5rem 3rem;
+  text-align: center;
+  overflow: hidden;
+}
+
+.confettiLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.confettiPiece {
+  position: absolute;
+  top: -20px;
+  border-radius: 2px;
+  animation-name: confetti-fall;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  opacity: 0.85;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(0, 110vh, 0) rotate(var(--rotate-end, 720deg));
+    opacity: 0;
+  }
+}
+
+.heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  animation: heading-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes heading-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(2.2rem, 6vw, 4rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 35%, #f59e0b 70%, #b45309 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 6px 18px rgba(245, 158, 11, 0.18);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--color-text-dim);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.codeText {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.dot {
+  color: var(--color-text-mute);
+}
+
+.podium {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1.35fr 1fr;
+  gap: 1rem;
+  align-items: end;
+  width: 100%;
+  max-width: 920px;
+}
+
+.podiumCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 1.5rem 1rem;
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  min-height: 200px;
+  opacity: 0;
+  animation-fill-mode: forwards;
+}
+
+.podiumPlaceholder {
+  /* keep grid alignment when fewer than 3 teams */
+  visibility: hidden;
+}
+
+.gold {
+  background: linear-gradient(160deg, #fef3c7 0%, #fde68a 50%, #fbbf24 100%);
+  border-color: #f59e0b;
+  min-height: 260px;
+  transform: translateY(-24px);
+  box-shadow:
+    0 18px 50px rgba(245, 158, 11, 0.35),
+    0 0 0 6px rgba(245, 158, 11, 0.18);
+  animation:
+    podium-rise 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 700ms forwards,
+    gold-glow 2.4s ease-in-out 1300ms infinite alternate;
+}
+
+.silver {
+  background: linear-gradient(160deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
+  border-color: #94a3b8;
+  min-height: 230px;
+  animation: podium-rise 550ms cubic-bezier(0.34, 1.56, 0.64, 1) 350ms forwards;
+}
+
+.bronze {
+  background: linear-gradient(160deg, #fef3c7 0%, #fbbf24 30%, #d97706 100%);
+  border-color: #b45309;
+  min-height: 200px;
+  animation: podium-rise 500ms cubic-bezier(0.34, 1.56, 0.64, 1) 0ms forwards;
+}
+
+@keyframes podium-rise {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gold {
+  /* gold uses translateY(-24px) at rest; keyframes for rise + glow override correctly */
+}
+
+@keyframes gold-glow {
+  0% {
+    box-shadow:
+      0 18px 50px rgba(245, 158, 11, 0.35),
+      0 0 0 6px rgba(245, 158, 11, 0.18);
+  }
+  100% {
+    box-shadow:
+      0 24px 60px rgba(245, 158, 11, 0.55),
+      0 0 0 10px rgba(245, 158, 11, 0.28);
+  }
+}
+
+.crown {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%);
+  color: #92400e;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  font-weight: 900;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.medal {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.gold .medal {
+  background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+  font-size: 2rem;
+  width: 72px;
+  height: 72px;
+}
+
+.silver .medal {
+  background: linear-gradient(135deg, #94a3b8 0%, #475569 100%);
+}
+
+.bronze .medal {
+  background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
+}
+
+.teamName {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.gold .teamName {
+  font-size: 1.55rem;
+  color: #78350f;
+}
+
+.teamScore {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  font-size: 2rem;
+  color: #0f172a;
+}
+
+.gold .teamScore {
+  font-size: 2.6rem;
+  color: #78350f;
+}
+
+.silver .teamScore {
+  color: #1e293b;
+}
+
+.bronze .teamScore {
+  color: #78350f;
+}
+
+.scoreUnit {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.gold .scoreUnit {
+  font-size: 1rem;
+}
+
+.winnerLabel {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  font-weight: 800;
+  color: #92400e;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.rest {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 720px;
+}
+
+.restTitle {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--color-text-dim);
+  text-align: center;
+  margin: 0 0 1rem;
+}
+
+.restList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  counter-reset: rest 3;
+}
+
+.restRow {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  counter-increment: rest;
+}
+
+.restRow::before {
+  content: counter(rest) ".";
+  font-weight: 800;
+  color: var(--color-text-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.restName {
+  font-weight: 700;
+  color: var(--color-text);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.restScore {
+  font-weight: 800;
+  color: var(--color-primary-strong);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+}
+
+.thanks {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--color-text-dim);
+  font-weight: 600;
+  animation: heading-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1) 1500ms backwards;
+}
+
+.noTeams {
+  margin: 1rem 0;
+  color: var(--color-text-dim);
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding: 1.5rem 1rem 2rem;
+    gap: 1.5rem;
+  }
+  .podium {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  .gold {
+    transform: none;
+    order: -1;
+    min-height: 200px;
+  }
+  .silver,
+  .bronze {
+    min-height: 160px;
+  }
+  .gold .medal {
+    width: 60px;
+    height: 60px;
+    font-size: 1.7rem;
+  }
+  .gold .teamName {
+    font-size: 1.3rem;
+  }
+  .gold .teamScore {
+    font-size: 2rem;
+  }
+  .podiumPlaceholder {
+    display: none;
+  }
+}
