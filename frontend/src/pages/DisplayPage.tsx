@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
+import { useGameSounds } from "../hooks/useGameSounds";
 import styles from "./DisplayPage.module.css";
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
@@ -57,6 +58,44 @@ function DisplayEntry() {
 
 function DisplayBoard({ gameCode }: { gameCode: string }) {
   const { state, status } = useGameChannel(gameCode);
+  const sounds = useGameSounds();
+  const [soundOn, setSoundOn] = useState(false);
+  const prevBuzzedRef = useRef<string | null | undefined>(undefined);
+  const prevScoresRef = useRef<Record<string, number>>({});
+  const prevRoundRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!soundOn || !state) return;
+    const game = state.game;
+
+    if (prevBuzzedRef.current !== undefined) {
+      if (
+        game.buzzed_team_id != null &&
+        prevBuzzedRef.current !== game.buzzed_team_id
+      ) {
+        sounds.playBuzz();
+      }
+    }
+    prevBuzzedRef.current = game.buzzed_team_id ?? null;
+
+    if (prevRoundRef.current !== undefined && game.round_number > prevRoundRef.current) {
+      sounds.playRoundStart();
+    }
+    prevRoundRef.current = game.round_number;
+
+    let scoreIncreased = false;
+    for (const t of state.teams.values()) {
+      const prev = prevScoresRef.current[t.id];
+      if (prev !== undefined && t.score > prev) scoreIncreased = true;
+      prevScoresRef.current[t.id] = t.score;
+    }
+    if (scoreIncreased) sounds.playAward();
+  }, [state, sounds, soundOn]);
+
+  function toggleSound() {
+    sounds.prime();
+    setSoundOn((s) => !s);
+  }
 
   if (status === "gone") {
     return (
@@ -103,7 +142,18 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     <main className={styles.shell}>
       <header className={styles.header}>
         <h1>Sound Clash</h1>
-        <span className={styles.code}>{gameCode}</span>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={`${styles.soundToggle} ${soundOn ? styles.soundOn : ""}`}
+            onClick={toggleSound}
+            aria-pressed={soundOn}
+          >
+            <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
+            <span>{soundOn ? "Sound on" : "Enable sound"}</span>
+          </button>
+          <span className={styles.code}>{gameCode}</span>
+        </div>
       </header>
 
       <div className={bannerClass} role="status" aria-live="polite">

@@ -80,6 +80,48 @@
   box-shadow: var(--shadow-md);
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.soundToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: #ffffff;
+  color: var(--color-text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    color 200ms ease;
+}
+
+.soundToggle:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+
+.soundOn {
+  border-color: var(--color-success);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.soundOn:hover {
+  border-color: var(--color-success);
+  background: rgba(16, 185, 129, 0.18);
+  color: #047857;
+}
+
 .header h1 {
   font-size: 2rem;
   background: linear-gradient(135deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%);

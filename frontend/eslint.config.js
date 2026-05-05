@@ -38,6 +38,7 @@ export default [
         HTMLInputElement: "readonly",
         KeyboardEvent: "readonly",
         Event: "readonly",
+        AudioContext: "readonly",
         React: "readonly",
       },
     },

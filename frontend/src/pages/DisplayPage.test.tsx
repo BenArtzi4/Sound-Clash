@@ -124,4 +124,36 @@ describe("DisplayPage board", () => {
     });
     expect(screen.getByText(/game over/i)).toBeInTheDocument();
   });
+
+  it("renders an empty-board hint when no teams have joined", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting" }),
+      teams: [],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByText(/waiting for teams/i)).toBeInTheDocument();
+  });
+
+  it("toggles the sound button between off and on states", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting" }),
+      teams: [],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByRole("button", { name: /enable sound/i });
+    expect(btn).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(btn);
+    expect(screen.getByRole("button", { name: /sound on/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
 });
