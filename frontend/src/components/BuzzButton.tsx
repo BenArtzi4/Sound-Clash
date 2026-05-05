@@ -44,11 +44,7 @@ export function BuzzButton({
   };
 
   const toneClass =
-    tone === "winner"
-      ? styles.toneWinner
-      : tone === "locked-other"
-        ? styles.toneLockedOther
-        : "";
+    tone === "winner" ? styles.toneWinner : tone === "locked-other" ? styles.toneLockedOther : "";
 
   const className = [styles.button, pressed ? styles.pressed : "", toneClass]
     .filter(Boolean)

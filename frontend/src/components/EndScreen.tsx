@@ -34,7 +34,15 @@ function generateConfetti(): ConfettiPiece[] {
   return pieces;
 }
 
-function CountUp({ value, duration = 900, delay = 0 }: { value: number; duration?: number; delay?: number }) {
+function CountUp({
+  value,
+  duration = 900,
+  delay = 0,
+}: {
+  value: number;
+  duration?: number;
+  delay?: number;
+}) {
   const [display, setDisplay] = useState(0);
   useEffect(() => {
     let raf = 0;
@@ -75,11 +83,49 @@ function TrophyIcon() {
         stroke="#92400e"
         strokeWidth="1.5"
       />
-      <path d="M14 12c-3 0-5 2-5 5s3 6 9 7" fill="none" stroke="#92400e" strokeWidth="2" strokeLinecap="round" />
-      <path d="M50 12c3 0 5 2 5 5s-3 6-9 7" fill="none" stroke="#92400e" strokeWidth="2" strokeLinecap="round" />
-      <rect x="28" y="32" width="8" height="10" fill="url(#trophy-grad)" stroke="#92400e" strokeWidth="1.5" />
-      <rect x="20" y="42" width="24" height="6" rx="1" fill="url(#trophy-grad)" stroke="#92400e" strokeWidth="1.5" />
-      <rect x="16" y="48" width="32" height="6" rx="1" fill="url(#trophy-grad)" stroke="#92400e" strokeWidth="1.5" />
+      <path
+        d="M14 12c-3 0-5 2-5 5s3 6 9 7"
+        fill="none"
+        stroke="#92400e"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M50 12c3 0 5 2 5 5s-3 6-9 7"
+        fill="none"
+        stroke="#92400e"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <rect
+        x="28"
+        y="32"
+        width="8"
+        height="10"
+        fill="url(#trophy-grad)"
+        stroke="#92400e"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="20"
+        y="42"
+        width="24"
+        height="6"
+        rx="1"
+        fill="url(#trophy-grad)"
+        stroke="#92400e"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="16"
+        y="48"
+        width="32"
+        height="6"
+        rx="1"
+        fill="url(#trophy-grad)"
+        stroke="#92400e"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
@@ -126,9 +172,7 @@ export function EndScreen({ teams, gameCode }: Props) {
         <p className={styles.subtitle}>
           Game <span className={styles.codeText}>{gameCode}</span>
           {teamCount > 0 ? <span className={styles.dot}>·</span> : null}
-          {teamCount > 0
-            ? `${teamCount} ${teamCount === 1 ? "team" : "teams"}`
-            : null}
+          {teamCount > 0 ? `${teamCount} ${teamCount === 1 ? "team" : "teams"}` : null}
         </p>
       </header>
 
