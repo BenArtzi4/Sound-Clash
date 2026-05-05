@@ -41,3 +41,31 @@ async def test_health_supabase_degraded_on_failure(client, monkeypatch) -> None:
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["supabase"] == "degraded"
+
+
+def test_sentry_install_calls_init_when_dsn_set(monkeypatch) -> None:
+    """Verify the production install path actually calls sentry_sdk.init."""
+    import sys
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("SENTRY_DSN_BACKEND", "https://example@sentry.test/1")
+
+    from app import config as config_module
+
+    config_module.get_settings.cache_clear()
+
+    captured: dict[str, object] = {}
+
+    def fake_init(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    fake_module = type(sys)("sentry_sdk")
+    fake_module.init = fake_init  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake_module)
+
+    from app.middleware import sentry as sentry_module
+
+    sentry_module.install()
+    assert captured.get("dsn") == "https://example@sentry.test/1"
+
+    config_module.get_settings.cache_clear()
