@@ -34,11 +34,12 @@ class FakeAudioContext {
   });
   close = vi.fn(async () => {});
   constructor() {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     lastCtx = this;
   }
   createOscillator(): FakeOsc {
     oscCount += 1;
-    const osc: FakeOsc = {
+    return {
       type: "sine",
       frequency: {
         value: 0,
@@ -49,7 +50,6 @@ class FakeAudioContext {
       start: vi.fn(),
       stop: vi.fn(),
     };
-    return osc;
   }
   createGain(): FakeGain {
     return {
