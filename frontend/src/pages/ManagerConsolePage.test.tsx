@@ -36,18 +36,16 @@ interface MockHandle {
 let onReadyHandler: (() => void) | null = null;
 
 vi.mock("../components/YouTubePlayer", () => ({
-  YouTubePlayer: forwardRef<MockHandle, { onReady?: () => void }>(
-    (props, ref) => {
-      onReadyHandler = props.onReady ?? null;
-      useImperativeHandle(ref, () => ({
-        loadVideoById: vi.fn(),
-        pause: vi.fn(),
-        play: vi.fn(),
-        stop: vi.fn(),
-      }));
-      return <div data-testid="yt-player" />;
-    },
-  ),
+  YouTubePlayer: forwardRef<MockHandle, { onReady?: () => void }>((props, ref) => {
+    onReadyHandler = props.onReady ?? null;
+    useImperativeHandle(ref, () => ({
+      loadVideoById: vi.fn(),
+      pause: vi.fn(),
+      play: vi.fn(),
+      stop: vi.fn(),
+    }));
+    return <div data-testid="yt-player" />;
+  }),
 }));
 
 import { ApiError, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
@@ -85,10 +83,7 @@ function renderConsole() {
     <MemoryRouter initialEntries={["/manager/game/ABCDEF"]}>
       <AuthProvider>
         <Routes>
-          <Route
-            path="/manager/game/:gameCode"
-            element={<ManagerConsolePage />}
-          />
+          <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
           <Route path="/manager/login" element={<div>login page</div>} />
         </Routes>
       </AuthProvider>
@@ -160,14 +155,10 @@ describe("ManagerConsolePage", () => {
     act(() => {
       onReadyHandler?.();
     });
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: /start game/i }));
     await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF"));
-    await waitFor(() =>
-      expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
   });
 
   it("logs out and redirects on 401 from selectSong", async () => {
@@ -176,9 +167,7 @@ describe("ManagerConsolePage", () => {
       teams: [],
       rounds: [],
     });
-    vi.mocked(selectSong).mockRejectedValueOnce(
-      new ApiError("unauthorized", "no", 401),
-    );
+    vi.mocked(selectSong).mockRejectedValueOnce(new ApiError("unauthorized", "no", 401));
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -187,9 +176,7 @@ describe("ManagerConsolePage", () => {
       onReadyHandler?.();
     });
     fireEvent.click(screen.getByRole("button", { name: /start game/i }));
-    await waitFor(() =>
-      expect(screen.getByText("login page")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
   });
 
   it("award button enables only when a team is buzzed", async () => {
@@ -207,9 +194,7 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     expect(screen.getByText(/alice buzzed in/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /award points/i }),
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: /award points/i })).toBeEnabled();
   });
 
   it("calls awardPoints with current checkbox state", async () => {
@@ -289,9 +274,7 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     fireEvent.click(screen.getByRole("button", { name: /kick/i }));
-    await waitFor(() =>
-      expect(kickTeam).toHaveBeenCalledWith("ABCDEF", "t1"),
-    );
+    await waitFor(() => expect(kickTeam).toHaveBeenCalledWith("ABCDEF", "t1"));
   });
 
   it("end button calls api.endGame", async () => {
@@ -324,8 +307,6 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-    await waitFor(() =>
-      expect(screen.getByText("login page")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
   });
 });

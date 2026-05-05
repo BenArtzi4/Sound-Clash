@@ -9,13 +9,7 @@ interface Props {
   onBuzz: () => void;
 }
 
-export function BuzzButton({
-  disabled,
-  isBuzzing,
-  label = "BUZZ",
-  subtitle,
-  onBuzz,
-}: Props) {
+export function BuzzButton({ disabled, isBuzzing, label = "BUZZ", subtitle, onBuzz }: Props) {
   const [pressed, setPressed] = useState(false);
 
   useEffect(() => {

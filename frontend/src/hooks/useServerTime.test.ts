@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  _resetServerTime,
-  observeServerTime,
-  serverTimeNow,
-  useServerTime,
-} from "./useServerTime";
+import { _resetServerTime, observeServerTime, serverTimeNow, useServerTime } from "./useServerTime";
 
 beforeEach(() => {
   _resetServerTime();

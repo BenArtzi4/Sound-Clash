@@ -6,6 +6,7 @@ vi.mock("../lib/supabase", async () => {
   return { supabase: mod.supabaseMock };
 });
 
+import type { ActiveGame, GameRound, Team } from "../lib/types";
 import { gameReducer, useGameChannel } from "./useGameChannel";
 import {
   channelMock,
@@ -36,10 +37,7 @@ describe("gameReducer", () => {
       type: "HYDRATE",
       game,
       teams: [makeTeam({ id: "t1" })],
-      rounds: [
-        makeRound({ id: "r2", round_number: 2 }),
-        makeRound({ id: "r1", round_number: 1 }),
-      ],
+      rounds: [makeRound({ id: "r2", round_number: 2 }), makeRound({ id: "r1", round_number: 1 })],
     });
     expect(next?.game).toBe(game);
     expect(next?.teams.get("t1")?.id).toBe("t1");
@@ -76,7 +74,7 @@ describe("gameReducer", () => {
     });
     const next = gameReducer(start, {
       type: "GAME_CHANGE",
-      payload: makePayload("active_games", "DELETE", {
+      payload: makePayload<ActiveGame>("active_games", "DELETE", {
         old: { game_code: "ABCDEF" },
       }),
     });
@@ -107,7 +105,9 @@ describe("gameReducer", () => {
 
     state = gameReducer(state, {
       type: "TEAM_CHANGE",
-      payload: makePayload("game_teams", "DELETE", { old: { id: "t1" } }),
+      payload: makePayload<Team>("game_teams", "DELETE", {
+        old: { id: "t1" },
+      }),
     });
     expect(state?.teams.has("t1")).toBe(false);
   });
@@ -163,7 +163,9 @@ describe("gameReducer", () => {
 
     state = gameReducer(state, {
       type: "ROUND_CHANGE",
-      payload: makePayload("game_rounds", "DELETE", { old: { id: "r1" } }),
+      payload: makePayload<GameRound>("game_rounds", "DELETE", {
+        old: { id: "r1" },
+      }),
     });
     expect(state?.rounds.find((r) => r.id === "r1")).toBeUndefined();
     expect(state?.currentRound).toBeNull();
@@ -280,7 +282,9 @@ describe("useGameChannel - subscription", () => {
     });
     act(() => {
       fireGame(
-        makePayload("active_games", "DELETE", { old: { game_code: "ABCDEF" } }),
+        makePayload<ActiveGame>("active_games", "DELETE", {
+          old: { game_code: "ABCDEF" },
+        }),
       );
     });
     await waitFor(() => expect(result.current.status).toBe("gone"));

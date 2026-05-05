@@ -35,8 +35,6 @@ describe("App router", () => {
   it("redirects unknown paths home", () => {
     window.history.pushState({}, "", "/totally-bogus");
     render(<App />);
-    expect(
-      screen.getByRole("link", { name: /host a game/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /host a game/i })).toBeInTheDocument();
   });
 });

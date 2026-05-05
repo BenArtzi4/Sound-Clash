@@ -16,16 +16,17 @@ export default defineConfig({
         "**/*.config.{ts,js}",
         "src/main.tsx",
         "src/test-setup.ts",
+        "src/test/**",
+        "src/vite-env.d.ts",
         "**/dist/**",
         "**/node_modules/**",
       ],
-      // Phase 1 starts low; ratchet up at end of each phase per
-      // ../docs/testing-strategy.md §5
+      // Phase 5 ratchet per ../docs/testing-strategy.md §5
       thresholds: {
-        lines: 0,
-        branches: 0,
-        functions: 0,
-        statements: 0,
+        lines: 85,
+        branches: 80,
+        functions: 85,
+        statements: 85,
       },
     },
   },

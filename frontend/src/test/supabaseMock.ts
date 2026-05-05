@@ -1,10 +1,5 @@
 import { vi } from "vitest";
-import type {
-  ActiveGame,
-  GameRound,
-  PostgresChangePayload,
-  Team,
-} from "../lib/types";
+import type { ActiveGame, GameRound, PostgresChangePayload, Team } from "../lib/types";
 
 export type ChangeListener<T> = (payload: PostgresChangePayload<T>) => void;
 export type TableName = "active_games" | "game_teams" | "game_rounds";
@@ -30,11 +25,7 @@ export const channelMock = {
 };
 
 channelMock.on.mockImplementation(
-  (
-    _event: string,
-    opts: { table: TableName },
-    cb: ChangeListener<unknown>,
-  ) => {
+  (_event: string, opts: { table: TableName }, cb: ChangeListener<unknown>) => {
     state.listeners[opts.table].push(cb);
     return channelMock;
   },
@@ -57,9 +48,7 @@ function buildSelect(table: TableName) {
       return { data: null, error: null };
     }),
     single: vi.fn(async () => ({ data: null, error: null })),
-    then<T>(
-      onfulfilled?: (value: { data: unknown; error: unknown }) => T,
-    ): Promise<T> {
+    then<T>(onfulfilled?: (value: { data: unknown; error: unknown }) => T): Promise<T> {
       const data =
         table === "game_teams"
           ? state.hydrate.teams
@@ -92,11 +81,7 @@ export function resetSupabaseMock(): void {
   channelMock.subscribe.mockClear();
   channelMock.unsubscribe.mockClear();
   channelMock.on.mockImplementation(
-    (
-      _event: string,
-      opts: { table: TableName },
-      cb: ChangeListener<unknown>,
-    ) => {
+    (_event: string, opts: { table: TableName }, cb: ChangeListener<unknown>) => {
       state.listeners[opts.table].push(cb);
       return channelMock;
     },
@@ -139,21 +124,15 @@ export async function fireStatus(status: string): Promise<void> {
 }
 
 export function fireGame(payload: PostgresChangePayload<ActiveGame>): void {
-  state.listeners.active_games.forEach((cb) =>
-    cb(payload as PostgresChangePayload<unknown>),
-  );
+  state.listeners.active_games.forEach((cb) => cb(payload as PostgresChangePayload<unknown>));
 }
 
 export function fireTeam(payload: PostgresChangePayload<Team>): void {
-  state.listeners.game_teams.forEach((cb) =>
-    cb(payload as PostgresChangePayload<unknown>),
-  );
+  state.listeners.game_teams.forEach((cb) => cb(payload as PostgresChangePayload<unknown>));
 }
 
 export function fireRound(payload: PostgresChangePayload<GameRound>): void {
-  state.listeners.game_rounds.forEach((cb) =>
-    cb(payload as PostgresChangePayload<unknown>),
-  );
+  state.listeners.game_rounds.forEach((cb) => cb(payload as PostgresChangePayload<unknown>));
 }
 
 export function makeActiveGame(overrides: Partial<ActiveGame> = {}): ActiveGame {

@@ -1,6 +1,7 @@
 import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
 import type { ReactNode } from "react";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./context/useAuth";
 import { DisplayPage } from "./pages/DisplayPage";
 import { HomePage } from "./pages/HomePage";
 import { JoinTeamPage } from "./pages/JoinTeamPage";

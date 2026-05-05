@@ -15,11 +15,7 @@
 .cover {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    135deg,
-    var(--color-bg-elev) 0%,
-    #000 60%
-  );
+  background: linear-gradient(135deg, var(--color-bg-elev) 0%, #000 60%);
   display: flex;
   align-items: center;
   justify-content: center;

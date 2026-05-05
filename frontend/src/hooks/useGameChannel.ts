@@ -10,25 +10,14 @@ import type {
 } from "../lib/types";
 import { observeServerTime } from "./useServerTime";
 
-export type ChannelStatus =
-  | "idle"
-  | "connecting"
-  | "subscribed"
-  | "reconnecting"
-  | "gone";
+export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting" | "gone";
 
-export function gameReducer(
-  state: GameState | null,
-  action: GameAction,
-): GameState | null {
+export function gameReducer(state: GameState | null, action: GameAction): GameState | null {
   switch (action.type) {
     case "HYDRATE": {
       const teams = new Map(action.teams.map((t) => [t.id, t]));
-      const rounds = [...action.rounds].sort(
-        (a, b) => a.round_number - b.round_number,
-      );
-      const currentRound =
-        rounds.find((r) => r.id === action.game.current_round_id) ?? null;
+      const rounds = [...action.rounds].sort((a, b) => a.round_number - b.round_number);
+      const currentRound = rounds.find((r) => r.id === action.game.current_round_id) ?? null;
       return { game: action.game, teams, rounds, currentRound };
     }
     case "GAME_CHANGE": {
@@ -36,8 +25,7 @@ export function gameReducer(
       const { eventType, new: row } = action.payload;
       if (eventType === "DELETE") return null;
       const game = row as ActiveGame;
-      const currentRound =
-        state.rounds.find((r) => r.id === game.current_round_id) ?? null;
+      const currentRound = state.rounds.find((r) => r.id === game.current_round_id) ?? null;
       return { ...state, game, currentRound };
     }
     case "TEAM_CHANGE": {
@@ -62,8 +50,7 @@ export function gameReducer(
         const oldRow = action.payload.old as Partial<GameRound>;
         if (!oldRow.id) return state;
         const rounds = state.rounds.filter((r) => r.id !== oldRow.id);
-        const currentRound =
-          state.currentRound?.id === oldRow.id ? null : state.currentRound;
+        const currentRound = state.currentRound?.id === oldRow.id ? null : state.currentRound;
         return { ...state, rounds, currentRound };
       }
       const round = action.payload.new as GameRound;
@@ -71,17 +58,13 @@ export function gameReducer(
         const exists = state.rounds.some((r) => r.id === round.id);
         const merged = exists
           ? state.rounds.map((r) => (r.id === round.id ? round : r))
-          : [...state.rounds, round].sort(
-              (a, b) => a.round_number - b.round_number,
-            );
-        const currentRound =
-          state.game.current_round_id === round.id ? round : state.currentRound;
+          : [...state.rounds, round].sort((a, b) => a.round_number - b.round_number);
+        const currentRound = state.game.current_round_id === round.id ? round : state.currentRound;
         return { ...state, rounds: merged, currentRound };
       }
       // UPDATE
       const rounds = state.rounds.map((r) => (r.id === round.id ? round : r));
-      const currentRound =
-        state.currentRound?.id === round.id ? round : state.currentRound;
+      const currentRound = state.currentRound?.id === round.id ? round : state.currentRound;
       return { ...state, rounds, currentRound };
     }
     case "GAME_DELETED":
@@ -111,13 +94,9 @@ export function useGameChannel(gameCode: string): {
         opts: { event: string; schema: string; table: string; filter: string },
         cb: (payload: PostgresChangePayload<unknown>) => void,
       ) => LooseChannel;
-      subscribe: (
-        cb: (status: string) => void | Promise<void>,
-      ) => LooseChannel;
+      subscribe: (cb: (status: string) => void | Promise<void>) => LooseChannel;
     };
-    const channel = (
-      supabase.channel(`game:${gameCode}`) as unknown as LooseChannel
-    )
+    const channel = (supabase.channel(`game:${gameCode}`) as unknown as LooseChannel)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "active_games", filter },
@@ -151,10 +130,7 @@ export function useGameChannel(gameCode: string): {
         if (subStatus === "SUBSCRIBED") {
           setStatus("subscribed");
           void hydrate();
-        } else if (
-          subStatus === "CHANNEL_ERROR" ||
-          subStatus === "TIMED_OUT"
-        ) {
+        } else if (subStatus === "CHANNEL_ERROR" || subStatus === "TIMED_OUT") {
           setStatus("reconnecting");
         } else if (subStatus === "CLOSED") {
           setStatus("idle");
@@ -164,11 +140,7 @@ export function useGameChannel(gameCode: string): {
     async function hydrate() {
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
-          supabase
-            .from("active_games")
-            .select("*")
-            .eq("game_code", gameCode)
-            .maybeSingle(),
+          supabase.from("active_games").select("*").eq("game_code", gameCode).maybeSingle(),
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);

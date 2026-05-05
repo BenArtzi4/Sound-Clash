@@ -76,9 +76,7 @@ export function TeamGameplayPage() {
   const game = state?.game;
   const lockedByMe = buzzer.lockedByMe;
   const lockedTeam =
-    game?.buzzed_team_id != null
-      ? state?.teams.get(game.buzzed_team_id) ?? null
-      : null;
+    game?.buzzed_team_id != null ? (state?.teams.get(game.buzzed_team_id) ?? null) : null;
 
   let bannerClass = styles.statusBanner;
   let bannerText = "Waiting for the host to start…";
@@ -99,10 +97,7 @@ export function TeamGameplayPage() {
   }
 
   const buzzDisabled =
-    !state ||
-    status !== "subscribed" ||
-    game?.status !== "playing" ||
-    buzzer.isLocked;
+    !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
 
   return (
     <main className={styles.shell}>
@@ -111,9 +106,7 @@ export function TeamGameplayPage() {
           <span className={styles.teamName}>{stored.name}</span>
           <span className={styles.gameCode}>{gameCode}</span>
         </div>
-        <div className="muted">
-          {status === "subscribed" ? "Connected" : "Connecting…"}
-        </div>
+        <div className="muted">{status === "subscribed" ? "Connected" : "Connecting…"}</div>
       </header>
 
       <div className={bannerClass}>{bannerText}</div>
@@ -124,9 +117,7 @@ export function TeamGameplayPage() {
           isBuzzing={buzzer.isBuzzing}
           label={lockedByMe ? "LOCKED" : "BUZZ"}
           subtitle={
-            game?.status === "playing" && !buzzer.isLocked
-              ? "Tap or press space"
-              : undefined
+            game?.status === "playing" && !buzzer.isLocked ? "Tap or press space" : undefined
           }
           onBuzz={() => void buzzer.buzz()}
         />

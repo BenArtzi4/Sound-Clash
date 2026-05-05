@@ -54,9 +54,7 @@ export function JoinTeamPage() {
       <form className={styles.card} onSubmit={handleSubmit}>
         <div>
           <h1 className={styles.title}>Join a team</h1>
-          <p className={styles.subtitle}>
-            Enter the code your host shared with you.
-          </p>
+          <p className={styles.subtitle}>Enter the code your host shared with you.</p>
         </div>
 
         <div className={styles.field}>
@@ -67,9 +65,7 @@ export function JoinTeamPage() {
             id="game-code"
             className={styles.codeInput}
             value={code}
-            onChange={(e) =>
-              setCode(e.target.value.toUpperCase().slice(0, 6))
-            }
+            onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
             placeholder="ABCDEF"
             autoComplete="off"
             inputMode="text"
@@ -98,11 +94,7 @@ export function JoinTeamPage() {
           <Link to="/" className="btn btn-ghost">
             Cancel
           </Link>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={!submittable}
-          >
+          <button type="submit" className="btn btn-primary" disabled={!submittable}>
             {busy ? "Joining…" : "Join game"}
           </button>
         </div>

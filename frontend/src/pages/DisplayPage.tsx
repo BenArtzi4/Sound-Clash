@@ -28,9 +28,7 @@ function DisplayEntry() {
     <main className={styles.entry}>
       <form className={styles.entryCard} onSubmit={handleSubmit}>
         <h1>Display</h1>
-        <p className="muted">
-          Enter the game code to open a read-only scoreboard.
-        </p>
+        <p className="muted">Enter the game code to open a read-only scoreboard.</p>
         <input
           className={styles.entryInput}
           value={code}
@@ -58,9 +56,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   if (status === "gone") {
     return (
       <main className={styles.shell}>
-        <div className={`${styles.banner} ${styles.bannerEnded}`}>
-          Game has ended or expired.
-        </div>
+        <div className={`${styles.banner} ${styles.bannerEnded}`}>Game has ended or expired.</div>
       </main>
     );
   }
@@ -78,8 +74,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     if (b.score !== a.score) return b.score - a.score;
     return a.joined_at.localeCompare(b.joined_at);
   });
-  const lockedTeam =
-    game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
+  const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
 
   let bannerClass = styles.banner;
   let bannerText = "Waiting for the host…";
