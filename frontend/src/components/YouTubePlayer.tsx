@@ -11,6 +11,7 @@ export interface YouTubePlayerHandle {
 interface Props {
   hideOverlay?: boolean;
   onReady?: () => void;
+  onError?: (code: number) => void;
 }
 
 interface YTPlayer {
@@ -19,6 +20,10 @@ interface YTPlayer {
   playVideo: () => void;
   stopVideo: () => void;
   destroy: () => void;
+}
+
+interface YTErrorEvent {
+  data: number;
 }
 
 interface YTNamespace {
@@ -30,6 +35,7 @@ interface YTNamespace {
       playerVars?: Record<string, number | string>;
       events?: {
         onReady?: () => void;
+        onError?: (event: YTErrorEvent) => void;
       };
     },
   ) => YTPlayer;
@@ -62,12 +68,13 @@ function loadApi(): Promise<YTNamespace> {
 }
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
-  { hideOverlay, onReady },
+  { hideOverlay, onReady, onError },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [errorCode, setErrorCode] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,8 +93,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         },
         events: {
           onReady: () => {
+            setErrorCode(null);
             setLoaded(true);
             onReady?.();
+          },
+          onError: (event) => {
+            setErrorCode(event.data);
+            onError?.(event.data);
           },
         },
       });
@@ -97,7 +109,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [onReady]);
+  }, [onReady, onError]);
 
   useImperativeHandle(
     ref,
@@ -115,11 +127,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     [],
   );
 
+  const overlayHidden = hideOverlay && loaded && errorCode === null;
   return (
     <div className={styles.wrapper}>
       <div ref={containerRef} className={styles.player} />
-      <div className={`${styles.cover} ${hideOverlay && loaded ? styles.coverHidden : ""}`}>
-        <span className={styles.loading}>{loaded ? "Ready" : "Loading player..."}</span>
+      <div
+        className={`${styles.cover} ${overlayHidden ? styles.coverHidden : ""}`}
+        role={errorCode !== null ? "alert" : undefined}
+      >
+        {errorCode !== null ? (
+          <span className={styles.error}>Video unavailable — manager can pick a new song.</span>
+        ) : (
+          <span className={styles.loading}>{loaded ? "Ready" : "Loading player..."}</span>
+        )}
       </div>
     </div>
   );

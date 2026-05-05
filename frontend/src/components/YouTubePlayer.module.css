@@ -37,3 +37,10 @@
   color: rgba(255, 255, 255, 0.65);
   font-size: 0.95rem;
 }
+
+.error {
+  color: #fecaca;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 0 1rem;
+}
