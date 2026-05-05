@@ -16,9 +16,7 @@ import styles from "./ManagerConsolePage.module.css";
 
 const ROUND_DURATION_SEC = 20;
 
-type PendingAction =
-  | { kind: "kick"; teamId: string; teamName: string }
-  | { kind: "end" };
+type PendingAction = { kind: "kick"; teamId: string; teamName: string } | { kind: "end" };
 
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
@@ -267,7 +265,8 @@ export function ManagerConsolePage() {
 
             {lockedTeam ? (
               <div className={styles.lockedBanner} role="status" aria-live="polite">
-                <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score the answer:
+                <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score the
+                answer:
               </div>
             ) : null}
 
@@ -290,9 +289,7 @@ export function ManagerConsolePage() {
                 />
                 <span>Artist</span>
               </label>
-              <label
-                className={`${styles.checkLabel} ${sourceCorrect ? styles.checkChecked : ""}`}
-              >
+              <label className={`${styles.checkLabel} ${sourceCorrect ? styles.checkChecked : ""}`}>
                 <input
                   type="checkbox"
                   checked={sourceCorrect}
@@ -332,10 +329,7 @@ export function ManagerConsolePage() {
         <div className={styles.column}>
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>Invite players</h2>
-            <QRPanel
-              gameCode={gameCode}
-              joinUrl={`${window.location.origin}/join/${gameCode}`}
-            />
+            <QRPanel gameCode={gameCode} joinUrl={`${window.location.origin}/join/${gameCode}`} />
           </section>
 
           <section className={styles.card}>
@@ -349,7 +343,8 @@ export function ManagerConsolePage() {
               <div className={styles.emptyTeams}>
                 <p className={styles.emptyTeamsTitle}>No teams have joined yet.</p>
                 <p className={styles.emptyTeamsHint}>
-                  Share <span className={styles.emptyTeamsCode}>{gameCode}</span> with players — they'll appear here once they join.
+                  Share <span className={styles.emptyTeamsCode}>{gameCode}</span> with players —
+                  they'll appear here once they join.
                 </p>
               </div>
             ) : (
@@ -361,9 +356,7 @@ export function ManagerConsolePage() {
                       <span>{t.score} pts</span>
                       <button
                         className="btn btn-danger"
-                        onClick={() =>
-                          setPending({ kind: "kick", teamId: t.id, teamName: t.name })
-                        }
+                        onClick={() => setPending({ kind: "kick", teamId: t.id, teamName: t.name })}
                         disabled={busy}
                       >
                         Kick

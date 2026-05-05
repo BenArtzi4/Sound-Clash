@@ -37,7 +37,9 @@ export function Scoreboard({ teams, buzzedTeamId }: Props) {
           <span />
         </div>
         <p className={styles.emptyTitle}>No teams have joined yet</p>
-        <p className={styles.emptyHint}>Share the game code — players will appear here as they join.</p>
+        <p className={styles.emptyHint}>
+          Share the game code — players will appear here as they join.
+        </p>
       </div>
     );
   }

@@ -97,10 +97,7 @@ export function TeamGameplayPage() {
     : ROUND_DURATION_SEC;
   const timerActive =
     game?.status === "playing" && lockedTeam == null && state?.currentRound != null;
-  const timerPct = Math.max(
-    0,
-    Math.min(100, (remainingSec / ROUND_DURATION_SEC) * 100),
-  );
+  const timerPct = Math.max(0, Math.min(100, (remainingSec / ROUND_DURATION_SEC) * 100));
 
   let bannerClass = styles.statusBanner;
   let bannerText = "Waiting for the host to start…";

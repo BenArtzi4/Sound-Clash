@@ -70,10 +70,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     const game = state.game;
 
     if (prevBuzzedRef.current !== undefined) {
-      if (
-        game.buzzed_team_id != null &&
-        prevBuzzedRef.current !== game.buzzed_team_id
-      ) {
+      if (game.buzzed_team_id != null && prevBuzzedRef.current !== game.buzzed_team_id) {
         sounds.playBuzz();
       }
     }
@@ -171,7 +168,8 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           <div className={styles.emptyBoard}>
             <p className={styles.emptyBoardTitle}>Waiting for teams</p>
             <p className={styles.emptyBoardHint}>
-              Share <span className={styles.emptyBoardCode}>{gameCode}</span> with players to get started.
+              Share <span className={styles.emptyBoardCode}>{gameCode}</span> with players to get
+              started.
             </p>
           </div>
         ) : (

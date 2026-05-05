@@ -26,8 +26,24 @@ export function ManagerIcon({ className }: IconProps) {
         strokeWidth="3.5"
         strokeLinecap="round"
       />
-      <line x1="32" y1="48" x2="32" y2="58" stroke="url(#mgr-grad)" strokeWidth="3.5" strokeLinecap="round" />
-      <line x1="22" y1="58" x2="42" y2="58" stroke="url(#mgr-grad)" strokeWidth="3.5" strokeLinecap="round" />
+      <line
+        x1="32"
+        y1="48"
+        x2="32"
+        y2="58"
+        stroke="url(#mgr-grad)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <line
+        x1="22"
+        y1="58"
+        x2="42"
+        y2="58"
+        stroke="url(#mgr-grad)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -58,9 +74,25 @@ export function TeamIcon({ className }: IconProps) {
         stroke="url(#team-grad)"
         strokeWidth="3.5"
       />
-      <line x1="28" y1="50" x2="36" y2="50" stroke="url(#team-grad)" strokeWidth="3" strokeLinecap="round" />
+      <line
+        x1="28"
+        y1="50"
+        x2="36"
+        y2="50"
+        stroke="url(#team-grad)"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
       <circle cx="26" cy="28" r="4" fill="url(#team-grad)" />
-      <line x1="30" y1="28" x2="30" y2="18" stroke="url(#team-grad)" strokeWidth="3" strokeLinecap="round" />
+      <line
+        x1="30"
+        y1="28"
+        x2="30"
+        y2="18"
+        stroke="url(#team-grad)"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
       <path
         d="M30 18c4 0 6 2 6 5"
         stroke="url(#team-grad)"
@@ -98,8 +130,24 @@ export function DisplayIcon({ className }: IconProps) {
         stroke="url(#disp-grad)"
         strokeWidth="3.5"
       />
-      <line x1="24" y1="50" x2="40" y2="50" stroke="url(#disp-grad)" strokeWidth="3.5" strokeLinecap="round" />
-      <line x1="32" y1="44" x2="32" y2="50" stroke="url(#disp-grad)" strokeWidth="3.5" strokeLinecap="round" />
+      <line
+        x1="24"
+        y1="50"
+        x2="40"
+        y2="50"
+        stroke="url(#disp-grad)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <line
+        x1="32"
+        y1="44"
+        x2="32"
+        y2="50"
+        stroke="url(#disp-grad)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
       <g fill="url(#disp-grad)">
         <rect x="14" y="30" width="4" height="8" rx="1.5" />
         <rect x="22" y="22" width="4" height="16" rx="1.5" />
