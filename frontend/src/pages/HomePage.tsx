@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
+import { DisplayIcon, ManagerIcon, TeamIcon } from "../components/RoleIcons";
 import styles from "./HomePage.module.css";
 
 export function HomePage() {
@@ -23,7 +24,7 @@ export function HomePage() {
             <section className={styles.actions}>
               <Link to="/manager/login" className={`${styles.roleBtn} ${styles.rolePrimary}`}>
                 <span className={styles.roleIcon} aria-hidden="true">
-                  🎮
+                  <ManagerIcon />
                 </span>
                 <span className={styles.roleContent}>
                   <span className={styles.roleTitle}>Manager Console</span>
@@ -33,7 +34,7 @@ export function HomePage() {
 
               <Link to="/join" className={`${styles.roleBtn} ${styles.roleSecondary}`}>
                 <span className={styles.roleIcon} aria-hidden="true">
-                  📱
+                  <TeamIcon />
                 </span>
                 <span className={styles.roleContent}>
                   <span className={styles.roleTitle}>Join as Team</span>
@@ -43,7 +44,7 @@ export function HomePage() {
 
               <Link to="/display" className={`${styles.roleBtn} ${styles.roleAccent}`}>
                 <span className={styles.roleIcon} aria-hidden="true">
-                  📺
+                  <DisplayIcon />
                 </span>
                 <span className={styles.roleContent}>
                   <span className={styles.roleTitle}>Display Screen</span>
