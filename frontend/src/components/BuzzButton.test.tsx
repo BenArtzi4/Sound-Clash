@@ -55,4 +55,15 @@ describe("BuzzButton", () => {
     fireEvent.keyDown(screen.getByTestId("buzz"), { key: "a" });
     expect(onBuzz).not.toHaveBeenCalled();
   });
+
+  it("reflects the tone prop via data-tone for styling", () => {
+    const { rerender } = render(
+      <BuzzButton disabled isBuzzing={false} tone="locked-other" onBuzz={() => {}} />,
+    );
+    expect(screen.getByTestId("buzz")).toHaveAttribute("data-tone", "locked-other");
+    rerender(<BuzzButton disabled isBuzzing={false} tone="winner" onBuzz={() => {}} />);
+    expect(screen.getByTestId("buzz")).toHaveAttribute("data-tone", "winner");
+    rerender(<BuzzButton disabled={false} isBuzzing={false} onBuzz={() => {}} />);
+    expect(screen.getByTestId("buzz")).toHaveAttribute("data-tone", "idle");
+  });
 });

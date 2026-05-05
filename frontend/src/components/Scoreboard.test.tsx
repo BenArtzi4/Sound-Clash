@@ -39,4 +39,21 @@ describe("Scoreboard", () => {
     const bob = screen.getByText("Bob").closest("li");
     expect(bob?.className).toMatch(/buzzed/);
   });
+
+  it("renders the empty-state hint with share-the-code guidance", () => {
+    render(<Scoreboard teams={[]} />);
+    expect(screen.getByText(/share the game code/i)).toBeInTheDocument();
+  });
+
+  it("flashes the row when a team's score changes", () => {
+    const initial: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 0 }];
+    const { rerender } = render(<Scoreboard teams={initial} />);
+    const row = screen.getByText("Alice").closest("li");
+    expect(row?.className).not.toMatch(/flashing/);
+
+    const updated: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 10 }];
+    rerender(<Scoreboard teams={updated} />);
+    const flashed = screen.getByText("Alice").closest("li");
+    expect(flashed?.className).toMatch(/flashing/);
+  });
 });
