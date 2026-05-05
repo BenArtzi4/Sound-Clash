@@ -45,11 +45,7 @@
 
 .buzzed {
   border-color: var(--color-accent);
-  background: linear-gradient(
-    90deg,
-    rgba(255, 90, 95, 0.18) 0%,
-    var(--color-card) 60%
-  );
+  background: linear-gradient(90deg, rgba(255, 90, 95, 0.18) 0%, var(--color-card) 60%);
 }
 
 .buzzed .rank,

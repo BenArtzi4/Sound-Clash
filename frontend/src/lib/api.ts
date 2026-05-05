@@ -30,11 +30,7 @@ interface RequestOptions {
   body?: unknown;
 }
 
-async function request<T>(
-  method: string,
-  path: string,
-  opts: RequestOptions = {},
-): Promise<T> {
+async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) {
     headers["Content-Type"] = "application/json";

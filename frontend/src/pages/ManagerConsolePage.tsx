@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Scoreboard } from "../components/Scoreboard";
-import {
-  YouTubePlayer,
-  type YouTubePlayerHandle,
-} from "../components/YouTubePlayer";
-import { useAuth } from "../context/AuthContext";
+import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
+import { useAuth } from "../context/useAuth";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { serverTimeNow } from "../hooks/useServerTime";
@@ -33,10 +30,7 @@ export function ManagerConsolePage() {
 
   // Tick once a second so the timer re-renders.
   useEffect(() => {
-    const id = window.setInterval(
-      () => setNow(serverTimeNow().getTime()),
-      1000,
-    );
+    const id = window.setInterval(() => setNow(serverTimeNow().getTime()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -67,10 +61,7 @@ export function ManagerConsolePage() {
       setCurrentSong(result.song);
       resetAwardChecks();
       if (player.ready) {
-        playerRef.current?.loadVideoById(
-          result.song.youtube_id,
-          result.song.start_time,
-        );
+        playerRef.current?.loadVideoById(result.song.youtube_id, result.song.start_time);
       } else {
         player.enqueueSong({
           youtube_id: result.song.youtube_id,
@@ -160,8 +151,7 @@ export function ManagerConsolePage() {
 
   const game = state.game;
   const teams = Array.from(state.teams.values());
-  const lockedTeam =
-    game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
+  const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
 
   const roundStartedAt = state.currentRound?.started_at;
   const elapsedSec = roundStartedAt
@@ -170,8 +160,7 @@ export function ManagerConsolePage() {
   const remainingSec = roundStartedAt
     ? Math.max(0, ROUND_DURATION_SEC - elapsedSec)
     : ROUND_DURATION_SEC;
-  const timerActive =
-    game.status === "playing" && lockedTeam == null && state.currentRound != null;
+  const timerActive = game.status === "playing" && lockedTeam == null && state.currentRound != null;
 
   const statusClass =
     game.status === "playing"
@@ -187,9 +176,7 @@ export function ManagerConsolePage() {
           <span className={styles.codeLabel}>Game code</span>
           <span className={styles.code}>{gameCode}</span>
         </div>
-        <span className={`${styles.statusPill} ${statusClass}`}>
-          {game.status}
-        </span>
+        <span className={`${styles.statusPill} ${statusClass}`}>{game.status}</span>
         <div>
           <span className="muted">
             Round {game.round_number} of {game.total_rounds}
@@ -226,19 +213,13 @@ export function ManagerConsolePage() {
               )}
 
               {timerActive ? (
-                <p
-                  className={`${styles.timer} ${
-                    remainingSec <= 5 ? styles.timerLow : ""
-                  }`}
-                >
+                <p className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}>
                   {remainingSec}s remaining
                 </p>
               ) : null}
 
               {lockedTeam ? (
-                <div className={styles.lockedBanner}>
-                  {lockedTeam.name} buzzed in.
-                </div>
+                <div className={styles.lockedBanner}>{lockedTeam.name} buzzed in.</div>
               ) : null}
 
               <div className={styles.checkRow}>
@@ -295,8 +276,7 @@ export function ManagerConsolePage() {
                     busy ||
                     game.status === "ended" ||
                     !player.ready ||
-                    (game.status === "playing" &&
-                      game.round_number >= game.total_rounds)
+                    (game.status === "playing" && game.round_number >= game.total_rounds)
                   }
                 >
                   {game.status === "waiting" ? "Start game" : "Next round"}

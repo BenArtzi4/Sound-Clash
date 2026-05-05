@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { BuzzResult, GameState } from "../lib/types";
 
@@ -15,13 +15,17 @@ export function useBuzzer(
 } {
   const [isBuzzing, setIsBuzzing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  // Synchronous in-flight guard so two rapid clicks can't both fire — React
+  // state updates aren't applied between the two calls within the same tick.
+  const inFlightRef = useRef(false);
 
   const isLocked = gameState?.game.buzzed_team_id != null;
   const lockedByMe = gameState?.game.buzzed_team_id === teamId;
   const isPlaying = gameState?.game.status === "playing";
 
   const buzz = useCallback(async () => {
-    if (isBuzzing || isLocked || !isPlaying) return;
+    if (inFlightRef.current || isLocked || !isPlaying) return;
+    inFlightRef.current = true;
     setIsBuzzing(true);
     setError(null);
     try {
@@ -36,9 +40,10 @@ export function useBuzzer(
     } catch (e) {
       setError(e instanceof Error ? e : new Error(String(e)));
     } finally {
+      inFlightRef.current = false;
       setIsBuzzing(false);
     }
-  }, [gameCode, teamId, isBuzzing, isLocked, isPlaying]);
+  }, [gameCode, teamId, isLocked, isPlaying]);
 
   return { buzz, isBuzzing, isLocked, lockedByMe, error };
 }

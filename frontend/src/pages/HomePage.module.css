@@ -4,12 +4,8 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-xl);
-  background: radial-gradient(
-      ellipse at top,
-      rgba(255, 90, 95, 0.08) 0%,
-      transparent 50%
-    ),
-    var(--color-bg);
+  background:
+    radial-gradient(ellipse at top, rgba(255, 90, 95, 0.08) 0%, transparent 50%), var(--color-bg);
 }
 
 .hero {

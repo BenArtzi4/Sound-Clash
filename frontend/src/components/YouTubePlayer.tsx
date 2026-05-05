@@ -1,10 +1,4 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import styles from "./YouTubePlayer.module.css";
 
 export interface YouTubePlayerHandle {
@@ -67,71 +61,66 @@ function loadApi(): Promise<YTNamespace> {
   });
 }
 
-export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(
-  function YouTubePlayer({ hideOverlay, onReady }, ref) {
-    const containerRef = useRef<HTMLDivElement | null>(null);
-    const playerRef = useRef<YTPlayer | null>(null);
-    const [loaded, setLoaded] = useState(false);
+export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
+  { hideOverlay, onReady },
+  ref,
+) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-    useEffect(() => {
-      let cancelled = false;
-      void (async () => {
-        const YT = await loadApi();
-        if (cancelled || !containerRef.current) return;
-        playerRef.current = new YT.Player(containerRef.current, {
-          width: "100%",
-          height: "100%",
-          playerVars: {
-            modestbranding: 1,
-            rel: 0,
-            controls: 0,
-            disablekb: 1,
-            playsinline: 1,
-          },
-          events: {
-            onReady: () => {
-              setLoaded(true);
-              onReady?.();
-            },
-          },
-        });
-      })();
-      return () => {
-        cancelled = true;
-        playerRef.current?.destroy();
-        playerRef.current = null;
-      };
-    }, [onReady]);
-
-    useImperativeHandle(
-      ref,
-      () => ({
-        loadVideoById: (videoId, startSeconds) => {
-          playerRef.current?.loadVideoById({
-            videoId,
-            startSeconds: startSeconds ?? 0,
-          });
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const YT = await loadApi();
+      if (cancelled || !containerRef.current) return;
+      playerRef.current = new YT.Player(containerRef.current, {
+        width: "100%",
+        height: "100%",
+        playerVars: {
+          modestbranding: 1,
+          rel: 0,
+          controls: 0,
+          disablekb: 1,
+          playsinline: 1,
         },
-        pause: () => playerRef.current?.pauseVideo(),
-        play: () => playerRef.current?.playVideo(),
-        stop: () => playerRef.current?.stopVideo(),
-      }),
-      [],
-    );
+        events: {
+          onReady: () => {
+            setLoaded(true);
+            onReady?.();
+          },
+        },
+      });
+    })();
+    return () => {
+      cancelled = true;
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
+  }, [onReady]);
 
-    return (
-      <div className={styles.wrapper}>
-        <div ref={containerRef} className={styles.player} />
-        <div
-          className={`${styles.cover} ${
-            hideOverlay && loaded ? styles.coverHidden : ""
-          }`}
-        >
-          <span className={styles.loading}>
-            {loaded ? "Ready" : "Loading player..."}
-          </span>
-        </div>
+  useImperativeHandle(
+    ref,
+    () => ({
+      loadVideoById: (videoId, startSeconds) => {
+        playerRef.current?.loadVideoById({
+          videoId,
+          startSeconds: startSeconds ?? 0,
+        });
+      },
+      pause: () => playerRef.current?.pauseVideo(),
+      play: () => playerRef.current?.playVideo(),
+      stop: () => playerRef.current?.stopVideo(),
+    }),
+    [],
+  );
+
+  return (
+    <div className={styles.wrapper}>
+      <div ref={containerRef} className={styles.player} />
+      <div className={`${styles.cover} ${hideOverlay && loaded ? styles.coverHidden : ""}`}>
+        <span className={styles.loading}>{loaded ? "Ready" : "Loading player..."}</span>
       </div>
-    );
-  },
-);
+    </div>
+  );
+});

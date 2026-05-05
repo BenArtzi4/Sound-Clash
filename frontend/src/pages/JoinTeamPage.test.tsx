@@ -69,51 +69,40 @@ describe("JoinTeamPage", () => {
     await waitFor(() => {
       expect(joinTeam).toHaveBeenCalledWith("ABCDEF", "Alice");
     });
-    expect(
-      JSON.parse(window.localStorage.getItem("game:ABCDEF:team") ?? "{}"),
-    ).toEqual({ id: "t1", name: "Alice" });
+    expect(JSON.parse(window.localStorage.getItem("game:ABCDEF:team") ?? "{}")).toEqual({
+      id: "t1",
+      name: "Alice",
+    });
   });
 
   it("shows a friendly message on 404", async () => {
-    vi.mocked(joinTeam).mockRejectedValueOnce(
-      new ApiError("not_found", "no", 404),
-    );
+    vi.mocked(joinTeam).mockRejectedValueOnce(new ApiError("not_found", "no", 404));
     renderAt("/join/ABCDEF");
     fireEvent.change(screen.getByLabelText(/team name/i), {
       target: { value: "Alice" },
     });
     fireEvent.click(screen.getByRole("button", { name: /join game/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/does not exist/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/does not exist/i)).toBeInTheDocument());
   });
 
   it("shows a friendly message on 410 ended", async () => {
-    vi.mocked(joinTeam).mockRejectedValueOnce(
-      new ApiError("gone", "ended", 410),
-    );
+    vi.mocked(joinTeam).mockRejectedValueOnce(new ApiError("gone", "ended", 410));
     renderAt("/join/ABCDEF");
     fireEvent.change(screen.getByLabelText(/team name/i), {
       target: { value: "Alice" },
     });
     fireEvent.click(screen.getByRole("button", { name: /join game/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/already ended/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/already ended/i)).toBeInTheDocument());
   });
 
   it("shows a friendly message on 409 conflict", async () => {
-    vi.mocked(joinTeam).mockRejectedValueOnce(
-      new ApiError("conflict", "taken", 409),
-    );
+    vi.mocked(joinTeam).mockRejectedValueOnce(new ApiError("conflict", "taken", 409));
     renderAt("/join/ABCDEF");
     fireEvent.change(screen.getByLabelText(/team name/i), {
       target: { value: "Alice" },
     });
     fireEvent.click(screen.getByRole("button", { name: /join game/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/already taken/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/already taken/i)).toBeInTheDocument());
   });
 
   it("shows a generic error on non-ApiError failures", async () => {
@@ -123,8 +112,6 @@ describe("JoinTeamPage", () => {
       target: { value: "Alice" },
     });
     fireEvent.click(screen.getByRole("button", { name: /join game/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/something went wrong/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/something went wrong/i)).toBeInTheDocument());
   });
 });

@@ -1,6 +1,8 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AuthProvider, useAuth } from "./AuthContext";
+import type { ReactNode } from "react";
+import { AuthProvider } from "./AuthContext";
+import { useAuth } from "./useAuth";
 import { getAdminPassword, setAdminPassword } from "./authStorage";
 
 beforeEach(() => {
@@ -13,7 +15,7 @@ afterEach(() => {
   setAdminPassword(null);
 });
 
-function wrapper({ children }: { children: React.ReactNode }) {
+function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }
 

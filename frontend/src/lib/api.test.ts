@@ -47,9 +47,7 @@ describe("api - public routes", () => {
   });
 
   it("listGenres GETs /genres", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
     const res = await listGenres();
     expect(res).toHaveLength(1);
   });
@@ -175,11 +173,10 @@ describe("api - admin routes", () => {
         message: "admin authentication required",
       }),
     );
-    await expect(createGame({ total_rounds: 5, selected_genres: ["g1"] }))
-      .rejects.toMatchObject({
-        code: "unauthorized",
-        status: 401,
-      });
+    await expect(createGame({ total_rounds: 5, selected_genres: ["g1"] })).rejects.toMatchObject({
+      code: "unauthorized",
+      status: 401,
+    });
   });
 
   it("falls back when error body is missing", async () => {

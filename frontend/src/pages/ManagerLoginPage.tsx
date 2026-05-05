@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import styles from "./ManagerLoginPage.module.css";
 
 export function ManagerLoginPage() {
@@ -20,9 +20,7 @@ export function ManagerLoginPage() {
       <form className={styles.card} onSubmit={handleSubmit}>
         <div>
           <h1 className={styles.title}>Host login</h1>
-          <p className={styles.subtitle}>
-            Enter the admin password to create games.
-          </p>
+          <p className={styles.subtitle}>Enter the admin password to create games.</p>
         </div>
         <input
           type="password"

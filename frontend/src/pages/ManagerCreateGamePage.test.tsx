@@ -41,14 +41,8 @@ function renderPage() {
       <AuthProvider>
         <Routes>
           <Route path="/manager/create" element={<ManagerCreateGamePage />} />
-          <Route
-            path="/manager/login"
-            element={<div>login page</div>}
-          />
-          <Route
-            path="/manager/game/:gameCode"
-            element={<div>game console</div>}
-          />
+          <Route path="/manager/login" element={<div>login page</div>} />
+          <Route path="/manager/game/:gameCode" element={<div>game console</div>} />
         </Routes>
       </AuthProvider>
     </MemoryRouter>,
@@ -70,9 +64,7 @@ describe("ManagerCreateGamePage", () => {
   });
 
   it("creates the game and navigates", async () => {
-    vi.mocked(listGenres).mockResolvedValueOnce([
-      { id: "g1", name: "Rock", slug: "rock" },
-    ]);
+    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
     vi.mocked(createGame).mockResolvedValueOnce({
       game_code: "ZZZZZZ",
       status: "waiting",
@@ -85,9 +77,7 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => screen.getByText("Rock"));
     fireEvent.click(screen.getByLabelText(/rock/i));
     fireEvent.click(screen.getByRole("button", { name: /create game/i }));
-    await waitFor(() =>
-      expect(screen.getByText("game console")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("game console")).toBeInTheDocument());
     expect(createGame).toHaveBeenCalledWith({
       total_rounds: 10,
       selected_genres: ["g1"],
@@ -95,42 +85,30 @@ describe("ManagerCreateGamePage", () => {
   });
 
   it("logs the user out and redirects on 401", async () => {
-    vi.mocked(listGenres).mockResolvedValueOnce([
-      { id: "g1", name: "Rock", slug: "rock" },
-    ]);
-    vi.mocked(createGame).mockRejectedValueOnce(
-      new ApiError("unauthorized", "nope", 401),
-    );
+    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
+    vi.mocked(createGame).mockRejectedValueOnce(new ApiError("unauthorized", "nope", 401));
     renderPage();
     await waitFor(() => screen.getByText("Rock"));
     fireEvent.click(screen.getByLabelText(/rock/i));
     fireEvent.click(screen.getByRole("button", { name: /create game/i }));
-    await waitFor(() =>
-      expect(screen.getByText("login page")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
     expect(window.sessionStorage.getItem("auth:adminPassword")).toBeNull();
   });
 
   it("shows the error message on non-auth failures", async () => {
-    vi.mocked(listGenres).mockResolvedValueOnce([
-      { id: "g1", name: "Rock", slug: "rock" },
-    ]);
+    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
     vi.mocked(createGame).mockRejectedValueOnce(new Error("boom"));
     renderPage();
     await waitFor(() => screen.getByText("Rock"));
     fireEvent.click(screen.getByLabelText(/rock/i));
     fireEvent.click(screen.getByRole("button", { name: /create game/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/boom/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
   });
 
   it("shows an error if listGenres fails", async () => {
     vi.mocked(listGenres).mockRejectedValueOnce(new Error("offline"));
     renderPage();
-    await waitFor(() =>
-      expect(screen.getByText(/offline/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/offline/i)).toBeInTheDocument());
   });
 
   it("sign out logs out and navigates to login", async () => {
@@ -138,8 +116,6 @@ describe("ManagerCreateGamePage", () => {
     renderPage();
     await waitFor(() => screen.getByRole("button", { name: /sign out/i }));
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-    await waitFor(() =>
-      expect(screen.getByText("login page")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
   });
 });

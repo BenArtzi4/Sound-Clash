@@ -22,10 +22,7 @@ describe("ManagerLoginPage", () => {
         <AuthProvider>
           <Routes>
             <Route path="/manager/login" element={<ManagerLoginPage />} />
-            <Route
-              path="/manager/create"
-              element={<div>create page</div>}
-            />
+            <Route path="/manager/create" element={<div>create page</div>} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>,

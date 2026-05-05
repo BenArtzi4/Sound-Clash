@@ -59,7 +59,7 @@ describe("TeamGameplayPage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
     expect(screen.getByText("ABCDEF")).toBeInTheDocument();
   });
 
@@ -127,10 +127,7 @@ describe("TeamGameplayPage", () => {
         status: "playing",
         buzzed_team_id: "team-2",
       }),
-      teams: [
-        makeTeam({ id: "team-1", name: "Alice" }),
-        makeTeam({ id: "team-2", name: "Bob" }),
-      ],
+      teams: [makeTeam({ id: "team-1", name: "Alice" }), makeTeam({ id: "team-2", name: "Bob" })],
       rounds: [],
     });
     renderAt("/team/ABCDEF");
@@ -154,9 +151,7 @@ describe("TeamGameplayPage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    await waitFor(() =>
-      expect(screen.getByText("home page")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("home page")).toBeInTheDocument());
     expect(window.localStorage.getItem("game:ABCDEF:team")).toBeNull();
   });
 

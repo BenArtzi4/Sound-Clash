@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { ApiError, createGame, listGenres } from "../lib/api";
 import type { Genre } from "../lib/types";
 import styles from "./ManagerCreateGamePage.module.css";
@@ -87,10 +87,7 @@ export function ManagerCreateGamePage() {
 
         <div className={styles.field}>
           <span className={styles.label}>
-            Genres{" "}
-            <span className="muted">
-              ({selected.size} selected)
-            </span>
+            Genres <span className="muted">({selected.size} selected)</span>
           </span>
           <div className={styles.genres}>
             {genres.map((g) => {
@@ -98,15 +95,9 @@ export function ManagerCreateGamePage() {
               return (
                 <label
                   key={g.id}
-                  className={`${styles.genre} ${
-                    isSel ? styles.genreSelected : ""
-                  }`}
+                  className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSel}
-                    onChange={() => toggleGenre(g.id)}
-                  />
+                  <input type="checkbox" checked={isSel} onChange={() => toggleGenre(g.id)} />
                   {g.name}
                 </label>
               );
@@ -127,11 +118,7 @@ export function ManagerCreateGamePage() {
           >
             Sign out
           </button>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={selected.size === 0 || busy}
-          >
+          <button type="submit" className="btn btn-primary" disabled={selected.size === 0 || busy}>
             {busy ? "Creating…" : "Create game"}
           </button>
         </div>
