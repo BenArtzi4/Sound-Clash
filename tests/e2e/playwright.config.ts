@@ -1,22 +1,48 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Phase 1 placeholder. Real specs added in Phase 6 per docs/testing-strategy.md §4.4.
+// Phase 6 (cores): chromium-only via --project=chromium in CI; the other
+// browser projects stay declared so the follow-up PR that adds them only
+// has to enable them in the workflow.
+
+const PORT_FRONTEND = 5173;
+const PORT_BACKEND = 8000;
 
 export default defineConfig({
   testDir: ".",
-  fullyParallel: true,
+  testIgnore: ["fixtures/**"],
+  fullyParallel: false, // sequential — multi-context specs share the preview project
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
+  workers: 1,
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   reporter: process.env.CI ? [["html"], ["github"]] : "html",
   use: {
-    baseURL: process.env.BASE_URL ?? "http://localhost:5173",
+    baseURL: process.env.BASE_URL ?? `http://localhost:${PORT_FRONTEND}`,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
+  webServer: [
+    {
+      command: `uvicorn app.main:app --port ${PORT_BACKEND}`,
+      cwd: "../../backend",
+      port: PORT_BACKEND,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+    {
+      command: `npm run dev -- --port ${PORT_FRONTEND} --strictPort`,
+      cwd: "../../frontend",
+      port: PORT_FRONTEND,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  ],
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
