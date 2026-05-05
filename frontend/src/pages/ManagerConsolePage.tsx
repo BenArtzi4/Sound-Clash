@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { QRPanel } from "../components/QRPanel";
 import { Scoreboard } from "../components/Scoreboard";
 import { Skeleton } from "../components/Skeleton";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
-import { useAuth } from "../context/useAuth";
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { serverTimeNow } from "../hooks/useServerTime";
-import { ApiError, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
+import { awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
+import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import type { Song } from "../lib/types";
 import styles from "./ManagerConsolePage.module.css";
 
@@ -20,9 +20,9 @@ type PendingAction = { kind: "kick"; teamId: string; teamName: string } | { kind
 
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
-  const { logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const managerToken = useMemo(() => getManagerToken(gameCode), [gameCode]);
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
@@ -48,22 +48,15 @@ export function ManagerConsolePage() {
     }
   }, [state?.game.buzzed_team_id]);
 
-  // 401 from any admin call → kick to login.
-  function handleAdminError(err: unknown) {
-    if (err instanceof ApiError && err.status === 401) {
-      logout();
-      navigate("/manager/login", { replace: true });
-      return true;
-    }
+  function reportError(err: unknown) {
     toast(err instanceof Error ? err.message : "Request failed", { variant: "error" });
-    return false;
   }
 
   async function handleNextRound() {
-    if (busy) return;
+    if (busy || !managerToken) return;
     setBusy(true);
     try {
-      const result = await selectSong(gameCode);
+      const result = await selectSong(gameCode, managerToken);
       setCurrentSong(result.song);
       resetAwardChecks();
       if (player.ready) {
@@ -75,7 +68,7 @@ export function ManagerConsolePage() {
         });
       }
     } catch (err) {
-      handleAdminError(err);
+      reportError(err);
     } finally {
       setBusy(false);
     }
@@ -88,10 +81,10 @@ export function ManagerConsolePage() {
   }
 
   async function handleAward(timeout: boolean) {
-    if (!state?.currentRound || busy) return;
+    if (!state?.currentRound || busy || !managerToken) return;
     setBusy(true);
     try {
-      const result = await awardPoints(gameCode, {
+      const result = await awardPoints(gameCode, managerToken, {
         round_id: state.currentRound.id,
         title_correct: timeout ? false : titleCorrect,
         artist_correct: timeout ? false : artistCorrect,
@@ -108,38 +101,35 @@ export function ManagerConsolePage() {
         toast("No points awarded", { variant: "info" });
       }
     } catch (err) {
-      handleAdminError(err);
+      reportError(err);
     } finally {
       setBusy(false);
     }
   }
 
   async function performKick(teamId: string, teamName: string) {
+    if (!managerToken) return;
     try {
-      await kickTeam(gameCode, teamId);
+      await kickTeam(gameCode, managerToken, teamId);
       toast(`${teamName} removed from the game`, { variant: "info" });
     } catch (err) {
-      handleAdminError(err);
+      reportError(err);
     }
   }
 
   async function performEnd() {
-    if (busy) return;
+    if (busy || !managerToken) return;
     setBusy(true);
     try {
-      await endGame(gameCode);
+      await endGame(gameCode, managerToken);
       playerRef.current?.stop();
+      clearManagerToken(gameCode);
       toast("Game ended", { variant: "info" });
     } catch (err) {
-      handleAdminError(err);
+      reportError(err);
     } finally {
       setBusy(false);
     }
-  }
-
-  function performSignout() {
-    logout();
-    navigate("/manager/login");
   }
 
   function onPlayerReady() {
@@ -148,6 +138,27 @@ export function ManagerConsolePage() {
     if (queued) {
       playerRef.current?.loadVideoById(queued.youtube_id, queued.start_time);
     }
+  }
+
+  // Visiting /manager/game/<code> without having created the game (or after
+  // having ended it / cleared storage) shouldn't surface the console UI.
+  // The check sits ABOVE the gone/skeleton branches because it doesn't
+  // depend on a Realtime payload — a non-host should bounce immediately.
+  if (!managerToken) {
+    return (
+      <main className={styles.shell}>
+        <p className="error">You're not the host of this game.</p>
+        <p className="muted">
+          Only the person who created game <strong>{gameCode}</strong> can manage it from this
+          browser. If you meant to play, head home and join with the game code.
+        </p>
+        <p>
+          <Link to="/" className="btn btn-ghost">
+            Back to home
+          </Link>
+        </p>
+      </main>
+    );
   }
 
   // status="gone" must be checked before the skeleton: an active_games
@@ -225,8 +236,8 @@ export function ManagerConsolePage() {
           >
             End game
           </button>
-          <button className="btn btn-ghost" onClick={performSignout}>
-            Sign out
+          <button className="btn btn-ghost" onClick={() => navigate("/")}>
+            Home
           </button>
         </div>
       </header>

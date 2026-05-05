@@ -1,18 +1,22 @@
-// Open a manager browser context, log in, and create the game via the UI.
+// Open a manager browser context and create a game from the home page.
 //
-// Why UI-create instead of REST: `authStorage` is intentionally in-memory
-// only. A `page.goto(/manager/game/<code>)` is a hard navigation that
-// wipes the password, RequireAuth then bounces to /manager/login. Using
-// the create-game form keeps everything on a single client-side
-// navigation chain.
+// Hosting is open: no password, no /manager/login. Game creation now
+// returns a per-game manager_token, which the page stores in localStorage
+// (`game:<code>:manager-token`) before navigating to /manager/game/<code>.
+// We mirror that flow through the UI so subsequent manager-only API calls
+// driven by the page (select-song, award-points, end, kick-team) attach
+// the X-Manager-Token header automatically.
+//
+// For specs that need to drive the backend RPCs directly (e.g. forced
+// expiration), `openManagerAndCreateGame` also returns the token — read
+// it from `ManagerSession.managerToken` and forward it on REST requests.
 
 import { type Browser, type Page, expect } from "@playwright/test";
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
 
 export interface ManagerSession {
   page: Page;
   gameCode: string;
+  managerToken: string;
 }
 
 interface CreateOpts {
@@ -29,10 +33,9 @@ export async function openManagerAndCreateGame(
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  // 1. Login
-  await page.goto("/manager/login");
-  await page.getByPlaceholder(/password/i).fill(ADMIN_PASSWORD);
-  await page.getByRole("button", { name: /continue/i }).click();
+  // 1. Land on home and click the "Host a game" CTA.
+  await page.goto("/");
+  await page.getByRole("link", { name: /host a game/i }).click();
   await expect(page).toHaveURL(/\/manager\/create$/);
 
   // 2. Wait for genres to load (the form fetches them on mount).
@@ -55,18 +58,27 @@ export async function openManagerAndCreateGame(
   await genreLabel.check();
   await page.getByRole("button", { name: /create game/i }).click();
 
-  // 5. App navigates to /manager/game/<code> client-side; auth password
-  //    survives. Extract the generated code from the URL.
+  // 5. App navigates to /manager/game/<code> client-side. Read the code
+  //    out of the URL.
   await page.waitForURL(/\/manager\/game\/[A-Z2-9]{6}$/, { timeout: 15_000 });
   const match = page.url().match(/\/manager\/game\/([A-Z2-9]{6})$/);
   if (!match) throw new Error(`failed to read game code from URL: ${page.url()}`);
   const gameCode = match[1]!;
 
-  // 6. Wait for the YouTube player wrapper to flip to ready so the Start
+  // 6. Read the manager token the create-game flow stored in localStorage.
+  const managerToken = await page.evaluate(
+    (code) => window.localStorage.getItem(`game:${code}:manager-token`),
+    gameCode,
+  );
+  if (!managerToken) {
+    throw new Error(`manager token missing in localStorage for ${gameCode}`);
+  }
+
+  // 7. Wait for the YouTube player wrapper to flip to ready so the Start
   //    button enables.
   await expect(page.getByTestId("youtube-player")).toHaveAttribute("data-ready", "true", {
     timeout: 20_000,
   });
 
-  return { page, gameCode };
+  return { page, gameCode, managerToken };
 }

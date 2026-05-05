@@ -18,35 +18,30 @@ vi.mock("../lib/api", () => ({
   createGame: vi.fn(),
 }));
 
-import { ApiError, createGame, listGenres } from "../lib/api";
-import { AuthProvider } from "../context/AuthContext";
+import { createGame, listGenres } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
-import { getAdminPassword, setAdminPassword } from "../context/authStorage";
+import { getManagerToken } from "../lib/managerToken";
 import { ManagerCreateGamePage } from "./ManagerCreateGamePage";
 
 beforeEach(() => {
-  window.sessionStorage.clear();
-  setAdminPassword("secret");
+  window.localStorage.clear();
   vi.mocked(listGenres).mockReset();
   vi.mocked(createGame).mockReset();
 });
 
 afterEach(() => {
-  window.sessionStorage.clear();
-  setAdminPassword(null);
+  window.localStorage.clear();
 });
 
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/manager/create"]}>
       <ToastProvider>
-        <AuthProvider>
-          <Routes>
-            <Route path="/manager/create" element={<ManagerCreateGamePage />} />
-            <Route path="/manager/login" element={<div>login page</div>} />
-            <Route path="/manager/game/:gameCode" element={<div>game console</div>} />
-          </Routes>
-        </AuthProvider>
+        <Routes>
+          <Route path="/" element={<div>home page</div>} />
+          <Route path="/manager/create" element={<ManagerCreateGamePage />} />
+          <Route path="/manager/game/:gameCode" element={<div>game console</div>} />
+        </Routes>
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -66,7 +61,7 @@ describe("ManagerCreateGamePage", () => {
     expect(submit).toBeEnabled();
   });
 
-  it("creates the game and navigates", async () => {
+  it("creates the game, stores the manager token, and navigates", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
     vi.mocked(createGame).mockResolvedValueOnce({
       game_code: "ZZZZZZ",
@@ -75,6 +70,7 @@ describe("ManagerCreateGamePage", () => {
       selected_genres: ["g1"],
       started_at: "2026-05-05T12:00:00Z",
       expires_at: "2026-05-05T16:00:00Z",
+      manager_token: "abc-token-123",
     });
     renderPage();
     await waitFor(() => screen.getByText("Rock"));
@@ -85,20 +81,10 @@ describe("ManagerCreateGamePage", () => {
       total_rounds: 10,
       selected_genres: ["g1"],
     });
+    expect(getManagerToken("ZZZZZZ")).toBe("abc-token-123");
   });
 
-  it("logs the user out and redirects on 401", async () => {
-    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
-    vi.mocked(createGame).mockRejectedValueOnce(new ApiError("unauthorized", "nope", 401));
-    renderPage();
-    await waitFor(() => screen.getByText("Rock"));
-    fireEvent.click(screen.getByLabelText(/rock/i));
-    fireEvent.click(screen.getByRole("button", { name: /create game/i }));
-    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
-    expect(getAdminPassword()).toBeNull();
-  });
-
-  it("shows the error message on non-auth failures", async () => {
+  it("shows the error message when createGame fails", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
     vi.mocked(createGame).mockRejectedValueOnce(new Error("boom"));
     renderPage();
@@ -114,11 +100,11 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => expect(screen.getByText(/offline/i)).toBeInTheDocument());
   });
 
-  it("sign out logs out and navigates to login", async () => {
+  it("Cancel returns to home", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([]);
     renderPage();
-    await waitFor(() => screen.getByRole("button", { name: /sign out/i }));
-    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
+    await waitFor(() => screen.getByRole("link", { name: /cancel/i }));
+    fireEvent.click(screen.getByRole("link", { name: /cancel/i }));
+    await waitFor(() => expect(screen.getByText("home page")).toBeInTheDocument());
   });
 });

@@ -182,16 +182,27 @@ Common causes:
 - Subscription filter mismatch. Verify `filter: 'game_code=eq.XXXXXX'` is correct.
 - Quota exhausted (peers > 200). Check Supabase Realtime tab — if at limit, peers are being rejected. Upgrade to Pro.
 
-### 4.4 "I can't log in as admin"
+### 4.4 "Catalog admin password rejected"
 
-Symptoms: admin password rejected.
+Symptoms: requests to `/admin/songs/*` return 401. (Game hosting is open and does not use this password — see §4.4b for token issues.)
 
 Triage:
 1. Verify Render env var `ADMIN_PASSWORD` (Service → Environment).
-2. Check that the frontend is sending the `X-Admin-Password` header (DevTools → Network → request headers).
+2. Check that the request is sending the `X-Admin-Password` header (DevTools → Network → request headers, or `curl -H 'X-Admin-Password: ...'`).
 3. Verify it matches what Render expects (typo? leading/trailing whitespace?).
 
 Mitigation: rotate password (§3.1).
+
+### 4.4b "I'm the host but the manager console says I'm not"
+
+Symptoms: visiting `/manager/game/<code>` shows "You're not the host of this game."
+
+Cause: the per-game manager token isn't in the browser's localStorage under `game:<code>:manager-token`. Most likely the host opened the URL in a different browser / incognito / device than the one that ran `POST /games`. Tokens never leave the host's device.
+
+Triage:
+1. Have the original host re-open the page in the browser they used to create the game. The token survives a hard refresh.
+2. If the original browser is gone, there is no recovery: tokens are not stored server-side as anything but the row itself, and no one else has the value. Create a new game.
+3. If you are debugging and have service-role access, you can read the token from the row: `SELECT manager_token FROM active_games WHERE game_code = '<code>';` — but this is a debug-only escape hatch, not a normal flow.
 
 ### 4.5 "Game expired mid-session"
 

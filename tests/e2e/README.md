@@ -2,7 +2,7 @@
 
 Playwright multi-context tests. Run against the `Sound-Clash-Preview` Supabase project (a separate Supabase free-tier project from prod).
 
-**Status:** all eight specs from [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 are landed: `buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_login`, `admin_songs_crud` (API-driven — the `/admin/songs` UI is a deferred carve-out), `kick_team`, `mobile_team`. The multi-browser matrix (firefox / webkit / iPhone-SE project) is declared in `playwright.config.ts` but the CI job runs `--project=chromium` only.
+**Status:** all seven specs from [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 are landed: `buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_songs_crud` (API-driven — the `/admin/songs` UI is a deferred carve-out), `kick_team`, `mobile_team`. The legacy `admin_login` spec was removed when the manager password was retired in favour of per-game manager tokens (hosting is open). The multi-browser matrix (firefox / webkit / iPhone-SE project) is declared in `playwright.config.ts` but the CI job runs `--project=chromium` only.
 
 ## One-time preview project setup
 
@@ -21,7 +21,7 @@ Then set GitHub repo secrets so the `E2E` workflow can run on PRs labeled `run-e
 | `SUPABASE_PREVIEW_URL` | preview project settings → API → URL |
 | `SUPABASE_PREVIEW_ANON_KEY` | preview project settings → API → anon/public key |
 | `SUPABASE_PREVIEW_SERVICE_ROLE_KEY` | preview project settings → API → service_role key |
-| `PREVIEW_ADMIN_PASSWORD` | choose any string; backend reads `ADMIN_PASSWORD` |
+| `PREVIEW_ADMIN_PASSWORD` | choose any string; backend reads `ADMIN_PASSWORD`. Gates `/admin/songs` only — game hosting is open. |
 
 ## Running locally
 

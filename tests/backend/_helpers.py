@@ -86,12 +86,13 @@ async def insert_game(
     selected_genres: list[UUID] | None = None,
     expires_in_hours: int = 4,
     game_code: str | None = None,
-) -> str:
+) -> tuple[str, UUID]:
     code = game_code or random_game_code()
-    await db.execute(
+    row = await db.fetchrow(
         """
         INSERT INTO active_games (game_code, status, total_rounds, selected_genres, expires_at)
         VALUES ($1, $2, $3, $4::uuid[], now() + ($5 || ' hours')::interval)
+        RETURNING manager_token
         """,
         code,
         status,
@@ -99,7 +100,13 @@ async def insert_game(
         selected_genres or [],
         str(expires_in_hours),
     )
-    return code
+    assert row is not None
+    token: UUID = row["manager_token"]
+    return code, token
+
+
+def manager_headers(token: UUID | str) -> dict[str, str]:
+    return {"X-Manager-Token": str(token)}
 
 
 async def insert_team(
@@ -121,12 +128,12 @@ async def insert_team(
 
 
 async def create_game_via_api(
-    admin_client: Any,
+    client: Any,
     selected_genres: list[UUID],
     *,
     total_rounds: int = 5,
 ) -> dict[str, Any]:
-    resp = await admin_client.post(
+    resp = await client.post(
         "/games",
         json={
             "total_rounds": total_rounds,

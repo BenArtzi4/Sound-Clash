@@ -173,13 +173,13 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 **Goal**: Automated proof that the full system works under realistic concurrency, on a real Supabase project, with measured latency.
 
-**Status**: complete. All eight specs from §4.4 are landed (`buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_login`, `admin_songs_crud`, `kick_team`, `mobile_team`). `admin_songs_crud` is API-driven (the `/admin/songs` UI is a deferred Phase 5 carve-out; the backend contract is exercised end-to-end). The multi-browser matrix (firefox / webkit / iPhone-SE project) and the 100×-stress `buzz_race_stress` job stay declared but label-gated. Creating the `Sound-Clash-Preview` Supabase project + setting GitHub secrets is an out-of-band setup step (see `tests/e2e/README.md`).
+**Status**: complete. Seven specs from §4.4 are landed (`buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_songs_crud`, `kick_team`, `mobile_team`). The legacy `admin_login.spec.ts` was removed when the manager password gate was retired in favour of per-game manager tokens (game hosting is open as of 2026-05-06). `admin_songs_crud` is API-driven (the `/admin/songs` UI is a deferred Phase 5 carve-out; the backend contract is exercised end-to-end). The multi-browser matrix (firefox / webkit / iPhone-SE project) and the 100×-stress `buzz_race_stress` job stay declared but label-gated. Creating the `Sound-Clash-Preview` Supabase project + setting GitHub secrets is an out-of-band setup step (see `tests/e2e/README.md`).
 
 **Deliverables**
 - `tests/e2e/playwright.config.ts` — multi-context test runner
 - `tests/e2e/buzzer_race.spec.ts` — 4 browser contexts (manager, team1, team2, display); race the buzz; assertions per **`realtime-design.md`** §3
 - `tests/e2e/full_game.spec.ts` — happy-path 3-round game end-to-end
-- `tests/e2e/admin_flows.spec.ts` — admin login + song CRUD via UI
+- `tests/e2e/admin_songs_crud.spec.ts` — song CRUD via admin API (UI deferred)
 - `.github/workflows/e2e.yml` — runs Playwright against a dedicated `Sound-Clash-Preview` Supabase project; gates merges to main
 - A separate `Sound-Clash-Preview` Supabase project for E2E isolation
 

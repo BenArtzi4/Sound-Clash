@@ -10,10 +10,10 @@ describe("HomePage", () => {
         <HomePage />
       </MemoryRouter>,
     );
-    const host = screen.getByRole("link", { name: /manager console/i });
+    const host = screen.getByRole("link", { name: /host a game/i });
     const join = screen.getByRole("link", { name: /join as team/i });
     const display = screen.getByRole("link", { name: /display screen/i });
-    expect(host).toHaveAttribute("href", "/manager/login");
+    expect(host).toHaveAttribute("href", "/manager/create");
     expect(join).toHaveAttribute("href", "/join");
     expect(display).toHaveAttribute("href", "/display");
   });

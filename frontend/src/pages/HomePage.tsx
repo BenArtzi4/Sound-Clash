@@ -22,13 +22,13 @@ export function HomePage() {
             </section>
 
             <section className={styles.actions}>
-              <Link to="/manager/login" className={`${styles.roleBtn} ${styles.rolePrimary}`}>
+              <Link to="/manager/create" className={`${styles.roleBtn} ${styles.rolePrimary}`}>
                 <span className={styles.roleIcon} aria-hidden="true">
                   <ManagerIcon />
                 </span>
                 <span className={styles.roleContent}>
-                  <span className={styles.roleTitle}>Manager Console</span>
-                  <span className={styles.roleSubtitle}>Host a game</span>
+                  <span className={styles.roleTitle}>Host a game</span>
+                  <span className={styles.roleSubtitle}>Pick genres and start playing</span>
                 </span>
               </Link>
 

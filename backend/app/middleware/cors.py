@@ -25,7 +25,7 @@ def install(app: FastAPI) -> None:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Admin-Password"],
+        allow_headers=["Content-Type", "X-Admin-Password", "X-Manager-Token"],
         allow_credentials=False,
     )
     app.middleware("http")(_security_headers)
