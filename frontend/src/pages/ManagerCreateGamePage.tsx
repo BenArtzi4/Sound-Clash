@@ -85,6 +85,8 @@ export function ManagerCreateGamePage() {
               max={50}
               value={totalRounds}
               onChange={(e) => setTotalRounds(Number(e.target.value))}
+              aria-label="Rounds"
+              data-testid="rounds-slider"
             />
             <span className={styles.roundsValue}>{totalRounds}</span>
           </div>

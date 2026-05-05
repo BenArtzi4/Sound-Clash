@@ -1,54 +1,68 @@
 # End-to-End tests
 
-Playwright multi-browser, multi-context tests. Run against the `Sound-Clash-Preview` Supabase project (or local dev stack).
+Playwright multi-context tests. Run against the `Sound-Clash-Preview` Supabase project (a separate Supabase free-tier project from prod).
 
-**Phase 6 deliverable.** Phase 1 contains only the config skeleton.
+**Status:** Phase 6 cores landed — `buzzer_race.spec.ts` and `full_game.spec.ts`. The remaining six specs from [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 (`reconnection`, `expiration`, `admin_login`, `admin_songs_crud`, `kick_team`, `mobile_team`) are follow-ups.
 
-## Planned specs
+## One-time preview project setup
 
-See [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 for the full list:
+```bash
+# 1. Create Sound-Clash-Preview project at supabase.com (free tier).
+# 2. Apply migrations.
+./db/migrate.sh local --db-url "$PREVIEW_DATABASE_URL"
+# 3. Seed songs (idempotent, run again any time the seed file changes).
+psql "$PREVIEW_DATABASE_URL" -f db/seed/songs.sql
+```
 
-- `buzzer_race.spec.ts` — 4 contexts; both teams click within 5ms; deterministic winner; all contexts agree.
-- `full_game.spec.ts` — 3-round happy path.
-- `reconnection.spec.ts` — team disconnect mid-game; reload; state restored.
-- `expiration.spec.ts` — game with past `expires_at`; cron runs; all clients redirect.
-- `admin_login.spec.ts` — wrong password rejected; correct admits.
-- `admin_songs_crud.spec.ts` — song CRUD via UI.
-- `kick_team.spec.ts` — team kicked; their tab redirects.
-- `mobile_team.spec.ts` — iPhone SE viewport; buzzer reachable.
+Then set GitHub repo secrets so the `E2E` workflow can run on PRs labeled `run-e2e`:
 
-## Browser matrix
+| Secret | Source |
+|---|---|
+| `SUPABASE_PREVIEW_URL` | preview project settings → API → URL |
+| `SUPABASE_PREVIEW_ANON_KEY` | preview project settings → API → anon/public key |
+| `SUPABASE_PREVIEW_SERVICE_ROLE_KEY` | preview project settings → API → service_role key |
+| `PREVIEW_ADMIN_PASSWORD` | choose any string; backend reads `ADMIN_PASSWORD` |
 
-Every spec must pass in:
-- **chromium** (Desktop Chrome)
-- **firefox** (Desktop Firefox)
-- **webkit** (Desktop Safari)
-- **mobile** (iPhone SE)
-
-## Running
+## Running locally
 
 ```bash
 cd tests/e2e
 npm install
-npx playwright install --with-deps  # one-time
-npx playwright test                 # all browsers, all specs
-npx playwright test --ui            # interactive
-npx playwright test buzzer_race     # one spec
-npx playwright test --project=mobile  # one browser
+npx playwright install --with-deps chromium    # one-time
+npx playwright test --project=chromium         # both specs
+npx playwright test --ui                       # interactive runner
+npx playwright test buzzer_race                # one spec
 ```
 
-## Required env vars
+The Playwright config auto-starts a local backend (`uvicorn` on port 8000) and the Vite dev server (port 5173). It does **not** spin up Supabase — you must point the backend at a real Supabase project (preview or local Docker).
+
+### Required env vars
+
+Create `tests/e2e/.env` (gitignored) or export in your shell:
 
 ```
-SUPABASE_URL=https://xxx.supabase.co
+# Backend reads these
+SUPABASE_URL=https://<preview-id>.supabase.co
 SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ADMIN_PASSWORD=...
-BASE_URL=http://localhost:5173    # or preview URL
+
+# Frontend reads these (Vite picks them up via process.env)
+VITE_SUPABASE_URL=https://<preview-id>.supabase.co
+VITE_SUPABASE_ANON_KEY=...
+VITE_API_URL=http://localhost:8000
+
+# E2E spec helpers
+API_URL=http://localhost:8000
+# ADMIN_PASSWORD reused from above
 ```
+
+## Browser matrix
+
+`playwright.config.ts` declares chromium / firefox / webkit / mobile. Phase 6 cores run only chromium in CI; the broader matrix is enabled in a follow-up PR.
 
 ## Important rules
 
-- **Never run against the prod Supabase project.** Use preview only.
+- **Never run against the prod Supabase project.** Preview only.
 - **Never embed secrets** in test code; always env vars.
-- **Single retry max** in CI (`retries: 1`) — flake should fail fast.
+- The buzzer race relies on Postgres deciding the winner — do not weaken `expect.poll` timeouts trying to make the race deterministic on the client.

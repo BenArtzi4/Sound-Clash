@@ -1,0 +1,98 @@
+// 3-round happy-path. Same setup as buzzer_race but with one team that
+// always wins and incrementing-points awards. End with the EndScreen
+// rendering the podium on the Display page.
+
+import { test, expect } from "@playwright/test";
+import { createGame } from "./fixtures/admin-api";
+import { joinAsTeam } from "./fixtures/team-context";
+import { openManager } from "./fixtures/manager-context";
+
+test("3-round game: award accumulates and podium renders on display", async ({ browser }) => {
+  const game = await createGame({ totalRounds: 3, genreSlugs: ["rock"] });
+  const code = game.game_code;
+
+  const team = await joinAsTeam(browser, code, "Solo");
+
+  const displayCtx = await browser.newContext();
+  const display = await displayCtx.newPage();
+  await display.goto(`/display/${code}`);
+  await expect(display.getByText("Solo")).toBeVisible();
+
+  const manager = await openManager(browser, code);
+
+  type RoundPoints = { title: boolean; artist: boolean; expected: number };
+  const rounds: RoundPoints[] = [
+    { title: true, artist: false, expected: 10 },
+    { title: true, artist: true, expected: 15 },
+    { title: false, artist: true, expected: 5 },
+  ];
+
+  let runningTotal = 0;
+
+  for (let i = 0; i < rounds.length; i++) {
+    const r = rounds[i]!;
+    const roundNum = i + 1;
+
+    await expect(manager.page.getByTestId("start-round")).toBeEnabled();
+    await manager.page.getByTestId("start-round").click();
+
+    // Manager header shows "Round N of 3" once start_round has completed.
+    await expect(
+      manager.page.getByText(new RegExp(`Round ${roundNum} of 3`, "i")),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Team can now buzz.
+    await expect(team.page.getByRole("status").filter({ hasText: /Buzz when you know it/i })).toBeVisible({
+      timeout: 10_000,
+    });
+    await team.page.getByTestId("buzz").click();
+    await expect(team.page.getByTestId("buzz")).toHaveAttribute("data-tone", "winner", {
+      timeout: 10_000,
+    });
+
+    // Manager checks the right boxes and awards.
+    if (r.title) {
+      await manager.page.getByLabel(/^title$/i).check();
+    }
+    if (r.artist) {
+      await manager.page.getByLabel(/^artist$/i).check();
+    }
+    await manager.page.getByTestId("award-points").click();
+
+    runningTotal += r.expected;
+
+    // Score reaches the running total on the display before we move on.
+    await expect(
+      display.locator(`[data-team-id]:has-text("Solo"):has-text("${runningTotal}")`).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  }
+
+  // End the game.
+  await manager.page.getByTestId("end-game").click();
+  const dialog = manager.page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /^end game$/i }).click();
+
+  // Display flips to the EndScreen.
+  await expect(display.getByRole("heading", { name: /final results/i })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(display.getByText("WINNER")).toBeVisible();
+  await expect(display.getByText("Solo")).toBeVisible();
+
+  // The CountUp animation settles within ~2s; assert the final number is
+  // the sum we tracked.
+  await expect
+    .poll(
+      async () => {
+        const text = await display
+          .locator(`text=${runningTotal}`)
+          .first()
+          .textContent()
+          .catch(() => null);
+        return text?.trim();
+      },
+      { timeout: 5_000 },
+    )
+    .toBe(String(runningTotal));
+});

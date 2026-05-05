@@ -218,6 +218,7 @@ export function ManagerConsolePage() {
             className="btn btn-danger"
             onClick={() => setPending({ kind: "end" })}
             disabled={busy || game.status === "ended"}
+            data-testid="end-game"
           >
             End game
           </button>
@@ -305,6 +306,7 @@ export function ManagerConsolePage() {
                 className="btn btn-ghost"
                 onClick={() => void handleAward(true)}
                 disabled={skipDisabled}
+                data-testid="skip-round"
               >
                 Skip
               </button>
@@ -312,6 +314,7 @@ export function ManagerConsolePage() {
                 className={`btn btn-primary ${styles.awardBtn}`}
                 onClick={() => void handleAward(false)}
                 disabled={awardDisabled}
+                data-testid="award-points"
               >
                 Award points
               </button>
@@ -319,6 +322,7 @@ export function ManagerConsolePage() {
                 className="btn btn-primary"
                 onClick={() => void handleNextRound()}
                 disabled={nextRoundDisabled}
+                data-testid="start-round"
               >
                 {nextRoundLabel}
               </button>
@@ -350,7 +354,7 @@ export function ManagerConsolePage() {
             ) : (
               <div>
                 {teams.map((t) => (
-                  <div key={t.id} className={styles.teamRow}>
+                  <div key={t.id} className={styles.teamRow} data-team-id={t.id}>
                     <span className={styles.teamRowName}>{t.name}</span>
                     <span className={styles.teamRowMeta}>
                       <span>{t.score} pts</span>
@@ -375,6 +379,7 @@ export function ManagerConsolePage() {
           className="btn btn-ghost"
           onClick={() => void handleAward(true)}
           disabled={skipDisabled}
+          data-testid="skip-round-mobile"
         >
           Skip
         </button>
@@ -382,6 +387,7 @@ export function ManagerConsolePage() {
           className={`btn btn-primary ${styles.awardBtn}`}
           onClick={() => void handleAward(false)}
           disabled={awardDisabled}
+          data-testid="award-points-mobile"
         >
           Award
         </button>
@@ -389,6 +395,7 @@ export function ManagerConsolePage() {
           className="btn btn-primary"
           onClick={() => void handleNextRound()}
           disabled={nextRoundDisabled}
+          data-testid="start-round-mobile"
         >
           {game.status === "waiting" ? "Start" : "Next"}
         </button>
