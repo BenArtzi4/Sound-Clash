@@ -139,7 +139,7 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 5 — Realtime Wiring & Frontend Port
+## Phase 5 — Realtime Wiring & Frontend Port ✅ shipped
 
 **Goal**: React frontend works against Supabase Realtime + the new FastAPI backend. The buzzer makes a direct PostgREST RPC call from the browser.
 

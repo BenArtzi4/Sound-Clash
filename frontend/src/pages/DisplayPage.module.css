@@ -1,0 +1,115 @@
+.shell {
+  min-height: 100%;
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+}
+
+.entryCard {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-xl);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.entryInput {
+  letter-spacing: 0.5em;
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 2.2rem;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+}
+
+.banner {
+  padding: var(--space-lg);
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  background: var(--color-bg-elev);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.bannerLocked {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.bannerEnded {
+  color: var(--color-text-dim);
+}
+
+.scores {
+  flex: 1;
+}
+
+.bigList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bigRow {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 16px 24px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 1.6rem;
+  transition: background 200ms ease;
+}
+
+.bigRowBuzzed {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+.bigRank {
+  font-weight: 800;
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bigName {
+  font-weight: 700;
+}
+
+.bigScore {
+  font-weight: 800;
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}

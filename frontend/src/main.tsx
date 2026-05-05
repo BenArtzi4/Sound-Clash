@@ -1,12 +1,18 @@
-// Phase 1 placeholder. Real router + providers in Phase 5 per docs/api-contracts.md.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
+import { App } from "./App";
+import { env } from "./lib/env";
+import "./styles.css";
 
-function App() {
-  return <h1>Sound Clash — Phase 1 scaffold</h1>;
+if (env.VITE_SENTRY_DSN) {
+  Sentry.init({ dsn: env.VITE_SENTRY_DSN, tracesSampleRate: 0 });
 }
 
-createRoot(document.getElementById("root")!).render(
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("#root element not found");
+
+createRoot(rootEl).render(
   <StrictMode>
     <App />
   </StrictMode>,
