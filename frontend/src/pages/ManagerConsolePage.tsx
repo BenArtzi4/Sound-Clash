@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Scoreboard } from "../components/Scoreboard";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
@@ -169,6 +169,9 @@ export function ManagerConsolePage() {
         ? styles.statusEnded
         : styles.statusWaiting;
 
+  const connectionLabel = status === "subscribed" ? "Connected" : "Connecting…";
+  const connectionStateClass = status === "subscribed" ? styles.connOk : styles.connWait;
+
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -177,9 +180,17 @@ export function ManagerConsolePage() {
           <span className={styles.code}>{gameCode}</span>
         </div>
         <span className={`${styles.statusPill} ${statusClass}`}>{game.status}</span>
-        <div>
+        <div className={styles.headerMeta}>
           <span className="muted">
             Round {game.round_number} of {game.total_rounds}
+          </span>
+          <span
+            className={`${styles.connection} ${connectionStateClass}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className={styles.connectionDot} aria-hidden="true" />
+            <span>{connectionLabel}</span>
           </span>
         </div>
         <button
@@ -213,9 +224,19 @@ export function ManagerConsolePage() {
               )}
 
               {timerActive ? (
-                <p className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}>
-                  {remainingSec}s remaining
-                </p>
+                <div
+                  className={`${styles.timerWrap} ${remainingSec <= 5 ? styles.timerLow : ""}`}
+                  style={
+                    {
+                      "--timer-pct": `${Math.max(0, Math.min(100, (remainingSec / ROUND_DURATION_SEC) * 100))}%`,
+                    } as CSSProperties
+                  }
+                >
+                  <div className={styles.timerRing}>
+                    <span className={styles.timerValue}>{remainingSec}</span>
+                  </div>
+                  <span className={styles.timerLabel}>seconds remaining</span>
+                </div>
               ) : null}
 
               {lockedTeam ? (
@@ -256,7 +277,7 @@ export function ManagerConsolePage() {
 
               <div className={styles.actions}>
                 <button
-                  className="btn"
+                  className="btn btn-ghost"
                   onClick={() => void handleAward(true)}
                   disabled={busy || game.status !== "playing"}
                 >
@@ -305,7 +326,12 @@ export function ManagerConsolePage() {
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>Teams</h2>
             {teams.length === 0 ? (
-              <p className="muted">No teams have joined yet.</p>
+              <div className={styles.emptyTeams}>
+                <p className={styles.emptyTeamsTitle}>No teams have joined yet.</p>
+                <p className={styles.emptyTeamsHint}>
+                  Share <span className={styles.emptyTeamsCode}>{gameCode}</span> with players — they'll appear here once they join.
+                </p>
+              </div>
             ) : (
               <div>
                 {teams.map((t) => (

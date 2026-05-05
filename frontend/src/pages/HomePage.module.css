@@ -283,6 +283,20 @@
   transition: all 0.4s var(--easing-spring);
   position: relative;
   overflow: hidden;
+  opacity: 0;
+  animation: fade-in-up 0.7s ease-out both;
+}
+
+.infoItem:nth-child(1) {
+  animation-delay: 0.45s;
+}
+
+.infoItem:nth-child(2) {
+  animation-delay: 0.6s;
+}
+
+.infoItem:nth-child(3) {
+  animation-delay: 0.75s;
 }
 
 .infoItem::before {

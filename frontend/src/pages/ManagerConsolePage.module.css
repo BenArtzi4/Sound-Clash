@@ -70,6 +70,72 @@
   border-color: var(--color-border-strong);
 }
 
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, 0.12);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  letter-spacing: 0.02em;
+  transition:
+    background 200ms ease,
+    color 200ms ease;
+}
+
+.connectionDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-text-mute);
+}
+
+.connOk {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+.connOk .connectionDot {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+
+.connWait {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+.connWait .connectionDot {
+  background: #f59e0b;
+  animation: conn-blink 1.2s ease-in-out infinite;
+}
+
+.connBad {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+.connBad .connectionDot {
+  background: var(--color-danger);
+}
+
+@keyframes conn-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -138,9 +204,67 @@
   letter-spacing: 0.02em;
 }
 
+.timerWrap {
+  --timer-pct: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.timerRing {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--color-warning) var(--timer-pct),
+    rgba(245, 158, 11, 0.18) var(--timer-pct)
+  );
+  flex-shrink: 0;
+  transition: background 600ms linear;
+}
+
+.timerRing::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  background: #ffffff;
+  border-radius: 50%;
+}
+
+.timerValue {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--color-warning);
+  z-index: 1;
+}
+
+.timerLabel {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  letter-spacing: 0.02em;
+}
+
 .timerLow {
-  color: var(--color-danger);
   animation: timer-pulse 0.7s ease-in-out infinite;
+}
+
+.timerLow .timerRing {
+  background: conic-gradient(
+    var(--color-danger) var(--timer-pct),
+    rgba(239, 68, 68, 0.18) var(--timer-pct)
+  );
+}
+
+.timerLow .timerValue {
+  color: var(--color-danger);
 }
 
 @keyframes timer-pulse {
@@ -243,6 +367,40 @@
   font-weight: 700;
   color: #92400e;
   font-size: 1.05rem;
+}
+
+.emptyTeams {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+  padding: 1.75rem 1rem;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.04) 0%, transparent 100%);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-dim);
+}
+
+.emptyTeamsTitle {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.emptyTeamsHint {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.emptyTeamsCode {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 @media (max-width: 600px) {

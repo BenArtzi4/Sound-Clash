@@ -4,6 +4,11 @@ import { useGameChannel } from "../hooks/useGameChannel";
 import styles from "./DisplayPage.module.css";
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
+const CODE_CHAR_RE = /[A-Z2-9]/g;
+
+function normalizeCode(raw: string): string {
+  return (raw.toUpperCase().match(CODE_CHAR_RE) ?? []).join("").slice(0, 6);
+}
 
 export function DisplayPage() {
   const { gameCode } = useParams<{ gameCode?: string }>();
@@ -19,7 +24,7 @@ function DisplayEntry() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const trimmed = code.toUpperCase();
+    const trimmed = normalizeCode(code);
     if (!CODE_RE.test(trimmed)) return;
     navigate(`/display/${trimmed}`);
   }
@@ -32,17 +37,16 @@ function DisplayEntry() {
         <input
           className={styles.entryInput}
           value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
+          onChange={(e) => setCode(normalizeCode(e.target.value))}
           placeholder="ABCDEF"
           maxLength={6}
           autoFocus
           required
         />
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={!CODE_RE.test(code.toUpperCase())}
-        >
+        <span className={styles.entryCounter} aria-hidden="true">
+          {code.length}/6
+        </span>
+        <button type="submit" className="btn btn-primary" disabled={!CODE_RE.test(code)}>
           Open
         </button>
       </form>
@@ -95,11 +99,18 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         <span className={styles.code}>{gameCode}</span>
       </header>
 
-      <div className={bannerClass}>{bannerText}</div>
+      <div className={bannerClass} role="status" aria-live="polite">
+        {bannerText}
+      </div>
 
       <div className={styles.scores}>
         {teams.length === 0 ? (
-          <p className="muted">No teams have joined yet.</p>
+          <div className={styles.emptyBoard}>
+            <p className={styles.emptyBoardTitle}>Waiting for teams</p>
+            <p className={styles.emptyBoardHint}>
+              Share <span className={styles.emptyBoardCode}>{gameCode}</span> with players to get started.
+            </p>
+          </div>
         ) : (
           <ol className={styles.bigList}>
             {teams.map((t, i) => (
