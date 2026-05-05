@@ -4,28 +4,32 @@
 //
 // Spec ref: docs/testing-strategy.md §4.4 + docs/realtime-design.md §3.
 
-import { test, expect } from "@playwright/test";
-import { createGame } from "./fixtures/admin-api";
+import { test, expect, type Browser } from "@playwright/test";
 import { joinAsTeam } from "./fixtures/team-context";
-import { openManager } from "./fixtures/manager-context";
+import { openManagerAndCreateGame } from "./fixtures/manager-context";
+
+async function openDisplay(browser: Browser, code: string) {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto(`/display/${code}`);
+  return { page };
+}
 
 test("two teams race the buzzer; exactly one wins; all contexts agree", async ({ browser }) => {
-  // 1. Create a 1-round, rock-only game via the admin API.
-  const game = await createGame({ totalRounds: 1, genreSlugs: ["rock"] });
-  const code = game.game_code;
+  // 1. Manager creates the game via the UI (REST create would force a
+  //    hard nav to /manager/game/<code> and lose the in-memory password).
+  const manager = await openManagerAndCreateGame(browser, {
+    totalRounds: 1,
+    genreName: "Rock",
+  });
+  const code = manager.gameCode;
 
-  // 2. Open the four contexts in parallel.
+  // 2. Game now exists; open the other three contexts in parallel.
   const [team1, team2, display] = await Promise.all([
     joinAsTeam(browser, code, "Alpha"),
     joinAsTeam(browser, code, "Bravo"),
-    (async () => {
-      const ctx = await browser.newContext();
-      const page = await ctx.newPage();
-      await page.goto(`/display/${code}`);
-      return { page };
-    })(),
+    openDisplay(browser, code),
   ]);
-  const manager = await openManager(browser, code);
 
   // 3. Both teams visible on display before we start.
   await expect(display.page.getByText("Alpha")).toBeVisible();
@@ -51,8 +55,8 @@ test("two teams race the buzzer; exactly one wins; all contexts agree", async ({
   //    conditional UPDATE.
   await Promise.all([team1.page.getByTestId("buzz").click(), team2.page.getByTestId("buzz").click()]);
 
-  // 7. After the dust settles, exactly one team should show data-tone="winner"
-  //    and the other should show "locked-other".
+  // 7. Wait for the locked state to actually propagate (one of the two
+  //    tones must be "winner", the other "locked-other").
   await expect
     .poll(
       async () => {
