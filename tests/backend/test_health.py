@@ -28,3 +28,16 @@ async def test_sentry_not_initialised_in_tests() -> None:
 
     client_obj = getattr(sentry_sdk.Hub.current, "client", None)
     assert client_obj is None or getattr(client_obj, "dsn", None) is None
+
+
+async def test_health_supabase_degraded_on_failure(client, monkeypatch) -> None:
+    """If the probe raises, ``supabase`` flips to ``"degraded"`` (still 200)."""
+    from app.db import supabase_client as supabase_module
+
+    def raising_probe() -> None:
+        raise RuntimeError("simulated supabase outage")
+
+    monkeypatch.setattr(supabase_module, "_probe", raising_probe)
+    resp = await client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["supabase"] == "degraded"

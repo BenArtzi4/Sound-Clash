@@ -14,10 +14,37 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import uuid as _uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import asyncpg
+
+
+def _normalize(value: Any) -> Any:
+    """Convert asyncpg-native types to JSON-friendly stdlib equivalents.
+
+    asyncpg returns ``asyncpg.pgproto.pgproto.UUID`` for uuid columns; pydantic
+    refuses these because ``uuid.UUID(...)`` calls ``.replace`` on the input.
+    Converting to stdlib ``uuid.UUID`` (or ``str`` for the array case) sidesteps
+    that without polluting prod code.
+    """
+    if isinstance(value, _uuid.UUID):
+        return value
+    if isinstance(value, datetime):
+        return value
+    if hasattr(value, "hex") and hasattr(value, "int") and not isinstance(value, int):
+        return _uuid.UUID(str(value))
+    if isinstance(value, list):
+        return [_normalize(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _normalize(v) for k, v in value.items()}
+    return value
+
+
+def _record_to_dict(record: asyncpg.Record) -> dict[str, Any]:
+    return {k: _normalize(v) for k, v in dict(record).items()}
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +253,7 @@ class FakeSupabaseClient:
             rows = self._runner.run(conn.fetch(sql, *params))
         except asyncpg.PostgresError as exc:
             raise _map_pg_exc(exc) from exc
-        return [dict(r) for r in rows]
+        return [_record_to_dict(r) for r in rows]
 
     def _normalize_values(
         self, values: dict[str, Any] | list[dict[str, Any]] | None
@@ -254,7 +281,7 @@ class FakeSupabaseClient:
             except asyncpg.PostgresError as exc:
                 raise _map_pg_exc(exc) from exc
             if rec is not None:
-                out.append(dict(rec))
+                out.append(_record_to_dict(rec))
         return out
 
     def _do_update(self, conn: Any, q: _Query) -> list[dict[str, Any]]:
@@ -270,7 +297,7 @@ class FakeSupabaseClient:
             rows = self._runner.run(conn.fetch(sql, *params))
         except asyncpg.PostgresError as exc:
             raise _map_pg_exc(exc) from exc
-        return [dict(r) for r in rows]
+        return [_record_to_dict(r) for r in rows]
 
     def _do_upsert(self, conn: Any, q: _Query) -> list[dict[str, Any]]:
         rows = self._normalize_values(q._values)
@@ -302,7 +329,7 @@ class FakeSupabaseClient:
             except asyncpg.PostgresError as exc:
                 raise _map_pg_exc(exc) from exc
             if rec is not None:
-                out.append(dict(rec))
+                out.append(_record_to_dict(rec))
         return out
 
     def _do_delete(self, conn: Any, q: _Query) -> list[dict[str, Any]]:
@@ -312,7 +339,7 @@ class FakeSupabaseClient:
             rows = self._runner.run(conn.fetch(sql, *params))
         except asyncpg.PostgresError as exc:
             raise _map_pg_exc(exc) from exc
-        return [dict(r) for r in rows]
+        return [_record_to_dict(r) for r in rows]
 
     def _build_where_offset(
         self, q: _Query, offset: int
@@ -370,9 +397,9 @@ class _Rpc:
                 data = None
             elif len(rows[0]) == 1 and self._name not in {"award_points", "buzz_in"}:
                 # scalar-returning function — unwrap single column
-                data = list(rows[0].values())[0]
+                data = _normalize(list(rows[0].values())[0])
             else:
-                data = [dict(r) for r in rows]
+                data = [_record_to_dict(r) for r in rows]
                 if len(data) == 1:
                     data = data[0]
             return FakeResponse(data)

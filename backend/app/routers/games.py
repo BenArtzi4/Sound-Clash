@@ -211,14 +211,7 @@ async def create_game(request: Request, body: CreateGameRequest) -> CreateGameRe
         )
 
     await generate_unique_code(insert)
-    return CreateGameResponse(
-        game_code=inserted["game_code"],
-        status=inserted["status"],
-        total_rounds=inserted["total_rounds"],
-        selected_genres=[UUID(g) for g in (inserted.get("selected_genres") or [])],
-        started_at=inserted["started_at"],
-        expires_at=inserted["expires_at"],
-    )
+    return CreateGameResponse.model_validate(inserted)
 
 
 @router.post(
@@ -230,13 +223,7 @@ async def create_game(request: Request, body: CreateGameRequest) -> CreateGameRe
 async def join_team(request: Request, game_code: str, body: JoinTeamRequest) -> JoinTeamResponse:
     client = get_supabase_client()
     row = await anyio.to_thread.run_sync(_join_team_blocking, client, game_code, body.name)
-    return JoinTeamResponse(
-        id=UUID(row["id"]),
-        game_code=row["game_code"],
-        name=row["name"],
-        score=row.get("score", 0),
-        joined_at=row["joined_at"],
-    )
+    return JoinTeamResponse.model_validate(row)
 
 
 @router.post(
@@ -263,7 +250,7 @@ async def select_song(
         _start_round_blocking, client, game_code, song
     )
     return SelectSongResponse(
-        round_id=UUID(round_id),
+        round_id=UUID(str(round_id)),
         round_number=round_number,
         song=SongPayload.model_validate(song),
     )
@@ -286,10 +273,9 @@ async def award_points(
     except Exception as exc:
         raise map_postgrest_error(exc) from exc
 
-    team_id = result.get("team_id")
     return AwardPointsResponse(
         round_id=body.round_id,
-        team_id=UUID(team_id) if team_id else None,
+        team_id=result.get("team_id"),
         points_awarded=int(result.get("points_awarded", 0)),
         team_total_score=int(result.get("team_total_score", 0)),
     )
@@ -304,11 +290,7 @@ async def award_points(
 async def end_game(request: Request, game_code: str) -> EndGameResponse:
     client = get_supabase_client()
     game = await anyio.to_thread.run_sync(_end_game_blocking, client, game_code)
-    return EndGameResponse(
-        game_code=game["game_code"],
-        status=game["status"],
-        ended_at=game["ended_at"],
-    )
+    return EndGameResponse.model_validate(game)
 
 
 @router.delete(

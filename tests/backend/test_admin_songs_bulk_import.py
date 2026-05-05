@@ -36,10 +36,10 @@ async def test_inserts_new_rows(admin_client) -> None:
 
 async def test_updates_existing_youtube_id(admin_client, db) -> None:
     await insert_song(
-        db, title="Old", artist="Old", youtube_id="DUPLICATEKEY", genre_slugs=["rock"]
+        db, title="Old", artist="Old", youtube_id="DUPKEY12345", genre_slugs=["rock"]
     )
     csv = _csv(
-        [["NewTitle", "NewArtist", "DUPLICATEKEY", "5", "false", "", "rock"]]
+        [["NewTitle", "NewArtist", "DUPKEY12345", "5", "false", "", "rock"]]
     )
     resp = await admin_client.post(
         "/admin/songs/bulk-import",
@@ -50,7 +50,7 @@ async def test_updates_existing_youtube_id(admin_client, db) -> None:
     assert body["inserted"] == 0
     assert body["updated"] == 1
     row = await db.fetchrow(
-        "SELECT title FROM songs WHERE youtube_id = $1", "DUPLICATEKEY"
+        "SELECT title FROM songs WHERE youtube_id = $1", "DUPKEY12345"
     )
     assert row["title"] == "NewTitle"
 
