@@ -3,13 +3,15 @@
 // rendering the podium on the Display page.
 
 import { test, expect } from "@playwright/test";
-import { createGame } from "./fixtures/admin-api";
 import { joinAsTeam } from "./fixtures/team-context";
-import { openManager } from "./fixtures/manager-context";
+import { openManagerAndCreateGame } from "./fixtures/manager-context";
 
 test("3-round game: award accumulates and podium renders on display", async ({ browser }) => {
-  const game = await createGame({ totalRounds: 3, genreSlugs: ["rock"] });
-  const code = game.game_code;
+  const manager = await openManagerAndCreateGame(browser, {
+    totalRounds: 3,
+    genreName: "Rock",
+  });
+  const code = manager.gameCode;
 
   const team = await joinAsTeam(browser, code, "Solo");
 
@@ -17,8 +19,6 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
   const display = await displayCtx.newPage();
   await display.goto(`/display/${code}`);
   await expect(display.getByText("Solo")).toBeVisible();
-
-  const manager = await openManager(browser, code);
 
   type RoundPoints = { title: boolean; artist: boolean; expected: number };
   const rounds: RoundPoints[] = [
@@ -80,18 +80,13 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
   await expect(display.getByText("WINNER")).toBeVisible();
   await expect(display.getByText("Solo")).toBeVisible();
 
-  // The CountUp animation settles within ~2s; assert the final number is
-  // the sum we tracked.
+  // CountUp animation settles within ~2s.
   await expect
     .poll(
-      async () => {
-        const text = await display
-          .locator(`text=${runningTotal}`)
-          .first()
-          .textContent()
-          .catch(() => null);
-        return text?.trim();
-      },
+      async () =>
+        (
+          await display.locator(`text=${runningTotal}`).first().textContent().catch(() => null)
+        )?.trim(),
       { timeout: 5_000 },
     )
     .toBe(String(runningTotal));
