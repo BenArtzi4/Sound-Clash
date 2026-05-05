@@ -94,3 +94,51 @@ async def test_list_pagination_and_search(admin_client, db) -> None:
     assert search.status_code == 200
     titles = {s["title"] for s in search.json()["items"]}
     assert "BBB Second" in titles
+
+
+async def test_list_genre_filter(admin_client, db) -> None:
+    await insert_song(db, title="RockSong", genre_slugs=["rock"])
+    await insert_song(db, title="PopSong", genre_slugs=["pop"])
+    resp = await admin_client.get("/admin/songs?genre=rock")
+    assert resp.status_code == 200
+    titles = {s["title"] for s in resp.json()["items"]}
+    assert "RockSong" in titles
+    assert "PopSong" not in titles
+
+
+async def test_list_genre_filter_unknown_returns_empty(admin_client) -> None:
+    resp = await admin_client.get("/admin/songs?genre=nonexistent_slug")
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+    assert resp.json()["total"] == 0
+
+
+async def test_get_unknown_id_404(admin_client) -> None:
+    resp = await admin_client.get(
+        "/admin/songs/00000000-0000-0000-0000-000000000000"
+    )
+    assert resp.status_code == 404
+
+
+async def test_delete_unknown_id_404(admin_client) -> None:
+    resp = await admin_client.delete(
+        "/admin/songs/00000000-0000-0000-0000-000000000000"
+    )
+    assert resp.status_code == 404
+
+
+async def test_update_unknown_id_404(admin_client, db) -> None:
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await admin_client.put(
+        "/admin/songs/00000000-0000-0000-0000-000000000000",
+        json={
+            "title": "X",
+            "artist": "Y",
+            "youtube_id": "abcDEF12345",
+            "start_time": 0,
+            "is_soundtrack": False,
+            "source": None,
+            "genre_ids": [str(rock[0])],
+        },
+    )
+    assert resp.status_code == 404
