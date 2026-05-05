@@ -80,14 +80,10 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
   await expect(display.getByText("WINNER")).toBeVisible();
   await expect(display.getByText("Solo")).toBeVisible();
 
-  // CountUp animation settles within ~2s.
-  await expect
-    .poll(
-      async () =>
-        (
-          await display.locator(`text=${runningTotal}`).first().textContent().catch(() => null)
-        )?.trim(),
-      { timeout: 5_000 },
-    )
-    .toBe(String(runningTotal));
+  // CountUp animation settles within ~2s. The podium score renders the
+  // number and the "pts" unit as siblings, so we assert the final
+  // "<total>pts" text becomes visible rather than poking at textContent.
+  await expect(display.getByText(`${runningTotal}pts`).first()).toBeVisible({
+    timeout: 5_000,
+  });
 });
