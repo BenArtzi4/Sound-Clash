@@ -1,4 +1,3 @@
-import { getAdminPassword } from "../context/authStorage";
 import { env } from "./env";
 import type {
   ApiErrorBody,
@@ -26,7 +25,8 @@ export class ApiError extends Error {
 }
 
 interface RequestOptions {
-  admin?: boolean;
+  managerToken?: string;
+  adminPassword?: string;
   body?: unknown;
 }
 
@@ -35,12 +35,11 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
   if (opts.body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
-  if (opts.admin) {
-    const pw = getAdminPassword();
-    if (!pw) {
-      throw new ApiError("unauthorized", "admin password not set", 401);
-    }
-    headers["X-Admin-Password"] = pw;
+  if (opts.managerToken) {
+    headers["X-Manager-Token"] = opts.managerToken;
+  }
+  if (opts.adminPassword) {
+    headers["X-Admin-Password"] = opts.adminPassword;
   }
 
   const response = await fetch(`${env.VITE_API_URL}${path}`, {
@@ -89,32 +88,36 @@ export function createGame(body: {
   total_rounds: number;
   selected_genres: string[];
 }): Promise<CreateGameResponse> {
-  return request("POST", "/games", { admin: true, body });
+  return request("POST", "/games", { body });
 }
 
-export function selectSong(gameCode: string): Promise<SelectSongResponse> {
+export function selectSong(gameCode: string, managerToken: string): Promise<SelectSongResponse> {
   return request("POST", `/games/${gameCode}/select-song`, {
-    admin: true,
+    managerToken,
     body: {},
   });
 }
 
 export function awardPoints(
   gameCode: string,
+  managerToken: string,
   body: AwardPointsRequest,
 ): Promise<AwardPointsResponse> {
   return request("POST", `/games/${gameCode}/award-points`, {
-    admin: true,
+    managerToken,
     body,
   });
 }
 
-export function endGame(gameCode: string): Promise<EndGameResponse> {
-  return request("POST", `/games/${gameCode}/end`, { admin: true, body: {} });
+export function endGame(gameCode: string, managerToken: string): Promise<EndGameResponse> {
+  return request("POST", `/games/${gameCode}/end`, {
+    managerToken,
+    body: {},
+  });
 }
 
-export function kickTeam(gameCode: string, teamId: string): Promise<void> {
+export function kickTeam(gameCode: string, managerToken: string, teamId: string): Promise<void> {
   return request("DELETE", `/games/${gameCode}/teams/${teamId}`, {
-    admin: true,
+    managerToken,
   });
 }

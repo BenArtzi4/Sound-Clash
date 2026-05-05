@@ -124,9 +124,10 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 ## 8. Reconnection (manager)
 
-- Manager identity is "whoever has the admin password and the game code." Manager state is recoverable from the `active_games` row.
-- If the manager closes the tab mid-game, the game stays in its current state (`playing`, `buzzed_team_id` still set if mid-buzz). The manager can reload `/manager/game/{code}` and resume.
-- **Two manager tabs problem**: the design accepts that two tabs both work as manager. Both can issue `start_round` / `award_points` RPCs. Practical impact is low (typical use is one host on one device). Mitigation deferred — see §11.
+- Manager identity is "whoever holds the per-game manager token in their browser's localStorage" (`game:<code>:manager-token`). The token is generated at game creation and returned by `POST /games`. Game state is recoverable from the `active_games` row.
+- If the manager closes the tab mid-game, the game stays in its current state (`playing`, `buzzed_team_id` still set if mid-buzz). The manager can reload `/manager/game/{code}` in the same browser and resume — the token survives a hard refresh.
+- A second device cannot resume management without the token. Losing the host browser ends practical management (the game still runs to its 4-hour TTL; players can keep playing what's already started but no new rounds can be selected without the token).
+- **Two manager tabs problem**: opening the same game in two tabs of the same browser shares the token (same localStorage), so both tabs can issue `start_round` / `award_points` RPCs. Practical impact is low (typical use is one host on one device). Mitigation deferred — see §11.
 
 ## 9. Timeouts
 

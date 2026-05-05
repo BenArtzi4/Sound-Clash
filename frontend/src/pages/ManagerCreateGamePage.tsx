@@ -1,14 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Skeleton } from "../components/Skeleton";
-import { useAuth } from "../context/useAuth";
 import { useToast } from "../context/useToast";
-import { ApiError, createGame, listGenres } from "../lib/api";
+import { createGame, listGenres } from "../lib/api";
+import { setManagerToken } from "../lib/managerToken";
 import type { Genre } from "../lib/types";
 import styles from "./ManagerCreateGamePage.module.css";
 
 export function ManagerCreateGamePage() {
-  const { logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -54,14 +53,10 @@ export function ManagerCreateGamePage() {
         total_rounds: totalRounds,
         selected_genres: Array.from(selected),
       });
+      setManagerToken(game.game_code, game.manager_token);
       toast(`Game ${game.game_code} created`, { variant: "success" });
       navigate(`/manager/game/${game.game_code}`);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        logout();
-        navigate("/manager/login", { replace: true });
-        return;
-      }
       toast(err instanceof Error ? err.message : "Failed to create game", { variant: "error" });
     } finally {
       setBusy(false);
@@ -71,7 +66,7 @@ export function ManagerCreateGamePage() {
   return (
     <main className={styles.shell}>
       <header>
-        <h1>Create a game</h1>
+        <h1>Host a game</h1>
         <p className="muted">Pick at least one genre and the round count.</p>
       </header>
 
@@ -121,16 +116,9 @@ export function ManagerCreateGamePage() {
         </div>
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              logout();
-              navigate("/manager/login");
-            }}
-          >
-            Sign out
-          </button>
+          <Link to="/" className="btn btn-ghost">
+            Cancel
+          </Link>
           <button type="submit" className="btn btn-primary" disabled={selected.size === 0 || busy}>
             {busy ? "Creating…" : "Create game"}
           </button>

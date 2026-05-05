@@ -49,8 +49,14 @@ def test_dict_args_fallback_extraction() -> None:
     assert err.message == "from-args"
 
 
-async def test_not_found_envelope_via_router(admin_client) -> None:
-    resp = await admin_client.post("/games/AAAAAA/end")
+async def test_not_found_envelope_via_router(client) -> None:
+    # The manager-token dep does the lookup and produces the 404 envelope
+    # before the route body runs. Any token value is fine since the game
+    # does not exist.
+    resp = await client.post(
+        "/games/AAAAAA/end",
+        headers={"X-Manager-Token": "00000000-0000-0000-0000-000000000000"},
+    )
     assert resp.status_code == 404
     body = resp.json()
     assert body["error"] == "not_found"

@@ -8,7 +8,7 @@ Three categories of API:
 
 | Category | Transport | Endpoint | Authn |
 |---|---|---|---|
-| **REST (FastAPI)** | HTTPS | `https://api.soundclash.org` | Optional `X-Admin-Password` header for admin/manager ops |
+| **REST (FastAPI)** | HTTPS | `https://api.soundclash.org` | `X-Manager-Token` for `/games/{code}/*` host actions; `X-Admin-Password` for `/admin/songs/*`; nothing for game creation, joining, or `/genres` |
 | **Postgres RPC (PostgREST)** | HTTPS | `https://<project>.supabase.co/rest/v1/rpc/<fn>` | Supabase **anon key** in `apikey` + `Authorization` headers |
 | **Realtime (Supabase)** | WebSocket | `wss://<project>.supabase.co/realtime/v1` | Supabase **anon key** |
 
@@ -39,9 +39,7 @@ Liveness probe. No auth.
 
 ### 2.2 `POST /games`
 
-Create a new game. **Admin auth required.**
-
-**Headers**: `X-Admin-Password: <password>`
+Create a new game. **No auth.** Anyone can host. Rate-limited 10/min/IP.
 
 **Request body**:
 ```json
@@ -63,13 +61,16 @@ Validation:
   "total_rounds": 10,
   "selected_genres": ["..."],
   "started_at": "2026-05-03T14:23:01.234Z",
-  "expires_at": "2026-05-03T18:23:01.234Z"
+  "expires_at": "2026-05-03T18:23:01.234Z",
+  "manager_token": "1f1a2b3c-4d5e-6f70-8190-a1b2c3d4e5f6"
 }
 ```
 
+The `manager_token` is generated server-side (`gen_random_uuid()`) and is the host's credential for every other `/games/{code}/*` call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on `select-song`, `award-points`, `end`, and `kick-team`. The token never leaves the host's device.
+
 Game-code generation: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O, 1/I/L, no lowercase). On collision (UNIQUE violation), retry up to 5 times then 500.
 
-**Errors**: `validation_error` (400), `unauthorized` (401).
+**Errors**: `validation_error` (400), `rate_limited` (429).
 
 ---
 
@@ -104,9 +105,9 @@ The frontend stores `id` in `localStorage` keyed by `game_code` for reconnection
 
 ### 2.4 `POST /games/{game_code}/select-song`
 
-Manager: pick the next song (random within `selected_genres`, excluding songs already played in this game) and start the round. **Admin auth required.**
+Manager: pick the next song (random within `selected_genres`, excluding songs already played in this game) and start the round. **Manager-token auth required.**
 
-**Headers**: `X-Admin-Password: <password>`
+**Headers**: `X-Manager-Token: <token>` (the value returned by `POST /games`)
 
 **Request body**: `{}` (reserved; future may include `song_id` for manual pick)
 
@@ -129,15 +130,15 @@ Manager: pick the next song (random within `selected_genres`, excluding songs al
 
 Server-side: calls Postgres `start_round(p_game_code, p_song_id)` RPC. Returns the new round id.
 
-**Errors**: `not_found` (404), `gone` (410), `conflict` (409 — game not in `playing` state, or all songs in selected genres exhausted).
+**Errors**: `unauthorized` (401), `not_found` (404), `gone` (410), `conflict` (409 — game not in `playing` state, or all songs in selected genres exhausted).
 
 ---
 
 ### 2.5 `POST /games/{game_code}/award-points`
 
-Manager: evaluate the buzzed team's answer and award points. **Admin auth required.**
+Manager: evaluate the buzzed team's answer and award points. **Manager-token auth required.**
 
-**Headers**: `X-Admin-Password: <password>`
+**Headers**: `X-Manager-Token: <token>`
 
 **Request body**:
 ```json
@@ -168,13 +169,15 @@ Server translates to point values:
 
 Server-side: calls Postgres `award_points` RPC.
 
-**Errors**: `not_found` (404), `validation_error` (400 — source_correct on non-soundtrack song; multiple non-mutually-exclusive flags).
+**Errors**: `unauthorized` (401), `not_found` (404), `validation_error` (400 — source_correct on non-soundtrack song; multiple non-mutually-exclusive flags).
 
 ---
 
 ### 2.6 `POST /games/{game_code}/end`
 
-Manager: end the game manually. **Admin auth required.**
+Manager: end the game manually. **Manager-token auth required.**
+
+**Headers**: `X-Manager-Token: <token>`
 
 **Response 200**:
 ```json
@@ -185,19 +188,21 @@ Manager: end the game manually. **Admin auth required.**
 }
 ```
 
-**Errors**: `not_found` (404), `conflict` (409 — already ended).
+**Errors**: `unauthorized` (401), `not_found` (404), `conflict` (409 — already ended).
 
 ---
 
 ### 2.7 `DELETE /games/{game_code}/teams/{team_id}`
 
-Manager: kick a team. **Admin auth required.**
+Manager: kick a team. **Manager-token auth required.**
+
+**Headers**: `X-Manager-Token: <token>`
 
 **Response 204** (no body).
 
 Cascade: any future actions by the kicked team are rejected because their row is gone. Their browser detects the Realtime DELETE event and redirects to a "you've been kicked" screen.
 
-**Errors**: `not_found` (404).
+**Errors**: `unauthorized` (401), `not_found` (404).
 
 ---
 
@@ -217,7 +222,7 @@ Public. List all genres.
 
 ### 2.9 Admin Songs CRUD
 
-All under `/admin/songs/*`. **Admin auth required** on every endpoint.
+All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (`X-Admin-Password` header). This is the only surface that still uses the global admin password — game hosting is open.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -354,7 +359,7 @@ Free tier: 200 concurrent peers, 2M messages/month, 100 channels per client. See
 
 FastAPI allows: `https://soundclash.org`, `https://www.soundclash.org`, and (in dev) `http://localhost:5173`.
 
-Methods: `GET, POST, PUT, DELETE, OPTIONS`. Headers: `Content-Type, X-Admin-Password`.
+Methods: `GET, POST, PUT, DELETE, OPTIONS`. Headers: `Content-Type, X-Admin-Password, X-Manager-Token`.
 
 ### Cache-Control
 

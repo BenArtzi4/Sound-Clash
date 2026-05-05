@@ -13,11 +13,22 @@ Every interaction with Postgres happens as one of two principals:
 | **anon** | Supabase anon key (public) | Whatever RLS allows | Browser |
 | **service_role** | Supabase service-role key (secret) | Bypass RLS; everything | FastAPI on Render |
 
-There are no other roles in MVP. No `authenticated`, no per-user scoping, no JWTs from Supabase Auth. This is by design (matches today's behavior: admin password + anonymous teams).
+There are no other roles in MVP. No `authenticated`, no per-user scoping, no JWTs from Supabase Auth. This is by design (matches today's behavior: anonymous teams + per-game manager tokens for hosts + a single admin password for the durable song catalog).
 
 The anon key ships in the frontend bundle — it's not a secret. RLS policies prevent it from being abused.
 
 The service-role key is server-only. **It must never reach the browser.** The build pipeline for the frontend has zero environment variables prefixed `SUPABASE_SERVICE_ROLE_*` available; only `VITE_SUPABASE_ANON_KEY` and `VITE_SUPABASE_URL`. Verified in CI.
+
+### Application-level credentials
+
+Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.compare_digest`.
+
+| Credential | Header | Scope | Lifetime |
+|---|---|---|---|
+| **manager token** | `X-Manager-Token` | One specific game's host actions (`select-song`, `award-points`, `end`, kick a team) | Generated server-side at `POST /games`; lives 4h with the row; auto-expires when `cleanup_expired_games` deletes the game |
+| **admin password** | `X-Admin-Password` | Song catalog only (`/admin/songs/*` CRUD + bulk import) | Single env var on FastAPI; rotated by changing the env and restarting |
+
+`POST /games` is **public** (rate-limited 10/min/IP). The browser keeps the returned manager token in `localStorage` under `game:<code>:manager-token` and presents it on subsequent host calls. Players who happen to know the game code cannot manage it because they don't have the token. Hosting requires no signup, login, or persistent identity.
 
 ## 2. RLS Policy Matrix
 
@@ -96,7 +107,8 @@ If we ever add per-user scoping, RLS policies become more restrictive and Realti
 | **Cross-site request forgery (CSRF)** | Low | Low | No cookies; admin auth is a header (not auto-sent by browser); SameSite N/A |
 | **XSS via team name** | Low | Medium (admin views injected names) | React auto-escapes; never use `dangerouslySetInnerHTML` for user-supplied content; CSP header |
 | **Realtime quota exhaustion** | Medium | Medium (game-day outage) | Alert at 75% utilization; document max-concurrent-games limit |
-| **Admin password brute force** | Low | High (full admin access) | 16+ char strong password; rate limit admin endpoints to 100/min/IP |
+| **Admin password brute force** | Low | High (catalog write access) | 16+ char strong password; rate limit `/admin/*` to 100/min/IP |
+| **Manager-token guess for someone else's game** | Very low | Medium (could control a stranger's game) | 128-bit uuid → 2^128 search space; rate-limit on `/games/*` is 100/min/IP per endpoint; tokens auto-expire after 4h with the game row |
 | **YouTube ID injection** (admin endpoint) | Low | Low | Validate as 11-char alphanumeric+`-_`; reject others |
 | **SQL injection** | Low | Critical | Use parameterized queries everywhere (`supabase-py` does this); functions use prepared parameters |
 
@@ -108,7 +120,8 @@ What secrets exist, where they live, who sees them:
 |---|---|---|
 | `SUPABASE_ANON_KEY`, `SUPABASE_URL` | Frontend bundle, GitHub secrets, Render env, Cloudflare Pages env | Everyone (intentional) |
 | `SUPABASE_SERVICE_ROLE_KEY` | GitHub secrets, Render env | Server-only |
-| `ADMIN_PASSWORD` | GitHub secrets, Render env | Server + manager humans |
+| `ADMIN_PASSWORD` | GitHub secrets, Render env | Server + the catalog operator (gates `/admin/songs/*` only) |
+| `manager_token` (per game) | `active_games.manager_token` (uuid); host's `localStorage` | Whoever holds the host browser session for that game |
 | `RENDER_DEPLOY_HOOK` | GitHub secrets | CI only |
 | `CF_API_TOKEN` | GitHub secrets | CI only |
 | Postgres direct connection string | Supabase dashboard, **never** in repo | Operator only (rare use) |
@@ -197,8 +210,10 @@ Reject anything that doesn't fit. Don't try to "fix" invalid input.
 
 | Scenario | Behaviour |
 |---|---|
-| `X-Admin-Password` header missing | 401 Unauthorized, generic message ("admin authentication required") |
-| `X-Admin-Password` wrong | 401 Unauthorized, generic message (do NOT distinguish "wrong password" from "missing" — info leak) |
+| `X-Admin-Password` header missing or wrong (`/admin/songs/*`) | 401 Unauthorized, generic message ("admin authentication required") — do NOT distinguish missing from wrong |
+| `X-Manager-Token` missing or wrong (`/games/{code}/*`) | 401 Unauthorized, generic message ("manager token required") |
+| `/games/{code}/*` against a non-existent game | 404 — the dependency runs the lookup before the auth check, so a non-host gets the same 404 a real host would |
+| `/games/{code}/*` against an already-ended game | 410 Gone — short-circuited before the route body |
 | Anon key omitted on Supabase RPC | PostgREST 401 |
 | Service-role key omitted on FastAPI internal call | Should never happen — code path bug; alert via Sentry |
 
@@ -223,7 +238,7 @@ The auth middleware uses constant-time comparison (`secrets.compare_digest`) to 
 
 Listed for awareness, not in MVP:
 
-- Replace admin password with Supabase Auth (manager accounts)
+- Replace admin password with Supabase Auth for the catalog operator (manager-token flow needs no change)
 - Issue per-game JWT to teams on join → tighten RLS to per-game scope
 - Tighten CSP (remove `'unsafe-inline'`, use script hashes)
 - Add `pg_throttle` for RPC-level rate limiting

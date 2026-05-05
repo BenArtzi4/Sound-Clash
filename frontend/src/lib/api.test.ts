@@ -10,19 +10,16 @@ import {
   listGenres,
   selectSong,
 } from "./api";
-import { setAdminPassword } from "../context/authStorage";
 
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
-  setAdminPassword(null);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  setAdminPassword(null);
 });
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -33,7 +30,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe("api - public routes", () => {
-  it("getHealth GETs /health without admin header", async () => {
+  it("getHealth GETs /health without auth headers", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, { status: "ok", version: "1.0", supabase: "ok" }),
     );
@@ -44,6 +41,7 @@ describe("api - public routes", () => {
     expect(init.method).toBe("GET");
     const headers = init.headers as Record<string, string>;
     expect(headers["X-Admin-Password"]).toBeUndefined();
+    expect(headers["X-Manager-Token"]).toBeUndefined();
   });
 
   it("listGenres GETs /genres", async () => {
@@ -69,18 +67,8 @@ describe("api - public routes", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ name: "Alice" });
   });
-});
 
-describe("api - admin routes", () => {
-  it("throws ApiError when admin password is unset before fetching", async () => {
-    await expect(createGame({ total_rounds: 5, selected_genres: [] })).rejects.toBeInstanceOf(
-      ApiError,
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("createGame sends X-Admin-Password header", async () => {
-    setAdminPassword("secret");
+  it("createGame is unauthenticated and returns the manager token", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(201, {
         game_code: "ABCDEF",
@@ -89,16 +77,22 @@ describe("api - admin routes", () => {
         selected_genres: [],
         started_at: "2026-05-05T12:00:00Z",
         expires_at: "2026-05-05T16:00:00Z",
+        manager_token: "11111111-1111-1111-1111-111111111111",
       }),
     );
-    await createGame({ total_rounds: 10, selected_genres: ["g1"] });
+    const res = await createGame({ total_rounds: 10, selected_genres: ["g1"] });
+    expect(res.manager_token).toBe("11111111-1111-1111-1111-111111111111");
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    expect(headers["X-Admin-Password"]).toBe("secret");
+    expect(headers["X-Admin-Password"]).toBeUndefined();
+    expect(headers["X-Manager-Token"]).toBeUndefined();
   });
+});
 
-  it("selectSong posts empty body to right URL", async () => {
-    setAdminPassword("secret");
+describe("api - manager-token routes", () => {
+  const TOKEN = "22222222-2222-2222-2222-222222222222";
+
+  it("selectSong sends X-Manager-Token", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         round_id: "r1",
@@ -114,14 +108,15 @@ describe("api - admin routes", () => {
         },
       }),
     );
-    const res = await selectSong("ABCDEF");
+    const res = await selectSong("ABCDEF", TOKEN);
     expect(res.round_id).toBe("r1");
-    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("http://localhost:8000/games/ABCDEF/select-song");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Manager-Token"]).toBe(TOKEN);
   });
 
-  it("awardPoints sends booleans", async () => {
-    setAdminPassword("secret");
+  it("awardPoints sends booleans + token", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         round_id: "r1",
@@ -130,7 +125,7 @@ describe("api - admin routes", () => {
         team_total_score: 30,
       }),
     );
-    const res = await awardPoints("ABCDEF", {
+    const res = await awardPoints("ABCDEF", TOKEN, {
       round_id: "r1",
       title_correct: true,
       artist_correct: true,
@@ -139,6 +134,8 @@ describe("api - admin routes", () => {
     });
     expect(res.points_awarded).toBe(15);
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Manager-Token"]).toBe(TOKEN);
     expect(JSON.parse(init.body as string)).toMatchObject({
       title_correct: true,
       artist_correct: true,
@@ -147,7 +144,6 @@ describe("api - admin routes", () => {
   });
 
   it("endGame returns parsed body", async () => {
-    setAdminPassword("secret");
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         game_code: "ABCDEF",
@@ -155,33 +151,33 @@ describe("api - admin routes", () => {
         ended_at: "2026-05-05T13:00:00Z",
       }),
     );
-    const res = await endGame("ABCDEF");
+    const res = await endGame("ABCDEF", TOKEN);
     expect(res.status).toBe("ended");
   });
 
-  it("kickTeam handles 204 No Content", async () => {
-    setAdminPassword("secret");
+  it("kickTeam handles 204 No Content with token header", async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
-    await expect(kickTeam("ABCDEF", "t1")).resolves.toBeUndefined();
+    await expect(kickTeam("ABCDEF", TOKEN, "t1")).resolves.toBeUndefined();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Manager-Token"]).toBe(TOKEN);
   });
 
   it("maps non-2xx body to ApiError", async () => {
-    setAdminPassword("wrong");
     fetchMock.mockResolvedValueOnce(
       jsonResponse(401, {
         error: "unauthorized",
-        message: "admin authentication required",
+        message: "manager token required",
       }),
     );
-    await expect(createGame({ total_rounds: 5, selected_genres: ["g1"] })).rejects.toMatchObject({
+    await expect(endGame("ABCDEF", TOKEN)).rejects.toMatchObject({
       code: "unauthorized",
       status: 401,
     });
   });
 
   it("falls back when error body is missing", async () => {
-    setAdminPassword("x");
     fetchMock.mockResolvedValueOnce(new Response("", { status: 500 }));
-    await expect(endGame("ABCDEF")).rejects.toBeInstanceOf(ApiError);
+    await expect(endGame("ABCDEF", TOKEN)).rejects.toBeInstanceOf(ApiError);
   });
 });

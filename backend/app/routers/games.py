@@ -21,7 +21,7 @@ from app.db.errors import (
     map_postgrest_error,
 )
 from app.db.supabase_client import SupabaseClientLike, get_supabase_client
-from app.middleware.admin_auth import require_admin
+from app.middleware.manager_auth import require_manager_token
 from app.middleware.rate_limit import limiter
 from app.models.games import (
     AwardPointsRequest,
@@ -195,7 +195,6 @@ def _kick_blocking(client: SupabaseClientLike, code: str, team_id: str) -> None:
     "/games",
     response_model=CreateGameResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
 @limiter.limit("10/minute")
 async def create_game(request: Request, body: CreateGameRequest) -> CreateGameResponse:
@@ -229,7 +228,7 @@ async def join_team(request: Request, game_code: str, body: JoinTeamRequest) -> 
 @router.post(
     "/games/{game_code}/select-song",
     response_model=SelectSongResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_manager_token)],
 )
 @limiter.limit("100/minute")
 async def select_song(
@@ -259,7 +258,7 @@ async def select_song(
 @router.post(
     "/games/{game_code}/award-points",
     response_model=AwardPointsResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_manager_token)],
 )
 @limiter.limit("100/minute")
 async def award_points(
@@ -284,7 +283,7 @@ async def award_points(
 @router.post(
     "/games/{game_code}/end",
     response_model=EndGameResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_manager_token)],
 )
 @limiter.limit("100/minute")
 async def end_game(request: Request, game_code: str) -> EndGameResponse:
@@ -296,7 +295,7 @@ async def end_game(request: Request, game_code: str) -> EndGameResponse:
 @router.delete(
     "/games/{game_code}/teams/{team_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_manager_token)],
 )
 @limiter.limit("100/minute")
 async def kick_team(request: Request, game_code: str, team_id: UUID) -> None:

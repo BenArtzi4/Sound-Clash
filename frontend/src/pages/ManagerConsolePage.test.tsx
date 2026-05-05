@@ -48,10 +48,9 @@ vi.mock("../components/YouTubePlayer", () => ({
   }),
 }));
 
-import { ApiError, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
-import { AuthProvider } from "../context/AuthContext";
+import { awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
-import { setAdminPassword } from "../context/authStorage";
+import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
   fireSubscribed,
   makeActiveGame,
@@ -62,10 +61,12 @@ import {
 } from "../test/supabaseMock";
 import { ManagerConsolePage } from "./ManagerConsolePage";
 
+const TOKEN = "tok-host-1";
+
 beforeEach(() => {
   resetSupabaseMock();
-  window.sessionStorage.clear();
-  setAdminPassword("secret");
+  window.localStorage.clear();
+  setManagerToken("ABCDEF", TOKEN);
   onReadyHandler = null;
   vi.mocked(selectSong).mockReset();
   vi.mocked(awardPoints).mockReset();
@@ -74,8 +75,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  window.sessionStorage.clear();
-  setAdminPassword(null);
+  window.localStorage.clear();
   vi.clearAllMocks();
 });
 
@@ -83,18 +83,23 @@ function renderConsole() {
   return render(
     <MemoryRouter initialEntries={["/manager/game/ABCDEF"]}>
       <ToastProvider>
-        <AuthProvider>
-          <Routes>
-            <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
-            <Route path="/manager/login" element={<div>login page</div>} />
-          </Routes>
-        </AuthProvider>
+        <Routes>
+          <Route path="/" element={<div>home page</div>} />
+          <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
+        </Routes>
       </ToastProvider>
     </MemoryRouter>,
   );
 }
 
 describe("ManagerConsolePage", () => {
+  it("shows the not-host branch when no manager token is stored", () => {
+    window.localStorage.clear();
+    renderConsole();
+    expect(screen.getByText(/you're not the host of this game/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to home/i })).toBeInTheDocument();
+  });
+
   it("renders connecting state while subscribing", () => {
     renderConsole();
     expect(screen.getByText(/connecting to game/i)).toBeInTheDocument();
@@ -132,7 +137,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(startBtn).toBeEnabled());
   });
 
-  it("calls selectSong when Start is pressed", async () => {
+  it("calls selectSong with the manager token when Start is pressed", async () => {
     setHydrate({
       game: makeActiveGame({ status: "waiting" }),
       teams: [],
@@ -160,26 +165,8 @@ describe("ManagerConsolePage", () => {
     });
     await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: /start game/i }));
-    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF"));
+    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
-  });
-
-  it("logs out and redirects on 401 from selectSong", async () => {
-    setHydrate({
-      game: makeActiveGame({ status: "waiting" }),
-      teams: [],
-      rounds: [],
-    });
-    vi.mocked(selectSong).mockRejectedValueOnce(new ApiError("unauthorized", "no", 401));
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    act(() => {
-      onReadyHandler?.();
-    });
-    fireEvent.click(screen.getByRole("button", { name: /start game/i }));
-    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
   });
 
   it("award button enables only when a team is buzzed", async () => {
@@ -202,7 +189,7 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByRole("button", { name: /award points/i })).toBeEnabled();
   });
 
-  it("calls awardPoints with current checkbox state", async () => {
+  it("calls awardPoints with the manager token + checkbox state", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -225,7 +212,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByLabelText(/^title$/i));
     fireEvent.click(screen.getByRole("button", { name: /award points/i }));
     await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", {
+      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
         round_id: "r1",
         title_correct: true,
         artist_correct: false,
@@ -255,11 +242,10 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    // Both desktop inline + mobile sticky bars render the Skip button.
     const skips = screen.getAllByRole("button", { name: /^skip$/i });
     fireEvent.click(skips[0]!);
     await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", {
+      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
         round_id: "r1",
         title_correct: false,
         artist_correct: false,
@@ -284,7 +270,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => screen.getByRole("dialog"));
     expect(kickTeam).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: /remove team/i }));
-    await waitFor(() => expect(kickTeam).toHaveBeenCalledWith("ABCDEF", "t1"));
+    await waitFor(() => expect(kickTeam).toHaveBeenCalledWith("ABCDEF", TOKEN, "t1"));
   });
 
   it("kick can be cancelled from the confirm dialog", async () => {
@@ -303,7 +289,7 @@ describe("ManagerConsolePage", () => {
     expect(kickTeam).not.toHaveBeenCalled();
   });
 
-  it("end game opens a confirm dialog and calls api.endGame after confirm", async () => {
+  it("end game confirms, calls endGame, and clears the manager token", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
       teams: [],
@@ -322,10 +308,11 @@ describe("ManagerConsolePage", () => {
     const endDialog = await waitFor(() => screen.getByRole("dialog"));
     expect(endGame).not.toHaveBeenCalled();
     fireEvent.click(within(endDialog).getByRole("button", { name: /^end game$/i }));
-    await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF"));
+    await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() => expect(getManagerToken("ABCDEF")).toBeNull());
   });
 
-  it("sign out logs out and goes straight to login (no confirm)", async () => {
+  it("Home button navigates back to the landing page", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
       teams: [],
@@ -335,7 +322,7 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^home$/i }));
+    await waitFor(() => expect(screen.getByText("home page")).toBeInTheDocument());
   });
 });

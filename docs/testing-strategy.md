@@ -118,7 +118,7 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 | `pages/DisplayScreen.test.tsx` | renders scoreboard; updates on team-score events |
 | `components/BuzzButton.test.tsx` | disabled while locked; disabled while disconnected; click fires buzz |
 | `components/Scoreboard.test.tsx` | sorts by score desc; ties shown together |
-| `context/AuthContext.test.tsx` | sessionStorage round-trip; logout clears |
+| `lib/managerToken.test.ts` (covered inline by `pages/ManagerConsolePage.test.tsx` + `pages/ManagerCreateGamePage.test.tsx`) | localStorage round-trip; absent token → "not the host" branch |
 
 ### 4.4 E2E tests — `tests/e2e/`
 
@@ -130,7 +130,6 @@ Playwright with multi-browser-context. Runs against a dedicated `Sound-Clash-Pre
 | `full_game.spec.ts` | 3-round happy path with score accumulation |
 | `reconnection.spec.ts` | team disconnects mid-game; reload; state restored; can buzz |
 | `expiration.spec.ts` | game with expires_at in past; cron runs; all clients redirect to "expired" page |
-| `admin_login.spec.ts` | wrong password rejected; correct password admits |
 | `admin_songs_crud.spec.ts` | create/edit/delete song via admin API + bulk-import idempotency (UI deferred — see roadmap) |
 | `kick_team.spec.ts` | manager kicks team; team's tab redirects |
 | `mobile_team.spec.ts` | iPhone viewport; buzzer reachable + tappable |
@@ -143,7 +142,7 @@ Run manually after each prod deploy.
 
 | File | What it does |
 |---|---|
-| `post_deploy.sh` | curl `/health`; create game with admin password; join 2 teams; start round; end game; cleanup |
+| `post_deploy.sh` | curl `/health`; create game (no auth) and capture `manager_token`; join 2 teams; start round (with token); end game (with token); cleanup |
 | `prod_realtime.spec.ts` | Playwright against prod URL; one buzzer race round end-to-end |
 
 ## 5. Phase Schedule

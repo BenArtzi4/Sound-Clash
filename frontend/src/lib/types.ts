@@ -105,6 +105,7 @@ export interface CreateGameResponse {
   selected_genres: string[];
   started_at: string;
   expires_at: string;
+  manager_token: string;
 }
 
 export interface SelectSongResponse {

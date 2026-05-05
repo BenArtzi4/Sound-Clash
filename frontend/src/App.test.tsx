@@ -7,17 +7,14 @@ vi.mock("./lib/supabase", async () => {
 });
 
 import { App } from "./App";
-import { setAdminPassword } from "./context/authStorage";
 
 beforeEach(() => {
   window.history.pushState({}, "", "/");
-  window.sessionStorage.clear();
-  setAdminPassword(null);
+  window.localStorage.clear();
 });
 
 afterEach(() => {
-  window.sessionStorage.clear();
-  setAdminPassword(null);
+  window.localStorage.clear();
 });
 
 describe("App router", () => {
@@ -26,15 +23,15 @@ describe("App router", () => {
     expect(screen.getByRole("heading", { name: /welcome to sound clash/i })).toBeInTheDocument();
   });
 
-  it("guards /manager/create when no admin password is set", () => {
+  it("renders /manager/create publicly (no password prompt)", () => {
     window.history.pushState({}, "", "/manager/create");
     render(<App />);
-    expect(screen.getByPlaceholderText(/password/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /host a game/i })).toBeInTheDocument();
   });
 
   it("redirects unknown paths home", () => {
     window.history.pushState({}, "", "/totally-bogus");
     render(<App />);
-    expect(screen.getByRole("link", { name: /manager console/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /host a game/i })).toBeInTheDocument();
   });
 });

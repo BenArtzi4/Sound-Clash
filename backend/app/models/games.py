@@ -32,6 +32,7 @@ class CreateGameResponse(BaseModel):
     selected_genres: list[UUID]
     started_at: datetime
     expires_at: datetime
+    manager_token: UUID
 
 
 class JoinTeamRequest(BaseModel):
