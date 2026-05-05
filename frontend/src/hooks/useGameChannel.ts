@@ -84,8 +84,22 @@ export function useGameChannel(gameCode: string): {
   useEffect(() => {
     if (!gameCode) return;
     let cancelled = false;
+    let hydrated = false;
+    // Realtime events that arrive between SUBSCRIBED and HYDRATE land on
+    // state===null and are dropped by the reducer's null guards. Queue them
+    // here and replay after HYDRATE; gameReducer is idempotent so replay is safe.
+    const pending: GameAction[] = [];
     setStatus("connecting");
     setError(null);
+
+    function dispatchOrQueue(action: GameAction): void {
+      if (cancelled) return;
+      if (!hydrated) {
+        pending.push(action);
+        return;
+      }
+      dispatch(action);
+    }
 
     const filter = `game_code=eq.${gameCode}`;
     type LooseChannel = {
@@ -103,7 +117,7 @@ export function useGameChannel(gameCode: string): {
         (payload) => {
           const typed = payload as PostgresChangePayload<ActiveGame>;
           observeServerTime(typed.commit_timestamp);
-          dispatch({ type: "GAME_CHANGE", payload: typed });
+          dispatchOrQueue({ type: "GAME_CHANGE", payload: typed });
           if (typed.eventType === "DELETE") setStatus("gone");
         },
       )
@@ -113,7 +127,7 @@ export function useGameChannel(gameCode: string): {
         (payload) => {
           const typed = payload as PostgresChangePayload<Team>;
           observeServerTime(typed.commit_timestamp);
-          dispatch({ type: "TEAM_CHANGE", payload: typed });
+          dispatchOrQueue({ type: "TEAM_CHANGE", payload: typed });
         },
       )
       .on(
@@ -122,7 +136,7 @@ export function useGameChannel(gameCode: string): {
         (payload) => {
           const typed = payload as PostgresChangePayload<GameRound>;
           observeServerTime(typed.commit_timestamp);
-          dispatch({ type: "ROUND_CHANGE", payload: typed });
+          dispatchOrQueue({ type: "ROUND_CHANGE", payload: typed });
         },
       )
       .subscribe((subStatus) => {
@@ -144,25 +158,32 @@ export function useGameChannel(gameCode: string): {
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);
-        if (cancelled) return;
-        if (gameRes.error) throw gameRes.error;
-        if (teamsRes.error) throw teamsRes.error;
-        if (roundsRes.error) throw roundsRes.error;
-        if (!gameRes.data) {
-          setStatus("gone");
-          dispatch({ type: "GAME_DELETED" });
-          return;
+        if (!cancelled) {
+          if (gameRes.error) throw gameRes.error;
+          if (teamsRes.error) throw teamsRes.error;
+          if (roundsRes.error) throw roundsRes.error;
+          if (!gameRes.data) {
+            setStatus("gone");
+            dispatch({ type: "GAME_DELETED" });
+          } else {
+            dispatch({
+              type: "HYDRATE",
+              game: gameRes.data as ActiveGame,
+              teams: (teamsRes.data ?? []) as Team[],
+              rounds: (roundsRes.data ?? []) as GameRound[],
+            });
+          }
         }
-        dispatch({
-          type: "HYDRATE",
-          game: gameRes.data as ActiveGame,
-          teams: (teamsRes.data ?? []) as Team[],
-          rounds: (roundsRes.data ?? []) as GameRound[],
-        });
       } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e : new Error(String(e)));
+        if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
       }
+      hydrated = true;
+      if (!cancelled) {
+        for (const action of pending) {
+          dispatch(action);
+        }
+      }
+      pending.length = 0;
     }
 
     return () => {

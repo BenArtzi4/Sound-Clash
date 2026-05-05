@@ -320,4 +320,30 @@ describe("useGameChannel - subscription", () => {
     });
     await waitFor(() => expect(result.current.status).toBe("gone"));
   });
+
+  it("queues Realtime events that arrive during hydration and replays them after HYDRATE", async () => {
+    const game = makeActiveGame({ status: "waiting" });
+    setHydrate({ game, teams: [], rounds: [] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+
+    // Begin subscription handshake but don't await it yet — we want to
+    // interleave a Realtime UPDATE before hydrate's SELECTs settle.
+    const subPromise = fireSubscribed();
+
+    // This UPDATE arrives while state is still null. Without queuing the
+    // reducer's null guards drop it; with queuing it replays after HYDRATE.
+    fireGame(
+      makePayload("active_games", "UPDATE", {
+        new: { ...game, status: "playing" },
+      }),
+    );
+
+    await act(async () => {
+      await subPromise;
+    });
+
+    await waitFor(() => {
+      expect(result.current.state?.game.status).toBe("playing");
+    });
+  });
 });
