@@ -150,6 +150,17 @@ export function ManagerConsolePage() {
     }
   }
 
+  // status="gone" must be checked before the skeleton: an active_games
+  // DELETE flips the reducer to null state AND status to "gone" in the
+  // same tick, and the user should see the explanation, not a skeleton.
+  if (status === "gone" || (state && !state.game)) {
+    return (
+      <main className={styles.shell}>
+        <p className="error">This game no longer exists.</p>
+      </main>
+    );
+  }
+
   if (!state || status === "connecting") {
     return (
       <main className={styles.shell} aria-busy="true">
@@ -159,14 +170,6 @@ export function ManagerConsolePage() {
           <Skeleton height={260} />
           <Skeleton height={180} />
         </div>
-      </main>
-    );
-  }
-
-  if (status === "gone" || !state.game) {
-    return (
-      <main className={styles.shell}>
-        <p className="error">This game no longer exists.</p>
       </main>
     );
   }
@@ -362,6 +365,7 @@ export function ManagerConsolePage() {
                         className="btn btn-danger"
                         onClick={() => setPending({ kind: "kick", teamId: t.id, teamName: t.name })}
                         disabled={busy}
+                        data-testid="kick-team"
                       >
                         Kick
                       </button>
