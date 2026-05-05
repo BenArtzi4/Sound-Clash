@@ -7,6 +7,7 @@ with the service-role key; tests inject a fake via
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Any, Literal, Protocol, runtime_checkable
@@ -15,6 +16,8 @@ import anyio
 from supabase import Client, create_client
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -57,6 +60,7 @@ async def health_check_supabase() -> Literal["ok", "degraded"]:
             await anyio.to_thread.run_sync(_probe)
         return "ok"
     except Exception:
+        logger.warning("supabase health probe failed", exc_info=True)
         return "degraded"
 
 
