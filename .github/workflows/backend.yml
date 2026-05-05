@@ -63,9 +63,9 @@ jobs:
             --cov-branch \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=0
-        # NOTE: --cov-fail-under starts at 0 in Phase 1 (empty app);
-        # ratcheted up at end of each phase per docs/testing-strategy.md §5.
+            --cov-fail-under=90
+        # NOTE: ratcheted to 90 at end of Phase 4 per docs/testing-strategy.md §5.
+        # Branch coverage tracked but not gated until a later phase.
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6

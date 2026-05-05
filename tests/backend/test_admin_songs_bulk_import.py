@@ -1,0 +1,93 @@
+"""POST /admin/songs/bulk-import — CSV upload, idempotent on youtube_id."""
+
+from __future__ import annotations
+
+import io
+
+import pytest
+
+from ._helpers import insert_song
+
+pytestmark = pytest.mark.needs_docker
+
+
+def _csv(rows: list[list[str]]) -> bytes:
+    header = "title,artist,youtube_id,start_time,is_soundtrack,source,genres\n"
+    body = "\n".join(",".join(r) for r in rows)
+    return (header + body + "\n").encode("utf-8")
+
+
+async def test_inserts_new_rows(admin_client) -> None:
+    csv = _csv(
+        [
+            ["Hello", "Adele", "YQHsXMglC9A", "0", "false", "", "rock"],
+            ["Yesterday", "Beatles", "NrgmdOz227I", "10", "false", "", "rock"],
+        ]
+    )
+    resp = await admin_client.post(
+        "/admin/songs/bulk-import",
+        files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["inserted"] == 2
+    assert body["updated"] == 0
+
+
+async def test_updates_existing_youtube_id(admin_client, db) -> None:
+    await insert_song(
+        db, title="Old", artist="Old", youtube_id="DUPLICATEKEY", genre_slugs=["rock"]
+    )
+    csv = _csv(
+        [["NewTitle", "NewArtist", "DUPLICATEKEY", "5", "false", "", "rock"]]
+    )
+    resp = await admin_client.post(
+        "/admin/songs/bulk-import",
+        files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["inserted"] == 0
+    assert body["updated"] == 1
+    row = await db.fetchrow(
+        "SELECT title FROM songs WHERE youtube_id = $1", "DUPLICATEKEY"
+    )
+    assert row["title"] == "NewTitle"
+
+
+async def test_malformed_row_rejected_with_line_number(admin_client) -> None:
+    csv = _csv(
+        [
+            ["Hello", "Adele", "YQHsXMglC9A", "0", "false", "", "rock"],
+            ["Bad", "Bad", "tooshort", "0", "false", "", "rock"],
+        ]
+    )
+    resp = await admin_client.post(
+        "/admin/songs/bulk-import",
+        files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"] == "validation_error"
+    assert body["details"]["line"] == 3  # 1=header, 2=first row, 3=bad row
+
+
+async def test_unknown_genre_rejected(admin_client) -> None:
+    csv = _csv(
+        [["Song", "Artist", "abcDEF1234X", "0", "false", "", "non_existent_slug"]]
+    )
+    resp = await admin_client.post(
+        "/admin/songs/bulk-import",
+        files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["details"]["issue"] == "unknown_slug"
+
+
+async def test_admin_required(client) -> None:
+    csv = _csv([["X", "Y", "abcDEF1234X", "0", "false", "", "rock"]])
+    resp = await client.post(
+        "/admin/songs/bulk-import",
+        files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert resp.status_code == 401
