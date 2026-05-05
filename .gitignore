@@ -29,6 +29,11 @@ frontend/dist/
 frontend/.vite/
 frontend/coverage/
 
+# Lockfile temporarily untracked: npm 10.x on the Linux runner mishandles
+# esbuild's per-platform optionalDependencies and fails npm ci. Re-track
+# once the workflow runs Node 22 (npm 10.9+) so npm ci stops choking on it.
+frontend/package-lock.json
+
 # Environment files (NEVER commit secrets)
 .env
 .env.*
