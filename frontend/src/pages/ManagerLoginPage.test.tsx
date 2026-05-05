@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthProvider } from "../context/AuthContext";
-import { setAdminPassword } from "../context/authStorage";
+import { getAdminPassword, setAdminPassword } from "../context/authStorage";
 import { ManagerLoginPage } from "./ManagerLoginPage";
 
 beforeEach(() => {
@@ -32,7 +32,7 @@ describe("ManagerLoginPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
     expect(screen.getByText("create page")).toBeInTheDocument();
-    expect(window.sessionStorage.getItem("auth:adminPassword")).toBe("secret");
+    expect(getAdminPassword()).toBe("secret");
   });
 
   it("blocks submit when password is empty", () => {

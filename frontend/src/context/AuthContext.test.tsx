@@ -20,26 +20,30 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("AuthContext", () => {
-  it("initial state reads from sessionStorage", () => {
+  it("initial state reads from in-memory cache", () => {
     setAdminPassword("preset");
     const { result } = renderHook(() => useAuth(), { wrapper });
     expect(result.current.adminPassword).toBe("preset");
   });
 
-  it("login writes both state and storage; getAdminPassword reflects it", () => {
+  it("login writes both state and cache; getAdminPassword reflects it", () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     act(() => result.current.login("hunter2"));
     expect(result.current.adminPassword).toBe("hunter2");
-    expect(window.sessionStorage.getItem("auth:adminPassword")).toBe("hunter2");
     expect(getAdminPassword()).toBe("hunter2");
   });
 
-  it("logout clears state and storage", () => {
+  it("login does NOT persist to sessionStorage", () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    act(() => result.current.login("hunter2"));
+    expect(window.sessionStorage.getItem("auth:adminPassword")).toBeNull();
+  });
+
+  it("logout clears state and cache", () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     act(() => result.current.login("x"));
     act(() => result.current.logout());
     expect(result.current.adminPassword).toBeNull();
-    expect(window.sessionStorage.getItem("auth:adminPassword")).toBeNull();
     expect(getAdminPassword()).toBeNull();
   });
 
