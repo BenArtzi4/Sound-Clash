@@ -18,10 +18,10 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   transition:
-    background 200ms ease,
-    border-color 200ms ease,
-    transform 200ms ease,
-    box-shadow 200ms ease;
+    background 350ms ease,
+    border-color 350ms ease,
+    transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 350ms ease;
 }
 
 .row:hover {
@@ -50,6 +50,21 @@
   font-size: 1.5rem;
   font-variant-numeric: tabular-nums;
   color: var(--color-primary-strong);
+  display: inline-block;
+  animation: score-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes score-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35);
+    color: var(--color-warning);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .buzzed {
@@ -67,9 +82,71 @@
   color: #b45309;
 }
 
+.flashing {
+  animation: row-flash 700ms ease-out;
+}
+
+@keyframes row-flash {
+  0% {
+    background: rgba(245, 158, 11, 0.32);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18);
+  }
+  60% {
+    background: rgba(245, 158, 11, 0.16);
+  }
+  100% {
+    background: var(--color-bg-elev);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
 .empty {
-  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
+  gap: 0.5rem;
+  padding: 32px 20px;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.04) 0%, transparent 100%);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
   color: var(--color-text-dim);
-  font-style: italic;
+}
+
+.emptyIcon {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 32px;
+  margin-bottom: 4px;
+  opacity: 0.7;
+}
+
+.emptyIcon span {
+  width: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%);
+}
+
+.emptyIcon span:nth-child(1) {
+  height: 60%;
+}
+.emptyIcon span:nth-child(2) {
+  height: 100%;
+}
+.emptyIcon span:nth-child(3) {
+  height: 75%;
+}
+
+.emptyTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.emptyHint {
+  font-size: 0.9rem;
+  margin: 0;
+  color: var(--color-text-dim);
 }
