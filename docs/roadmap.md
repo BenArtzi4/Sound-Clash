@@ -173,7 +173,7 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 **Goal**: Automated proof that the full system works under realistic concurrency, on a real Supabase project, with measured latency.
 
-**Status**: cores landed (`buzzer_race.spec.ts`, `full_game.spec.ts`, Playwright config with local `webServer`, `db/seed/songs.sql`, `data-testid` hooks on the manager console). Remaining specs (`reconnection`, `expiration`, `admin_login`, `admin_songs_crud`, `kick_team`, `mobile_team`) and the multi-browser matrix are follow-up PRs. Creating the `Sound-Clash-Preview` Supabase project + setting GitHub secrets is an out-of-band setup step (see `tests/e2e/README.md`).
+**Status**: complete. All eight specs from §4.4 are landed (`buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_login`, `admin_songs_crud`, `kick_team`, `mobile_team`). `admin_songs_crud` is API-driven (the `/admin/songs` UI is a deferred Phase 5 carve-out; the backend contract is exercised end-to-end). The multi-browser matrix (firefox / webkit / iPhone-SE project) and the 100×-stress `buzz_race_stress` job stay declared but label-gated. Creating the `Sound-Clash-Preview` Supabase project + setting GitHub secrets is an out-of-band setup step (see `tests/e2e/README.md`).
 
 **Deliverables**
 - `tests/e2e/playwright.config.ts` — multi-context test runner

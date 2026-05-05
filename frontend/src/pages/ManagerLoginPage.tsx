@@ -30,9 +30,15 @@ export function ManagerLoginPage() {
           placeholder="Password"
           autoComplete="current-password"
           required
+          data-testid="admin-password"
         />
         <div className={styles.actions}>
-          <button type="submit" className="btn btn-primary" disabled={!password}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!password}
+            data-testid="admin-login-submit"
+          >
             Continue
           </button>
         </div>

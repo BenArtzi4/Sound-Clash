@@ -2,7 +2,7 @@
 
 Playwright multi-context tests. Run against the `Sound-Clash-Preview` Supabase project (a separate Supabase free-tier project from prod).
 
-**Status:** Phase 6 cores landed — `buzzer_race.spec.ts` and `full_game.spec.ts`. The remaining six specs from [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 (`reconnection`, `expiration`, `admin_login`, `admin_songs_crud`, `kick_team`, `mobile_team`) are follow-ups.
+**Status:** all eight specs from [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 are landed: `buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_login`, `admin_songs_crud` (API-driven — the `/admin/songs` UI is a deferred carve-out), `kick_team`, `mobile_team`. The multi-browser matrix (firefox / webkit / iPhone-SE project) is declared in `playwright.config.ts` but the CI job runs `--project=chromium` only.
 
 ## One-time preview project setup
 
