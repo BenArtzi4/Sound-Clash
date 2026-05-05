@@ -112,17 +112,19 @@ describe("DisplayPage board", () => {
     expect(screen.getByText(/Alice buzzed in/i)).toBeInTheDocument();
   });
 
-  it("renders the ended banner when the game is over", async () => {
+  it("renders the end-screen splash when the game is over", async () => {
     setHydrate({
       game: makeActiveGame({ status: "ended" }),
-      teams: [],
+      teams: [makeTeam({ id: "t1", name: "Alice", score: 12 })],
       rounds: [],
     });
     renderAt("/display/ABCDEF");
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByText(/game over/i)).toBeInTheDocument();
+    expect(screen.getByText(/final results/i)).toBeInTheDocument();
+    expect(screen.getByText(/winner/i)).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
   it("renders an empty-board hint when no teams have joined", async () => {
