@@ -1,0 +1,205 @@
+import { useEffect, useReducer, useState } from "react";
+import { supabase } from "../lib/supabase";
+import type {
+  ActiveGame,
+  GameAction,
+  GameRound,
+  GameState,
+  PostgresChangePayload,
+  Team,
+} from "../lib/types";
+import { observeServerTime } from "./useServerTime";
+
+export type ChannelStatus =
+  | "idle"
+  | "connecting"
+  | "subscribed"
+  | "reconnecting"
+  | "gone";
+
+export function gameReducer(
+  state: GameState | null,
+  action: GameAction,
+): GameState | null {
+  switch (action.type) {
+    case "HYDRATE": {
+      const teams = new Map(action.teams.map((t) => [t.id, t]));
+      const rounds = [...action.rounds].sort(
+        (a, b) => a.round_number - b.round_number,
+      );
+      const currentRound =
+        rounds.find((r) => r.id === action.game.current_round_id) ?? null;
+      return { game: action.game, teams, rounds, currentRound };
+    }
+    case "GAME_CHANGE": {
+      if (state === null) return null;
+      const { eventType, new: row } = action.payload;
+      if (eventType === "DELETE") return null;
+      const game = row as ActiveGame;
+      const currentRound =
+        state.rounds.find((r) => r.id === game.current_round_id) ?? null;
+      return { ...state, game, currentRound };
+    }
+    case "TEAM_CHANGE": {
+      if (state === null) return null;
+      const { eventType } = action.payload;
+      if (eventType === "DELETE") {
+        const oldRow = action.payload.old as Partial<Team>;
+        if (!oldRow.id) return state;
+        const teams = new Map(state.teams);
+        teams.delete(oldRow.id);
+        return { ...state, teams };
+      }
+      const team = action.payload.new as Team;
+      const teams = new Map(state.teams);
+      teams.set(team.id, team);
+      return { ...state, teams };
+    }
+    case "ROUND_CHANGE": {
+      if (state === null) return null;
+      const { eventType } = action.payload;
+      if (eventType === "DELETE") {
+        const oldRow = action.payload.old as Partial<GameRound>;
+        if (!oldRow.id) return state;
+        const rounds = state.rounds.filter((r) => r.id !== oldRow.id);
+        const currentRound =
+          state.currentRound?.id === oldRow.id ? null : state.currentRound;
+        return { ...state, rounds, currentRound };
+      }
+      const round = action.payload.new as GameRound;
+      if (eventType === "INSERT") {
+        const exists = state.rounds.some((r) => r.id === round.id);
+        const merged = exists
+          ? state.rounds.map((r) => (r.id === round.id ? round : r))
+          : [...state.rounds, round].sort(
+              (a, b) => a.round_number - b.round_number,
+            );
+        const currentRound =
+          state.game.current_round_id === round.id ? round : state.currentRound;
+        return { ...state, rounds: merged, currentRound };
+      }
+      // UPDATE
+      const rounds = state.rounds.map((r) => (r.id === round.id ? round : r));
+      const currentRound =
+        state.currentRound?.id === round.id ? round : state.currentRound;
+      return { ...state, rounds, currentRound };
+    }
+    case "GAME_DELETED":
+      return null;
+  }
+}
+
+export function useGameChannel(gameCode: string): {
+  state: GameState | null;
+  status: ChannelStatus;
+  error: Error | null;
+} {
+  const [state, dispatch] = useReducer(gameReducer, null);
+  const [status, setStatus] = useState<ChannelStatus>("idle");
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!gameCode) return;
+    let cancelled = false;
+    setStatus("connecting");
+    setError(null);
+
+    const filter = `game_code=eq.${gameCode}`;
+    type LooseChannel = {
+      on: (
+        event: string,
+        opts: { event: string; schema: string; table: string; filter: string },
+        cb: (payload: PostgresChangePayload<unknown>) => void,
+      ) => LooseChannel;
+      subscribe: (
+        cb: (status: string) => void | Promise<void>,
+      ) => LooseChannel;
+    };
+    const channel = (
+      supabase.channel(`game:${gameCode}`) as unknown as LooseChannel
+    )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "active_games", filter },
+        (payload) => {
+          const typed = payload as PostgresChangePayload<ActiveGame>;
+          observeServerTime(typed.commit_timestamp);
+          dispatch({ type: "GAME_CHANGE", payload: typed });
+          if (typed.eventType === "DELETE") setStatus("gone");
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "game_teams", filter },
+        (payload) => {
+          const typed = payload as PostgresChangePayload<Team>;
+          observeServerTime(typed.commit_timestamp);
+          dispatch({ type: "TEAM_CHANGE", payload: typed });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "game_rounds", filter },
+        (payload) => {
+          const typed = payload as PostgresChangePayload<GameRound>;
+          observeServerTime(typed.commit_timestamp);
+          dispatch({ type: "ROUND_CHANGE", payload: typed });
+        },
+      )
+      .subscribe((subStatus) => {
+        if (cancelled) return;
+        if (subStatus === "SUBSCRIBED") {
+          setStatus("subscribed");
+          void hydrate();
+        } else if (
+          subStatus === "CHANNEL_ERROR" ||
+          subStatus === "TIMED_OUT"
+        ) {
+          setStatus("reconnecting");
+        } else if (subStatus === "CLOSED") {
+          setStatus("idle");
+        }
+      });
+
+    async function hydrate() {
+      try {
+        const [gameRes, teamsRes, roundsRes] = await Promise.all([
+          supabase
+            .from("active_games")
+            .select("*")
+            .eq("game_code", gameCode)
+            .maybeSingle(),
+          supabase.from("game_teams").select("*").eq("game_code", gameCode),
+          supabase.from("game_rounds").select("*").eq("game_code", gameCode),
+        ]);
+        if (cancelled) return;
+        if (gameRes.error) throw gameRes.error;
+        if (teamsRes.error) throw teamsRes.error;
+        if (roundsRes.error) throw roundsRes.error;
+        if (!gameRes.data) {
+          setStatus("gone");
+          dispatch({ type: "GAME_DELETED" });
+          return;
+        }
+        dispatch({
+          type: "HYDRATE",
+          game: gameRes.data as ActiveGame,
+          teams: (teamsRes.data ?? []) as Team[],
+          rounds: (roundsRes.data ?? []) as GameRound[],
+        });
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e : new Error(String(e)));
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(
+        channel as unknown as Parameters<typeof supabase.removeChannel>[0],
+      );
+    };
+  }, [gameCode]);
+
+  return { state, status, error };
+}

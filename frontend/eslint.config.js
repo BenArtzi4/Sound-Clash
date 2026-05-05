@@ -23,7 +23,12 @@ export default [
         localStorage: "readonly",
         sessionStorage: "readonly",
         fetch: "readonly",
-        WebSocket: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        Promise: "readonly",
+        URL: "readonly",
       },
     },
     plugins: {

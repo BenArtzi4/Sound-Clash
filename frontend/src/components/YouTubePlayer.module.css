@@ -1,0 +1,41 @@
+.wrapper {
+  position: relative;
+  width: 100%;
+  background: #000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+
+.player {
+  width: 100%;
+  height: 100%;
+}
+
+.cover {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-elev) 0%,
+    #000 60%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-dim);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-size: 1.1rem;
+  pointer-events: none;
+  transition: opacity 320ms ease;
+}
+
+.coverHidden {
+  opacity: 0;
+}
+
+.loading {
+  color: var(--color-text-dim);
+  font-size: 0.95rem;
+}
