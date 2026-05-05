@@ -61,7 +61,7 @@ CREATE TABLE song_genres (
 
 -- ====== Ephemeral: live game state ======
 CREATE TABLE active_games (
-  game_code         char(6) PRIMARY KEY,
+  game_code         text PRIMARY KEY,
   status            text NOT NULL DEFAULT 'waiting'
                      CHECK (status IN ('waiting','playing','ended')),
   total_rounds      integer NOT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE active_games (
 
 CREATE TABLE game_teams (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  game_code  char(6) NOT NULL REFERENCES active_games(game_code) ON DELETE CASCADE,
+  game_code  text NOT NULL REFERENCES active_games(game_code) ON DELETE CASCADE,
   name       text NOT NULL,
   score      integer NOT NULL DEFAULT 0,
   joined_at  timestamptz NOT NULL DEFAULT now(),
@@ -87,7 +87,7 @@ CREATE TABLE game_teams (
 
 CREATE TABLE game_rounds (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  game_code       char(6) NOT NULL REFERENCES active_games(game_code) ON DELETE CASCADE,
+  game_code       text NOT NULL REFERENCES active_games(game_code) ON DELETE CASCADE,
   round_number    integer NOT NULL,
   song_id         uuid REFERENCES songs(id) ON DELETE SET NULL,
   started_at      timestamptz NOT NULL DEFAULT now(),

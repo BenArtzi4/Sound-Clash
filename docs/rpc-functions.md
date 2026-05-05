@@ -26,20 +26,35 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_round_id  uuid;
+  v_locked_at timestamptz;
 BEGIN
-  -- Atomic conditional UPDATE
-  RETURN QUERY
+  -- Atomic conditional UPDATE on active_games. RETURNING captures the
+  -- current_round_id so we can mirror the lock onto game_rounds, and
+  -- the resulting locked_at for the function's return value.
   UPDATE active_games ag
      SET buzzed_team_id = p_team_id,
          locked_at      = now()
    WHERE ag.game_code = p_game_code
      AND ag.status = 'playing'
      AND ag.buzzed_team_id IS NULL
-  RETURNING true, ag.buzzed_team_id, ag.locked_at;
+  RETURNING ag.current_round_id, ag.locked_at INTO v_round_id, v_locked_at;
 
-  -- If the UPDATE didn't match (lock already held or game not playing),
-  -- return the current state so the caller can reconcile its UI.
-  IF NOT FOUND THEN
+  IF FOUND THEN
+    -- Mirror the lock onto the round so award_points can credit the
+    -- team. active_games.buzzed_team_id is reset to NULL after each
+    -- round; game_rounds.buzzed_team_id is the durable record.
+    IF v_round_id IS NOT NULL THEN
+      UPDATE game_rounds
+         SET buzzed_team_id = p_team_id
+       WHERE id = v_round_id;
+    END IF;
+
+    RETURN QUERY SELECT true, p_team_id, v_locked_at;
+  ELSE
+    -- Lock already held or game not playable; return current state so
+    -- the caller can reconcile its UI.
     RETURN QUERY
     SELECT false, ag.buzzed_team_id, ag.locked_at
       FROM active_games ag
