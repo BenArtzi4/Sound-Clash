@@ -2,6 +2,10 @@
 
 Settings are read once via lru_cache so the app behaves like a singleton.
 Tests override by setting env vars before the first call to ``get_settings``.
+
+For local dev we also pick up ``backend/.env`` via python-dotenv. On Render,
+env vars come from the platform and the .env load is a harmless no-op.
+``override=False`` ensures values already set by the OS or test fixtures win.
 """
 
 from __future__ import annotations
@@ -9,6 +13,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV_FILE, override=False)
 
 
 @dataclass(frozen=True)
