@@ -1,5 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Load tests/e2e/.env when present (local runs). CI sets vars directly via
+// the workflow env block, so the absence of the file is fine there.
+try {
+  process.loadEnvFile(".env");
+} catch {
+  /* no .env locally is fine if vars are exported in the shell */
+}
+
 // Phase 6 (cores): chromium-only via --project=chromium in CI; the other
 // browser projects stay declared so the follow-up PR that adds them only
 // has to enable them in the workflow.
