@@ -49,4 +49,6 @@ All migrations must be **idempotent** — running them twice on the same DB must
 # Use the `db-migrate.yml` workflow with manual dispatch + confirmation.
 ```
 
+**Pooler vs direct connection**: when setting `SUPABASE_DATABASE_URL` for CI / GitHub Actions, use Supabase's **Session pooler** URL (Project Settings → Database → Connection string → Session pooler). The default "Direct connection" URL is IPv6-only on the free tier and GitHub Actions runners can't reach it. Pooler URL pattern: `postgresql://postgres.<ref>:[password]@aws-0-<region>.pooler.supabase.com:5432/postgres`.
+
 See [`docs/runbook.md`](../docs/runbook.md) §1.3 for the deploy-with-migration playbook.
