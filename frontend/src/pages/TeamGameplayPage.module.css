@@ -1,9 +1,9 @@
 .shell {
   min-height: 100%;
-  padding: var(--space-lg);
+  padding: 1.5rem var(--space-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: 1.5rem;
   max-width: 720px;
   margin: 0 auto;
 }
@@ -12,7 +12,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-md);
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1.25rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .identity {
@@ -22,8 +28,10 @@
 }
 
 .teamName {
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
 }
 
 .gameCode {
@@ -31,53 +39,71 @@
   font-size: 0.95rem;
   color: var(--color-text-dim);
   letter-spacing: 0.16em;
+  font-weight: 600;
 }
 
 .statusBanner {
   text-align: center;
-  padding: var(--space-md);
+  padding: 1rem 1.25rem;
   border-radius: var(--radius-md);
-  background: var(--color-bg-elev);
-  border: 1px solid var(--color-border);
-  font-weight: 600;
+  background: #ffffff;
+  border: 2px solid var(--color-border);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--color-text-dim);
+  box-shadow: var(--shadow-sm);
 }
 
 .statusPlaying {
-  background: rgba(40, 199, 111, 0.12);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(52, 211, 153, 0.08) 100%);
   border-color: var(--color-success);
-  color: var(--color-success);
+  color: #065f46;
 }
 
 .statusEnded {
-  background: rgba(91, 101, 115, 0.12);
+  background: rgba(148, 163, 184, 0.12);
   border-color: var(--color-border-strong);
   color: var(--color-text-dim);
 }
 
 .statusLocked {
-  background: var(--color-accent-soft);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(251, 191, 36, 0.08) 100%);
+  border-color: var(--color-warning);
+  color: #92400e;
 }
 
 .buzzZone {
   display: flex;
   justify-content: center;
-  padding: var(--space-xl) 0;
+  padding: 1.5rem 0;
 }
 
 .scoreCard {
-  background: var(--color-card);
+  background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
 }
 
 .scoreCardTitle {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--color-text-dim);
-  font-weight: 600;
-  margin-bottom: var(--space-md);
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 480px) {
+  .shell {
+    padding: 1rem var(--space-md);
+    gap: 1.25rem;
+  }
+  .teamName {
+    font-size: 1.05rem;
+  }
+  .gameCode {
+    font-size: 0.85rem;
+  }
 }

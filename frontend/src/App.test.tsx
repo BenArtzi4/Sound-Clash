@@ -23,7 +23,7 @@ afterEach(() => {
 describe("App router", () => {
   it("renders the home page at /", () => {
     render(<App />);
-    expect(screen.getByText(/sound clash/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /welcome to sound clash/i })).toBeInTheDocument();
   });
 
   it("guards /manager/create when no admin password is set", () => {
@@ -35,6 +35,6 @@ describe("App router", () => {
   it("redirects unknown paths home", () => {
     window.history.pushState({}, "", "/totally-bogus");
     render(<App />);
-    expect(screen.getByRole("link", { name: /host a game/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /manager console/i })).toBeInTheDocument();
   });
 });
