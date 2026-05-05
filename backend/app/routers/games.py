@@ -1,0 +1,322 @@
+"""Game lifecycle endpoints — see ``docs/api-contracts.md §2``.
+
+The router never calls ``buzz_in``; that stays browser-direct via PostgREST
+to keep Python out of the buzzer hot path. Service-role-only RPCs
+(``start_round``, ``award_points``, ``end_game``) are dispatched here.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+import anyio
+from fastapi import APIRouter, Depends, Request, status
+
+from app.db.errors import (
+    ConflictError,
+    DomainError,
+    GoneError,
+    NotFoundError,
+    map_postgrest_error,
+)
+from app.db.supabase_client import SupabaseClientLike, get_supabase_client
+from app.middleware.admin_auth import require_admin
+from app.middleware.rate_limit import limiter
+from app.models.games import (
+    AwardPointsRequest,
+    AwardPointsResponse,
+    CreateGameRequest,
+    CreateGameResponse,
+    EndGameResponse,
+    JoinTeamRequest,
+    JoinTeamResponse,
+    SelectSongRequest,
+    SelectSongResponse,
+)
+from app.models.songs import SongPayload
+from app.services.codes import generate_unique_code
+from app.services.scoring import to_rpc_points
+from app.services.song_picker import pick_random_song
+
+router = APIRouter(tags=["games"])
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+
+def _insert_game_blocking(
+    client: SupabaseClientLike, code: str, total_rounds: int, genre_ids: list[str]
+) -> dict[str, Any]:
+    payload = {
+        "game_code": code,
+        "status": "waiting",
+        "total_rounds": total_rounds,
+        "selected_genres": genre_ids,
+    }
+    try:
+        resp = client.table("active_games").insert(payload).execute()
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+    rows = resp.data or []
+    if not rows:
+        raise NotFoundError("game insert returned no row")
+    return dict(rows[0])
+
+
+def _fetch_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:
+    resp = (
+        client.table("active_games")
+        .select(
+            "game_code,status,total_rounds,selected_genres,started_at,expires_at,ended_at,round_number"
+        )
+        .eq("game_code", code)
+        .execute()
+    )
+    rows = resp.data or []
+    if not rows:
+        raise NotFoundError(f"game {code} not found")
+    return dict(rows[0])
+
+
+def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dict[str, Any]:
+    game = _fetch_game_blocking(client, code)
+    if game["status"] == "ended" or game.get("ended_at"):
+        raise GoneError(f"game {code} has ended")
+
+    try:
+        resp = client.table("game_teams").insert({"game_code": code, "name": name}).execute()
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+    rows = resp.data or []
+    if not rows:
+        raise NotFoundError("team insert returned no row")
+    return dict(rows[0])
+
+
+def _start_round_blocking(
+    client: SupabaseClientLike, code: str, song: dict[str, Any]
+) -> tuple[str, int]:
+    try:
+        rpc_resp = client.rpc(
+            "start_round", {"p_game_code": code, "p_song_id": song["id"]}
+        ).execute()
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+    round_id = rpc_resp.data
+    if isinstance(round_id, list) and round_id:
+        round_id = round_id[0]
+
+    game_resp = client.table("active_games").select("round_number").eq("game_code", code).execute()
+    rows = game_resp.data or []
+    if not rows:
+        raise NotFoundError(f"game {code} not found")
+    return str(round_id), int(rows[0]["round_number"])
+
+
+def _award_blocking(
+    client: SupabaseClientLike,
+    code: str,
+    body: AwardPointsRequest,
+) -> dict[str, Any]:
+    round_resp = (
+        client.table("game_rounds")
+        .select("id,song_id,buzzed_team_id,ended_at")
+        .eq("id", str(body.round_id))
+        .eq("game_code", code)
+        .execute()
+    )
+    rows = round_resp.data or []
+    if not rows:
+        raise NotFoundError(f"round {body.round_id} not found in game {code}")
+    round_row = rows[0]
+
+    is_soundtrack = False
+    song_id = round_row.get("song_id")
+    if song_id:
+        song_resp = client.table("songs").select("is_soundtrack").eq("id", song_id).execute()
+        song_rows = song_resp.data or []
+        if song_rows:
+            is_soundtrack = bool(song_rows[0].get("is_soundtrack"))
+
+    title, artist, source, timeout = to_rpc_points(
+        title_correct=body.title_correct,
+        artist_correct=body.artist_correct,
+        source_correct=body.source_correct,
+        timeout=body.timeout,
+        song_is_soundtrack=is_soundtrack,
+    )
+
+    try:
+        rpc_resp = client.rpc(
+            "award_points",
+            {
+                "p_game_code": code,
+                "p_round_id": str(body.round_id),
+                "p_title": title,
+                "p_artist": artist,
+                "p_source": source,
+                "p_timeout": timeout,
+            },
+        ).execute()
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+    data = rpc_resp.data
+    if isinstance(data, list):
+        if not data:
+            raise NotFoundError("award_points returned no row")
+        data = data[0]
+    return dict(data) if isinstance(data, dict) else {}
+
+
+def _end_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:
+    try:
+        client.rpc("end_game", {"p_game_code": code}).execute()
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+    return _fetch_game_blocking(client, code)
+
+
+def _kick_blocking(client: SupabaseClientLike, code: str, team_id: str) -> None:
+    resp = client.table("game_teams").delete().eq("id", team_id).eq("game_code", code).execute()
+    rows = resp.data or []
+    if not rows:
+        raise NotFoundError(f"team {team_id} not found in game {code}")
+
+
+# ---------------------------------------------------------------------------
+# endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/games",
+    response_model=CreateGameResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("10/minute")
+async def create_game(request: Request, body: CreateGameRequest) -> CreateGameResponse:
+    client = get_supabase_client()
+    genre_ids = [str(g) for g in body.selected_genres]
+
+    inserted: dict[str, Any] = {}
+
+    async def insert(code: str) -> None:
+        nonlocal inserted
+        inserted = await anyio.to_thread.run_sync(
+            _insert_game_blocking, client, code, body.total_rounds, genre_ids
+        )
+
+    await generate_unique_code(insert)
+    return CreateGameResponse(
+        game_code=inserted["game_code"],
+        status=inserted["status"],
+        total_rounds=inserted["total_rounds"],
+        selected_genres=[UUID(g) for g in (inserted.get("selected_genres") or [])],
+        started_at=inserted["started_at"],
+        expires_at=inserted["expires_at"],
+    )
+
+
+@router.post(
+    "/games/{game_code}/teams",
+    response_model=JoinTeamResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit("30/minute")
+async def join_team(request: Request, game_code: str, body: JoinTeamRequest) -> JoinTeamResponse:
+    client = get_supabase_client()
+    row = await anyio.to_thread.run_sync(_join_team_blocking, client, game_code, body.name)
+    return JoinTeamResponse(
+        id=UUID(row["id"]),
+        game_code=row["game_code"],
+        name=row["name"],
+        score=row.get("score", 0),
+        joined_at=row["joined_at"],
+    )
+
+
+@router.post(
+    "/games/{game_code}/select-song",
+    response_model=SelectSongResponse,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("100/minute")
+async def select_song(
+    request: Request, game_code: str, body: SelectSongRequest | None = None
+) -> SelectSongResponse:
+    _ = body
+    client = get_supabase_client()
+    game = await anyio.to_thread.run_sync(_fetch_game_blocking, client, game_code)
+    if game["status"] == "ended" or game.get("ended_at"):
+        raise GoneError(f"game {game_code} has ended")
+
+    genre_ids = list(game.get("selected_genres") or [])
+    if not genre_ids:
+        raise ConflictError("game has no selected genres")
+
+    song = await pick_random_song(client, game_code, genre_ids)
+    round_id, round_number = await anyio.to_thread.run_sync(
+        _start_round_blocking, client, game_code, song
+    )
+    return SelectSongResponse(
+        round_id=UUID(round_id),
+        round_number=round_number,
+        song=SongPayload.model_validate(song),
+    )
+
+
+@router.post(
+    "/games/{game_code}/award-points",
+    response_model=AwardPointsResponse,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("100/minute")
+async def award_points(
+    request: Request, game_code: str, body: AwardPointsRequest
+) -> AwardPointsResponse:
+    client = get_supabase_client()
+    try:
+        result = await anyio.to_thread.run_sync(_award_blocking, client, game_code, body)
+    except DomainError:
+        raise
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+
+    team_id = result.get("team_id")
+    return AwardPointsResponse(
+        round_id=body.round_id,
+        team_id=UUID(team_id) if team_id else None,
+        points_awarded=int(result.get("points_awarded", 0)),
+        team_total_score=int(result.get("team_total_score", 0)),
+    )
+
+
+@router.post(
+    "/games/{game_code}/end",
+    response_model=EndGameResponse,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("100/minute")
+async def end_game(request: Request, game_code: str) -> EndGameResponse:
+    client = get_supabase_client()
+    game = await anyio.to_thread.run_sync(_end_game_blocking, client, game_code)
+    return EndGameResponse(
+        game_code=game["game_code"],
+        status=game["status"],
+        ended_at=game["ended_at"],
+    )
+
+
+@router.delete(
+    "/games/{game_code}/teams/{team_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_admin)],
+)
+@limiter.limit("100/minute")
+async def kick_team(request: Request, game_code: str, team_id: UUID) -> None:
+    client = get_supabase_client()
+    await anyio.to_thread.run_sync(_kick_blocking, client, game_code, str(team_id))

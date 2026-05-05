@@ -64,8 +64,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-# Phase 1 starts low; ratchet up at end of each phase per docs/testing-strategy.md §5
-fail_under = 0
+# Ratcheted at the end of Phase 4 — see docs/testing-strategy.md §5.
+fail_under = 90
 precision = 2
 show_missing = true
 skip_covered = false
