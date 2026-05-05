@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { QRPanel } from "../components/QRPanel";
 import { Scoreboard } from "../components/Scoreboard";
 import { Skeleton } from "../components/Skeleton";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
@@ -342,6 +343,14 @@ export function ManagerConsolePage() {
         </div>
 
         <div className={styles.column}>
+          <section className={styles.card}>
+            <h2 className={styles.cardTitle}>Invite players</h2>
+            <QRPanel
+              gameCode={gameCode}
+              joinUrl={`${window.location.origin}/join/${gameCode}`}
+            />
+          </section>
+
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>Scoreboard</h2>
             <Scoreboard teams={teams} buzzedTeamId={game.buzzed_team_id} />
