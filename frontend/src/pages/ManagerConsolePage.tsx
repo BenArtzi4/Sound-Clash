@@ -18,8 +18,7 @@ const ROUND_DURATION_SEC = 20;
 
 type PendingAction =
   | { kind: "kick"; teamId: string; teamName: string }
-  | { kind: "end" }
-  | { kind: "signout" };
+  | { kind: "end" };
 
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
@@ -194,19 +193,17 @@ export function ManagerConsolePage() {
         ? styles.statusEnded
         : styles.statusWaiting;
 
-  const connectionLabel = status === "subscribed" ? "Connected" : "Connecting…";
-  const connectionStateClass = status === "subscribed" ? styles.connOk : styles.connWait;
-
-  const onSignOutClick = () => {
-    if (game.status === "playing") {
-      setPending({ kind: "signout" });
-    } else {
-      performSignout();
-    }
-  };
+  const nextRoundDisabled =
+    busy ||
+    game.status === "ended" ||
+    !player.ready ||
+    (game.status === "playing" && game.round_number >= game.total_rounds);
+  const skipDisabled = busy || game.status !== "playing";
+  const awardDisabled = busy || !lockedTeam;
+  const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
 
   return (
-    <main className={styles.shell}>
+    <main className={`${styles.shell} ${styles.shellWithFooter}`}>
       <header className={styles.header}>
         <div className={styles.codeBlock}>
           <span className={styles.codeLabel}>Game code</span>
@@ -217,18 +214,19 @@ export function ManagerConsolePage() {
           <span className="muted">
             Round {game.round_number} of {game.total_rounds}
           </span>
-          <span
-            className={`${styles.connection} ${connectionStateClass}`}
-            role="status"
-            aria-live="polite"
-          >
-            <span className={styles.connectionDot} aria-hidden="true" />
-            <span>{connectionLabel}</span>
-          </span>
         </div>
-        <button className="btn btn-ghost" onClick={onSignOutClick}>
-          Sign out
-        </button>
+        <div className={styles.headerActions}>
+          <button
+            className="btn btn-danger"
+            onClick={() => setPending({ kind: "end" })}
+            disabled={busy || game.status === "ended"}
+          >
+            End game
+          </button>
+          <button className="btn btn-ghost" onClick={performSignout}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <div className={styles.grid}>
@@ -236,20 +234,21 @@ export function ManagerConsolePage() {
           <YouTubePlayer ref={playerRef} hideOverlay onReady={onPlayerReady} />
 
           <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Round controls</h2>
-            <div className="stack">
-              {currentSong ? (
-                <div>
-                  <p className={styles.songLine}>{currentSong.title}</p>
-                  <p className={styles.songMeta}>
-                    {currentSong.artist}
-                    {currentSong.source ? ` — ${currentSong.source}` : ""}
-                  </p>
-                </div>
-              ) : (
-                <p className="muted">No round started yet.</p>
-              )}
-
+            <div className={styles.roundHeader}>
+              <div className={styles.roundHeaderInfo}>
+                <span className={styles.cardTitle}>Round controls</span>
+                {currentSong ? (
+                  <>
+                    <p className={styles.songLine}>{currentSong.title}</p>
+                    <p className={styles.songMeta}>
+                      {currentSong.artist}
+                      {currentSong.source ? ` — ${currentSong.source}` : ""}
+                    </p>
+                  </>
+                ) : (
+                  <p className={styles.songMeta}>No round started yet.</p>
+                )}
+              </div>
               {timerActive ? (
                 <div
                   className={`${styles.timerWrap} ${remainingSec <= 5 ? styles.timerLow : ""}`}
@@ -262,82 +261,70 @@ export function ManagerConsolePage() {
                   <div className={styles.timerRing}>
                     <span className={styles.timerValue}>{remainingSec}</span>
                   </div>
-                  <span className={styles.timerLabel}>seconds remaining</span>
                 </div>
               ) : null}
+            </div>
 
-              {lockedTeam ? (
-                <div className={styles.lockedBanner}>{lockedTeam.name} buzzed in.</div>
-              ) : null}
-
-              <div className={styles.checkRow}>
-                <label className={styles.checkLabel}>
-                  <input
-                    type="checkbox"
-                    checked={titleCorrect}
-                    disabled={!lockedTeam}
-                    onChange={(e) => setTitleCorrect(e.target.checked)}
-                  />
-                  Title
-                </label>
-                <label className={styles.checkLabel}>
-                  <input
-                    type="checkbox"
-                    checked={artistCorrect}
-                    disabled={!lockedTeam}
-                    onChange={(e) => setArtistCorrect(e.target.checked)}
-                  />
-                  Artist
-                </label>
-                <label className={styles.checkLabel}>
-                  <input
-                    type="checkbox"
-                    checked={sourceCorrect}
-                    disabled={!lockedTeam || !currentSong?.is_soundtrack}
-                    onChange={(e) => setSourceCorrect(e.target.checked)}
-                  />
-                  Source
-                </label>
+            {lockedTeam ? (
+              <div className={styles.lockedBanner} role="status" aria-live="polite">
+                <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score the answer:
               </div>
+            ) : null}
 
-              <div className={styles.actions}>
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => void handleAward(true)}
-                  disabled={busy || game.status !== "playing"}
-                >
-                  Timeout / skip
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => void handleAward(false)}
-                  disabled={busy || !lockedTeam}
-                >
-                  Award points
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => void handleNextRound()}
-                  disabled={
-                    busy ||
-                    game.status === "ended" ||
-                    !player.ready ||
-                    (game.status === "playing" && game.round_number >= game.total_rounds)
-                  }
-                >
-                  {game.status === "waiting" ? "Start game" : "Next round"}
-                </button>
-              </div>
+            <div className={styles.checkRow} aria-disabled={!lockedTeam}>
+              <label className={`${styles.checkLabel} ${titleCorrect ? styles.checkChecked : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={titleCorrect}
+                  disabled={!lockedTeam}
+                  onChange={(e) => setTitleCorrect(e.target.checked)}
+                />
+                <span>Title</span>
+              </label>
+              <label className={`${styles.checkLabel} ${artistCorrect ? styles.checkChecked : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={artistCorrect}
+                  disabled={!lockedTeam}
+                  onChange={(e) => setArtistCorrect(e.target.checked)}
+                />
+                <span>Artist</span>
+              </label>
+              <label
+                className={`${styles.checkLabel} ${sourceCorrect ? styles.checkChecked : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={sourceCorrect}
+                  disabled={!lockedTeam || !currentSong?.is_soundtrack}
+                  onChange={(e) => setSourceCorrect(e.target.checked)}
+                />
+                <span>Source</span>
+              </label>
+            </div>
 
-              <div className={styles.actions}>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => setPending({ kind: "end" })}
-                  disabled={busy || game.status === "ended"}
-                >
-                  End game
-                </button>
-              </div>
+            <div className={styles.actionsInline}>
+              <button
+                className="btn btn-ghost"
+                onClick={() => void handleAward(true)}
+                disabled={skipDisabled}
+              >
+                Skip
+              </button>
+              <button
+                className={`btn btn-primary ${styles.awardBtn}`}
+                onClick={() => void handleAward(false)}
+                disabled={awardDisabled}
+              >
+                Award points
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => void handleNextRound()}
+                disabled={nextRoundDisabled}
+              >
+                {nextRoundLabel}
+              </button>
             </div>
           </section>
         </div>
@@ -390,6 +377,30 @@ export function ManagerConsolePage() {
         </div>
       </div>
 
+      <div className={styles.mobileBar} role="toolbar" aria-label="Round actions">
+        <button
+          className="btn btn-ghost"
+          onClick={() => void handleAward(true)}
+          disabled={skipDisabled}
+        >
+          Skip
+        </button>
+        <button
+          className={`btn btn-primary ${styles.awardBtn}`}
+          onClick={() => void handleAward(false)}
+          disabled={awardDisabled}
+        >
+          Award
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={() => void handleNextRound()}
+          disabled={nextRoundDisabled}
+        >
+          {game.status === "waiting" ? "Start" : "Next"}
+        </button>
+      </div>
+
       <ConfirmDialog
         open={pending?.kind === "kick"}
         title={pending?.kind === "kick" ? `Remove ${pending.teamName}?` : ""}
@@ -414,18 +425,6 @@ export function ManagerConsolePage() {
         onConfirm={() => {
           setPending(null);
           void performEnd();
-        }}
-        onCancel={() => setPending(null)}
-      />
-      <ConfirmDialog
-        open={pending?.kind === "signout"}
-        title="Sign out mid-game?"
-        message="The game will keep running, but you'll need the host password again to come back."
-        confirmLabel="Sign out"
-        destructive
-        onConfirm={() => {
-          setPending(null);
-          performSignout();
         }}
         onCancel={() => setPending(null)}
       />

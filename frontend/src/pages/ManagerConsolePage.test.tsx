@@ -196,7 +196,9 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByText(/alice buzzed in/i)).toBeInTheDocument();
+    const banner = screen.getByRole("status");
+    expect(banner.textContent).toMatch(/alice/i);
+    expect(banner.textContent).toMatch(/buzzed in/i);
     expect(screen.getByRole("button", { name: /award points/i })).toBeEnabled();
   });
 
@@ -233,7 +235,7 @@ describe("ManagerConsolePage", () => {
     );
   });
 
-  it("timeout button awards with timeout=true even when checkboxes are checked", async () => {
+  it("skip button awards with timeout=true even when checkboxes are checked", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -253,7 +255,9 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByRole("button", { name: /timeout/i }));
+    // Both desktop inline + mobile sticky bars render the Skip button.
+    const skips = screen.getAllByRole("button", { name: /^skip$/i });
+    fireEvent.click(skips[0]!);
     await waitFor(() =>
       expect(awardPoints).toHaveBeenCalledWith("ABCDEF", {
         round_id: "r1",
@@ -321,21 +325,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF"));
   });
 
-  it("sign out from a waiting game does not require confirmation", async () => {
-    setHydrate({
-      game: makeActiveGame({ status: "waiting" }),
-      teams: [],
-      rounds: [],
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
-  });
-
-  it("sign out during a playing game asks for confirmation", async () => {
+  it("sign out logs out and goes straight to login (no confirm)", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
       teams: [],
@@ -345,10 +335,7 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByRole("button", { name: /^sign out$/i }));
-    const signoutDialog = await waitFor(() => screen.getByRole("dialog"));
-    expect(screen.queryByText("login page")).not.toBeInTheDocument();
-    fireEvent.click(within(signoutDialog).getByRole("button", { name: /^sign out$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
     await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
   });
 });
