@@ -62,4 +62,6 @@ def get_settings() -> Settings:
     }
     if cors:
         kwargs["cors_origins"] = cors
+    # reason: kwargs is dict[str, object] because cors_origins is conditionally
+    # added as list[str]; mypy can't narrow the union per-key for **kwargs.
     return Settings(**kwargs)  # type: ignore[arg-type]
