@@ -12,12 +12,22 @@ interface FakeYTPlayer {
 }
 
 let lastPlayer: FakeYTPlayer | null = null;
-let lastConfig: { events?: { onReady?: () => void } } | null = null;
+let lastConfig: {
+  events?: {
+    onReady?: () => void;
+    onError?: (event: { data: number }) => void;
+  };
+} | null = null;
 
 function installFakeYT() {
   function FakePlayer(
     _el: HTMLElement,
-    config: { events?: { onReady?: () => void } },
+    config: {
+      events?: {
+        onReady?: () => void;
+        onError?: (event: { data: number }) => void;
+      };
+    },
   ): FakeYTPlayer {
     const instance: FakeYTPlayer = {
       loadVideoById: vi.fn(),
@@ -83,6 +93,33 @@ describe("YouTubePlayer", () => {
       lastConfig?.events?.onReady?.();
     });
     expect(onReady).toHaveBeenCalled();
+  });
+
+  it("renders an error message and invokes onError when YT fires onError", async () => {
+    installFakeYT();
+    const onError = vi.fn();
+    const { findByRole } = render(<YouTubePlayer onError={onError} />);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 150 });
+    });
+    const alert = await findByRole("alert");
+    expect(alert.textContent).toContain("Video unavailable");
+    expect(onError).toHaveBeenCalledWith(150);
+  });
+
+  it("keeps the overlay visible on error even when hideOverlay is true", async () => {
+    installFakeYT();
+    const { findByRole } = render(<YouTubePlayer hideOverlay />);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 100 });
+    });
+    const alert = await findByRole("alert");
+    expect(alert.className).not.toContain("coverHidden");
   });
 
   it("loads the iframe API script when YT is not yet on window", async () => {
