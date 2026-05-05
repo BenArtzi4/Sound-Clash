@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @.claude/rules/ci-and-repo-config.md
 @.claude/rules/dependencies.md
 @.claude/rules/binary-assets.md
+@.claude/rules/lessons-learned.md
 
 ## Project status
 
