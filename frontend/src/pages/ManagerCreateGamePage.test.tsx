@@ -20,6 +20,7 @@ vi.mock("../lib/api", () => ({
 
 import { ApiError, createGame, listGenres } from "../lib/api";
 import { AuthProvider } from "../context/AuthContext";
+import { ToastProvider } from "../context/ToastContext";
 import { getAdminPassword, setAdminPassword } from "../context/authStorage";
 import { ManagerCreateGamePage } from "./ManagerCreateGamePage";
 
@@ -38,13 +39,15 @@ afterEach(() => {
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/manager/create"]}>
-      <AuthProvider>
-        <Routes>
-          <Route path="/manager/create" element={<ManagerCreateGamePage />} />
-          <Route path="/manager/login" element={<div>login page</div>} />
-          <Route path="/manager/game/:gameCode" element={<div>game console</div>} />
-        </Routes>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/manager/create" element={<ManagerCreateGamePage />} />
+            <Route path="/manager/login" element={<div>login page</div>} />
+            <Route path="/manager/game/:gameCode" element={<div>game console</div>} />
+          </Routes>
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
 import styles from "./DisplayPage.module.css";
 
@@ -67,8 +68,14 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
 
   if (!state) {
     return (
-      <main className={styles.shell}>
-        <p className="muted">Connecting…</p>
+      <main className={styles.shell} aria-busy="true">
+        <Skeleton height={72} />
+        <Skeleton height={96} />
+        <div className={styles.skeletonRows}>
+          <Skeleton height={88} />
+          <Skeleton height={88} />
+          <Skeleton height={88} />
+        </div>
       </main>
     );
   }

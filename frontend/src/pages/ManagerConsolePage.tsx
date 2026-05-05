@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Scoreboard } from "../components/Scoreboard";
+import { Skeleton } from "../components/Skeleton";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useAuth } from "../context/useAuth";
+import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { serverTimeNow } from "../hooks/useServerTime";
@@ -12,9 +15,15 @@ import styles from "./ManagerConsolePage.module.css";
 
 const ROUND_DURATION_SEC = 20;
 
+type PendingAction =
+  | { kind: "kick"; teamId: string; teamName: string }
+  | { kind: "end" }
+  | { kind: "signout" };
+
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
   const { logout } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
@@ -25,8 +34,8 @@ export function ManagerConsolePage() {
   const [artistCorrect, setArtistCorrect] = useState(false);
   const [sourceCorrect, setSourceCorrect] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => serverTimeNow().getTime());
+  const [pending, setPending] = useState<PendingAction | null>(null);
 
   // Tick once a second so the timer re-renders.
   useEffect(() => {
@@ -48,14 +57,13 @@ export function ManagerConsolePage() {
       navigate("/manager/login", { replace: true });
       return true;
     }
-    setError(err instanceof Error ? err.message : "Request failed");
+    toast(err instanceof Error ? err.message : "Request failed", { variant: "error" });
     return false;
   }
 
   async function handleNextRound() {
     if (busy) return;
     setBusy(true);
-    setError(null);
     try {
       const result = await selectSong(gameCode);
       setCurrentSong(result.song);
@@ -84,9 +92,8 @@ export function ManagerConsolePage() {
   async function handleAward(timeout: boolean) {
     if (!state?.currentRound || busy) return;
     setBusy(true);
-    setError(null);
     try {
-      await awardPoints(gameCode, {
+      const result = await awardPoints(gameCode, {
         round_id: state.currentRound.id,
         title_correct: timeout ? false : titleCorrect,
         artist_correct: timeout ? false : artistCorrect,
@@ -95,6 +102,13 @@ export function ManagerConsolePage() {
       });
       resetAwardChecks();
       playerRef.current?.stop();
+      if (timeout) {
+        toast("Round skipped", { variant: "info" });
+      } else if (result.points_awarded > 0) {
+        toast(`+${result.points_awarded} pts awarded`, { variant: "success" });
+      } else {
+        toast("No points awarded", { variant: "info" });
+      }
     } catch (err) {
       handleAdminError(err);
     } finally {
@@ -102,27 +116,32 @@ export function ManagerConsolePage() {
     }
   }
 
-  async function handleKick(teamId: string) {
-    setError(null);
+  async function performKick(teamId: string, teamName: string) {
     try {
       await kickTeam(gameCode, teamId);
+      toast(`${teamName} removed from the game`, { variant: "info" });
     } catch (err) {
       handleAdminError(err);
     }
   }
 
-  async function handleEnd() {
+  async function performEnd() {
     if (busy) return;
     setBusy(true);
-    setError(null);
     try {
       await endGame(gameCode);
       playerRef.current?.stop();
+      toast("Game ended", { variant: "info" });
     } catch (err) {
       handleAdminError(err);
     } finally {
       setBusy(false);
     }
+  }
+
+  function performSignout() {
+    logout();
+    navigate("/manager/login");
   }
 
   function onPlayerReady() {
@@ -135,8 +154,13 @@ export function ManagerConsolePage() {
 
   if (!state || status === "connecting") {
     return (
-      <main className={styles.shell}>
+      <main className={styles.shell} aria-busy="true">
         <p className="muted">Connecting to game…</p>
+        <div className={styles.skeletonStack}>
+          <Skeleton height={72} />
+          <Skeleton height={260} />
+          <Skeleton height={180} />
+        </div>
       </main>
     );
   }
@@ -172,6 +196,14 @@ export function ManagerConsolePage() {
   const connectionLabel = status === "subscribed" ? "Connected" : "Connecting…";
   const connectionStateClass = status === "subscribed" ? styles.connOk : styles.connWait;
 
+  const onSignOutClick = () => {
+    if (game.status === "playing") {
+      setPending({ kind: "signout" });
+    } else {
+      performSignout();
+    }
+  };
+
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -193,13 +225,7 @@ export function ManagerConsolePage() {
             <span>{connectionLabel}</span>
           </span>
         </div>
-        <button
-          className="btn btn-ghost"
-          onClick={() => {
-            logout();
-            navigate("/manager/login");
-          }}
-        >
+        <button className="btn btn-ghost" onClick={onSignOutClick}>
           Sign out
         </button>
       </header>
@@ -273,8 +299,6 @@ export function ManagerConsolePage() {
                 </label>
               </div>
 
-              {error ? <p className="error">{error}</p> : null}
-
               <div className={styles.actions}>
                 <button
                   className="btn btn-ghost"
@@ -307,7 +331,7 @@ export function ManagerConsolePage() {
               <div className={styles.actions}>
                 <button
                   className="btn btn-danger"
-                  onClick={() => void handleEnd()}
+                  onClick={() => setPending({ kind: "end" })}
                   disabled={busy || game.status === "ended"}
                 >
                   End game
@@ -341,7 +365,9 @@ export function ManagerConsolePage() {
                       <span>{t.score} pts</span>
                       <button
                         className="btn btn-danger"
-                        onClick={() => void handleKick(t.id)}
+                        onClick={() =>
+                          setPending({ kind: "kick", teamId: t.id, teamName: t.name })
+                        }
                         disabled={busy}
                       >
                         Kick
@@ -354,6 +380,46 @@ export function ManagerConsolePage() {
           </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pending?.kind === "kick"}
+        title={pending?.kind === "kick" ? `Remove ${pending.teamName}?` : ""}
+        message="They'll be disconnected from the game and their score will be lost."
+        confirmLabel="Remove team"
+        destructive
+        onConfirm={() => {
+          if (pending?.kind === "kick") {
+            const { teamId, teamName } = pending;
+            setPending(null);
+            void performKick(teamId, teamName);
+          }
+        }}
+        onCancel={() => setPending(null)}
+      />
+      <ConfirmDialog
+        open={pending?.kind === "end"}
+        title="End the game now?"
+        message="No more rounds can be played and teams will see the final scoreboard."
+        confirmLabel="End game"
+        destructive
+        onConfirm={() => {
+          setPending(null);
+          void performEnd();
+        }}
+        onCancel={() => setPending(null)}
+      />
+      <ConfirmDialog
+        open={pending?.kind === "signout"}
+        title="Sign out mid-game?"
+        message="The game will keep running, but you'll need the host password again to come back."
+        confirmLabel="Sign out"
+        destructive
+        onConfirm={() => {
+          setPending(null);
+          performSignout();
+        }}
+        onCancel={() => setPending(null)}
+      />
     </main>
   );
 }

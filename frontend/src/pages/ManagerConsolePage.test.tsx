@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { forwardRef, useImperativeHandle } from "react";
@@ -50,6 +50,7 @@ vi.mock("../components/YouTubePlayer", () => ({
 
 import { ApiError, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
 import { AuthProvider } from "../context/AuthContext";
+import { ToastProvider } from "../context/ToastContext";
 import { setAdminPassword } from "../context/authStorage";
 import {
   fireSubscribed,
@@ -81,12 +82,14 @@ afterEach(() => {
 function renderConsole() {
   return render(
     <MemoryRouter initialEntries={["/manager/game/ABCDEF"]}>
-      <AuthProvider>
-        <Routes>
-          <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
-          <Route path="/manager/login" element={<div>login page</div>} />
-        </Routes>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
+            <Route path="/manager/login" element={<div>login page</div>} />
+          </Routes>
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -262,7 +265,7 @@ describe("ManagerConsolePage", () => {
     );
   });
 
-  it("kick calls api.kickTeam", async () => {
+  it("kick opens a confirm dialog and calls api.kickTeam after confirm", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
       teams: [makeTeam({ id: "t1", name: "Alice" })],
@@ -273,11 +276,30 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByRole("button", { name: /kick/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^kick$/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    expect(kickTeam).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /remove team/i }));
     await waitFor(() => expect(kickTeam).toHaveBeenCalledWith("ABCDEF", "t1"));
   });
 
-  it("end button calls api.endGame", async () => {
+  it("kick can be cancelled from the confirm dialog", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^kick$/i }));
+    await waitFor(() => screen.getByRole("dialog"));
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    expect(kickTeam).not.toHaveBeenCalled();
+  });
+
+  it("end game opens a confirm dialog and calls api.endGame after confirm", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
       teams: [],
@@ -292,11 +314,14 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByRole("button", { name: /end game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^end game$/i }));
+    const endDialog = await waitFor(() => screen.getByRole("dialog"));
+    expect(endGame).not.toHaveBeenCalled();
+    fireEvent.click(within(endDialog).getByRole("button", { name: /^end game$/i }));
     await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF"));
   });
 
-  it("sign out clears auth and goes to login", async () => {
+  it("sign out from a waiting game does not require confirmation", async () => {
     setHydrate({
       game: makeActiveGame({ status: "waiting" }),
       teams: [],
@@ -307,6 +332,23 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+    await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
+  });
+
+  it("sign out during a playing game asks for confirmation", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [],
+      rounds: [],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^sign out$/i }));
+    const signoutDialog = await waitFor(() => screen.getByRole("dialog"));
+    expect(screen.queryByText("login page")).not.toBeInTheDocument();
+    fireEvent.click(within(signoutDialog).getByRole("button", { name: /^sign out$/i }));
     await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
   });
 });

@@ -236,6 +236,12 @@
   padding: 0 0.15em;
 }
 
+.skeletonRows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .bigRowBuzzed .bigScore {
   color: #b45309;
 }
