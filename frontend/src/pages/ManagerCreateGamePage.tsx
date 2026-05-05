@@ -1,19 +1,22 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { Skeleton } from "../components/Skeleton";
 import { useAuth } from "../context/useAuth";
+import { useToast } from "../context/useToast";
 import { ApiError, createGame, listGenres } from "../lib/api";
 import type { Genre } from "../lib/types";
 import styles from "./ManagerCreateGamePage.module.css";
 
 export function ManagerCreateGamePage() {
   const { logout } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const [genres, setGenres] = useState<Genre[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [totalRounds, setTotalRounds] = useState(10);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [genresLoading, setGenresLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,13 +26,15 @@ export function ManagerCreateGamePage() {
         if (!cancelled) setGenres(list);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load genres");
+        toast(err instanceof Error ? err.message : "Failed to load genres", { variant: "error" });
+      } finally {
+        if (!cancelled) setGenresLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [toast]);
 
   function toggleGenre(id: string) {
     setSelected((prev) => {
@@ -44,12 +49,12 @@ export function ManagerCreateGamePage() {
     e.preventDefault();
     if (selected.size === 0 || busy) return;
     setBusy(true);
-    setError(null);
     try {
       const game = await createGame({
         total_rounds: totalRounds,
         selected_genres: Array.from(selected),
       });
+      toast(`Game ${game.game_code} created`, { variant: "success" });
       navigate(`/manager/game/${game.game_code}`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -57,7 +62,7 @@ export function ManagerCreateGamePage() {
         navigate("/manager/login", { replace: true });
         return;
       }
-      setError(err instanceof Error ? err.message : "Failed to create game");
+      toast(err instanceof Error ? err.message : "Failed to create game", { variant: "error" });
     } finally {
       setBusy(false);
     }
@@ -89,23 +94,29 @@ export function ManagerCreateGamePage() {
           <span className={styles.label}>
             Genres <span className="muted">({selected.size} selected)</span>
           </span>
-          <div className={styles.genres}>
-            {genres.map((g) => {
-              const isSel = selected.has(g.id);
-              return (
-                <label
-                  key={g.id}
-                  className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
-                >
-                  <input type="checkbox" checked={isSel} onChange={() => toggleGenre(g.id)} />
-                  {g.name}
-                </label>
-              );
-            })}
-          </div>
+          {genresLoading ? (
+            <div className={styles.genres}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} height={44} />
+              ))}
+            </div>
+          ) : (
+            <div className={styles.genres}>
+              {genres.map((g) => {
+                const isSel = selected.has(g.id);
+                return (
+                  <label
+                    key={g.id}
+                    className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
+                  >
+                    <input type="checkbox" checked={isSel} onChange={() => toggleGenre(g.id)} />
+                    {g.name}
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        {error ? <p className="error">{error}</p> : null}
 
         <div className={styles.actions}>
           <button

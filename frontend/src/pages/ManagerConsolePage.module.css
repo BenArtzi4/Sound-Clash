@@ -403,6 +403,13 @@
   color: transparent;
 }
 
+.skeletonStack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
 @media (max-width: 600px) {
   .shell {
     padding: 1.25rem var(--space-md);
