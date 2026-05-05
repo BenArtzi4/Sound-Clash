@@ -58,6 +58,16 @@
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+.entryCounter {
+  align-self: flex-end;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-mute);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  margin-top: -0.5rem;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -98,6 +108,10 @@
   color: var(--color-text-dim);
   box-shadow: var(--shadow-md);
   letter-spacing: -0.01em;
+  transition:
+    background 280ms ease,
+    border-color 280ms ease,
+    color 280ms ease;
 }
 
 .bannerLocked {
@@ -182,6 +196,44 @@
   font-size: 2.4rem;
   font-variant-numeric: tabular-nums;
   color: var(--color-primary-strong);
+}
+
+.emptyBoard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 4rem 2rem;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.04) 0%, transparent 100%);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.emptyBoardTitle {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.emptyBoardHint {
+  margin: 0;
+  color: var(--color-text-dim);
+  font-size: 1.1rem;
+}
+
+.emptyBoardCode {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding: 0 0.15em;
 }
 
 .bigRowBuzzed .bigScore {

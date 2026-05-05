@@ -99,6 +99,23 @@ export function TeamGameplayPage() {
   const buzzDisabled =
     !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
 
+  const buzzTone: "idle" | "locked-other" | "winner" = lockedByMe
+    ? "winner"
+    : lockedTeam
+      ? "locked-other"
+      : "idle";
+  const buzzSubtitle =
+    game?.status === "playing"
+      ? lockedByMe
+        ? "Wait for the host"
+        : lockedTeam
+          ? `${lockedTeam.name} buzzed first`
+          : "Tap or press space"
+      : undefined;
+
+  const connectionLabel = status === "subscribed" ? "Connected" : "Connecting…";
+  const connectionStateClass = status === "subscribed" ? styles.connOk : styles.connWait;
+
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -106,19 +123,27 @@ export function TeamGameplayPage() {
           <span className={styles.teamName}>{stored.name}</span>
           <span className={styles.gameCode}>{gameCode}</span>
         </div>
-        <div className="muted">{status === "subscribed" ? "Connected" : "Connecting…"}</div>
+        <div
+          className={`${styles.connection} ${connectionStateClass}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={styles.connectionDot} aria-hidden="true" />
+          <span>{connectionLabel}</span>
+        </div>
       </header>
 
-      <div className={bannerClass}>{bannerText}</div>
+      <div className={bannerClass} role="status" aria-live="polite">
+        {bannerText}
+      </div>
 
       <div className={styles.buzzZone}>
         <BuzzButton
           disabled={buzzDisabled}
           isBuzzing={buzzer.isBuzzing}
           label={lockedByMe ? "LOCKED" : "BUZZ"}
-          subtitle={
-            game?.status === "playing" && !buzzer.isLocked ? "Tap or press space" : undefined
-          }
+          subtitle={buzzSubtitle}
+          tone={buzzTone}
           onBuzz={() => void buzzer.buzz()}
         />
       </div>

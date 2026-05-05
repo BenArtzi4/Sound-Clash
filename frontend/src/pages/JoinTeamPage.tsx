@@ -4,6 +4,11 @@ import { ApiError, joinTeam } from "../lib/api";
 import styles from "./JoinTeamPage.module.css";
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
+const CODE_CHAR_RE = /[A-Z2-9]/g;
+
+function normalizeCode(raw: string): string {
+  return (raw.toUpperCase().match(CODE_CHAR_RE) ?? []).join("").slice(0, 6);
+}
 
 function teamStorageKey(gameCode: string): string {
   return `game:${gameCode}:team`;
@@ -13,7 +18,7 @@ export function JoinTeamPage() {
   const { gameCode: paramCode } = useParams<{ gameCode?: string }>();
   const navigate = useNavigate();
 
-  const [code, setCode] = useState((paramCode ?? "").toUpperCase());
+  const [code, setCode] = useState(normalizeCode(paramCode ?? ""));
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,13 +70,16 @@ export function JoinTeamPage() {
             id="game-code"
             className={styles.codeInput}
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
+            onChange={(e) => setCode(normalizeCode(e.target.value))}
             placeholder="ABCDEF"
             autoComplete="off"
             inputMode="text"
             maxLength={6}
             required
           />
+          <span className={styles.counter} aria-hidden="true">
+            {code.length}/6
+          </span>
         </div>
 
         <div className={styles.field}>
@@ -86,6 +94,9 @@ export function JoinTeamPage() {
             maxLength={30}
             required
           />
+          <span className={styles.counter} aria-hidden="true">
+            {trimmedName.length}/30
+          </span>
         </div>
 
         {error ? <p className="error">{error}</p> : null}

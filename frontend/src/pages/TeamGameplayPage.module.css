@@ -42,6 +42,65 @@
   font-weight: 600;
 }
 
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, 0.12);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  letter-spacing: 0.02em;
+  transition:
+    background 200ms ease,
+    color 200ms ease;
+}
+
+.connectionDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-text-mute);
+}
+
+.connOk {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+.connOk .connectionDot {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+
+.connWait {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+.connWait .connectionDot {
+  background: #f59e0b;
+  animation: conn-blink 1.2s ease-in-out infinite;
+}
+
+.connBad {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+.connBad .connectionDot {
+  background: var(--color-danger);
+}
+
+@keyframes conn-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .statusBanner {
   text-align: center;
   padding: 1rem 1.25rem;
@@ -52,6 +111,11 @@
   font-size: 1.05rem;
   color: var(--color-text-dim);
   box-shadow: var(--shadow-sm);
+  transition:
+    background 280ms ease,
+    border-color 280ms ease,
+    color 280ms ease,
+    transform 280ms ease;
 }
 
 .statusPlaying {

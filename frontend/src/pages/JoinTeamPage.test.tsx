@@ -105,6 +105,13 @@ describe("JoinTeamPage", () => {
     await waitFor(() => expect(screen.getByText(/already taken/i)).toBeInTheDocument());
   });
 
+  it("strips invalid characters from the game-code input as the user types", () => {
+    renderAt("/join");
+    const codeInput = screen.getByLabelText(/game code/i);
+    fireEvent.change(codeInput, { target: { value: "ab1c0d!ef" } });
+    expect(codeInput).toHaveValue("ABCDEF");
+  });
+
   it("shows a generic error on non-ApiError failures", async () => {
     vi.mocked(joinTeam).mockRejectedValueOnce(new Error("boom"));
     renderAt("/join/ABCDEF");
