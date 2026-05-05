@@ -1,71 +1,125 @@
 .shell {
   min-height: 100%;
-  padding: var(--space-xl);
-  max-width: 720px;
+  padding: 2.5rem var(--space-lg);
+  max-width: 800px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: 2rem;
+}
+
+.shell > header h1 {
+  font-size: 2rem;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: 0.75rem;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.5rem 1.5rem;
+  box-shadow: var(--shadow-md);
 }
 
 .label {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--color-text-dim);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .genres {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.6rem;
 }
 
 .genre {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: 10px 12px;
-  background: var(--color-bg-elev);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  gap: 0.6rem;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
   cursor: pointer;
   user-select: none;
-  transition: border-color 160ms ease;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    color 200ms ease,
+    transform 100ms ease;
 }
 
 .genre:hover {
-  border-color: var(--color-border-strong);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  transform: translateY(-1px);
+}
+
+.genre input {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--color-primary);
 }
 
 .genreSelected {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, var(--color-primary-soft) 100%);
+  color: var(--color-primary-strong);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.18);
 }
 
 .actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-md);
+  gap: 1rem;
+  margin-top: 0.5rem;
 }
 
 .rounds {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: 1rem;
+}
+
+.rounds input[type="range"] {
+  flex: 1;
+  padding: 0;
+  background: transparent;
+  border: none;
+  accent-color: var(--color-primary);
+}
+
+.rounds input[type="range"]:focus {
+  background: transparent;
+  box-shadow: none;
 }
 
 .roundsValue {
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 1.5rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   min-width: 2.5em;
+  color: var(--color-primary-strong);
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .shell {
+    padding: 1.5rem var(--space-md);
+  }
+  .field {
+    padding: 1.25rem;
+  }
 }

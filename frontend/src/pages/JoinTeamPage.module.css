@@ -3,57 +3,89 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-xl);
+  padding: var(--space-xl) var(--space-lg);
 }
 
 .card {
   width: 100%;
-  max-width: 420px;
-  background: var(--color-card);
+  max-width: 460px;
+  background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-xl);
+  padding: 2.5rem 2.25rem;
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: 1.5rem;
   box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #10b981 100%);
 }
 
 .title {
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin: 0;
 }
 
 .subtitle {
   color: var(--color-text-dim);
-  font-size: 0.95rem;
+  font-size: 1rem;
+  margin: 0.25rem 0 0;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: 0.5rem;
 }
 
 .label {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--color-text-dim);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .codeInput {
   letter-spacing: 0.5em;
   text-align: center;
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 800;
   text-transform: uppercase;
+  color: var(--color-primary-strong);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 .actions {
   display: flex;
-  gap: var(--space-sm);
-  justify-content: space-between;
+  gap: 0.75rem;
+  justify-content: flex-end;
   align-items: center;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 2rem 1.5rem;
+  }
+  .title {
+    font-size: 1.5rem;
+  }
+  .codeInput {
+    font-size: 1.5rem;
+    letter-spacing: 0.4em;
+  }
 }
