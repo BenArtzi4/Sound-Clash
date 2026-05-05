@@ -20,7 +20,7 @@ vi.mock("../lib/api", () => ({
 
 import { ApiError, createGame, listGenres } from "../lib/api";
 import { AuthProvider } from "../context/AuthContext";
-import { setAdminPassword } from "../context/authStorage";
+import { getAdminPassword, setAdminPassword } from "../context/authStorage";
 import { ManagerCreateGamePage } from "./ManagerCreateGamePage";
 
 beforeEach(() => {
@@ -92,7 +92,7 @@ describe("ManagerCreateGamePage", () => {
     fireEvent.click(screen.getByLabelText(/rock/i));
     fireEvent.click(screen.getByRole("button", { name: /create game/i }));
     await waitFor(() => expect(screen.getByText("login page")).toBeInTheDocument());
-    expect(window.sessionStorage.getItem("auth:adminPassword")).toBeNull();
+    expect(getAdminPassword()).toBeNull();
   });
 
   it("shows the error message on non-auth failures", async () => {
