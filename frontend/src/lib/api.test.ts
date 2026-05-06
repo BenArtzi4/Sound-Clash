@@ -2,14 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   awardPoints,
+  bulkImportSongs,
   createGame,
+  createSong,
+  deleteSong,
   endGame,
   getHealth,
+  getSong,
   joinTeam,
   kickTeam,
   listGenres,
+  listSongs,
   selectSong,
+  updateSong,
 } from "./api";
+import type { SongWritePayload } from "./types";
 
 const fetchMock = vi.fn();
 
@@ -179,5 +186,123 @@ describe("api - manager-token routes", () => {
   it("falls back when error body is missing", async () => {
     fetchMock.mockResolvedValueOnce(new Response("", { status: 500 }));
     await expect(endGame("ABCDEF", TOKEN)).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("api - admin-songs routes", () => {
+  const PW = "letmein";
+  const SONG = {
+    id: "11111111-1111-1111-1111-111111111111",
+    title: "Song",
+    artist: "Artist",
+    youtube_id: "abcdefghijk",
+    start_time: 0,
+    is_soundtrack: false,
+    source: null,
+  };
+  const PAYLOAD: SongWritePayload = {
+    title: "Song",
+    artist: "Artist",
+    youtube_id: "abcdefghijk",
+    start_time: 0,
+    is_soundtrack: false,
+    source: null,
+    genre_ids: ["g1"],
+  };
+
+  it("listSongs sends the password header and serializes query params", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { items: [SONG], page: 2, per_page: 25, total: 1 }),
+    );
+    const res = await listSongs(
+      { page: 2, per_page: 25, search: "foo", genre: "rock" },
+      PW,
+    );
+    expect(res.total).toBe(1);
+    expect(res.items[0]!.id).toBe(SONG.id);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "http://localhost:8000/admin/songs?page=2&per_page=25&search=foo&genre=rock",
+    );
+    expect(init.method).toBe("GET");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Admin-Password"]).toBe(PW);
+  });
+
+  it("listSongs omits empty params", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { items: [], page: 1, per_page: 50, total: 0 }),
+    );
+    await listSongs({}, PW);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/admin/songs");
+  });
+
+  it("getSong sends the password header", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, SONG));
+    const res = await getSong(SONG.id, PW);
+    expect(res.title).toBe("Song");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`http://localhost:8000/admin/songs/${SONG.id}`);
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Admin-Password"]).toBe(PW);
+  });
+
+  it("createSong POSTs JSON with the password header", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, SONG));
+    await createSong(PAYLOAD, PW);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/admin/songs");
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Admin-Password"]).toBe(PW);
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(init.body as string)).toEqual(PAYLOAD);
+  });
+
+  it("updateSong PUTs JSON with the password header", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, SONG));
+    await updateSong(SONG.id, PAYLOAD, PW);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`http://localhost:8000/admin/songs/${SONG.id}`);
+    expect(init.method).toBe("PUT");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Admin-Password"]).toBe(PW);
+  });
+
+  it("deleteSong handles 204 with the password header", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(deleteSong(SONG.id, PW)).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`http://localhost:8000/admin/songs/${SONG.id}`);
+    expect(init.method).toBe("DELETE");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Admin-Password"]).toBe(PW);
+  });
+
+  it("bulkImportSongs posts FormData and does not set Content-Type", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { inserted: 2, updated: 1, total: 3 }),
+    );
+    const file = new File(["title,artist,youtube_id\n"], "songs.csv", { type: "text/csv" });
+    const summary = await bulkImportSongs(file, PW);
+    expect(summary).toEqual({ inserted: 2, updated: 1, total: 3 });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/admin/songs/bulk-import");
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Admin-Password"]).toBe(PW);
+    expect(headers["Content-Type"]).toBeUndefined();
+    expect(init.body).toBeInstanceOf(FormData);
+  });
+
+  it("admin endpoints surface 401 as ApiError", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(401, { error: "unauthorized", message: "admin authentication required" }),
+    );
+    await expect(listSongs({}, PW)).rejects.toMatchObject({
+      code: "unauthorized",
+      status: 401,
+    });
   });
 });
