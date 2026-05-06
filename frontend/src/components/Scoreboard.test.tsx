@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Scoreboard } from "./Scoreboard";
 import type { Team } from "../lib/types";
 
@@ -55,5 +55,56 @@ describe("Scoreboard", () => {
     rerender(<Scoreboard teams={updated} />);
     const flashed = screen.getByText("Alice").closest("li");
     expect(flashed?.className).toMatch(/flashing/);
+  });
+
+  describe("score-change announcement", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("announces a score gain via the live region", () => {
+      const initial: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 0 }];
+      const { rerender } = render(<Scoreboard teams={initial} />);
+      expect(screen.getByTestId("scoreboard-announcement").textContent).toBe("");
+
+      const updated: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 10 }];
+      rerender(<Scoreboard teams={updated} />);
+      expect(screen.getByTestId("scoreboard-announcement").textContent).toBe(
+        "Alice gained 10 points to 10",
+      );
+    });
+
+    it("announces a score loss with absolute delta", () => {
+      const initial: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 10 }];
+      const { rerender } = render(<Scoreboard teams={initial} />);
+      const updated: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 5 }];
+      rerender(<Scoreboard teams={updated} />);
+      expect(screen.getByTestId("scoreboard-announcement").textContent).toBe(
+        "Alice lost 5 points to 5",
+      );
+    });
+
+    it("clears the announcement after 700ms", () => {
+      const initial: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 0 }];
+      const { rerender } = render(<Scoreboard teams={initial} />);
+      const updated: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 10 }];
+      rerender(<Scoreboard teams={updated} />);
+      expect(screen.getByTestId("scoreboard-announcement").textContent).not.toBe("");
+      act(() => {
+        vi.advanceTimersByTime(700);
+      });
+      expect(screen.getByTestId("scoreboard-announcement").textContent).toBe("");
+    });
+
+    it("uses polite live-region semantics", () => {
+      const teams: Team[] = [{ ...baseTeam, id: "1", name: "Alice", score: 0 }];
+      render(<Scoreboard teams={teams} />);
+      const region = screen.getByTestId("scoreboard-announcement");
+      expect(region).toHaveAttribute("aria-live", "polite");
+      expect(region).toHaveAttribute("role", "status");
+    });
   });
 });

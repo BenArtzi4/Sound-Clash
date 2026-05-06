@@ -183,9 +183,9 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    const banner = screen.getByRole("status");
-    expect(banner.textContent).toMatch(/alice/i);
-    expect(banner.textContent).toMatch(/buzzed in/i);
+    const banner = screen.getByText(/buzzed in/i).closest('[role="status"]');
+    expect(banner?.textContent).toMatch(/alice/i);
+    expect(banner?.textContent).toMatch(/buzzed in/i);
     expect(screen.getByRole("button", { name: /award points/i })).toBeEnabled();
   });
 

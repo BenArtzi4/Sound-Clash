@@ -7,9 +7,11 @@ vi.mock("../lib/supabase", async () => {
   return { supabase: mod.supabaseMock };
 });
 
+import { _resetServerTime } from "../hooks/useServerTime";
 import {
   fireSubscribed,
   makeActiveGame,
+  makeRound,
   makeTeam,
   resetSupabaseMock,
   setHydrate,
@@ -20,6 +22,7 @@ import { TeamGameplayPage } from "./TeamGameplayPage";
 beforeEach(() => {
   resetSupabaseMock();
   window.localStorage.clear();
+  _resetServerTime();
 });
 
 afterEach(() => {
@@ -159,6 +162,55 @@ describe("TeamGameplayPage", () => {
     window.localStorage.setItem("game:ABCDEF:team", "{not json");
     renderAt("/team/ABCDEF");
     expect(screen.getByText("join page")).toBeInTheDocument();
+  });
+
+  describe("timer accessibility", () => {
+    function setupRunningRound(secondsAgo: number): void {
+      const FIXED_NOW = 1_780_000_000_000;
+      vi.spyOn(Date, "now").mockReturnValue(FIXED_NOW);
+      const startedAt = new Date(FIXED_NOW - secondsAgo * 1000).toISOString();
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      setHydrate({
+        game: makeActiveGame({ status: "playing", current_round_id: "round-1" }),
+        teams: [makeTeam({ id: "team-1" })],
+        rounds: [makeRound({ id: "round-1", started_at: startedAt })],
+      });
+    }
+
+    it("uses a static aria-label on the timer (no per-tick rewrite)", async () => {
+      setupRunningRound(2);
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const timer = await screen.findByRole("timer");
+      expect(timer).toHaveAttribute("aria-label", "Time remaining");
+    });
+
+    it("renders an empty live region when there is plenty of time left", async () => {
+      setupRunningRound(2);
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const timer = await screen.findByRole("timer");
+      const liveRegion = timer.querySelector('[aria-live="polite"]');
+      expect(liveRegion?.textContent).toBe("");
+    });
+
+    it("announces low time when remaining seconds drop to the 5→1 tail", async () => {
+      setupRunningRound(17);
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const timer = await screen.findByRole("timer");
+      const liveRegion = timer.querySelector('[aria-live="polite"]');
+      expect(liveRegion?.textContent).toBe("3 seconds left");
+    });
   });
 
   it("renders the rpc-mock click without error", async () => {
