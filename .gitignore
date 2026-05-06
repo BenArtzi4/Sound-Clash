@@ -39,6 +39,11 @@ frontend/package-lock.json
 .env.*
 !.env.example
 !.env.*.example
+# Production frontend env: explicitly tracked. Only contains values that ship
+# to the browser bundle anyway (Supabase anon key, Sentry DSN public form, etc).
+# Service-role keys / admin password / deploy hooks live in GitHub Actions
+# secrets and .claude/phase7-secrets.local — never in the repo.
+!frontend/.env.production
 
 # Editor / OS
 .vscode/
@@ -62,6 +67,9 @@ supabase/.temp/
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Wrangler local cache
+.wrangler/
 
 # Sentry
 .sentryclirc
