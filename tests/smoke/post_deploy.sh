@@ -44,27 +44,23 @@ require_cmd() {
 require_cmd curl
 require_cmd jq
 
-# Wrapper that captures status code AND body. We need both: status to
-# detect failure, body to surface error detail.
+# Wrapper that asserts a 2xx and emits the body to stdout. Uses
+# --fail-with-body (curl 7.76+) so curl exits non-zero on HTTP errors
+# while still streaming the body — gives us the detail in the failure
+# message without the -w '%{http_code}' invocation that trips git-bash
+# bundled curl 8.8.0 (exits 43). Portable across git-bash, macOS, and
+# CI Ubuntu.
 http() {
   local method="$1"
   local path="$2"
-  local body_file
-  body_file=$(mktemp)
   shift 2
 
-  local status
-  status=$(curl -sS -o "$body_file" -w '%{http_code}' -X "$method" \
+  local body
+  if ! body=$(curl -sS --fail-with-body -X "$method" \
     -H 'Content-Type: application/json' \
     "$@" \
-    "${API_URL}${path}")
-
-  local body
-  body=$(cat "$body_file")
-  rm -f "$body_file"
-
-  if [[ ! "$status" =~ ^2 ]]; then
-    fail "$method $path -> $status: $body"
+    "${API_URL}${path}"); then
+    fail "$method $path failed: $body"
   fi
   printf '%s' "$body"
 }
