@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           # NOTE: npm cache disabled until frontend/package-lock.json is committed
           # (will be generated when Node is installed locally for Phase 5).
           # Re-enable with `cache: "npm"` + `cache-dependency-path` once the
@@ -92,7 +92,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           # See note above about cache.
       - run: |
           if [ -f package-lock.json ]; then
