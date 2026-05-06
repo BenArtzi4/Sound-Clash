@@ -69,13 +69,13 @@ Open http://localhost:5173. Full setup details: [`docs/local-development.md`](do
 
 ## Project status
 
-- [ ] Phase 1 — Infrastructure setup
-- [ ] Phase 2 — Data migration
-- [ ] Phase 3 — Postgres logic
-- [ ] Phase 4 — Backend port
-- [ ] Phase 5 — Realtime wiring & frontend port
-- [ ] Phase 6 — End-to-end testing
-- [ ] Phase 7 — Deploy & cutover
+- [x] Phase 1 — Infrastructure setup
+- [x] Phase 2 — Data migration
+- [x] Phase 3 — Postgres logic
+- [x] Phase 4 — Backend port
+- [x] Phase 5 — Realtime wiring & frontend port
+- [x] Phase 6 — End-to-end testing
+- [ ] Phase 7 — Deploy & cutover (see [`docs/phase7-cutover-checklist.md`](docs/phase7-cutover-checklist.md))
 
 Full plan: [`docs/roadmap.md`](docs/roadmap.md).
 

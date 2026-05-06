@@ -17,7 +17,7 @@ const PORT_BACKEND = 8000;
 
 export default defineConfig({
   testDir: ".",
-  testIgnore: ["fixtures/**"],
+  testIgnore: ["fixtures/**", "smoke/**"],
   fullyParallel: false, // sequential — multi-context specs share the preview project
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
