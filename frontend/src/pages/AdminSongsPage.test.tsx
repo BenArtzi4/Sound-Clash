@@ -210,10 +210,7 @@ describe("AdminSongsPage — list", () => {
     vi.mocked(listSongs).mockClear();
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     await waitFor(() => {
-      expect(listSongs).toHaveBeenCalledWith(
-        expect.objectContaining({ page: 2 }),
-        "letmein",
-      );
+      expect(listSongs).toHaveBeenCalledWith(expect.objectContaining({ page: 2 }), "letmein");
     });
   });
 });
@@ -329,9 +326,7 @@ describe("AdminSongsPage — bulk import", () => {
     expect(uploadedFile.name).toBe("songs.csv");
     expect(pw).toBe("letmein");
     await waitFor(() =>
-      expect(
-        screen.getByText(/imported 2 new \+ 1 updated \(3 total\)/i),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/imported 2 new \+ 1 updated \(3 total\)/i)).toBeInTheDocument(),
     );
   });
 
@@ -345,4 +340,3 @@ describe("AdminSongsPage — bulk import", () => {
     await waitFor(() => expect(screen.getByText(/malformed csv/i)).toBeInTheDocument());
   });
 });
-

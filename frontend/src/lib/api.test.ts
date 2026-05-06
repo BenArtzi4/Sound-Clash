@@ -214,16 +214,11 @@ describe("api - admin-songs routes", () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, { items: [SONG], page: 2, per_page: 25, total: 1 }),
     );
-    const res = await listSongs(
-      { page: 2, per_page: 25, search: "foo", genre: "rock" },
-      PW,
-    );
+    const res = await listSongs({ page: 2, per_page: 25, search: "foo", genre: "rock" }, PW);
     expect(res.total).toBe(1);
     expect(res.items[0]!.id).toBe(SONG.id);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(
-      "http://localhost:8000/admin/songs?page=2&per_page=25&search=foo&genre=rock",
-    );
+    expect(url).toBe("http://localhost:8000/admin/songs?page=2&per_page=25&search=foo&genre=rock");
     expect(init.method).toBe("GET");
     const headers = init.headers as Record<string, string>;
     expect(headers["X-Admin-Password"]).toBe(PW);
@@ -281,9 +276,7 @@ describe("api - admin-songs routes", () => {
   });
 
   it("bulkImportSongs posts FormData and does not set Content-Type", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { inserted: 2, updated: 1, total: 3 }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { inserted: 2, updated: 1, total: 3 }));
     const file = new File(["title,artist,youtube_id\n"], "songs.csv", { type: "text/csv" });
     const summary = await bulkImportSongs(file, PW);
     expect(summary).toEqual({ inserted: 2, updated: 1, total: 3 });
