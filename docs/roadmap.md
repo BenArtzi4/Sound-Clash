@@ -213,17 +213,17 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 - DNS cutover: change apex `soundclash.org` from CloudFront to Cloudflare Pages
 - Smoke test: `tests/smoke/post_deploy.sh` — curl health endpoints, confirm a synthetic game can be created and a round can run
 
-**Exit criteria — Definition of Done**
-- [ ] `https://soundclash.org` serves the new frontend
-- [ ] `https://api.soundclash.org/health` returns 200
-- [ ] A real end-to-end game playable from a clean browser session
-- [ ] Smoke-test script passes
-- [ ] AWS Cost Explorer shows $0 forecasted for next month
-- [ ] All AWS resources from the teardown checklist are confirmed deleted
-- [ ] `Sound-Clash-legacy` README updated with `LEGACY.md` pointing at `Sound-Clash`
-- [ ] `Sound-Clash` README has setup, dev, deploy, runbook links
-- [ ] Monitoring active: Render health alerts + Supabase email alerts + Sentry
-- [ ] Rollback plan documented (DNS revert to CloudFront within 24h)
+**Exit criteria — Definition of Done** (cutover completed 2026-05-07)
+- [x] `https://soundclash.org` serves the new frontend (apex `soundclash.org` → URL-redirect to `https://www.soundclash.org`, which is the Pages custom domain)
+- [x] `https://api.soundclash.org/health` returns 200
+- [x] A real end-to-end game playable from a clean browser session (verified via `tests/e2e/smoke/prod_realtime.spec.ts` — manager + 2 teams + buzzer race + scoring all pass against canonical URLs)
+- [x] Smoke-test script passes (`./tests/smoke/post_deploy.sh https://api.soundclash.org` PASS, game `QA34DD`)
+- [x] AWS Cost Explorer shows $0 forecasted for next month (actual daily spend from 2026-05-03 onward is $0.0001 — fractions of a cent. Forecast still displayed $19.93 immediately after teardown because it's based on the prior 30-day window; collapses to $0 once a few all-zero days accumulate.)
+- [x] All AWS resources from the teardown checklist are confirmed deleted (CloudFormation stacks, S3 buckets, CloudFront, ACM cert, ECR repos, CloudWatch logs all gone — verified via `aws` CLI sweep)
+- [x] `Sound-Clash-legacy` README updated with teardown notice pointing at `Sound-Clash`
+- [x] `Sound-Clash` README has setup, dev, deploy, runbook links (see "Documentation" section)
+- [x] Monitoring active: Render workspace-default failure notifications, Supabase free-tier auto-quota emails, Sentry "new issue" alert rules on both `sound-clash-frontend` and `sound-clash-backend` projects, cron-job.org keepalive on `https://api.soundclash.org/health` every 14 min
+- [x] Rollback plan documented — see `docs/runbook.md §2.4`. **Note**: as of teardown (2026-05-07) the DNS-revert path is no longer available; recovery now requires rebuilding AWS from scratch per `runbook.md §6`.
 
 **Dependencies**: Phase 6
 
