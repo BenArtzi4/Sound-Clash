@@ -134,3 +134,27 @@ export interface EndGameResponse {
   status: GameStatus;
   ended_at: string;
 }
+
+// Admin song-catalog payloads. Mirrors backend/app/models/songs.py.
+export interface SongWritePayload {
+  title: string;
+  artist: string;
+  youtube_id: string;
+  start_time: number;
+  is_soundtrack: boolean;
+  source: string | null;
+  genre_ids: string[];
+}
+
+export interface SongListResponse {
+  items: Song[];
+  page: number;
+  per_page: number;
+  total: number;
+}
+
+export interface BulkImportSummary {
+  inserted: number;
+  updated: number;
+  total: number;
+}

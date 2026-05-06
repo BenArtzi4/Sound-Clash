@@ -1,5 +1,6 @@
 import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
 import { ToastProvider } from "./context/ToastContext";
+import { AdminSongsPage } from "./pages/AdminSongsPage";
 import { DisplayPage } from "./pages/DisplayPage";
 import { HomePage } from "./pages/HomePage";
 import { JoinTeamPage } from "./pages/JoinTeamPage";
@@ -18,6 +19,7 @@ export function App() {
           <Route path="/team/:gameCode" element={<TeamGameplayPage />} />
           <Route path="/manager/create" element={<ManagerCreateGamePage />} />
           <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
+          <Route path="/admin/songs" element={<AdminSongsPage />} />
           <Route path="/display" element={<DisplayPage />} />
           <Route path="/display/:gameCode" element={<DisplayPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

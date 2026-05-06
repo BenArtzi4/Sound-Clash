@@ -3,10 +3,14 @@ import type {
   ApiErrorBody,
   AwardPointsRequest,
   AwardPointsResponse,
+  BulkImportSummary,
   CreateGameResponse,
   EndGameResponse,
   Genre,
   SelectSongResponse,
+  Song,
+  SongListResponse,
+  SongWritePayload,
   Team,
 } from "./types";
 
@@ -32,7 +36,8 @@ interface RequestOptions {
 
 async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  if (opts.body !== undefined) {
+  const isFormData = typeof FormData !== "undefined" && opts.body instanceof FormData;
+  if (opts.body !== undefined && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
   if (opts.managerToken) {
@@ -42,10 +47,19 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
     headers["X-Admin-Password"] = opts.adminPassword;
   }
 
+  let body: BodyInit | undefined;
+  if (opts.body === undefined) {
+    body = undefined;
+  } else if (isFormData) {
+    body = opts.body as FormData;
+  } else {
+    body = JSON.stringify(opts.body);
+  }
+
   const response = await fetch(`${env.VITE_API_URL}${path}`, {
     method,
     headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    body,
   });
 
   if (response.status === 204) {
@@ -120,4 +134,56 @@ export function kickTeam(gameCode: string, managerToken: string, teamId: string)
   return request("DELETE", `/games/${gameCode}/teams/${teamId}`, {
     managerToken,
   });
+}
+
+// Admin song-catalog wrappers — gated by X-Admin-Password.
+
+export interface ListSongsParams {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  genre?: string;
+}
+
+function buildQuery(params: ListSongsParams): string {
+  const search = new URLSearchParams();
+  if (params.page !== undefined) search.set("page", String(params.page));
+  if (params.per_page !== undefined) search.set("per_page", String(params.per_page));
+  if (params.search) search.set("search", params.search);
+  if (params.genre) search.set("genre", params.genre);
+  const q = search.toString();
+  return q.length > 0 ? `?${q}` : "";
+}
+
+export function listSongs(
+  params: ListSongsParams,
+  adminPassword: string,
+): Promise<SongListResponse> {
+  return request("GET", `/admin/songs${buildQuery(params)}`, { adminPassword });
+}
+
+export function getSong(id: string, adminPassword: string): Promise<Song> {
+  return request("GET", `/admin/songs/${id}`, { adminPassword });
+}
+
+export function createSong(body: SongWritePayload, adminPassword: string): Promise<Song> {
+  return request("POST", "/admin/songs", { adminPassword, body });
+}
+
+export function updateSong(
+  id: string,
+  body: SongWritePayload,
+  adminPassword: string,
+): Promise<Song> {
+  return request("PUT", `/admin/songs/${id}`, { adminPassword, body });
+}
+
+export function deleteSong(id: string, adminPassword: string): Promise<void> {
+  return request("DELETE", `/admin/songs/${id}`, { adminPassword });
+}
+
+export function bulkImportSongs(file: File, adminPassword: string): Promise<BulkImportSummary> {
+  const form = new FormData();
+  form.append("file", file);
+  return request("POST", "/admin/songs/bulk-import", { adminPassword, body: form });
 }
