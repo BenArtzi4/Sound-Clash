@@ -163,12 +163,15 @@ export function TeamGameplayPage() {
           className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}
           style={{ "--timer-pct": `${timerPct}%` } as CSSProperties}
           role="timer"
-          aria-label={`${remainingSec} seconds remaining`}
+          aria-label="Time remaining"
         >
           <div className={styles.timerBar}>
             <div className={styles.timerFill} />
           </div>
           <span className={styles.timerValue}>{remainingSec}s</span>
+          <span className="visually-hidden" aria-live="polite" role="status">
+            {remainingSec <= 5 && remainingSec > 0 ? `${remainingSec} seconds left` : ""}
+          </span>
         </div>
       ) : null}
 

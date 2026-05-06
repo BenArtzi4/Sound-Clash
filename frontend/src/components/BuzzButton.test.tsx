@@ -56,6 +56,24 @@ describe("BuzzButton", () => {
     expect(onBuzz).not.toHaveBeenCalled();
   });
 
+  it("uses the visible label and subtitle as the accessible name", () => {
+    render(
+      <BuzzButton
+        disabled={false}
+        isBuzzing={false}
+        label="BUZZ"
+        subtitle="Tap or press space"
+        onBuzz={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /BUZZ Tap or press space/i })).toBeInTheDocument();
+  });
+
+  it("falls back to label-only accessible name when no subtitle", () => {
+    render(<BuzzButton disabled={false} isBuzzing={false} label="BUZZ" onBuzz={() => {}} />);
+    expect(screen.getByRole("button", { name: "BUZZ" })).toBeInTheDocument();
+  });
+
   it("reflects the tone prop via data-tone for styling", () => {
     const { rerender } = render(
       <BuzzButton disabled isBuzzing={false} tone="locked-other" onBuzz={() => {}} />,

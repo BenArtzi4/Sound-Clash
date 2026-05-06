@@ -59,10 +59,14 @@ export function BuzzButton({
       onClick={handleClick}
       onKeyDown={handleKey}
       className={className}
-      aria-label={label}
     >
       <span className={styles.label}>{label}</span>
-      {subtitle ? <span className={styles.subtitle}>{subtitle}</span> : null}
+      {subtitle ? (
+        <>
+          {" "}
+          <span className={styles.subtitle}>{subtitle}</span>
+        </>
+      ) : null}
     </button>
   );
 }

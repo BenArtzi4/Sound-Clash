@@ -56,16 +56,16 @@
 
 .button:disabled {
   cursor: not-allowed;
-  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
-  color: #e5e7eb;
-  box-shadow: 0 6px 18px rgba(107, 114, 128, 0.3);
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: #f9fafb;
+  box-shadow: 0 6px 18px rgba(75, 85, 99, 0.3);
   animation: none;
-  opacity: 0.85;
+  opacity: 1;
 }
 
 .toneLockedOther:disabled {
   background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%);
-  color: #fff5f5;
+  color: #ffffff;
   box-shadow:
     0 8px 28px rgba(239, 68, 68, 0.45),
     0 0 0 6px rgba(239, 68, 68, 0.18);

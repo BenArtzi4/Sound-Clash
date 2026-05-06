@@ -101,9 +101,9 @@
   accent-color: var(--color-primary);
 }
 
-.rounds input[type="range"]:focus {
-  background: transparent;
-  box-shadow: none;
+.rounds input[type="range"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
 }
 
 .roundsValue {

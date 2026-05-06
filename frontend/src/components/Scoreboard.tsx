@@ -10,12 +10,19 @@ interface Props {
 export function Scoreboard({ teams, buzzedTeamId }: Props) {
   const prevScoresRef = useRef<Record<string, number>>({});
   const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set());
+  const [announcement, setAnnouncement] = useState("");
 
   useEffect(() => {
     const changed = new Set<string>();
+    const messages: string[] = [];
     for (const t of teams) {
       const prev = prevScoresRef.current[t.id];
-      if (prev !== undefined && prev !== t.score) changed.add(t.id);
+      if (prev !== undefined && prev !== t.score) {
+        changed.add(t.id);
+        const delta = t.score - prev;
+        const verb = delta > 0 ? "gained" : "lost";
+        messages.push(`${t.name} ${verb} ${Math.abs(delta)} points to ${t.score}`);
+      }
       prevScoresRef.current[t.id] = t.score;
     }
     if (changed.size === 0) return undefined;
@@ -24,7 +31,11 @@ export function Scoreboard({ teams, buzzedTeamId }: Props) {
       changed.forEach((id) => next.add(id));
       return next;
     });
-    const handle = window.setTimeout(() => setFlashingIds(new Set()), 700);
+    setAnnouncement(messages.join(". "));
+    const handle = window.setTimeout(() => {
+      setFlashingIds(new Set());
+      setAnnouncement("");
+    }, 700);
     return () => window.clearTimeout(handle);
   }, [teams]);
 
@@ -50,27 +61,37 @@ export function Scoreboard({ teams, buzzedTeamId }: Props) {
   });
 
   return (
-    <ol className={styles.list} data-testid="scoreboard">
-      {sorted.map((team, index) => {
-        const isBuzzed = team.id === buzzedTeamId;
-        const isFlashing = flashingIds.has(team.id);
-        const rowClass = [
-          styles.row,
-          isBuzzed ? styles.buzzed : "",
-          isFlashing ? styles.flashing : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-        return (
-          <li key={team.id} className={rowClass} data-team-id={team.id}>
-            <span className={styles.rank}>{index + 1}</span>
-            <span className={styles.name}>{team.name}</span>
-            <span key={team.score} className={styles.score}>
-              {team.score}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+    <>
+      <ol className={styles.list} data-testid="scoreboard">
+        {sorted.map((team, index) => {
+          const isBuzzed = team.id === buzzedTeamId;
+          const isFlashing = flashingIds.has(team.id);
+          const rowClass = [
+            styles.row,
+            isBuzzed ? styles.buzzed : "",
+            isFlashing ? styles.flashing : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <li key={team.id} className={rowClass} data-team-id={team.id}>
+              <span className={styles.rank}>{index + 1}</span>
+              <span className={styles.name}>{team.name}</span>
+              <span key={team.score} className={styles.score}>
+                {team.score}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <span
+        className="visually-hidden"
+        aria-live="polite"
+        role="status"
+        data-testid="scoreboard-announcement"
+      >
+        {announcement}
+      </span>
+    </>
   );
 }
