@@ -19,11 +19,7 @@ import {
   listSongs,
   updateSong,
 } from "../lib/api";
-import {
-  clearAdminPassword,
-  getAdminPassword,
-  setAdminPassword,
-} from "../lib/adminPassword";
+import { clearAdminPassword, getAdminPassword, setAdminPassword } from "../lib/adminPassword";
 import type { Genre, Song, SongWritePayload } from "../lib/types";
 import styles from "./AdminSongsPage.module.css";
 
@@ -242,14 +238,11 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
-  const songToFilterEdit = useCallback(
-    (song: Song) => {
-      // Backend doesn't return genre links on the song row; preselect nothing.
-      // Operator can re-pick. (A future enhancement could add ?include=genres.)
-      setMode({ kind: "edit", song });
-    },
-    [],
-  );
+  const songToFilterEdit = useCallback((song: Song) => {
+    // Backend doesn't return genre links on the song row; preselect nothing.
+    // Operator can re-pick. (A future enhancement could add ?include=genres.)
+    setMode({ kind: "edit", song });
+  }, []);
 
   async function handleSubmitForm(payload: SongWritePayload) {
     setBusy(true);
