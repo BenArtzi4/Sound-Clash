@@ -51,6 +51,8 @@ Thumbs.db
 # Claude Code local-only settings (project rules in CLAUDE.md are committed; local settings are not)
 .claude/settings.local.json
 .claude/rules/
+.claude/*.local
+.claude/*.local.*
 
 # Supabase local
 supabase/.branches/
