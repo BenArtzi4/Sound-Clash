@@ -12,7 +12,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml ./
 COPY app ./app
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir .
 
 # ---- runtime ----
 FROM python:3.11-slim AS runtime
