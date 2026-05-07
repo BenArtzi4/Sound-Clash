@@ -1,7 +1,3 @@
-<!--
-This file goes in the new repo at: .github/ISSUE_TEMPLATE/bug_report.md
--->
-
 ---
 name: Bug report
 about: Something isn't working

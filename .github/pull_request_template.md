@@ -1,8 +1,3 @@
-<!--
-This file goes in the new repo at: .github/pull_request_template.md
-GitHub auto-loads it as the description when you open a PR.
--->
-
 ## What
 
 <!-- One-paragraph summary of what this PR changes. Focus on user-visible or system-visible effects, not the diff. -->
