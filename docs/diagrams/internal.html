@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sound Clash — Internal Architecture</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --accent: #cc6600;
+    --rule: #e5e5e5;
+    --code-bg: #f3f3f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1a1a1a; --fg: #e8e8e8; --muted: #aaa; --rule: #333; --code-bg: #2a2a2a; }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+  }
+  h1 { border-bottom: 1px solid var(--rule); padding-bottom: 0.4rem; }
+  h2 { margin-top: 2.4rem; }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 0.4rem 1rem;
+    color: var(--muted);
+    background: var(--code-bg);
+    margin: 1.2rem 0;
+    border-radius: 0 4px 4px 0;
+  }
+  table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+  th, td { border: 1px solid var(--rule); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
+  .mermaid {
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+  }
+  .legend { font-size: 0.94em; }
+  .legend li { margin: 0.3rem 0; }
+  .nav { font-size: 0.9em; color: var(--muted); margin-bottom: 1rem; }
+  .nav a { color: inherit; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="./README.md">← diagrams index</a> &middot;
+  <a href="../README.md">docs index</a>
+</div>
+
+<h1>Internal Architecture</h1>
+
+<p>What lives inside the running game: how the React frontend, FastAPI backend, and Supabase Postgres talk to each other, and what travels over each edge.</p>
+
+<blockquote>
+  <strong>The single most important detail</strong>: the buzzer (<code>buzz_in</code>) goes browser → Supabase <strong>directly</strong>, bypassing FastAPI entirely. That's how a &lt;200ms hot path coexists with free-tier Python hosting that has 2–30s cold starts. See <code>realtime-design.md</code> for the full reasoning.
+</blockquote>
+
+<h2>Component map</h2>
+
+<pre class="mermaid">
+flowchart TB
+    subgraph BROWSER["Browser (React + Vite SPA)"]
+        direction LR
+        Mgr["Manager<br/>console"]
+        Tm["Team<br/>buzzer"]
+        Disp["Display<br/>screen"]
+    end
+
+    subgraph RENDER["FastAPI on Render"]
+        direction TB
+        Health["/health"]
+        Games["/games/*<br/>create / join / select-song /<br/>award-points / bonus / end / kick"]
+        Admin["/admin/songs<br/>CRUD + bulk-import"]
+        Genres["/genres"]
+    end
+
+    subgraph SUPA["Supabase"]
+        direction TB
+        PostgREST["PostgREST<br/>HTTP → SQL"]
+        Realtime["Realtime<br/>WebSocket"]
+        subgraph PG["Postgres 15"]
+            direction TB
+            Tephem[("Ephemeral<br/>active_games /<br/>game_teams /<br/>game_rounds<br/>(4h TTL)")]
+            Tdurable[("Durable<br/>songs /<br/>genres /<br/>song_genres")]
+            RPC{{"PL/pgSQL<br/>buzz_in / start_round /<br/>award_points / award_bonus /<br/>end_game / cleanup_expired_games"}}
+            Cron[/"pg_cron<br/>cleanup every hour"/]
+            RLS[/"RLS policies<br/>anon SELECT only"/]
+        end
+    end
+
+    Mgr -.->|"REST<br/>X-Manager-Token (per-game uuid)"| Games
+    Mgr -.->|"REST<br/>X-Admin-Password"| Admin
+    BROWSER -.->|"REST (open)"| Genres
+    Tm ==>|"PostgREST RPC<br/>anon key<br/>buzz_in &lt;200ms"| PostgREST
+    BROWSER ==>|"WSS subscribe<br/>active_games / game_teams /<br/>game_rounds for game_code"| Realtime
+
+    Games -->|"service-role key"| Tephem
+    Admin -->|"service-role key"| Tdurable
+    Genres -->|"service-role key"| Tdurable
+    PostgREST --> RPC
+    RPC --> Tephem
+    RPC --> Tdurable
+    Cron --> Tephem
+    Realtime -.->|"logical replication"| Tephem
+    RLS -.- Tephem
+    RLS -.- Tdurable
+
+    classDef hot fill:#fff3cd,stroke:#cc6600,stroke-width:3px,color:#000
+    classDef cold fill:#e8f0fe,stroke:#1a73e8,color:#000
+    classDef store fill:#f1f8e9,stroke:#558b2f,color:#000
+    class Tm,PostgREST,RPC hot
+    class Games,Admin,Genres,Health cold
+    class Tephem,Tdurable store
+</pre>
+
+<p class="legend"><strong>Legend</strong></p>
+<ul class="legend">
+  <li><strong>Yellow / thick edges</strong> = the buzzer hot path. Browser fires <code>supabase.rpc('buzz_in', ...)</code> over PostgREST; Postgres does an atomic conditional <code>UPDATE</code>; Realtime fans the row change to all subscribers. No Python in the loop.</li>
+  <li><strong>Blue / dashed edges</strong> = REST traffic to FastAPI. Cold-start tolerant: game creation, song selection, scoring, admin CRUD. Always uses the service-role key server-side.</li>
+  <li><strong>Solid arrows</strong> = synchronous request/response. <strong>Dashed arrows</strong> = subscription / pub-sub.</li>
+</ul>
+
+<h2>Auth surfaces (who can hit what)</h2>
+
+<table>
+<thead><tr><th>Caller</th><th>Path</th><th>Header / key</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Anonymous browser</td><td><code>POST /games</code></td><td>none</td><td>Open hosting; returns the per-game <code>manager_token</code></td></tr>
+<tr><td>Anonymous browser</td><td><code>POST /games/{code}/teams</code></td><td>none</td><td>Players just need to know the code</td></tr>
+<tr><td>Anonymous browser</td><td><code>supabase.rpc('buzz_in')</code></td><td>anon JWT (RLS)</td><td>Hot path; the only RPC <code>anon</code> is <code>GRANT EXECUTE</code>'d on</td></tr>
+<tr><td>Anonymous browser</td><td><code>SELECT</code> on game-scoped rows</td><td>anon JWT (RLS)</td><td>RLS allows SELECT, denies all writes</td></tr>
+<tr><td>Manager browser</td><td><code>POST /games/{code}/{select-song,award-points,bonus,end}</code></td><td><code>X-Manager-Token</code></td><td>Per-game uuid stored on <code>active_games</code>, mirrored in localStorage</td></tr>
+<tr><td>Manager browser</td><td><code>DELETE /games/{code}/teams/{team_id}</code></td><td><code>X-Manager-Token</code></td><td>Same</td></tr>
+<tr><td>Admin browser</td><td><code>/admin/songs/*</code></td><td><code>X-Admin-Password</code></td><td>Single env-var password, constant-time compared</td></tr>
+<tr><td>FastAPI itself</td><td>Anything via <code>supabase-py</code></td><td>service-role key</td><td>Server-side only; never reaches the browser bundle</td></tr>
+</tbody>
+</table>
+
+<p>The <code>manager_token</code> was added in 2026-05-06 (<code>migrations/012_manager_token.sql</code>) when the global manager-password gate was retired in favour of open hosting.</p>
+
+<h2>Hot-path sequence: a buzz race</h2>
+
+<p>Two teams click the buzzer within ~50ms of each other. Postgres serializes them and exactly one wins. The other clients learn the result over Realtime.</p>
+
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant T1 as Team 1 (browser)
+    participant T2 as Team 2 (browser)
+    participant PR as PostgREST
+    participant PG as Postgres (buzz_in)
+    participant RT as Realtime
+    participant Mgr as Manager / Display
+
+    par Concurrent buzzes
+        T1->>PR: POST /rest/v1/rpc/buzz_in
+        PR->>PG: SELECT buzz_in('A1B2C3', team1_uuid)
+    and
+        T2->>PR: POST /rest/v1/rpc/buzz_in
+        PR->>PG: SELECT buzz_in('A1B2C3', team2_uuid)
+    end
+
+    Note over PG: UPDATE active_games<br/>SET buzzed_team_id = $2<br/>WHERE buzzed_team_id IS NULL<br/>RETURNING ...
+
+    PG-->>PR: T1 result: locked=true
+    PG-->>PR: T2 result: locked=false
+    PR-->>T1: { locked: true, team_id: t1 }
+    PR-->>T2: { locked: false, team_id: t1 }
+
+    PG-)RT: WAL change on active_games
+    RT-)Mgr: row update {buzzed_team_id: t1}
+    RT-)T1: row update
+    RT-)T2: row update
+
+    Note over T1,Mgr: All four contexts agree on the winner<br/>within ~80–180ms total
+</pre>
+
+<p>Why this works: Postgres' <code>UPDATE ... WHERE buzzed_team_id IS NULL</code> is atomic at row level. The first call to land sets the field; the second sees zero rows affected and returns <code>locked=false</code>. There is no separate read-then-write that could lose to a race.</p>
+
+<h2>What's deliberately <em>not</em> here</h2>
+
+<ul>
+  <li>No object storage. Audio is YouTube IFrame Player only — the catalog stores <code>youtube_id</code> + <code>start_time</code>.</li>
+  <li>No state-management library. React local state + Supabase Realtime is the entire client model.</li>
+  <li>No user accounts or JWT identity. The two credentials in the system (<code>X-Manager-Token</code>, <code>X-Admin-Password</code>) are scoped to specific surfaces; there is no profile, no login, no session.</li>
+  <li>No WebSocket service in FastAPI. Supabase Realtime is the broadcast plane.</li>
+</ul>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });
+</script>
+
+</body>
+</html>

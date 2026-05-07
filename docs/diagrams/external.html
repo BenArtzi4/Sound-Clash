@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sound Clash — External Services</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --accent: #1a73e8;
+    --rule: #e5e5e5;
+    --code-bg: #f3f3f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1a1a1a; --fg: #e8e8e8; --muted: #aaa; --rule: #333; --code-bg: #2a2a2a; }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+  }
+  h1 { border-bottom: 1px solid var(--rule); padding-bottom: 0.4rem; }
+  h2 { margin-top: 2.4rem; }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 0.4rem 1rem;
+    color: var(--muted);
+    background: var(--code-bg);
+    margin: 1.2rem 0;
+    border-radius: 0 4px 4px 0;
+  }
+  table { border-collapse: collapse; margin: 1rem 0; width: 100%; font-size: 0.95em; }
+  th, td { border: 1px solid var(--rule); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  td.center { text-align: center; }
+  code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
+  .mermaid {
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+  }
+  .nav { font-size: 0.9em; color: var(--muted); margin-bottom: 1rem; }
+  .nav a { color: inherit; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="./README.md">← diagrams index</a> &middot;
+  <a href="../README.md">docs index</a>
+</div>
+
+<h1>External Services</h1>
+
+<p>The third-party services Sound Clash depends on, and how they're glued together. Internal architecture (browser ↔ FastAPI ↔ Postgres) lives in <a href="./internal.html">internal.html</a>; this file covers everything <em>around</em> the running game: hosting, CI/CD, error tracking, dependency bots, DNS.</p>
+
+<blockquote>
+  <strong>Total recurring cost</strong>: $12/yr for the domain. Everything else is on a free tier. See <code>tech-stack.md</code> for the full quota table and <code>free-tier-budget.md</code> for capacity analysis.
+</blockquote>
+
+<h2>Service map</h2>
+
+<pre class="mermaid">
+flowchart LR
+    User((Player /<br/>Host /<br/>Display))
+    YT[YouTube IFrame<br/>Player API]
+
+    subgraph DNS["DNS &amp; domain"]
+        Namecheap[("Namecheap<br/>$12/yr")]
+        Cloudflare[Cloudflare DNS<br/>soundclash.org]
+    end
+
+    subgraph Frontend["Frontend hosting"]
+        Pages[Cloudflare Pages<br/>www.soundclash.org]
+    end
+
+    subgraph Backend["Backend hosting"]
+        Render[Render web service<br/>api.soundclash.org]
+    end
+
+    subgraph Data["Database &amp; realtime"]
+        SupaProd[Supabase<br/>Sound-Clash<br/>Frankfurt, prod]
+        SupaPreview[Supabase<br/>Sound-Clash-Preview<br/>for E2E]
+    end
+
+    subgraph Ops["Ops &amp; observability"]
+        Sentry[Sentry<br/>frontend + backend]
+        CronJob[cron-job.org<br/>14-min keepalive]
+    end
+
+    subgraph Repo["GitHub repo"]
+        GH[github.com/<br/>BenArtzi4/Sound-Clash]
+        Actions[GitHub Actions<br/>backend / frontend /<br/>e2e / db-migrate]
+        CodeQL[CodeQL<br/>Default Setup]
+        Dependabot[Dependabot<br/>weekly bumps]
+        Codecov[Codecov<br/>coverage badge]
+    end
+
+    User -->|HTTPS| Pages
+    User -.->|YouTube embed| YT
+    Pages -->|REST| Render
+    Pages -->|"Realtime WSS<br/>+ PostgREST"| SupaProd
+    Render -->|"service-role key"| SupaProd
+    CronJob -->|GET /health<br/>every 14 min| Render
+
+    Namecheap -.->|nameservers| Cloudflare
+    Cloudflare -.->|"apex 301 → www"| Pages
+    Cloudflare -.->|"CNAME api"| Render
+
+    GH -->|webhook on push| Actions
+    Actions -->|Render deploy hook| Render
+    Actions -->|wrangler pages deploy| Pages
+    Actions -.->|coverage.xml| Codecov
+    Actions -.->|psql migrate.sh<br/>(manual dispatch)| SupaProd
+    Actions -->|Playwright E2E| SupaPreview
+    GH -.->|on push / PR| CodeQL
+    Dependabot -.->|opens PRs| GH
+
+    Pages -.->|JS errors| Sentry
+    Render -.->|Python errors| Sentry
+
+    classDef paid fill:#ffe0e0,stroke:#cc0000,color:#000
+    classDef free fill:#e8f5e9,stroke:#2e7d32,color:#000
+    classDef ci fill:#e3f2fd,stroke:#1565c0,color:#000
+    class Namecheap paid
+    class Pages,Render,SupaProd,SupaPreview,Sentry,CronJob,YT free
+    class GH,Actions,CodeQL,Dependabot,Codecov ci
+</pre>
+
+<p><strong>Legend</strong>: red = paid (just the domain), green = free-tier services in the request path, blue = developer/CI infrastructure that doesn't sit on the request path.</p>
+
+<h2>Service inventory</h2>
+
+<table>
+<thead><tr><th>Service</th><th>Used for</th><th>Plan</th><th>Auth surface</th></tr></thead>
+<tbody>
+<tr><td><strong>Namecheap</strong></td><td>Domain registration of <code>soundclash.org</code></td><td>$12/yr</td><td>Account login</td></tr>
+<tr><td><strong>Cloudflare DNS</strong></td><td>Authoritative DNS, apex redirect, CNAME for <code>api.soundclash.org</code></td><td>Free</td><td>API token (<code>CF_API_TOKEN</code>)</td></tr>
+<tr><td><strong>Cloudflare Pages</strong></td><td>Static hosting of the React SPA at <code>www.soundclash.org</code></td><td>Free (unlimited bandwidth, 500 builds/mo)</td><td>API token + account ID</td></tr>
+<tr><td><strong>Render</strong></td><td>FastAPI Docker service at <code>api.soundclash.org</code></td><td>Free (750 hr/mo, 512 MB, 15-min idle sleep)</td><td>Deploy webhook (<code>RENDER_DEPLOY_HOOK</code>)</td></tr>
+<tr><td><strong>Supabase (prod)</strong></td><td>Postgres + Realtime + PostgREST</td><td>Free (500 MB DB, 200 concurrent peers, 2M msgs/mo)</td><td>anon key (browser), service-role key (server)</td></tr>
+<tr><td><strong>Supabase (preview)</strong></td><td>Isolated project for Playwright E2E</td><td>Free</td><td>Separate anon + service-role secrets</td></tr>
+<tr><td><strong>GitHub Actions</strong></td><td>CI/CD for all four workflows</td><td>Free for public repos</td><td><code>GITHUB_TOKEN</code> per run</td></tr>
+<tr><td><strong>CodeQL</strong></td><td>Security static analysis</td><td>Free for public repos (Default Setup)</td><td>none (runs as a check)</td></tr>
+<tr><td><strong>Dependabot</strong></td><td>Weekly dependency PRs</td><td>Free</td><td>none (built into GitHub)</td></tr>
+<tr><td><strong>Codecov</strong></td><td>Coverage delta comments + badge</td><td>Free for public repos</td><td><code>CODECOV_TOKEN</code> upload secret</td></tr>
+<tr><td><strong>Sentry</strong></td><td>Error tracking (<code>sound-clash-frontend</code> + <code>sound-clash-backend</code>)</td><td>Free (5k errors/mo, 10k perf events)</td><td>DSN per project</td></tr>
+<tr><td><strong>cron-job.org</strong></td><td>Pings <code>/health</code> every 14 min so Render doesn't sleep</td><td>Free</td><td>Account login</td></tr>
+<tr><td><strong>YouTube IFrame Player API</strong></td><td>Audio playback (browser-direct)</td><td>Free, terms apply</td><td>none (public CDN)</td></tr>
+</tbody>
+</table>
+
+<h2>Deploy flow: what happens on <code>git push main</code></h2>
+
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant Dev as Developer
+    participant GH as GitHub
+    participant CI as GitHub Actions
+    participant CodeQL as CodeQL
+    participant Codecov as Codecov
+    participant Render as Render
+    participant CF as Cloudflare Pages
+    participant API as api.soundclash.org
+    participant Web as www.soundclash.org
+
+    Dev->>GH: git push origin main
+    par
+        GH->>CI: trigger backend.yml
+        and
+        GH->>CI: trigger frontend.yml
+        and
+        GH->>CodeQL: scan changed files
+    end
+
+    Note over CI: ruff + mypy + pytest<br/>(backend.yml)<br/>eslint + tsc + vitest + build<br/>(frontend.yml)
+
+    CI->>Codecov: upload coverage.xml / lcov.info
+    Codecov-->>GH: PR comment / badge update
+
+    alt backend tests pass
+        CI->>Render: POST $RENDER_DEPLOY_HOOK
+        Render->>Render: docker build + health-check
+        Render-->>API: traffic swap (~30s cold start)
+    end
+
+    alt frontend tests pass
+        CI->>CF: wrangler pages deploy dist
+        CF-->>Web: new build live (~10s)
+    end
+
+    Note over CI: e2e.yml only runs on main pushes,<br/>or PRs labeled `run-e2e`.<br/>db-migrate.yml is manual-dispatch only<br/>(never auto-applied).
+</pre>
+
+<h2>What goes into which secret store</h2>
+
+<p>Every credential lives in <strong>exactly one</strong> of these places (no duplication, no committed <code>.env</code>):</p>
+
+<table>
+<thead><tr><th>Secret</th><th>GitHub Actions</th><th>Render env</th><th>Cloudflare Pages env</th><th>Local <code>.env</code></th></tr></thead>
+<tbody>
+<tr><td><code>SUPABASE_URL</code></td><td class="center">✅</td><td class="center">✅</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
+<tr><td><code>SUPABASE_ANON_KEY</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
+<tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td class="center">✅</td><td class="center">✅</td><td class="center"><strong>never</strong></td><td class="center">✅ (dev)</td></tr>
+<tr><td><code>SUPABASE_PREVIEW_*</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+<tr><td><code>ADMIN_PASSWORD</code></td><td class="center">✅ (preview)</td><td class="center">✅</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
+<tr><td><code>RENDER_DEPLOY_HOOK</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+<tr><td><code>CF_API_TOKEN</code> / <code>CF_ACCOUNT_ID</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+<tr><td><code>SENTRY_DSN_BACKEND</code></td><td class="center">–</td><td class="center">✅</td><td class="center">–</td><td class="center">optional</td></tr>
+<tr><td><code>SENTRY_DSN_FRONTEND</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">optional</td></tr>
+<tr><td><code>CODECOV_TOKEN</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+<tr><td><code>VITE_SUPABASE_URL</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
+<tr><td><code>VITE_SUPABASE_ANON_KEY</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
+<tr><td><code>VITE_API_URL</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
+</tbody>
+</table>
+
+<p>The full secret rotation procedure is in <code>runbook.md</code> §3.</p>
+
+<h2>What is <em>not</em> in this diagram</h2>
+
+<ul>
+  <li><strong>AWS</strong> — torn down 2026-05-07. The legacy stack lives in <code>Sound-Clash-legacy</code> for reference only; nothing in the new system depends on AWS resources.</li>
+  <li><strong>CDN for YouTube</strong> — YouTube IFrame Player loads its own JS from <code>youtube.com</code>; there's no separate CDN dependency we manage.</li>
+  <li><strong>Email</strong> — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.</li>
+</ul>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });
+</script>
+
+</body>
+</html>
