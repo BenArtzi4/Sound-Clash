@@ -49,7 +49,7 @@ The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Soun
 - [x] **DB-02** `db/migrations/002_durable_tables.sql` — `songs`, `genres`, `song_genres` (per `data-model.md` §2)
 - [x] **DB-03** `db/migrations/003_ephemeral_tables.sql` — `active_games`, `game_teams`, `game_rounds`, deferred FKs
 - [x] **DB-04** `db/migrations/004_indexes.sql` — per `data-model.md` §3
-- [x] **DB-05** `db/migrations/005_rpc_functions.sql` — `buzz_in`, `start_round`, `award_points`, `end_game`, `cleanup_expired_games` (full bodies in `rpc-functions.md`)
+- [x] **DB-05** `db/migrations/005_rpc_functions.sql` — `buzz_in`, `start_round`, `award_points`, `end_game`, `cleanup_expired_games` (full bodies in `rpc-functions.md`). Reshaped + extended in `db/migrations/014_scoring_revamp.sql` (wrong-buzz penalty replaces source/timeout; new `award_bonus`).
 - [x] **DB-06** `db/migrations/006_rls_policies.sql` — enable RLS, anon SELECT policies, function grants
 - [x] **DB-07** `db/migrations/007_cron_jobs.sql` — `cron.schedule('cleanup-expired-games', '0 * * * *', ...)`
 - [x] **DB-08** `db/migrations/008_seed_genres.sql` — initial genre list (rock, pop, hip-hop, classical, soundtrack, jazz, electronic, country, R&B, metal); seeded via migration per `data-model.md` §7
@@ -62,13 +62,14 @@ The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Soun
 - [ ] **PY-02** `backend/Dockerfile` — multi-stage, non-root user, uvicorn entry on `$PORT`
 - [ ] **PY-03** `backend/app/main.py` — FastAPI app, CORS for `soundclash.org`, mounts routers, `/health` endpoint, Sentry init, slowapi init
 - [ ] **PY-04** `backend/app/db/supabase_client.py` — singleton client using service-role key
-- [ ] **PY-05** `backend/app/routers/games.py` per `api-contracts.md` §2:
-  - `POST /games` (admin-gated)
+- [x] **PY-05** `backend/app/routers/games.py` per `api-contracts.md` §2:
+  - `POST /games` (open hosting; returns `manager_token`)
   - `POST /games/{code}/teams`
-  - `POST /games/{code}/select-song` (admin-gated; calls `start_round` RPC)
-  - `POST /games/{code}/award-points` (admin-gated; calls `award_points` RPC)
-  - `POST /games/{code}/end` (admin-gated; calls `end_game` RPC)
-  - `DELETE /games/{code}/teams/{team_id}` (admin-gated)
+  - `POST /games/{code}/select-song` (manager-token gated; calls `start_round` RPC)
+  - `POST /games/{code}/award-points` (manager-token gated; calls `award_points` RPC)
+  - `POST /games/{code}/bonus` (manager-token gated; calls `award_bonus` RPC) — added in scoring revamp
+  - `POST /games/{code}/end` (manager-token gated; calls `end_game` RPC)
+  - `DELETE /games/{code}/teams/{team_id}` (manager-token gated)
 - [ ] **PY-06** `backend/app/routers/admin_songs.py` — admin-gated GET/POST/PUT/DELETE; bulk CSV import endpoint with idempotency on `youtube_id`
 - [ ] **PY-07** `backend/app/routers/genres.py` — public GET `/genres`
 - [ ] **PY-08** `backend/app/services/game_code.py` — generator: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`; collision retry
@@ -170,6 +171,26 @@ The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Soun
 - [ ] **DOC-06** Architecture diagram as PNG/SVG in `docs/diagrams/` (Excalidraw or Mermaid)
 - [ ] **DOC-07** `CONTRIBUTING.md` — coding style, PR template, test requirements
 - [ ] **DOC-08** PR template `.github/pull_request_template.md` — sections: what changed, why, test plan, doc updates
+
+## Scoring revamp (post-Phase 7)
+
+PR #38 / branch `feature/scoring-revamp`. Fixes the latent free-spam-buzz bug, drops the soundtrack-source mechanic, and adds a host-discretion bonus.
+
+- [x] **SCORE-01** `db/migrations/014_scoring_revamp.sql` — drops `source_points` and `timeout_penalty` columns, adds `wrong_buzz_penalty`, replaces `award_points` (5th param renamed `p_source` → `p_wrong_buzz`; timeout subtraction removed), adds `award_bonus(p_game_code, p_team_id, p_points DEFAULT 4)`. Idempotent. Includes a `DROP FUNCTION IF EXISTS` guard added to `005_rpc_functions.sql` so the param rename survives reruns.
+- [x] **SCORE-02** Backend `scoring.py` — constants reshaped to `TITLE_POINTS=10`, `ARTIST_POINTS=5`, `WRONG_BUZZ_PENALTY=3`, `BONUS_POINTS=4`. `to_rpc_points` enforces the title/artist/wrong-buzz/timeout mutex.
+- [x] **SCORE-03** Backend models — `AwardPointsRequest.wrong_buzz` replaces `source_correct`; new `AwardBonusRequest`.
+- [x] **SCORE-04** Backend router — `POST /games/{code}/bonus` endpoint; `is_soundtrack` lookup removed from `_award_blocking`.
+- [x] **SCORE-05** Frontend `ManagerConsolePage` — checkboxes replaced with four toggle buttons (`Correct Song +10` / `Correct Artist +5` / `Wrong -3` / `Bonus +4`); Wrong is mutually exclusive with the positives; "Skip" + "Award points" merged into a single "End round" button; bonus opens an inline team picker.
+- [x] **SCORE-06** Frontend lib — `AwardBonusRequest`/`Response` types, `awardBonus()` API wrapper.
+- [x] **SCORE-07** Tests — `test_award_points.py` rewritten for new signature; new `test_award_bonus.py`. Backend `test_games_award_points.py` updated; new `test_games_bonus.py`. Frontend `ManagerConsolePage.test.tsx` updated with wrong-buzz + bonus flow tests.
+- [x] **SCORE-08** Docs — `api-contracts.md §2.5` rewritten + new §2.6 for bonus; `rpc-functions.md` updated `award_points` + new §3a for `award_bonus`; `game-rules.md §4` rewritten + new §4a; `data-model.md` reflects column changes; `README.md` and `CLAUDE.md` say "six functions".
+- [x] **SCORE-09** Migration applied to `Sound-Clash-Preview` Supabase via `supabase db query --linked --file …`. Verified on the live DB: column reshape, function signatures, runtime wrong-buzz `-3`, runtime bonus `+4`, mutex `P0001`, ended-game guard `P0001`, idempotency rerun.
+- [x] **SCORE-10** All local gates green: `ruff`, `ruff format`, `mypy`, `tsc`, `eslint`, `vitest run` (22 files / 183 tests).
+- [ ] **SCORE-11** PR #38 CI green (backend + frontend workflows).
+- [ ] **SCORE-12** Merge PR #38 to `main` — triggers Render redeploy of new backend. Watch for the redeploy to finish.
+- [ ] **SCORE-13** Apply `014_scoring_revamp.sql` to **prod** Supabase (`Sound-Clash` Frankfurt, `jvfddxuaqcsrguibkymp`) the moment the new backend is live on Render. **Window of broken `/award-points` calls between deploy completion and migration apply — keep it short (seconds, not minutes).** Coordinate by re-linking the CLI: `supabase link --project-ref jvfddxuaqcsrguibkymp` then `supabase db query --linked --file db/migrations/014_scoring_revamp.sql`.
+- [ ] **SCORE-14** Three-tab manual smoke against prod: Correct Song → +10, Correct Song + Artist → +15, Wrong → -3, no-toggle End round → 0, no-buzz End round → timeout 0, +4 Bonus picker.
+- [ ] **SCORE-15** Re-link CLI back to preview (`supabase link --project-ref vriljyhpxfcwpqwshajv`) so future ad-hoc DB ops don't accidentally hit prod.
 
 ---
 
