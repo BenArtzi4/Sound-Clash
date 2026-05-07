@@ -300,6 +300,10 @@ body {
   color: var(--fg-subtle);
   margin: 0 0 0.7rem;
   font-weight: 600;
+  /* Reset h2 base styles when .toc-title is applied to a heading element. */
+  padding: 0;
+  border: 0;
+  line-height: 1.4;
 }
 .toc ul { list-style: none; padding: 0; margin: 0; border-left: 1px solid var(--rule); }
 .toc li { margin: 0; }
@@ -519,8 +523,10 @@ td.center, th.center { text-align: center; }
 .card:hover .card-arrow { transform: translateX(3px); }
 
 /* ---------- Mermaid containers ---------- */
+/* Mermaid is initialised with theme: "default" or "dark" matching the page
+   theme (see assets/script.js), so the diagram canvas blends with the surface. */
 .diagram {
-  background: #ffffff;        /* always white for Mermaid contrast */
+  background: var(--bg-elevated);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding: 1.5rem;
@@ -530,7 +536,6 @@ td.center, th.center { text-align: center; }
 }
 .diagram .mermaid { text-align: center; }
 .diagram .mermaid svg { max-width: 100%; height: auto !important; }
-.diagram, .diagram * { color-scheme: light; }
 
 .caption {
   font-size: 0.88rem;
@@ -593,7 +598,7 @@ details > :not(summary) {
   padding: 0 1.2rem 1rem;
   margin: 0;
 }
-details ul { padding-left: 2.4rem; }
+details ul { padding-left: 1.4rem; }
 
 /* ---------- Page nav (prev/next, rendered by script.js) ---------- */
 .page-nav {
