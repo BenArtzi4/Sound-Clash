@@ -148,7 +148,8 @@
       utility
     );
 
-    host.className = "topnav";
+    // .topnav class is set in HTML so the bar has stable height from first
+    // paint; here we just populate the inner content.
     host.replaceChildren(inner);
   }
 
@@ -172,7 +173,7 @@
       );
     };
 
-    host.className = "page-nav";
+    // .page-nav class is set in HTML; here we just populate prev/next cards.
     host.replaceChildren(
       prev ? card(prev, "prev") : el("span", { class: "page-nav-spacer" }),
       next ? card(next, "next") : el("span", { class: "page-nav-spacer" })

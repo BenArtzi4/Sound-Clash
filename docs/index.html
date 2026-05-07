@@ -12,8 +12,9 @@
 
 <a class="skip-link" href="#content">Skip to content</a>
 
-<!-- Top nav rendered by assets/script.js -->
-<header id="topnav"></header>
+<!-- Top nav: CSS class applied here so the bar has stable height from
+     first paint; assets/script.js populates the inner content. -->
+<header id="topnav" class="topnav"></header>
 
 <main id="content" class="container">
 
@@ -98,8 +99,8 @@
     </ul>
   </details>
 
-  <!-- Prev/next nav rendered by assets/script.js -->
-  <nav id="page-nav" aria-label="Page navigation"></nav>
+  <!-- Prev/next nav populated by assets/script.js -->
+  <nav id="page-nav" class="page-nav" aria-label="Page navigation"></nav>
 
   <footer class="footer">
     <span>Sound Clash — free-tier multiplayer music trivia</span>

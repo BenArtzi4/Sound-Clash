@@ -12,8 +12,9 @@
 
 <a class="skip-link" href="#content">Skip to content</a>
 
-<!-- Top nav rendered by assets/script.js -->
-<header id="topnav"></header>
+<!-- Top nav: CSS class applied here so the bar has stable height from
+     first paint; assets/script.js populates the inner content. -->
+<header id="topnav" class="topnav"></header>
 
 <div class="layout-with-toc">
   <main id="content">
@@ -162,8 +163,8 @@ sequenceDiagram
       <li><strong>No WebSocket service in FastAPI.</strong> Supabase Realtime is the broadcast plane.</li>
     </ul>
 
-    <!-- Prev/next nav rendered by assets/script.js -->
-    <nav id="page-nav" aria-label="Page navigation"></nav>
+    <!-- Prev/next nav populated by assets/script.js -->
+    <nav id="page-nav" class="page-nav" aria-label="Page navigation"></nav>
 
     <footer class="footer">
       <span><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/diagrams/internal.md">View Markdown source</a></span>
