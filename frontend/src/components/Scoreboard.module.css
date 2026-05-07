@@ -82,6 +82,31 @@
   color: #b45309;
 }
 
+.mine {
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, var(--color-bg-elev) 100%);
+}
+
+.mine.buzzed {
+  border-color: var(--color-warning);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, var(--color-bg-elev) 100%);
+}
+
+.mineTag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-strong);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .flashing {
   animation: row-flash 700ms ease-out;
 }

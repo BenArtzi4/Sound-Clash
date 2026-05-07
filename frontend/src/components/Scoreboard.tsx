@@ -5,9 +5,10 @@ import styles from "./Scoreboard.module.css";
 interface Props {
   teams: Team[];
   buzzedTeamId?: string | null;
+  myTeamId?: string | null;
 }
 
-export function Scoreboard({ teams, buzzedTeamId }: Props) {
+export function Scoreboard({ teams, buzzedTeamId, myTeamId }: Props) {
   const prevScoresRef = useRef<Record<string, number>>({});
   const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set());
   const [announcement, setAnnouncement] = useState("");
@@ -65,10 +66,12 @@ export function Scoreboard({ teams, buzzedTeamId }: Props) {
       <ol className={styles.list} data-testid="scoreboard">
         {sorted.map((team, index) => {
           const isBuzzed = team.id === buzzedTeamId;
+          const isMine = myTeamId != null && team.id === myTeamId;
           const isFlashing = flashingIds.has(team.id);
           const rowClass = [
             styles.row,
             isBuzzed ? styles.buzzed : "",
+            isMine ? styles.mine : "",
             isFlashing ? styles.flashing : "",
           ]
             .filter(Boolean)
@@ -76,7 +79,14 @@ export function Scoreboard({ teams, buzzedTeamId }: Props) {
           return (
             <li key={team.id} className={rowClass} data-team-id={team.id}>
               <span className={styles.rank}>{index + 1}</span>
-              <span className={styles.name}>{team.name}</span>
+              <span className={styles.name}>
+                {team.name}
+                {isMine ? (
+                  <span className={styles.mineTag} aria-label="your team">
+                    you
+                  </span>
+                ) : null}
+              </span>
               <span key={team.score} className={styles.score}>
                 {team.score}
               </span>

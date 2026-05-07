@@ -122,7 +122,14 @@ export function TeamGameplayPage() {
       <header className={styles.header}>
         <div className={styles.identity}>
           <span className={styles.teamName}>{stored.name}</span>
-          <span className={styles.gameCode}>{gameCode}</span>
+          <span className={styles.identityMeta}>
+            <span className={styles.gameCode}>{gameCode}</span>
+            {game && game.status !== "waiting" ? (
+              <span className={styles.roundPill} data-testid="round-indicator">
+                Round {game.round_number}
+              </span>
+            ) : null}
+          </span>
         </div>
         <div
           className={`${styles.connection} ${connectionStateClass}`}
@@ -170,7 +177,11 @@ export function TeamGameplayPage() {
 
       <section className={styles.scoreCard}>
         <h2 className={styles.scoreCardTitle}>Scoreboard</h2>
-        <Scoreboard teams={teams} buzzedTeamId={game?.buzzed_team_id ?? null} />
+        <Scoreboard
+          teams={teams}
+          buzzedTeamId={game?.buzzed_team_id ?? null}
+          myTeamId={stored.id}
+        />
       </section>
     </main>
   );

@@ -28,7 +28,6 @@ async function joinAsMobileTeam(browser: Browser, code: string, name: string) {
 
 test("mobile viewport: team can join, buzz, and score", async ({ browser }) => {
   const manager = await openManagerAndCreateGame(browser, {
-    totalRounds: 1,
     genreName: "Rock",
   });
   const code = manager.gameCode;

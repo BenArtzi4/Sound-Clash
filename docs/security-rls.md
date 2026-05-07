@@ -186,7 +186,6 @@ All API inputs validated with Pydantic (FastAPI auto-validates request bodies):
 
 ```python
 class CreateGameRequest(BaseModel):
-    total_rounds: conint(ge=1, le=50) = 10
     selected_genres: conlist(UUID, min_length=1)
 
 class JoinTeamRequest(BaseModel):

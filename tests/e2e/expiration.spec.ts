@@ -22,7 +22,6 @@ async function openDisplay(browser: Browser, code: string) {
 
 test("expired game is swept; all clients surface the 'gone' banner", async ({ browser }) => {
   const manager = await openManagerAndCreateGame(browser, {
-    totalRounds: 1,
     genreName: "Rock",
   });
   const code = manager.gameCode;

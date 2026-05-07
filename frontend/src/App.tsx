@@ -3,6 +3,7 @@ import { ToastProvider } from "./context/ToastContext";
 import { AdminSongsPage } from "./pages/AdminSongsPage";
 import { DisplayPage } from "./pages/DisplayPage";
 import { HomePage } from "./pages/HomePage";
+import { HowToPlayPage } from "./pages/HowToPlayPage";
 import { JoinTeamPage } from "./pages/JoinTeamPage";
 import { ManagerConsolePage } from "./pages/ManagerConsolePage";
 import { ManagerCreateGamePage } from "./pages/ManagerCreateGamePage";
@@ -14,6 +15,7 @@ export function App() {
       <ToastProvider>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/how-to-play" element={<HowToPlayPage />} />
           <Route path="/join" element={<JoinTeamPage />} />
           <Route path="/join/:gameCode" element={<JoinTeamPage />} />
           <Route path="/team/:gameCode" element={<TeamGameplayPage />} />

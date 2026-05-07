@@ -59,7 +59,7 @@
 }
 
 .title {
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: clamp(2.25rem, 5.5vw, 4rem);
   font-weight: 800;
   color: #0f172a;
   margin: 0 0 1rem 0;
@@ -68,7 +68,7 @@
 }
 
 .subtitle {
-  font-size: clamp(1.2rem, 3vw, 1.75rem);
+  font-size: clamp(1.3rem, 3.2vw, 1.9rem);
   font-weight: 600;
   background: linear-gradient(120deg, #3b82f6 0%, #06b6d4 100%);
   -webkit-background-clip: text;
@@ -76,13 +76,6 @@
   color: transparent;
   margin: 0 0 1rem 0;
   line-height: 1.3;
-}
-
-.description {
-  font-size: 1.1rem;
-  color: var(--color-text-dim);
-  margin: 0;
-  font-weight: 500;
 }
 
 .actions {
@@ -210,7 +203,7 @@
 }
 
 .roleTitle {
-  font-size: 1.4rem;
+  font-size: 1.7rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -236,137 +229,22 @@
 }
 
 .roleSubtitle {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 500;
   color: var(--color-text-dim);
   line-height: 1.4;
 }
 
-.info {
-  margin: 1rem auto 0;
+.howToPlayLink {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
   animation: fade-in-up 0.8s ease-out 0.3s both;
 }
 
-.infoTitle {
-  font-size: clamp(1.6rem, 4vw, 2.5rem);
-  font-weight: 800;
-  color: #0f172a;
-  text-align: center;
-  margin: 0 0 2.5rem 0;
-  letter-spacing: -0.02em;
-  position: relative;
-  padding-bottom: 1rem;
-}
-
-.infoTitle::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 80px;
-  height: 4px;
-  background: linear-gradient(90deg, #3b82f6, #06b6d4);
-  border-radius: 2px;
-}
-
-.infoGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
-.infoItem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 1.1rem;
-  padding: 2.25rem 1.75rem;
-  background: #ffffff;
-  border-radius: 20px;
-  border: 2px solid rgba(59, 130, 246, 0.08);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  transition: all 0.4s var(--easing-spring);
-  position: relative;
-  overflow: hidden;
-  opacity: 0;
-  animation: fade-in-up 0.7s ease-out both;
-}
-
-.infoItem:nth-child(1) {
-  animation-delay: 0.45s;
-}
-
-.infoItem:nth-child(2) {
-  animation-delay: 0.6s;
-}
-
-.infoItem:nth-child(3) {
-  animation-delay: 0.75s;
-}
-
-.infoItem::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #3b82f6, #06b6d4);
-  transform: scaleX(0);
-  transition: transform 0.4s ease;
-}
-
-.infoItem:hover::before {
-  transform: scaleX(1);
-}
-
-.infoItem:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 12px 30px rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.22);
-}
-
-.infoNumber {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.75rem;
-  font-weight: 800;
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
-  transition: transform 0.4s var(--easing-spring);
-}
-
-.infoItem:hover .infoNumber {
-  transform: scale(1.1) rotate(5deg);
-}
-
-.infoContent {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.infoContent h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-
-.infoContent p {
-  font-size: 1rem;
-  color: var(--color-text-dim);
-  margin: 0;
-  line-height: 1.55;
-  font-weight: 500;
+.howToPlayLink :global(.btn) {
+  font-size: 1.1rem;
+  padding: 14px 28px;
 }
 
 @keyframes fade-in-up {
@@ -390,11 +268,6 @@
   .roleBtn {
     min-height: 180px;
   }
-  .infoGrid {
-    grid-template-columns: 1fr;
-    max-width: 520px;
-    margin: 0 auto;
-  }
 }
 
 @media (max-width: 768px) {
@@ -414,6 +287,9 @@
   .roleIcon {
     width: 60px;
     height: 60px;
+  }
+  .roleTitle {
+    font-size: 1.55rem;
   }
 }
 

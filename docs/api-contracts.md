@@ -44,21 +44,20 @@ Create a new game. **No auth.** Anyone can host. Rate-limited 10/min/IP.
 **Request body**:
 ```json
 {
-  "total_rounds": 10,
   "selected_genres": ["<genre_uuid>", "..."]
 }
 ```
 
 Validation:
-- `total_rounds`: integer, 1–50 (default 10 if omitted)
 - `selected_genres`: at least 1 genre UUID
+
+Games run for as many rounds as the host wants and end only when the host calls `POST /games/{code}/end`. There is no per-game round limit.
 
 **Response 201**:
 ```json
 {
   "game_code": "ABCDEF",
   "status": "waiting",
-  "total_rounds": 10,
   "selected_genres": ["..."],
   "started_at": "2026-05-03T14:23:01.234Z",
   "expires_at": "2026-05-03T18:23:01.234Z",

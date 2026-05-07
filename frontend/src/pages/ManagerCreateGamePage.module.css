@@ -87,34 +87,6 @@
   margin-top: 0.5rem;
 }
 
-.rounds {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.rounds input[type="range"] {
-  flex: 1;
-  padding: 0;
-  background: transparent;
-  border: none;
-  accent-color: var(--color-primary);
-}
-
-.rounds input[type="range"]:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 4px;
-}
-
-.roundsValue {
-  font-size: 1.5rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  min-width: 2.5em;
-  color: var(--color-primary-strong);
-  text-align: right;
-}
-
 @media (max-width: 600px) {
   .shell {
     padding: 1.5rem var(--space-md);

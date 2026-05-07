@@ -69,8 +69,8 @@ async def test_anon_cannot_insert(
             (),
         ),
         "active_games": (
-            "INSERT INTO active_games (game_code, total_rounds) VALUES ($1, $2)",
-            ("INSERT", 5),
+            "INSERT INTO active_games (game_code) VALUES ($1)",
+            ("INSERT",),
         ),
         "game_teams": (
             "INSERT INTO game_teams (game_code, name) VALUES ($1, $2)",

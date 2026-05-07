@@ -161,16 +161,6 @@ export function ManagerConsolePage() {
       } else {
         toast("No points awarded", { variant: "info" });
       }
-      // game-rules.md §2: "round complete + last round" auto-transitions to `ended`.
-      if (state.game.round_number >= state.game.total_rounds) {
-        try {
-          await endGame(gameCode, managerToken);
-          clearManagerToken(gameCode);
-          toast("Game complete!", { variant: "success" });
-        } catch (endErr) {
-          reportError(endErr);
-        }
-      }
     } catch (err) {
       reportError(err);
     } finally {
@@ -301,8 +291,7 @@ export function ManagerConsolePage() {
   // return; the "ended" arm is unreachable here.
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
-  const nextRoundDisabled =
-    busy || !player.ready || (game.status === "playing" && game.round_number >= game.total_rounds);
+  const nextRoundDisabled = busy || !player.ready;
   const restartDisabled =
     busy || game.status !== "playing" || !currentSong || !player.ready || lockedTeam != null;
   const scoringDisabled = busy || !lockedTeam;
@@ -319,9 +308,7 @@ export function ManagerConsolePage() {
         </div>
         <span className={`${styles.statusPill} ${statusClass}`}>{game.status}</span>
         <div className={styles.headerMeta}>
-          <span className="muted">
-            Round {game.round_number} of {game.total_rounds}
-          </span>
+          <span className="muted">Round {game.round_number}</span>
         </div>
         <div className={styles.headerActions}>
           <button

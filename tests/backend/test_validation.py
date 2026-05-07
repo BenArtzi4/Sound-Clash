@@ -9,31 +9,11 @@ from ._helpers import fetch_genre_ids, insert_game
 pytestmark = pytest.mark.needs_docker
 
 
-async def test_create_game_total_rounds_too_high(client, db) -> None:
-    genres = await fetch_genre_ids(db, slugs=["rock"])
-    resp = await client.post(
-        "/games",
-        json={"total_rounds": 999, "selected_genres": [str(genres[0])]},
-    )
-    assert resp.status_code == 400
-    assert resp.json()["error"] == "validation_error"
-
-
-async def test_create_game_total_rounds_zero(client, db) -> None:
-    genres = await fetch_genre_ids(db, slugs=["rock"])
-    resp = await client.post(
-        "/games",
-        json={"total_rounds": 0, "selected_genres": [str(genres[0])]},
-    )
-    assert resp.status_code == 400
-
-
 async def test_create_game_extra_fields_rejected(client, db) -> None:
     genres = await fetch_genre_ids(db, slugs=["rock"])
     resp = await client.post(
         "/games",
         json={
-            "total_rounds": 3,
             "selected_genres": [str(genres[0])],
             "secret_field": "nope",
         },

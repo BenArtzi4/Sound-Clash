@@ -18,15 +18,13 @@ describe("HomePage", () => {
     expect(display).toHaveAttribute("href", "/display");
   });
 
-  it("renders the How to Play steps", () => {
+  it("links to the dedicated How to Play page", () => {
     render(
       <MemoryRouter>
         <HomePage />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("heading", { name: /how to play/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /teams join/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /listen & buzz/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /manager awards/i })).toBeInTheDocument();
+    const howTo = screen.getByRole("link", { name: /how to play/i });
+    expect(howTo).toHaveAttribute("href", "/how-to-play");
   });
 });

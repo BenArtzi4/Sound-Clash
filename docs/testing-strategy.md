@@ -98,7 +98,7 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 | `test_admin_songs_bulk_import.py` | new rows inserted; existing youtube_id updated; malformed CSV rejected with row numbers |
 | `test_genres.py` | public; returns all genres |
 | `test_rate_limits.py` | exceed `POST /games` rate → 429; per-IP isolation |
-| `test_validation.py` | invalid YouTube IDs; oversized team names; out-of-range total_rounds |
+| `test_validation.py` | invalid YouTube IDs; oversized team names; extra fields rejected |
 | `test_error_mapping.py` | Postgres P0001/P0002 → HTTP 4xx with structured body |
 
 ### 4.3 Frontend unit tests: co-located `*.test.ts(x)`

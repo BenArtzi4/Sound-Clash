@@ -23,9 +23,8 @@ test("prod smoke: one buzzer round end-to-end against the deployed app", async (
   testInfo.annotations.push({ type: "frontend", description: baseURL ?? "(unset)" });
   testInfo.annotations.push({ type: "backend", description: apiBase });
 
-  // 1. Manager creates a 1-round game in the "Rock" genre via the UI.
+  // 1. Manager creates a game in the "Rock" genre via the UI.
   const manager = await openManagerAndCreateGame(browser, {
-    totalRounds: 1,
     genreName: "Rock",
   });
   const code = manager.gameCode;

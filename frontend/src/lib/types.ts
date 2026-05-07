@@ -6,7 +6,6 @@ export type GameStatus = "waiting" | "playing" | "ended";
 export interface ActiveGame {
   game_code: string;
   status: GameStatus;
-  total_rounds: number;
   selected_genres: string[];
   round_number: number;
   current_song_id: string | null;
@@ -100,7 +99,6 @@ export interface ApiErrorBody {
 export interface CreateGameResponse {
   game_code: string;
   status: GameStatus;
-  total_rounds: number;
   selected_genres: string[];
   started_at: string;
   expires_at: string;

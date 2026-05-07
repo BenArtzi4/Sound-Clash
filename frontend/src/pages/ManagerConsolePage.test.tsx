@@ -109,7 +109,7 @@ describe("ManagerConsolePage", () => {
 
   it("renders the game code, status pill and round counter", async () => {
     setHydrate({
-      game: makeActiveGame({ status: "waiting", round_number: 0, total_rounds: 5 }),
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
       teams: [],
       rounds: [],
     });
@@ -118,7 +118,7 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     expect(screen.getAllByText("ABCDEF").length).toBeGreaterThan(0);
-    expect(screen.getByText(/round 0 of 5/i)).toBeInTheDocument();
+    expect(screen.getByText(/round 0$/i)).toBeInTheDocument();
   });
 
   it("disables Start until player is ready", async () => {
@@ -540,46 +540,13 @@ describe("ManagerConsolePage", () => {
     expect(screen.queryByTestId("end-round")).not.toBeInTheDocument();
   });
 
-  it("auto-ends the game after the final round is awarded", async () => {
+  it("never auto-ends after end round, regardless of round number", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
         buzzed_team_id: "t1",
         current_round_id: "r1",
-        round_number: 5,
-        total_rounds: 5,
-      }),
-      teams: [makeTeam({ id: "t1" })],
-      rounds: [makeRound({ id: "r1" })],
-    });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
-      round_id: "r1",
-      team_id: "t1",
-      points_awarded: 10,
-      team_total_score: 10,
-    });
-    vi.mocked(endGame).mockResolvedValueOnce({
-      game_code: "ABCDEF",
-      status: "ended",
-      ended_at: "2026-05-05T13:00:00Z",
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByTestId("end-round"));
-    await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF", TOKEN));
-    await waitFor(() => expect(getManagerToken("ABCDEF")).toBeNull());
-  });
-
-  it("does not auto-end before the final round", async () => {
-    setHydrate({
-      game: makeActiveGame({
-        status: "playing",
-        buzzed_team_id: "t1",
-        current_round_id: "r1",
-        round_number: 2,
-        total_rounds: 5,
+        round_number: 99,
       }),
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
@@ -597,6 +564,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("end-round"));
     await waitFor(() => expect(awardPoints).toHaveBeenCalled());
     expect(endGame).not.toHaveBeenCalled();
+    expect(getManagerToken("ABCDEF")).toBe(TOKEN);
   });
 
   it("Restart song re-selects the current song via selectSong with a song_id", async () => {
@@ -654,7 +622,7 @@ describe("ManagerConsolePage", () => {
 
   it("shows a clear toast when the song pool is exhausted", async () => {
     setHydrate({
-      game: makeActiveGame({ status: "playing", round_number: 1, total_rounds: 5 }),
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
       teams: [],
       rounds: [],
     });

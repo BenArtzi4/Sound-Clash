@@ -42,7 +42,6 @@ async def test_two_genres_are_interleaved_across_picks(client, db) -> None:
         db,
         status="playing",
         selected_genres=[rock_id, pop_id],
-        total_rounds=TOTAL,
     )
     headers = manager_headers(token)
 
