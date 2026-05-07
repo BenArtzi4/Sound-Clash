@@ -9,7 +9,6 @@ import pytest
 from app.db.errors import ConflictError, InternalError, ValidationError
 from app.services import codes, csv_import, scoring
 
-
 # ----- scoring -----------------------------------------------------------
 
 
@@ -122,9 +121,7 @@ def _bytes(rows: list[str]) -> bytes:
 
 
 def test_parse_csv_happy_path() -> None:
-    rows = csv_import.parse_csv(
-        _bytes(["Hello,Adele,YQHsXMglC9A,0,false,,rock"])
-    )
+    rows = csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,0,false,,rock"]))
     assert len(rows) == 1
     assert rows[0].title == "Hello"
     assert rows[0].is_soundtrack is False
@@ -195,3 +192,85 @@ def test_parse_csv_strips_bom() -> None:
     raw = b"\xef\xbb\xbf" + _bytes(["Hi,Adele,YQHsXMglC9A,0,false,,rock"])
     rows = csv_import.parse_csv(raw)
     assert rows[0].title == "Hi"
+
+
+# ----- _award_blocking shape handling -----------------------------------
+
+
+class _StubExecuteResponse:
+    def __init__(self, data: object) -> None:
+        self.data = data
+
+
+class _StubRpc:
+    def __init__(self, data: object) -> None:
+        self._data = data
+
+    def execute(self) -> _StubExecuteResponse:
+        return _StubExecuteResponse(self._data)
+
+
+class _StubSupabaseClient:
+    def __init__(self, rpc_data: object) -> None:
+        self._rpc_data = rpc_data
+
+    def rpc(self, name: str, params: dict[str, object]) -> _StubRpc:
+        del name, params
+        return _StubRpc(self._rpc_data)
+
+
+def _award_body() -> object:
+    from uuid import UUID
+
+    from app.models.games import AwardPointsRequest
+
+    return AwardPointsRequest(
+        round_id=UUID("00000000-0000-0000-0000-000000000001"),
+        title_correct=True,
+        artist_correct=False,
+        wrong_buzz=False,
+        timeout=False,
+    )
+
+
+def test_award_blocking_handles_postgrest_list_shape() -> None:
+    """Real PostgREST returns TABLE-shaped functions as a list of row-dicts."""
+    from app.routers.games import _award_blocking
+
+    client = _StubSupabaseClient(
+        rpc_data=[
+            {
+                "team_id": "11111111-1111-1111-1111-111111111111",
+                "points_awarded": 10,
+                "team_total_score": 10,
+            }
+        ],
+    )
+    out = _award_blocking(client, "ABCDEF", _award_body())
+    assert out["points_awarded"] == 10
+    assert out["team_total_score"] == 10
+
+
+def test_award_blocking_accepts_legacy_dict_shape() -> None:
+    """Older test mocks pass a bare dict — keep working with both shapes."""
+    from app.routers.games import _award_blocking
+
+    client = _StubSupabaseClient(
+        rpc_data={
+            "team_id": "11111111-1111-1111-1111-111111111111",
+            "points_awarded": 5,
+            "team_total_score": 5,
+        },
+    )
+    out = _award_blocking(client, "ABCDEF", _award_body())
+    assert out["points_awarded"] == 5
+
+
+def test_award_blocking_empty_list_raises_not_found() -> None:
+    """Defensive: an unexpected empty list response surfaces as 404, not 500."""
+    from app.db.errors import NotFoundError
+    from app.routers.games import _award_blocking
+
+    client = _StubSupabaseClient(rpc_data=[])
+    with pytest.raises(NotFoundError):
+        _award_blocking(client, "ABCDEF", _award_body())
