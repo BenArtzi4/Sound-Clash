@@ -55,7 +55,7 @@ async def test_happy_path_awards_15_for_title_artist(client, db) -> None:
             "round_id": round_id,
             "title_correct": True,
             "artist_correct": True,
-            "source_correct": False,
+            "wrong_buzz": False,
             "timeout": False,
         },
         headers=manager_headers(token),
@@ -67,6 +67,31 @@ async def test_happy_path_awards_15_for_title_artist(client, db) -> None:
     assert body["team_total_score"] == 15
 
 
+async def test_wrong_buzz_deducts_three(client, db) -> None:
+    code, round_id, team_id, token = await _start_round(client, db)
+    # Seed a baseline so we can prove the deduction lands.
+    await db.execute(
+        "UPDATE game_teams SET score = 10 WHERE id = $1",
+        team_id,
+    )
+    resp = await client.post(
+        f"/games/{code}/award-points",
+        json={
+            "round_id": round_id,
+            "title_correct": False,
+            "artist_correct": False,
+            "wrong_buzz": True,
+            "timeout": False,
+        },
+        headers=manager_headers(token),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["points_awarded"] == -3
+    assert body["team_id"] == team_id
+    assert body["team_total_score"] == 7
+
+
 async def test_idempotency_second_call_409(client, db) -> None:
     code, round_id, _, token = await _start_round(client, db)
     headers = manager_headers(token)
@@ -74,7 +99,7 @@ async def test_idempotency_second_call_409(client, db) -> None:
         "round_id": round_id,
         "title_correct": True,
         "artist_correct": False,
-        "source_correct": False,
+        "wrong_buzz": False,
         "timeout": False,
     }
     r1 = await client.post(f"/games/{code}/award-points", json=payload, headers=headers)
@@ -83,15 +108,16 @@ async def test_idempotency_second_call_409(client, db) -> None:
     assert r2.status_code == 409
 
 
-async def test_source_on_non_soundtrack_400(client, db) -> None:
-    code, round_id, _, token = await _start_round(client, db, is_soundtrack=False)
+async def test_wrong_buzz_with_positive_flag_400(client, db) -> None:
+    """Mutex: wrong_buzz cannot be combined with title/artist correct."""
+    code, round_id, _, token = await _start_round(client, db)
     resp = await client.post(
         f"/games/{code}/award-points",
         json={
             "round_id": round_id,
-            "title_correct": False,
+            "title_correct": True,
             "artist_correct": False,
-            "source_correct": True,
+            "wrong_buzz": True,
             "timeout": False,
         },
         headers=manager_headers(token),
@@ -100,10 +126,15 @@ async def test_source_on_non_soundtrack_400(client, db) -> None:
     assert resp.json()["error"] == "validation_error"
 
 
-async def test_timeout_penalty_applies(client, db) -> None:
-    """timeout=True applies -2 penalty; other booleans ignored."""
-    code, round_id, _, token = await _start_round(client, db)
-    # Clear the buzz so the round is a "no buzz" timeout.
+async def test_timeout_no_score_change(client, db) -> None:
+    """timeout=True ends the round but never changes any team's score."""
+    code, round_id, team_id, token = await _start_round(client, db)
+    # Clear the buzz so the round is a "no buzz" timeout. Also seed a non-zero
+    # score so we can prove it stays put.
+    await db.execute(
+        "UPDATE game_teams SET score = 7 WHERE id = $1",
+        team_id,
+    )
     await db.execute(
         "UPDATE active_games SET buzzed_team_id = NULL, locked_at = NULL WHERE game_code = $1",
         code,
@@ -116,18 +147,22 @@ async def test_timeout_penalty_applies(client, db) -> None:
         f"/games/{code}/award-points",
         json={
             "round_id": round_id,
-            "title_correct": True,  # ignored due to timeout=True
-            "artist_correct": True,
-            "source_correct": False,
+            "title_correct": False,
+            "artist_correct": False,
+            "wrong_buzz": False,
             "timeout": True,
         },
         headers=manager_headers(token),
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["team_id"] is None  # nobody buzzed
-    # team score is 0 since no team to credit
-    assert body["team_total_score"] == 0
+    assert body["team_id"] is None
+    assert body["points_awarded"] == 0
+    # The team's score is unaffected by timeout.
+    score = await db.fetchval(
+        "SELECT score FROM game_teams WHERE id = $1", team_id
+    )
+    assert score == 7
 
 
 async def test_manager_token_required(client, db) -> None:
@@ -139,7 +174,7 @@ async def test_manager_token_required(client, db) -> None:
             "round_id": "00000000-0000-0000-0000-000000000000",
             "title_correct": False,
             "artist_correct": False,
-            "source_correct": False,
+            "wrong_buzz": False,
             "timeout": False,
         },
     )

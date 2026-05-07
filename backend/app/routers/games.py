@@ -24,6 +24,8 @@ from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 from app.middleware.manager_auth import require_manager_token
 from app.middleware.rate_limit import limiter
 from app.models.games import (
+    AwardBonusRequest,
+    AwardBonusResponse,
     AwardPointsRequest,
     AwardPointsResponse,
     CreateGameRequest,
@@ -121,32 +123,11 @@ def _award_blocking(
     code: str,
     body: AwardPointsRequest,
 ) -> dict[str, Any]:
-    round_resp = (
-        client.table("game_rounds")
-        .select("id,song_id,buzzed_team_id,ended_at")
-        .eq("id", str(body.round_id))
-        .eq("game_code", code)
-        .execute()
-    )
-    rows = round_resp.data or []
-    if not rows:
-        raise NotFoundError(f"round {body.round_id} not found in game {code}")
-    round_row = rows[0]
-
-    is_soundtrack = False
-    song_id = round_row.get("song_id")
-    if song_id:
-        song_resp = client.table("songs").select("is_soundtrack").eq("id", song_id).execute()
-        song_rows = song_resp.data or []
-        if song_rows:
-            is_soundtrack = bool(song_rows[0].get("is_soundtrack"))
-
-    title, artist, source, timeout = to_rpc_points(
+    title, artist, wrong_buzz, timeout = to_rpc_points(
         title_correct=body.title_correct,
         artist_correct=body.artist_correct,
-        source_correct=body.source_correct,
+        wrong_buzz=body.wrong_buzz,
         timeout=body.timeout,
-        song_is_soundtrack=is_soundtrack,
     )
 
     try:
@@ -157,7 +138,7 @@ def _award_blocking(
                 "p_round_id": str(body.round_id),
                 "p_title": title,
                 "p_artist": artist,
-                "p_source": source,
+                "p_wrong_buzz": wrong_buzz,
                 "p_timeout": timeout,
             },
         ).execute()
@@ -169,6 +150,34 @@ def _award_blocking(
             raise NotFoundError("award_points returned no row")
         data = data[0]
     return dict(data) if isinstance(data, dict) else {}
+
+
+def _bonus_blocking(
+    client: SupabaseClientLike,
+    code: str,
+    body: AwardBonusRequest,
+) -> dict[str, Any]:
+    try:
+        rpc_resp = client.rpc(
+            "award_bonus",
+            {
+                "p_game_code": code,
+                "p_team_id": str(body.team_id),
+                "p_points": body.points,
+            },
+        ).execute()
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+    new_total = rpc_resp.data
+    if isinstance(new_total, list):
+        if not new_total:
+            raise NotFoundError("award_bonus returned no row")
+        new_total = new_total[0]
+    return {
+        "team_id": str(body.team_id),
+        "points_awarded": body.points,
+        "team_total_score": int(new_total or 0),
+    }
 
 
 def _end_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:
@@ -298,6 +307,26 @@ async def award_points(
         points_awarded=int(result.get("points_awarded", 0)),
         team_total_score=int(result.get("team_total_score", 0)),
     )
+
+
+@router.post(
+    "/games/{game_code}/bonus",
+    response_model=AwardBonusResponse,
+    dependencies=[Depends(require_manager_token)],
+)
+@limiter.limit("100/minute")
+async def award_bonus(
+    request: Request, game_code: str, body: AwardBonusRequest
+) -> AwardBonusResponse:
+    client = get_supabase_client()
+    try:
+        result = await anyio.to_thread.run_sync(_bonus_blocking, client, game_code, body)
+    except DomainError:
+        raise
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc
+
+    return AwardBonusResponse.model_validate(result)
 
 
 @router.post(

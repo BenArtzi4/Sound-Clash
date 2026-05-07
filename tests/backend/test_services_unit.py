@@ -17,9 +17,8 @@ def test_scoring_title_only() -> None:
     out = scoring.to_rpc_points(
         title_correct=True,
         artist_correct=False,
-        source_correct=False,
+        wrong_buzz=False,
         timeout=False,
-        song_is_soundtrack=False,
     )
     assert out == (10, 0, 0, 0)
 
@@ -28,44 +27,57 @@ def test_scoring_title_plus_artist() -> None:
     out = scoring.to_rpc_points(
         title_correct=True,
         artist_correct=True,
-        source_correct=False,
+        wrong_buzz=False,
         timeout=False,
-        song_is_soundtrack=False,
     )
     assert out == (10, 5, 0, 0)
 
 
-def test_scoring_full_soundtrack() -> None:
+def test_scoring_wrong_buzz() -> None:
     out = scoring.to_rpc_points(
-        title_correct=True,
-        artist_correct=True,
-        source_correct=True,
+        title_correct=False,
+        artist_correct=False,
+        wrong_buzz=True,
         timeout=False,
-        song_is_soundtrack=True,
     )
-    assert out == (10, 5, 5, 0)
+    assert out == (0, 0, scoring.WRONG_BUZZ_PENALTY, 0)
 
 
-def test_scoring_source_on_non_soundtrack_raises() -> None:
+def test_scoring_wrong_buzz_with_positive_raises() -> None:
     with pytest.raises(ValidationError):
         scoring.to_rpc_points(
-            title_correct=False,
+            title_correct=True,
             artist_correct=False,
-            source_correct=True,
+            wrong_buzz=True,
             timeout=False,
-            song_is_soundtrack=False,
         )
 
 
-def test_scoring_timeout_overrides_other_flags() -> None:
+def test_scoring_timeout_alone() -> None:
     out = scoring.to_rpc_points(
-        title_correct=True,
-        artist_correct=True,
-        source_correct=True,
+        title_correct=False,
+        artist_correct=False,
+        wrong_buzz=False,
         timeout=True,
-        song_is_soundtrack=True,
     )
-    assert out == (0, 0, 0, scoring.TIMEOUT_PENALTY)
+    assert out == (0, 0, 0, 1)
+
+
+def test_scoring_timeout_with_other_flags_raises() -> None:
+    with pytest.raises(ValidationError):
+        scoring.to_rpc_points(
+            title_correct=True,
+            artist_correct=False,
+            wrong_buzz=False,
+            timeout=True,
+        )
+
+
+def test_scoring_constants_unchanged() -> None:
+    assert scoring.TITLE_POINTS == 10
+    assert scoring.ARTIST_POINTS == 5
+    assert scoring.WRONG_BUZZ_PENALTY == 3
+    assert scoring.BONUS_POINTS == 4
 
 
 # ----- game-code generation ---------------------------------------------

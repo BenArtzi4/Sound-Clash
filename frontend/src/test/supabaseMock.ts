@@ -174,8 +174,7 @@ export function makeRound(overrides: Partial<GameRound> = {}): GameRound {
     buzzed_team_id: null,
     title_points: 0,
     artist_points: 0,
-    source_points: 0,
-    timeout_penalty: 0,
+    wrong_buzz_penalty: 0,
     ended_at: null,
     ...overrides,
   };

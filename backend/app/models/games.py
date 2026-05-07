@@ -74,7 +74,7 @@ class AwardPointsRequest(BaseModel):
     round_id: UUID
     title_correct: bool = False
     artist_correct: bool = False
-    source_correct: bool = False
+    wrong_buzz: bool = False
     timeout: bool = False
 
 
@@ -83,6 +83,21 @@ class AwardPointsResponse(BaseModel):
 
     round_id: UUID
     team_id: UUID | None
+    points_awarded: int
+    team_total_score: int
+
+
+class AwardBonusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    team_id: UUID
+    points: int = Field(default=4, ge=1, le=50)
+
+
+class AwardBonusResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    team_id: UUID
     points_awarded: int
     team_total_score: int
 

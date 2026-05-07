@@ -85,6 +85,10 @@ END $$;
 -- =============================================================================
 -- award_points — manager evaluates the answer.
 -- =============================================================================
+-- DROP guard so later migrations that rename parameters (e.g. 014's source→wrong_buzz)
+-- can be re-applied alongside this file without `cannot change name of input parameter`.
+DROP FUNCTION IF EXISTS award_points(char, uuid, integer, integer, integer, integer);
+
 CREATE OR REPLACE FUNCTION award_points(
   p_game_code char(6),
   p_round_id  uuid,

@@ -1,8 +1,8 @@
 # Sound Clash — Postgres RPC Functions
 
-The five PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
+The six PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-This is the spec Phase 3 of the roadmap implements. Functions live in `db/migrations/005_rpc_functions.sql` in the new repo.
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five) and `db/migrations/014_scoring_revamp.sql` (the reshaped `award_points` and the new `award_bonus`).
 
 ## 0. Conventions
 
@@ -189,72 +189,29 @@ Not idempotent. Each call increments `round_number` and creates a new row. Calle
 
 ## 3. `award_points` — manager evaluates the answer
 
-Called by FastAPI (`POST /games/{code}/award-points`). Not exposed to anon.
+Called by FastAPI (`POST /games/{code}/award-points`). Not exposed to anon. Reshaped in migration 014: the `p_source` parameter is gone (the soundtrack-source bonus is no longer scored), and the timeout penalty is gone (timeout is now a pure "end the round, no score change" signal). The new fourth integer is `p_wrong_buzz`, which deducts from the buzzed team when the host marks a buzz as wrong.
 
 ```sql
 CREATE OR REPLACE FUNCTION award_points(
-  p_game_code char(6),
-  p_round_id  uuid,
-  p_title     integer DEFAULT 0,
-  p_artist    integer DEFAULT 0,
-  p_source    integer DEFAULT 0,
-  p_timeout   integer DEFAULT 0
+  p_game_code  char(6),
+  p_round_id   uuid,
+  p_title      integer DEFAULT 0,   -- 0 or 10
+  p_artist     integer DEFAULT 0,   -- 0 or 5
+  p_wrong_buzz integer DEFAULT 0,   -- 0 or 3 (deducted)
+  p_timeout    integer DEFAULT 0    -- 0 or 1 (flag, no score impact)
 )
 RETURNS TABLE(team_id uuid, points_awarded integer, team_total_score integer)
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_team_id  uuid;
-  v_total    integer;
-  v_round_ended timestamptz;
-BEGIN
-  -- Idempotency check: if round already evaluated, return the prior result
-  SELECT buzzed_team_id, ended_at INTO v_team_id, v_round_ended
-    FROM game_rounds WHERE id = p_round_id AND game_code = p_game_code;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'round_not_found' USING ERRCODE = 'P0002';
-  END IF;
-
-  IF v_round_ended IS NOT NULL THEN
-    RAISE EXCEPTION 'round_already_ended' USING ERRCODE = 'P0001';
-  END IF;
-
-  -- Compute total points (timeout is mutually exclusive with title/artist/source;
-  -- caller responsibility to enforce. Function trusts inputs.)
-  v_total := COALESCE(p_title, 0) + COALESCE(p_artist, 0) + COALESCE(p_source, 0)
-             - COALESCE(p_timeout, 0);
-
-  -- Write round result
-  UPDATE game_rounds
-     SET title_points    = p_title,
-         artist_points   = p_artist,
-         source_points   = p_source,
-         timeout_penalty = p_timeout,
-         ended_at        = now()
-   WHERE id = p_round_id;
-
-  -- Apply points to team's running total (only if a team buzzed)
-  IF v_team_id IS NOT NULL AND p_timeout = 0 THEN
-    UPDATE game_teams SET score = score + v_total WHERE id = v_team_id;
-  END IF;
-
-  -- Reset buzz state on the game so the manager can start the next round
-  UPDATE active_games
-     SET buzzed_team_id = NULL, locked_at = NULL
-   WHERE game_code = p_game_code;
-
-  -- Return summary
-  RETURN QUERY
-  SELECT v_team_id,
-         v_total,
-         COALESCE((SELECT score FROM game_teams WHERE id = v_team_id), 0);
-END $$;
-
-REVOKE ALL ON FUNCTION award_points(char, uuid, integer, integer, integer, integer) FROM PUBLIC;
+SET search_path = public;
 ```
+
+Behavior:
+- `p_timeout = 1` → end the round, return `(NULL, 0, 0)`. No team score moves.
+- `p_wrong_buzz > 0 AND (p_title > 0 OR p_artist > 0)` → raises `P0001 wrong_buzz_with_correct`.
+- `p_wrong_buzz > 0` AND a team buzzed → score `-= p_wrong_buzz`, recorded on `game_rounds.wrong_buzz_penalty`.
+- `p_title > 0 OR p_artist > 0` AND a team buzzed → score `+= p_title + p_artist`, recorded on `game_rounds.title_points` / `.artist_points`.
+- All zero AND a team buzzed → end round, no score change.
 
 ### Error semantics
 
@@ -262,22 +219,47 @@ REVOKE ALL ON FUNCTION award_points(char, uuid, integer, integer, integer, integ
 |---|---|
 | Round doesn't exist | `P0002 round_not_found` |
 | Round already evaluated | `P0001 round_already_ended` |
-| Source points awarded for non-soundtrack song | Not enforced here — FastAPI validates first |
-| Negative point input | Not enforced — caller responsibility (FastAPI validates) |
+| `wrong_buzz` combined with `title` or `artist` | `P0001 wrong_buzz_with_correct` |
 
 ### Idempotency
 
 Idempotent on `round_id` via the `ended_at IS NOT NULL` check — second call raises an exception that FastAPI maps to a 409 (Conflict). This protects against double-award on retry.
 
-### Edge cases
-
-- **Timeout with no buzz**: caller passes `p_timeout=2`, all others 0. `v_team_id` is NULL → score update skipped. The round row records the timeout penalty.
-- **Buzz with timeout=0 but all components 0**: legitimate "team buzzed, got everything wrong, 0 points." Allowed.
-- **Buzz with timeout > 0**: ambiguous; caller must not send this. Function uses timeout to suppress score update; intent unclear. FastAPI validation rejects.
-
 ### Callers
 
 - FastAPI `POST /games/{code}/award-points`.
+
+## 3a. `award_bonus` — host-discretion bonus to a chosen team
+
+Added in migration 014. Independent of round state and the buzz lock — the host picks any team in the game and grants a positive number of points (default 4). Does not touch `game_rounds`. Called by FastAPI (`POST /games/{code}/bonus`). Not exposed to anon.
+
+```sql
+CREATE OR REPLACE FUNCTION award_bonus(
+  p_game_code char(6),
+  p_team_id   uuid,
+  p_points    integer DEFAULT 4
+) RETURNS integer  -- new total score for the team
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+### Error semantics
+
+| Failure | Exception |
+|---|---|
+| `p_points <= 0` | `P0001 bonus_points_non_positive` |
+| Game doesn't exist | `P0002 game_not_found` |
+| Game already ended | `P0001 game_already_ended` |
+| Team doesn't exist or belongs to a different game | `P0002 team_not_in_game` |
+
+### Idempotency
+
+Not idempotent. Each call adds `p_points` to the team's score. The host is expected to click "+4 Bonus" only when they mean to.
+
+### Callers
+
+- FastAPI `POST /games/{code}/bonus`.
 
 ## 4. `end_game` — manager ends the game
 
