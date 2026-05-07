@@ -318,6 +318,141 @@ describe("ManagerConsolePage", () => {
     );
   });
 
+  it("Title + Artist combine to send both flags true", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardPoints).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 15,
+      team_total_score: 15,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-title"));
+    fireEvent.click(screen.getByTestId("score-artist"));
+    fireEvent.click(screen.getByTestId("end-round"));
+    await waitFor(() =>
+      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: true,
+        artist_correct: true,
+        wrong_buzz: false,
+        timeout: false,
+      }),
+    );
+  });
+
+  it("Artist clears Wrong (mutex from the artist direction)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardPoints).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 5,
+      team_total_score: 5,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Wrong first, then Artist should clear wrong.
+    fireEvent.click(screen.getByTestId("score-wrong"));
+    fireEvent.click(screen.getByTestId("score-artist"));
+    fireEvent.click(screen.getByTestId("end-round"));
+    await waitFor(() =>
+      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: false,
+        artist_correct: true,
+        wrong_buzz: false,
+        timeout: false,
+      }),
+    );
+  });
+
+  it("End round with a buzz but no toggle sends all flags false (no score change)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardPoints).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 0,
+      team_total_score: 0,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("end-round"));
+    await waitFor(() =>
+      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: false,
+        artist_correct: false,
+        wrong_buzz: false,
+        timeout: false,
+      }),
+    );
+  });
+
+  it("Bonus picker can be toggled closed without picking a team", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-bonus"));
+    await waitFor(() => screen.getByTestId("bonus-team-t1"));
+    fireEvent.click(screen.getByTestId("score-bonus"));
+    await waitFor(() => expect(screen.queryByTestId("bonus-team-t1")).not.toBeInTheDocument());
+    expect(awardBonus).not.toHaveBeenCalled();
+  });
+
+  it("Bonus surfaces an error toast when the API call fails", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [],
+    });
+    vi.mocked(awardBonus).mockRejectedValueOnce(new Error("boom"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-bonus"));
+    await waitFor(() => screen.getByTestId("bonus-team-t1"));
+    fireEvent.click(screen.getByTestId("bonus-team-t1"));
+    await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
+  });
+
   it("kick opens a confirm dialog and calls api.kickTeam after confirm", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
