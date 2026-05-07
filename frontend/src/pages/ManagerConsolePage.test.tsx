@@ -298,10 +298,7 @@ describe("ManagerConsolePage", () => {
   it("Bonus opens a team picker and posts to awardBonus", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
-      teams: [
-        makeTeam({ id: "t1", name: "Alice" }),
-        makeTeam({ id: "t2", name: "Bob" }),
-      ],
+      teams: [makeTeam({ id: "t1", name: "Alice" }), makeTeam({ id: "t2", name: "Bob" })],
       rounds: [],
     });
     vi.mocked(awardBonus).mockResolvedValueOnce({
