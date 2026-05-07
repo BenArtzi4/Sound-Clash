@@ -4,7 +4,7 @@ Granular, checkboxed tasks grouped by area. Tasks within an area are roughly ord
 
 The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Sound-Clash-legacy`**.
 
-> **Status note (2026-05-07):** Phases 0 → 7 are shipped (production cutover complete; see `roadmap.md`). The boxes below have been reconciled against the live code; `[x]` means "in `main` and live at `https://soundclash.org`". The only remaining `[ ]` is **DOC-06** (architecture diagram). Post-launch work tracked separately under "Scoring revamp (post-Phase 7)".
+> **Status note (2026-05-07):** Phases 0 → 7 are shipped (production cutover complete; see `roadmap.md`). The boxes below have been reconciled against the live code; `[x]` means "in `main` and live at `https://soundclash.org`". All initial-phase tasks are now complete. Post-launch work tracked separately under "Scoring revamp (post-Phase 7)".
 
 ## Phase 0 — Naming
 
@@ -173,7 +173,7 @@ The new repo is **`Sound-Clash`** (GitHub). The legacy AWS-based repo is **`Soun
 - [x] **DOC-03** `docs/realtime-design.md` — copy from plan
 - [x] **DOC-04** `docs/data-model.md`, `docs/rpc-functions.md`, `docs/security-rls.md`, `docs/api-contracts.md`, `docs/game-rules.md`, `docs/tech-stack.md`, `docs/free-tier-budget.md`, `docs/local-development.md`, `docs/runbook.md` — copy from plan
 - [x] **DOC-05** `docs/aws-teardown-checklist.md` — explicit, dated checklist for the cutover
-- [ ] **DOC-06** Architecture diagram as PNG/SVG in `docs/diagrams/` (Excalidraw or Mermaid). Still missing — `architecture.md` §2 has the ASCII diagram, but no rendered image.
+- [x] **DOC-06** Architecture diagrams in `docs/diagrams/` — Mermaid in Markdown plus standalone HTML mirrors. `internal.md`/`internal.html` covers component map + buzz-race sequence; `external.md`/`external.html` covers service map + deploy sequence + secret-store matrix. Linked from `docs/README.md` and `architecture.md`.
 - [x] **DOC-07** `CONTRIBUTING.md` — coding style, PR template, test requirements
 - [x] **DOC-08** PR template `.github/pull_request_template.md` — sections: what changed, why, test plan, doc updates
 

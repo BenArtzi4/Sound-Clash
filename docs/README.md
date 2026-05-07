@@ -19,6 +19,8 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 13. **[roadmap.md](roadmap.md)** — eight-phase migration plan with exit criteria.
 14. **[tasks.md](tasks.md)** — granular checkboxed task list grouped by area.
 15. **[aws-teardown-checklist.md](aws-teardown-checklist.md)** — step-by-step Phase 7 cutover script for tearing down the legacy AWS stack.
+16. **[tooling.md](tooling.md)** — every tool that touches the repo: GitHub Actions workflows, CodeQL, Dependabot, Codecov, pre-commit, deploy automation, monitoring.
+17. **[diagrams/](diagrams/)** — visual architecture diagrams (Mermaid in Markdown + standalone HTML mirrors). [`internal.md`](diagrams/internal.md) for what's inside the game; [`external.md`](diagrams/external.md) for the third-party services around it.
 
 ## Suggested reading paths
 
@@ -95,3 +97,5 @@ Out-of-date docs are worse than missing ones.
 | `roadmap.md` | 8-phase migration plan |
 | `tasks.md` | Granular task checklist |
 | `aws-teardown-checklist.md` | Phase 7 step-by-step cutover script |
+| `tooling.md` | Dev/CI tooling reference — workflows, bots, deploy automation |
+| `diagrams/` | Architecture diagrams (Mermaid `.md` + standalone `.html`) |
