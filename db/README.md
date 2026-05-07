@@ -2,26 +2,17 @@
 
 Postgres-as-code. Schema, RPC functions, RLS policies, and the pg_cron job all live here as ordered SQL migrations.
 
-**Phase 3 deliverable.** Empty in Phase 1.
-
 ## Layout
 
 ```
 db/
 ├── README.md         (this file)
 ├── migrate.sh        (applies migrations in order; used locally and in CI)
-├── migrations/       (numbered SQL files)
-│   ├── 001_extensions.sql
-│   ├── 002_durable_tables.sql
-│   ├── 003_ephemeral_tables.sql
-│   ├── 004_indexes.sql
-│   ├── 005_rpc_functions.sql
-│   ├── 006_rls_policies.sql
-│   ├── 007_cron_jobs.sql
-│   └── 008_seed_genres.sql
-└── seed/
-    └── (one-time seed data not tied to migrations)
+├── migrations/       (numbered SQL files — see the directory for the canonical list)
+└── seed/             (one-time seed data not tied to migrations)
 ```
+
+Migrations are applied in numeric order. The initial set (`001`–`008`) ships the schema, indexes, the original five RPC functions, RLS policies, the cron job, and the genre seed. Later migrations layer fixes and feature work on top — Realtime publication wiring (`009`), `char(n)` → `text` for game codes (`010`), buzz/round mirroring (`011`), the per-game manager token (`012`), and the scoring revamp + `award_bonus` (`014`). New migrations get the next free numeric prefix.
 
 ## Authority
 

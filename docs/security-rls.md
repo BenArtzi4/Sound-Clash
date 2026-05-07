@@ -48,6 +48,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `buzz_in`               | ✅ | ✅ |
 | `start_round`           | ❌ | ✅ |
 | `award_points`          | ❌ | ✅ |
+| `award_bonus`           | ❌ | ✅ |
 | `end_game`              | ❌ | ✅ |
 | `cleanup_expired_games` | ❌ | ✅ |
 
