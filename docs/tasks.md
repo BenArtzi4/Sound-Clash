@@ -193,9 +193,9 @@ PR #38 / branch `feature/scoring-revamp`. Fixes the latent free-spam-buzz bug, d
 - [x] **SCORE-10** All local gates green: `ruff`, `ruff format`, `mypy`, `tsc`, `eslint`, `vitest run` (22 files / 183 tests).
 - [x] **SCORE-11** PR #38 CI green (backend + frontend workflows).
 - [x] **SCORE-12** Merge PR #38 to `main` — triggers Render redeploy of new backend. Watch for the redeploy to finish.
-- [x] **SCORE-13** Apply `014_scoring_revamp.sql` to **prod** Supabase (`Sound-Clash` Frankfurt, `jvfddxuaqcsrguibkymp`). Verified 2026-05-07 via `pg_get_function_arguments` — `award_bonus` exists and `award_points` carries the new `p_wrong_buzz` arg. Migration is idempotent and was applied during the original PR #38 deploy.
+- [x] **SCORE-13** Apply `014_scoring_revamp.sql` to **prod** Supabase (`Sound-Clash` Frankfurt; project ref kept out of public docs — look it up in the Supabase dashboard). Verified 2026-05-07 via `pg_get_function_arguments` — `award_bonus` exists and `award_points` carries the new `p_wrong_buzz` arg. Migration is idempotent and was applied during the original PR #38 deploy.
 - [x] **SCORE-14** Three-tab manual smoke against prod — substituted by automated smokes: `tests/smoke/post_deploy.sh https://api.soundclash.org` and `tests/e2e/smoke/prod_realtime.spec.ts`. Smoke initially surfaced a separate prod regression in `_award_blocking` (PostgREST list-shape handling); fixed in PR #40.
-- [x] **SCORE-15** Re-link CLI back to preview (`supabase link --project-ref vriljyhpxfcwpqwshajv`) so future ad-hoc DB ops don't accidentally hit prod. Done 2026-05-07.
+- [x] **SCORE-15** Re-link CLI back to preview (`supabase link --project-ref <preview-project-ref>`) so future ad-hoc DB ops don't accidentally hit prod. Done 2026-05-07. The real project ref is in the Supabase dashboard.
 
 ---
 

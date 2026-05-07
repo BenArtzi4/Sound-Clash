@@ -290,7 +290,7 @@ The system is designed to be **rebuildable from source** — if everything excep
 
 ## 8. Emergency Contacts
 
-- **You**: benartzi4@gmail.com
+- **You**: see your password manager (intentionally not in public docs)
 - **Supabase support** (free tier): community Discord + GitHub issues; no SLA
 - **Render support**: support@render.com (no free-tier SLA)
 - **Cloudflare**: dashboard support tab

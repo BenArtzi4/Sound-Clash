@@ -126,7 +126,7 @@ Configured in `.github/dependabot.yml`. Five package ecosystems, all on a weekly
 - `@dependabot ignore this minor version` — skip a single version
 - `@dependabot ignore this dependency` — stop opening PRs for this dep entirely
 
-Per `.claude/rules/dependencies.md`, **flag any new dependency before installing it**. Dependabot only bumps existing deps, so it never violates the rule — but reviewing its PRs is a good moment to spot transitive growth.
+Project rule: **flag any new dependency before installing it** (keep the project lean). Dependabot only bumps existing deps, so it never violates the rule — but reviewing its PRs is a good moment to spot transitive growth.
 
 ---
 
@@ -190,7 +190,7 @@ pre-commit install
 | `no-skip-tests` | local pygrep | `it.skip`, `test.skip`, `xfail` outside generated code |
 | `no-pragma-no-cover` | local pygrep | `# pragma: no cover` under `backend/app/` |
 
-Per `.claude/rules/git-workflow.md`, **bypassing a hook with `--no-verify` is not allowed** — fix the underlying issue.
+Project rule: **bypassing a hook with `--no-verify` is not allowed** — fix the underlying issue.
 
 ---
 
@@ -244,7 +244,7 @@ Both projects are skipped when their DSN env var is empty (so `pytest` runs and 
 
 The Render free tier sleeps after 15 min of idle. cron-job.org pings `https://api.soundclash.org/health` every 14 min to keep the worker warm.
 
-Account credentials are stored in `.claude/phase7-secrets.local` (not committed; see the secrets-file memory).
+Account credentials are kept out of the repo — see your password manager.
 
 If the keepalive stops (cron-job.org outage, account locked), the symptom is a 30s wait on the first game-creation after an idle period. The buzzer is unaffected because it doesn't go through Render.
 
@@ -281,7 +281,7 @@ Configured on `main`:
 
 E2E, CodeQL, and Codecov are **not** required checks — they're advisory. Adding them as required checks is a one-line settings change but would block merges when the preview Supabase is being maintained.
 
-Per `.claude/rules/ci-and-repo-config.md`, **changing branch protection requires explicit user approval** — Claude will not modify it autonomously.
+Project rule: **changing branch protection requires explicit user approval** — automation tools should not modify it autonomously.
 
 ---
 
