@@ -85,7 +85,7 @@ Out-of-date docs are worse than missing ones.
 | `tech-stack.md` | Service list with free-tier limits |
 | `game-rules.md` | Gameplay, state machine, edge cases |
 | `data-model.md` | Schema + indexes + ER |
-| `rpc-functions.md` | The 5 PL/pgSQL functions |
+| `rpc-functions.md` | The 6 PL/pgSQL functions |
 | `security-rls.md` | RLS, threat model, rate limits, CSP |
 | `api-contracts.md` | REST + Realtime contracts |
 | `testing-strategy.md` | Test categories + CI gates |
