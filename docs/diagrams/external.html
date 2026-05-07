@@ -201,7 +201,6 @@ sequenceDiagram
 
     <h2 id="not-here">What is <em>not</em> in this diagram</h2>
     <ul>
-      <li><strong>AWS</strong> — torn down 2026-05-07. The legacy stack lives in <code>Sound-Clash-legacy</code> for reference only; nothing in the new system depends on AWS resources.</li>
       <li><strong>CDN for YouTube</strong> — YouTube IFrame Player loads its own JS from <code>youtube.com</code>; there's no separate CDN dependency we manage.</li>
       <li><strong>Email</strong> — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.</li>
     </ul>

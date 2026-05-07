@@ -13,7 +13,6 @@ For *building* the system, see `roadmap.md` and `tasks.md`. For *quotas*, see `f
 | Database | Supabase | https://app.supabase.com → project `Sound-Clash` |
 | DNS | Cloudflare | https://dash.cloudflare.com → `soundclash.org` |
 | Source code | GitHub | https://github.com/BenArtzi4/Sound-Clash |
-| Legacy AWS code (read-only reference) | GitHub | https://github.com/BenArtzi4/Sound-Clash-legacy |
 | Error tracking | Sentry | https://sentry.io → project `sound-clash` |
 | Keepalive | cron-job.org | https://console.cron-job.org |
 
@@ -85,19 +84,6 @@ Postgres migrations are forward-only by design. To revert:
 - **Hard revert** (data corruption only): restore from Supabase backup. Free tier has 1 day of backups; Pro has more.
 
 Supabase free tier does NOT have point-in-time recovery. For prod-impacting incidents, accept that the last full backup is your floor.
-
-### 2.4 DNS rollback (cutover undo)
-
-> **No longer available as of 2026-05-07.** The legacy CloudFront distribution `E2NIDUY011R5N4`, the ALBs, the ECR images, the ACM cert, and all S3 backing data were deleted during Phase 7 teardown. There is nothing to revert DNS to. If the new stack breaks, the recovery path is **forward** (deploy a fix) or **rebuild from source** per §6 — there is no quick DNS flip back.
->
-> The original rollback procedure is preserved below for historical reference.
-
-If the migration cutover fails and you need to send traffic back to the legacy AWS stack:
-1. DNS → `soundclash.org` records (currently at Namecheap, not Cloudflare) → change `www` CNAME from `sound-clash.pages.dev` back to the CloudFront distribution domain (was `d149g9hh3mks89.cloudfront.net`, distribution ID `E2NIDUY011R5N4`).
-2. Propagation: 5-30 min at Namecheap.
-3. Spin AWS back up if it was destroyed (legacy repo's `scripts/ondemand/deploy-all.sh` — file no longer present in the current legacy clone; would need to be re-created from git history).
-
-This rollback path was only available while the AWS stack remained alive. After the Phase 7 teardown the option is gone.
 
 ## 3. Secret Rotation
 
