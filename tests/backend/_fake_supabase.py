@@ -399,9 +399,13 @@ class _Rpc:
                 # scalar-returning function — unwrap single column
                 data = _normalize(list(rows[0].values())[0])
             else:
+                # Real PostgREST always returns TABLE-shaped functions as a
+                # list of row-dicts, even for single-row results — never
+                # auto-unwraps. Match that. (Earlier this fake unwrapped a
+                # length-1 list into a bare dict; that masked the regression
+                # in d49cb6f where _award_blocking dropped its list-defensive
+                # handling.)
                 data = [_record_to_dict(r) for r in rows]
-                if len(data) == 1:
-                    data = data[0]
             return FakeResponse(data)
         finally:
             self._fake._close_conn(conn)

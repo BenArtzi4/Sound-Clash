@@ -144,9 +144,15 @@ def _award_blocking(
         ).execute()
     except Exception as exc:
         raise map_postgrest_error(exc) from exc
-    # award_points returns exactly one row (or raises P0001/P0002 which the
-    # except above maps to a DomainError), so .data is always a single dict.
-    return dict(rpc_resp.data)
+    # PostgREST returns a TABLE-shaped function as a list of row-dicts (a
+    # length-1 list here, since award_points always RETURN QUERY one row).
+    # Some test mocks pass a bare dict, so accept both shapes.
+    data = rpc_resp.data
+    if isinstance(data, list):
+        if not data:
+            raise NotFoundError("award_points returned no row")
+        data = data[0]
+    return dict(data)
 
 
 def _bonus_blocking(
