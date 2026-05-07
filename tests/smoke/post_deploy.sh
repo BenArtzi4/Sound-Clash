@@ -157,7 +157,7 @@ log "      round_id=$ROUND_ID song=\"$SONG_TITLE\""
 log "5/6 POST /games/$GAME_CODE/award-points"
 AWARD_BODY=$(jq -n \
   --arg rid "$ROUND_ID" \
-  '{round_id: $rid, title_correct: true, artist_correct: false, source_correct: false, timeout: false}')
+  '{round_id: $rid, title_correct: true, artist_correct: false, wrong_buzz: false, timeout: false}')
 AWARD=$(http POST "/games/$GAME_CODE/award-points" \
   -H "X-Manager-Token: $TOKEN" \
   --data "$AWARD_BODY")
