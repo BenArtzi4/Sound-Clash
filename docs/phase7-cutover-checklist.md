@@ -1,5 +1,7 @@
 # Phase 7 — Cutover Checklist
 
+> **Status: completed retrospectively on 2026-05-07.** Cutover is live and `https://soundclash.org` serves the new stack. The per-step boxes below were not ticked individually as the cutover progressed — instead, each step was performed and signed off via the Definition of Done in [`roadmap.md`](roadmap.md) §7 (lines 217–227, all checked). This file remains as a runbook reference for anyone repeating a similar migration.
+
 Pre-cutover sequencing for moving `soundclash.org` from the legacy AWS stack to the new Supabase + Render + Cloudflare Pages system. Walk top-to-bottom; do not skip ahead. Each step has a verification gate that must pass before moving to the next.
 
 For day-2 ops after cutover, see [`runbook.md`](runbook.md). For AWS teardown, see [`aws-teardown-checklist.md`](aws-teardown-checklist.md). For the official Definition of Done, see [`roadmap.md`](roadmap.md) §7 lines 217–227.

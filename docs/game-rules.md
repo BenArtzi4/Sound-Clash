@@ -144,7 +144,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 ### Buzz window timeout
 
-- After `start_round`, if no team buzzes within **20 seconds** (configurable), the manager UI shows a "no one buzzed" prompt and the manager presses "Skip / Timeout" → `award_points` RPC is called with `p_timeout = 2`, and the round ends with a `-2` penalty recorded.
+- After `start_round`, if no team buzzes within **20 seconds** (configurable), the manager UI shows a "no one buzzed" prompt and the manager presses "End round" with no toggles set → `award_points` is called with `p_timeout = 1` (or all-zero scoring args), the round ends, and no team's score changes. The earlier `-2` timeout penalty was removed in migration 014 because it never actually landed on any team (the SQL guard prevented it) and its UX value was negative.
 - The 20-second window is enforced client-side in the manager UI (timer). The server does not auto-timeout.
 
 ### Answer-evaluation window

@@ -6,6 +6,10 @@ A real-time multiplayer music trivia game. Teams compete to identify songs by bu
 [![Frontend](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/frontend.yml/badge.svg)](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/frontend.yml)
 [![Coverage](https://codecov.io/gh/BenArtzi4/Sound-Clash/branch/main/graph/badge.svg)](https://codecov.io/gh/BenArtzi4/Sound-Clash)
 
+## Play it now
+
+**[https://soundclash.org](https://soundclash.org)** — open it in any browser. Hosting a game is free and takes seconds: pick genres and round count, share the 6-character code with your room, players join from their phones, you run the round on a TV or projector. No accounts, no install.
+
 ## What is this?
 
 Sound Clash is a buzzer game played in groups. Three roles connect to a shared game code:
@@ -14,11 +18,11 @@ Sound Clash is a buzzer game played in groups. Three roles connect to a shared g
 - **Teams** (typically on phones) — race to buzz in when they recognize the song
 - **Display** — public scoreboard for the room ("TV screen")
 
-Each round, the manager plays a YouTube clip. Teams buzz; first wins the lock. The manager evaluates the team's verbal answer and awards points (title=10, artist=5, source=5). Game ends after N rounds; scoreboard is shown; data is auto-deleted after 4 hours.
+Each round, the manager plays a YouTube clip. Teams buzz; first one wins the lock. The manager evaluates the answer with toggle buttons: **Correct Song +10**, **Correct Artist +5**, **Wrong buzz -3**. The host can also grant any team a **Bonus +4** at any time (off-the-cuff awards for clever guesses, callbacks, etc). Game ends after N rounds; the scoreboard is shown on the Display screen; all game data is auto-deleted after 4 hours.
 
 ## Stack
 
-100% free-tier (excluding domain):
+100% free-tier (excluding the domain):
 
 - **Backend**: Python 3.11 + FastAPI on Render
 - **Database + Realtime + RPC**: Supabase (Postgres 15)
@@ -26,46 +30,7 @@ Each round, the manager plays a YouTube clip. Teams buzz; first wins the lock. T
 - **CI/CD**: GitHub Actions
 - **Errors**: Sentry
 
-The architectural keystone: the buzzer is a Postgres PL/pgSQL function called directly from the browser via Supabase RPC, with row-change events fanned out to all clients via Supabase Realtime. Python is **not** in the buzzer hot path — this is what makes <200ms buzzer latency possible on free hosting. See [`docs/realtime-design.md`](docs/realtime-design.md).
-
-## Quick start
-
-```bash
-git clone https://github.com/BenArtzi4/Sound-Clash.git
-cd Sound-Clash
-
-# Start local Supabase (requires Docker)
-supabase start
-
-# Backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn app.main:app --reload
-
-# Frontend (separate terminal)
-cd ../frontend
-npm install
-npm run dev
-```
-
-Open http://localhost:5173. Full setup details: [`docs/local-development.md`](docs/local-development.md).
-
-## Documentation
-
-| Doc | When to read |
-|---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Start here — overview with links |
-| [`docs/realtime-design.md`](docs/realtime-design.md) | The central design decision |
-| [`docs/tech-stack.md`](docs/tech-stack.md) | Service-by-service rationale |
-| [`docs/game-rules.md`](docs/game-rules.md) | Gameplay flow + edge cases |
-| [`docs/data-model.md`](docs/data-model.md) | Schema |
-| [`docs/rpc-functions.md`](docs/rpc-functions.md) | The 5 PL/pgSQL functions |
-| [`docs/security-rls.md`](docs/security-rls.md) | Auth + threat model |
-| [`docs/api-contracts.md`](docs/api-contracts.md) | REST + Realtime contracts |
-| [`docs/free-tier-budget.md`](docs/free-tier-budget.md) | Capacity planning |
-| [`docs/local-development.md`](docs/local-development.md) | Dev setup |
-| [`docs/runbook.md`](docs/runbook.md) | Production ops |
+The architectural keystone: the buzzer is a Postgres PL/pgSQL function called directly from the browser via Supabase RPC, with row-change events fanned out to all clients via Supabase Realtime. Python is **not** in the buzzer hot path — this is what makes <200ms buzzer latency possible on free hosting. The full design discussion lives in `docs/realtime-design.md` if you're curious.
 
 ## Project status
 
@@ -77,11 +42,7 @@ Open http://localhost:5173. Full setup details: [`docs/local-development.md`](do
 - [x] Phase 6 — End-to-end testing
 - [x] Phase 7 — Deploy & cutover
 
-Full plan: [`docs/roadmap.md`](docs/roadmap.md).
-
-## Contributing
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). PRs welcome; issues for bugs and feature requests.
+The game is live and playable at [https://soundclash.org](https://soundclash.org).
 
 ## License
 
@@ -89,4 +50,4 @@ MIT — see [`LICENSE`](LICENSE).
 
 ## Predecessor
 
-The legacy AWS version is at https://github.com/BenArtzi4/Sound-Clash-legacy (archived).
+The earlier AWS-based version is at https://github.com/BenArtzi4/Sound-Clash-legacy (archived). That version ran ~$20/month on AWS; this rewrite runs at $0/month on free tiers without sacrificing the buzzer-latency requirement.
