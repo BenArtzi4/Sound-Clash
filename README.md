@@ -47,7 +47,3 @@ The game is live and playable at [https://soundclash.org](https://soundclash.org
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
-
-## Predecessor
-
-The earlier AWS-based version is at https://github.com/BenArtzi4/Sound-Clash-legacy (archived). That version ran ~$20/month on AWS; this rewrite runs at $0/month on free tiers without sacrificing the buzzer-latency requirement.

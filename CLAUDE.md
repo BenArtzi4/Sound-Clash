@@ -85,5 +85,3 @@ E2E (`cd tests/e2e`, one-time `npm install && npx playwright install`):
 - `docs/local-development.md` — full dev setup + Windows notes + troubleshooting.
 - `docs/testing-strategy.md` — what to test, where, and the CI gates.
 - `docs/roadmap.md` — phase boundaries and exit criteria.
-
-The legacy AWS version lives at https://github.com/BenArtzi4/Sound-Clash-legacy and is reference-only.

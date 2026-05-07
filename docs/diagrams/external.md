@@ -160,6 +160,5 @@ The full secret rotation procedure is in `runbook.md` §3.
 
 ## What is **not** in this diagram
 
-- **AWS** — torn down 2026-05-07. The legacy stack lives in `Sound-Clash-legacy` for reference only; nothing in the new system depends on AWS resources.
 - **CDN for YouTube** — YouTube IFrame Player loads its own JS from `youtube.com`; there's no separate CDN dependency we manage.
 - **Email** — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.

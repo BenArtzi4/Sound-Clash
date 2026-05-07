@@ -36,7 +36,6 @@ The system has a deliberately small attack surface (no PII, no payments, no user
 - Vulnerabilities in third-party services we depend on (Supabase, Render, Cloudflare). Report those upstream.
 - Bugs that require physical access to the host's device.
 - Reports about missing best practices that don't lead to an exploit (e.g., "you should use header X"). Open an issue or PR for those.
-- Issues in the [legacy AWS repo](https://github.com/BenArtzi4/Sound-Clash-legacy). That codebase is archived and won't receive security fixes.
 
 ## Disclosure policy
 
