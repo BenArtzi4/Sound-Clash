@@ -79,10 +79,10 @@ test("two teams race the buzzer; exactly one wins; all contexts agree", async ({
     display.page.getByRole("status").filter({ hasText: new RegExp(`${winnerName}.*buzzed in`, "i") }),
   ).toBeVisible({ timeout: 10_000 });
 
-  // 9. Manager checks Title and awards points; the winner's score should
-  //    update on display + both team scoreboards.
-  await manager.page.getByLabel(/^title$/i).check();
-  await manager.page.getByTestId("award-points").click();
+  // 9. Manager toggles "Correct Song" and ends the round; the winner's
+  //    score should update on display + both team scoreboards.
+  await manager.page.getByTestId("score-title").click();
+  await manager.page.getByTestId("end-round").click();
 
   for (const page of [team1.page, team2.page, display.page]) {
     await expect(
