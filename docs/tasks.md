@@ -186,11 +186,11 @@ PR #38 / branch `feature/scoring-revamp`. Fixes the latent free-spam-buzz bug, d
 - [x] **SCORE-08** Docs — `api-contracts.md §2.5` rewritten + new §2.6 for bonus; `rpc-functions.md` updated `award_points` + new §3a for `award_bonus`; `game-rules.md §4` rewritten + new §4a; `data-model.md` reflects column changes; `README.md` and `CLAUDE.md` say "six functions".
 - [x] **SCORE-09** Migration applied to `Sound-Clash-Preview` Supabase via `supabase db query --linked --file …`. Verified on the live DB: column reshape, function signatures, runtime wrong-buzz `-3`, runtime bonus `+4`, mutex `P0001`, ended-game guard `P0001`, idempotency rerun.
 - [x] **SCORE-10** All local gates green: `ruff`, `ruff format`, `mypy`, `tsc`, `eslint`, `vitest run` (22 files / 183 tests).
-- [ ] **SCORE-11** PR #38 CI green (backend + frontend workflows).
-- [ ] **SCORE-12** Merge PR #38 to `main` — triggers Render redeploy of new backend. Watch for the redeploy to finish.
-- [ ] **SCORE-13** Apply `014_scoring_revamp.sql` to **prod** Supabase (`Sound-Clash` Frankfurt, `jvfddxuaqcsrguibkymp`) the moment the new backend is live on Render. **Window of broken `/award-points` calls between deploy completion and migration apply — keep it short (seconds, not minutes).** Coordinate by re-linking the CLI: `supabase link --project-ref jvfddxuaqcsrguibkymp` then `supabase db query --linked --file db/migrations/014_scoring_revamp.sql`.
-- [ ] **SCORE-14** Three-tab manual smoke against prod: Correct Song → +10, Correct Song + Artist → +15, Wrong → -3, no-toggle End round → 0, no-buzz End round → timeout 0, +4 Bonus picker.
-- [ ] **SCORE-15** Re-link CLI back to preview (`supabase link --project-ref vriljyhpxfcwpqwshajv`) so future ad-hoc DB ops don't accidentally hit prod.
+- [x] **SCORE-11** PR #38 CI green (backend + frontend workflows).
+- [x] **SCORE-12** Merge PR #38 to `main` — triggers Render redeploy of new backend. Watch for the redeploy to finish.
+- [x] **SCORE-13** Apply `014_scoring_revamp.sql` to **prod** Supabase (`Sound-Clash` Frankfurt, `jvfddxuaqcsrguibkymp`). Verified 2026-05-07 via `pg_get_function_arguments` — `award_bonus` exists and `award_points` carries the new `p_wrong_buzz` arg. Migration is idempotent and was applied during the original PR #38 deploy.
+- [x] **SCORE-14** Three-tab manual smoke against prod — substituted by automated smokes: `tests/smoke/post_deploy.sh https://api.soundclash.org` and `tests/e2e/smoke/prod_realtime.spec.ts`. Smoke initially surfaced a separate prod regression in `_award_blocking` (PostgREST list-shape handling); fixed in PR #40.
+- [x] **SCORE-15** Re-link CLI back to preview (`supabase link --project-ref vriljyhpxfcwpqwshajv`) so future ad-hoc DB ops don't accidentally hit prod. Done 2026-05-07.
 
 ---
 

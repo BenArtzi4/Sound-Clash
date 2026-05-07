@@ -1,7 +1,10 @@
 -- 005_rpc_functions.sql
--- The five PL/pgSQL functions that hold the system's state-transition logic.
+-- The original five PL/pgSQL functions that hold the system's state-transition
+-- logic. Migration 014 reshapes award_points (drops source/timeout penalties,
+-- adds wrong-buzz) and adds a sixth function (award_bonus); apply 014 after
+-- this file.
 --
--- Spec: docs/rpc-functions.md §1–5.
+-- Spec: docs/rpc-functions.md §1–6.
 -- Race correctness for buzz_in: docs/realtime-design.md §4.
 --
 -- All functions: SECURITY DEFINER + explicit search_path so they execute with

@@ -78,7 +78,7 @@ E2E (`cd tests/e2e`, one-time `npm install && npx playwright install`):
 `docs/` is authoritative; code disagreeing with docs is a bug in one or the other. Useful starting points:
 - `docs/architecture.md` — overview + links to depth.
 - `docs/realtime-design.md` — buzzer hot path, race correctness, latency budget.
-- `docs/rpc-functions.md` — the 5 PL/pgSQL functions (`buzz_in`, `start_round`, `award_points`, `end_game`, `cleanup_expired_games`).
+- `docs/rpc-functions.md` — the 6 PL/pgSQL functions (`buzz_in`, `start_round`, `award_points`, `award_bonus`, `end_game`, `cleanup_expired_games`).
 - `docs/api-contracts.md` — REST + Realtime wire format.
 - `docs/security-rls.md` — auth, RLS, threat model.
 - `docs/local-development.md` — full dev setup + Windows notes + troubleshooting.

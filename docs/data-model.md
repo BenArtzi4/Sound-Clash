@@ -183,13 +183,14 @@ Full policy DDL and threat model: see **`security-rls.md`**.
 
 ## 6. RPC Functions (summary)
 
-Five PL/pgSQL functions encode all state transitions:
+Six PL/pgSQL functions encode all state transitions:
 
 | Function | Purpose | Caller |
 |---|---|---|
 | `buzz_in(p_game_code, p_team_id)` | Atomic buzzer lock | Browser via PostgREST |
 | `start_round(p_game_code, p_song_id)` | Begin a new round | FastAPI |
-| `award_points(p_game_code, p_round_id, p_title, p_artist, p_source, p_timeout)` | Evaluate and score | FastAPI |
+| `award_points(p_game_code, p_round_id, p_title, p_artist, p_wrong_buzz, p_timeout)` | Evaluate and score | FastAPI |
+| `award_bonus(p_game_code, p_team_id, p_points DEFAULT 4)` | Host-discretion bonus to a team | FastAPI |
 | `end_game(p_game_code)` | Mark game ended | FastAPI |
 | `cleanup_expired_games()` | TTL sweep | pg_cron |
 
