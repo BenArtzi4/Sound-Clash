@@ -188,27 +188,73 @@
       const next = currentTheme() === "dark" ? "light" : "dark";
       localStorage.setItem(STORAGE_KEY, next);
       applyTheme(next);
+      // Re-render diagrams against the new theme.
+      renderMermaid();
     });
   }
 
   // ---------- Mermaid ----------
-  function initMermaid() {
-    if (!document.querySelector(".mermaid")) return;
+  // Cache the resolved module + the original source of each diagram so we
+  // can re-render without re-fetching when the user toggles the theme.
+  let mermaidModule = null;
+  const mermaidSources = new WeakMap();
+
+  function captureMermaidSources() {
+    document.querySelectorAll(".mermaid").forEach((el) => {
+      if (!mermaidSources.has(el)) {
+        mermaidSources.set(el, el.textContent);
+      }
+    });
+  }
+
+  function isDarkTheme() {
+    const explicit = root.getAttribute("data-theme");
+    if (explicit === "dark") return true;
+    if (explicit === "light") return false;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  function renderMermaid() {
+    const nodes = document.querySelectorAll(".mermaid");
+    if (!nodes.length) return;
+    captureMermaidSources();
+
+    const run = (mermaid) => {
+      // Reset any previously-rendered SVG back to its original Mermaid source
+      // so mermaid.run() re-processes it under the current theme.
+      nodes.forEach((el) => {
+        el.removeAttribute("data-processed");
+        const src = mermaidSources.get(el);
+        if (src != null) el.textContent = src;
+      });
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isDarkTheme() ? "dark" : "default",
+        securityLevel: "antiscript",
+        flowchart: { htmlLabels: true, curve: "basis" },
+        sequence: { mirrorActors: false, showSequenceNumbers: true },
+      });
+      mermaid.run({ querySelector: ".mermaid" }).catch((err) => {
+        console.error("Mermaid render failed:", err);
+      });
+    };
+
+    if (mermaidModule) {
+      run(mermaidModule);
+      return;
+    }
     import("https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs")
       .then((mod) => {
-        const mermaid = mod.default;
-        mermaid.initialize({
-          startOnLoad: true,
-          theme: "default", // diagrams render on white background regardless of page theme
-          securityLevel: "loose",
-          flowchart: { htmlLabels: true, curve: "basis" },
-          sequence: { mirrorActors: false, showSequenceNumbers: true },
-        });
+        mermaidModule = mod.default;
+        run(mermaidModule);
       })
       .catch((err) => {
         console.error("Mermaid failed to load:", err);
       });
   }
+
+  // Keep the older name as a thin alias so the boot path reads the same.
+  const initMermaid = renderMermaid;
 
   // ---------- TOC active-link on scroll ----------
   function setupTOC() {
