@@ -451,9 +451,7 @@ describe("ManagerConsolePage", () => {
     const restart = screen.getAllByRole("button", { name: /^restart song$/i })[0]!;
     await waitFor(() => expect(restart).toBeEnabled());
     fireEvent.click(restart);
-    await waitFor(() =>
-      expect(selectSong).toHaveBeenLastCalledWith("ABCDEF", TOKEN, "song-A"),
-    );
+    await waitFor(() => expect(selectSong).toHaveBeenLastCalledWith("ABCDEF", TOKEN, "song-A"));
   });
 
   it("shows a clear toast when the song pool is exhausted", async () => {
@@ -477,7 +475,9 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(next).toBeEnabled());
     fireEvent.click(next);
     await waitFor(() =>
-      expect(screen.getByText(/all songs in your selected genres have been played/i)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/all songs in your selected genres have been played/i),
+      ).toBeInTheDocument(),
     );
   });
 });

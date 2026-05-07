@@ -84,7 +84,8 @@ async def test_two_genres_are_interleaved_across_picks(client, db) -> None:
     #    has exactly 1 transition; the expected value for a uniform random
     #    shuffle of 50/50 is ~50. The bound here is loose enough that random
     #    sampling never trips it but any per-genre batching does.
-    transitions = sum(1 for a, b in zip(sequence, sequence[1:], strict=True) if a != b)
+    # zip without strict — the two iterables differ in length by 1 by design.
+    transitions = sum(1 for a, b in zip(sequence[:-1], sequence[1:], strict=True) if a != b)
     assert transitions >= 15, (
         f"only {transitions} genre transitions across {TOTAL} picks — "
         "looks like the picker is batching by genre"

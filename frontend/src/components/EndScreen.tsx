@@ -246,12 +246,7 @@ export function EndScreen({ teams, gameCode }: Props) {
             )}
 
             {goldGroup ? (
-              <PodiumCard
-                teams={goldGroup}
-                place={1}
-                className={styles.gold}
-                startDelayMs={800}
-              />
+              <PodiumCard teams={goldGroup} place={1} className={styles.gold} startDelayMs={800} />
             ) : null}
 
             {bronzeGroup ? (
