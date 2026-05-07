@@ -8,7 +8,7 @@ from uuid import UUID
 import anyio
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
-from app.db.errors import NotFoundError, map_postgrest_error
+from app.db.errors import NotFoundError, mapped_postgrest_errors
 from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 from app.middleware.admin_auth import require_admin
 from app.middleware.rate_limit import limiter
@@ -85,10 +85,8 @@ def _create_song_blocking(client: SupabaseClientLike, body: SongCreate) -> dict[
         "is_soundtrack": body.is_soundtrack,
         "source": body.source,
     }
-    try:
+    with mapped_postgrest_errors():
         resp = client.table("songs").insert(payload).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     rows = resp.data or []
     if not rows:
         raise NotFoundError("song insert returned no row")
@@ -96,10 +94,8 @@ def _create_song_blocking(client: SupabaseClientLike, body: SongCreate) -> dict[
 
     joins = [{"song_id": song["id"], "genre_id": str(g)} for g in body.genre_ids]
     if joins:
-        try:
+        with mapped_postgrest_errors():
             client.table("song_genres").insert(joins).execute()
-        except Exception as exc:
-            raise map_postgrest_error(exc) from exc
     return song
 
 
@@ -115,20 +111,16 @@ def _update_song_blocking(
         "is_soundtrack": body.is_soundtrack,
         "source": body.source,
     }
-    try:
+    with mapped_postgrest_errors():
         resp = client.table("songs").update(payload).eq("id", song_id).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     rows = resp.data or []
     song = rows[0] if rows else _fetch_song_blocking(client, song_id)
 
     client.table("song_genres").delete().eq("song_id", song_id).execute()
     joins = [{"song_id": song_id, "genre_id": str(g)} for g in body.genre_ids]
     if joins:
-        try:
+        with mapped_postgrest_errors():
             client.table("song_genres").insert(joins).execute()
-        except Exception as exc:
-            raise map_postgrest_error(exc) from exc
     return song
 
 

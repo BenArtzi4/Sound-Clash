@@ -15,10 +15,9 @@ from fastapi import APIRouter, Depends, Request, status
 
 from app.db.errors import (
     ConflictError,
-    DomainError,
     GoneError,
     NotFoundError,
-    map_postgrest_error,
+    mapped_postgrest_errors,
 )
 from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 from app.middleware.manager_auth import require_manager_token
@@ -58,10 +57,8 @@ def _insert_game_blocking(
         "total_rounds": total_rounds,
         "selected_genres": genre_ids,
     }
-    try:
+    with mapped_postgrest_errors():
         resp = client.table("active_games").insert(payload).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     rows = resp.data or []
     if not rows:
         raise NotFoundError("game insert returned no row")
@@ -88,10 +85,8 @@ def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dic
     if game["status"] == "ended" or game.get("ended_at"):
         raise GoneError(f"game {code} has ended")
 
-    try:
+    with mapped_postgrest_errors():
         resp = client.table("game_teams").insert({"game_code": code, "name": name}).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     rows = resp.data or []
     if not rows:
         raise NotFoundError("team insert returned no row")
@@ -101,12 +96,10 @@ def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dic
 def _start_round_blocking(
     client: SupabaseClientLike, code: str, song: dict[str, Any]
 ) -> tuple[str, int]:
-    try:
+    with mapped_postgrest_errors():
         rpc_resp = client.rpc(
             "start_round", {"p_game_code": code, "p_song_id": song["id"]}
         ).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     round_id = rpc_resp.data
     if isinstance(round_id, list) and round_id:
         round_id = round_id[0]
@@ -130,7 +123,7 @@ def _award_blocking(
         timeout=body.timeout,
     )
 
-    try:
+    with mapped_postgrest_errors():
         rpc_resp = client.rpc(
             "award_points",
             {
@@ -142,8 +135,6 @@ def _award_blocking(
                 "p_timeout": timeout,
             },
         ).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     # PostgREST returns a TABLE-shaped function as a list of row-dicts (a
     # length-1 list here, since award_points always RETURN QUERY one row).
     # Some test mocks pass a bare dict, so accept both shapes.
@@ -160,7 +151,7 @@ def _bonus_blocking(
     code: str,
     body: AwardBonusRequest,
 ) -> dict[str, Any]:
-    try:
+    with mapped_postgrest_errors():
         rpc_resp = client.rpc(
             "award_bonus",
             {
@@ -169,8 +160,6 @@ def _bonus_blocking(
                 "p_points": body.points,
             },
         ).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     # award_bonus returns RETURNS integer: a single scalar new total.
     return {
         "team_id": str(body.team_id),
@@ -180,10 +169,8 @@ def _bonus_blocking(
 
 
 def _end_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:
-    try:
+    with mapped_postgrest_errors():
         client.rpc("end_game", {"p_game_code": code}).execute()
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
     return _fetch_game_blocking(client, code)
 
 
@@ -293,12 +280,8 @@ async def award_points(
     request: Request, game_code: str, body: AwardPointsRequest
 ) -> AwardPointsResponse:
     client = get_supabase_client()
-    try:
+    with mapped_postgrest_errors():
         result = await anyio.to_thread.run_sync(_award_blocking, client, game_code, body)
-    except DomainError:
-        raise
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
 
     return AwardPointsResponse(
         round_id=body.round_id,

@@ -5,35 +5,15 @@ import { Scoreboard } from "../components/Scoreboard";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { serverTimeNow } from "../hooks/useServerTime";
+import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
 import styles from "./TeamGameplayPage.module.css";
 
 const ROUND_DURATION_SEC = 20;
 
-interface StoredTeam {
-  id: string;
-  name: string;
-}
-
-function readStoredTeam(gameCode: string): StoredTeam | null {
-  try {
-    const raw = window.localStorage.getItem(`game:${gameCode}:team`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StoredTeam>;
-    if (!parsed.id || !parsed.name) return null;
-    return { id: parsed.id, name: parsed.name };
-  } catch {
-    return null;
-  }
-}
-
-function clearStoredTeam(gameCode: string): void {
-  window.localStorage.removeItem(`game:${gameCode}:team`);
-}
-
 export function TeamGameplayPage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
   const navigate = useNavigate();
-  const stored = useMemo(() => readStoredTeam(gameCode), [gameCode]);
+  const stored = useMemo(() => getStoredTeam(gameCode), [gameCode]);
   const [hydratedOnce, setHydratedOnce] = useState(false);
   const [now, setNow] = useState(() => serverTimeNow().getTime());
 
