@@ -258,9 +258,7 @@ export function ManagerConsolePage() {
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
   const nextRoundDisabled =
-    busy ||
-    !player.ready ||
-    (game.status === "playing" && game.round_number >= game.total_rounds);
+    busy || !player.ready || (game.status === "playing" && game.round_number >= game.total_rounds);
   const skipDisabled = busy || game.status !== "playing";
   const restartDisabled =
     busy || game.status !== "playing" || !currentSong || !player.ready || lockedTeam != null;
