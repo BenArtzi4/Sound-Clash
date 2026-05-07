@@ -3,73 +3,50 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sound Clash — External Services</title>
-<style>
-  :root {
-    --bg: #fafafa;
-    --fg: #1a1a1a;
-    --muted: #666;
-    --accent: #1a73e8;
-    --rule: #e5e5e5;
-    --code-bg: #f3f3f3;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #1a1a1a; --fg: #e8e8e8; --muted: #aaa; --rule: #333; --code-bg: #2a2a2a; }
-  }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem 4rem;
-    background: var(--bg);
-    color: var(--fg);
-    line-height: 1.55;
-  }
-  h1 { border-bottom: 1px solid var(--rule); padding-bottom: 0.4rem; }
-  h2 { margin-top: 2.4rem; }
-  blockquote {
-    border-left: 3px solid var(--accent);
-    padding: 0.4rem 1rem;
-    color: var(--muted);
-    background: var(--code-bg);
-    margin: 1.2rem 0;
-    border-radius: 0 4px 4px 0;
-  }
-  table { border-collapse: collapse; margin: 1rem 0; width: 100%; font-size: 0.95em; }
-  th, td { border: 1px solid var(--rule); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
-  th { background: var(--code-bg); }
-  td.center { text-align: center; }
-  code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
-  .mermaid {
-    background: #fff;
-    border: 1px solid var(--rule);
-    border-radius: 6px;
-    padding: 1rem;
-    overflow-x: auto;
-    margin: 1.5rem 0;
-  }
-  .nav { font-size: 0.9em; color: var(--muted); margin-bottom: 1rem; }
-  .nav a { color: inherit; }
-</style>
+<title>External Services — Sound Clash</title>
+<meta name="description" content="The third-party services Sound Clash depends on, and how they're glued together." />
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/script.js"></script>
 </head>
 <body>
 
-<div class="nav">
-  <a href="./README.md">← diagrams index</a> &middot;
-  <a href="../README.md">docs index</a>
-</div>
+<header class="topnav">
+  <div class="topnav-inner">
+    <a class="topnav-brand" href="../"><span class="dot"></span>Sound Clash <span class="muted small">docs</span></a>
+    <nav class="topnav-crumbs">
+      <a href="../">Docs</a><span class="sep">/</span>
+      <a href="./README.md">Diagrams</a><span class="sep">/</span>
+      <span>External services</span>
+    </nav>
+    <div class="topnav-links">
+      <a href="./internal.html">
+        <span class="label">← Internal</span>
+      </a>
+      <a href="https://github.com/BenArtzi4/Sound-Clash" target="_blank" rel="noopener">
+        <span class="label">GitHub</span>
+        <svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
+      </a>
+      <button id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg class="icon icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>
+        <svg class="icon icon-sun" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6m0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
 
-<h1>External Services</h1>
+<div class="layout-with-toc">
+  <main>
+    <h1>External services</h1>
+    <p class="lead">The third-party services Sound Clash depends on, and how they're glued together. <a href="./internal.html">Internal architecture</a> covers what's <em>inside</em> the game.</p>
 
-<p>The third-party services Sound Clash depends on, and how they're glued together. Internal architecture (browser ↔ FastAPI ↔ Postgres) lives in <a href="./internal.html">internal.html</a>; this file covers everything <em>around</em> the running game: hosting, CI/CD, error tracking, dependency bots, DNS.</p>
+    <blockquote>
+      <strong>Total recurring cost:</strong> $12/yr for the domain. Everything else is on a free tier. See <code>tech-stack.md</code> for the full quota table and <code>free-tier-budget.md</code> for capacity analysis.
+    </blockquote>
 
-<blockquote>
-  <strong>Total recurring cost</strong>: $12/yr for the domain. Everything else is on a free tier. See <code>tech-stack.md</code> for the full quota table and <code>free-tier-budget.md</code> for capacity analysis.
-</blockquote>
+    <h2 id="service-map">Service map</h2>
 
-<h2>Service map</h2>
-
-<pre class="mermaid">
+    <div class="diagram">
+      <pre class="mermaid">
 flowchart LR
     User((Player /<br/>Host /<br/>Display))
     YT[YouTube IFrame<br/>Player API]
@@ -134,34 +111,45 @@ flowchart LR
     class Namecheap paid
     class Pages,Render,SupaProd,SupaPreview,Sentry,CronJob,YT free
     class GH,Actions,CodeQL,Dependabot,Codecov ci
-</pre>
+      </pre>
+    </div>
 
-<p><strong>Legend</strong>: red = paid (just the domain), green = free-tier services in the request path, blue = developer/CI infrastructure that doesn't sit on the request path.</p>
+    <div class="legend">
+      <p class="legend-title">Legend</p>
+      <ul>
+        <li><strong>Red</strong> — paid (just the domain)</li>
+        <li><strong>Green</strong> — free-tier services in the request path</li>
+        <li><strong>Blue</strong> — developer / CI infrastructure that doesn't sit on the request path</li>
+      </ul>
+    </div>
 
-<h2>Service inventory</h2>
+    <h2 id="inventory">Service inventory</h2>
 
-<table>
-<thead><tr><th>Service</th><th>Used for</th><th>Plan</th><th>Auth surface</th></tr></thead>
-<tbody>
-<tr><td><strong>Namecheap</strong></td><td>Domain registration of <code>soundclash.org</code></td><td>$12/yr</td><td>Account login</td></tr>
-<tr><td><strong>Cloudflare DNS</strong></td><td>Authoritative DNS, apex redirect, CNAME for <code>api.soundclash.org</code></td><td>Free</td><td>API token (<code>CF_API_TOKEN</code>)</td></tr>
-<tr><td><strong>Cloudflare Pages</strong></td><td>Static hosting of the React SPA at <code>www.soundclash.org</code></td><td>Free (unlimited bandwidth, 500 builds/mo)</td><td>API token + account ID</td></tr>
-<tr><td><strong>Render</strong></td><td>FastAPI Docker service at <code>api.soundclash.org</code></td><td>Free (750 hr/mo, 512 MB, 15-min idle sleep)</td><td>Deploy webhook (<code>RENDER_DEPLOY_HOOK</code>)</td></tr>
-<tr><td><strong>Supabase (prod)</strong></td><td>Postgres + Realtime + PostgREST</td><td>Free (500 MB DB, 200 concurrent peers, 2M msgs/mo)</td><td>anon key (browser), service-role key (server)</td></tr>
-<tr><td><strong>Supabase (preview)</strong></td><td>Isolated project for Playwright E2E</td><td>Free</td><td>Separate anon + service-role secrets</td></tr>
-<tr><td><strong>GitHub Actions</strong></td><td>CI/CD for all four workflows</td><td>Free for public repos</td><td><code>GITHUB_TOKEN</code> per run</td></tr>
-<tr><td><strong>CodeQL</strong></td><td>Security static analysis</td><td>Free for public repos (Default Setup)</td><td>none (runs as a check)</td></tr>
-<tr><td><strong>Dependabot</strong></td><td>Weekly dependency PRs</td><td>Free</td><td>none (built into GitHub)</td></tr>
-<tr><td><strong>Codecov</strong></td><td>Coverage delta comments + badge</td><td>Free for public repos</td><td><code>CODECOV_TOKEN</code> upload secret</td></tr>
-<tr><td><strong>Sentry</strong></td><td>Error tracking (<code>sound-clash-frontend</code> + <code>sound-clash-backend</code>)</td><td>Free (5k errors/mo, 10k perf events)</td><td>DSN per project</td></tr>
-<tr><td><strong>cron-job.org</strong></td><td>Pings <code>/health</code> every 14 min so Render doesn't sleep</td><td>Free</td><td>Account login</td></tr>
-<tr><td><strong>YouTube IFrame Player API</strong></td><td>Audio playback (browser-direct)</td><td>Free, terms apply</td><td>none (public CDN)</td></tr>
-</tbody>
-</table>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Service</th><th>Used for</th><th>Plan</th><th>Auth surface</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Namecheap</strong></td><td>Domain registration of <code>soundclash.org</code></td><td>$12/yr</td><td>Account login</td></tr>
+          <tr><td><strong>Cloudflare DNS</strong></td><td>Authoritative DNS, apex redirect, CNAME for <code>api.soundclash.org</code></td><td>Free</td><td>API token</td></tr>
+          <tr><td><strong>Cloudflare Pages</strong></td><td>Static hosting of the React SPA at <code>www.soundclash.org</code></td><td>Free (unlimited bandwidth, 500 builds/mo)</td><td>API token + account ID</td></tr>
+          <tr><td><strong>Render</strong></td><td>FastAPI Docker service at <code>api.soundclash.org</code></td><td>Free (750 hr/mo, 512 MB, 15-min idle sleep)</td><td>Deploy webhook</td></tr>
+          <tr><td><strong>Supabase (prod)</strong></td><td>Postgres + Realtime + PostgREST</td><td>Free (500 MB DB, 200 concurrent peers, 2M msgs/mo)</td><td>anon key (browser), service-role key (server)</td></tr>
+          <tr><td><strong>Supabase (preview)</strong></td><td>Isolated project for Playwright E2E</td><td>Free</td><td>Separate anon + service-role secrets</td></tr>
+          <tr><td><strong>GitHub Actions</strong></td><td>CI/CD for all four workflows</td><td>Free for public repos</td><td><code>GITHUB_TOKEN</code> per run</td></tr>
+          <tr><td><strong>CodeQL</strong></td><td>Security static analysis</td><td>Free (Default Setup)</td><td>none (runs as a check)</td></tr>
+          <tr><td><strong>Dependabot</strong></td><td>Weekly dependency PRs</td><td>Free</td><td>none (built into GitHub)</td></tr>
+          <tr><td><strong>Codecov</strong></td><td>Coverage delta comments + badge</td><td>Free for public repos</td><td><code>CODECOV_TOKEN</code> upload secret</td></tr>
+          <tr><td><strong>Sentry</strong></td><td>Error tracking (frontend + backend)</td><td>Free (5k errors/mo, 10k perf events)</td><td>DSN per project</td></tr>
+          <tr><td><strong>cron-job.org</strong></td><td>Pings <code>/health</code> every 14 min so Render doesn't sleep</td><td>Free</td><td>Account login</td></tr>
+          <tr><td><strong>YouTube IFrame Player</strong></td><td>Audio playback (browser-direct)</td><td>Free, terms apply</td><td>none</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-<h2>Deploy flow: what happens on <code>git push main</code></h2>
+    <h2 id="deploy-flow">Deploy flow: <code>git push main</code></h2>
 
-<pre class="mermaid">
+    <div class="diagram">
+      <pre class="mermaid">
 sequenceDiagram
     autonumber
     participant Dev as Developer
@@ -200,45 +188,60 @@ sequenceDiagram
     end
 
     Note over CI: e2e.yml only runs on main pushes,<br/>or PRs labeled `run-e2e`.<br/>db-migrate.yml is manual-dispatch only<br/>(never auto-applied).
-</pre>
+      </pre>
+    </div>
 
-<h2>What goes into which secret store</h2>
+    <h2 id="secrets">Secret-store matrix</h2>
+    <p>Every credential lives in <strong>exactly one</strong> of these places (no duplication, no committed <code>.env</code>):</p>
 
-<p>Every credential lives in <strong>exactly one</strong> of these places (no duplication, no committed <code>.env</code>):</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Secret</th><th class="center">GitHub Actions</th><th class="center">Render env</th><th class="center">Cloudflare Pages env</th><th class="center">Local <code>.env</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>SUPABASE_URL</code></td><td class="center">✅</td><td class="center">✅</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
+          <tr><td><code>SUPABASE_ANON_KEY</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
+          <tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td class="center">✅</td><td class="center">✅</td><td class="center"><strong>never</strong></td><td class="center">✅ (dev)</td></tr>
+          <tr><td><code>SUPABASE_PREVIEW_*</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+          <tr><td><code>ADMIN_PASSWORD</code></td><td class="center">✅ (preview)</td><td class="center">✅</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
+          <tr><td><code>RENDER_DEPLOY_HOOK</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+          <tr><td><code>CF_API_TOKEN</code> / <code>CF_ACCOUNT_ID</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+          <tr><td><code>SENTRY_DSN_BACKEND</code></td><td class="center">–</td><td class="center">✅</td><td class="center">–</td><td class="center">optional</td></tr>
+          <tr><td><code>SENTRY_DSN_FRONTEND</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">optional</td></tr>
+          <tr><td><code>CODECOV_TOKEN</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
+          <tr><td><code>VITE_SUPABASE_URL</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
+          <tr><td><code>VITE_SUPABASE_ANON_KEY</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
+          <tr><td><code>VITE_API_URL</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-<table>
-<thead><tr><th>Secret</th><th>GitHub Actions</th><th>Render env</th><th>Cloudflare Pages env</th><th>Local <code>.env</code></th></tr></thead>
-<tbody>
-<tr><td><code>SUPABASE_URL</code></td><td class="center">✅</td><td class="center">✅</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
-<tr><td><code>SUPABASE_ANON_KEY</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
-<tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td class="center">✅</td><td class="center">✅</td><td class="center"><strong>never</strong></td><td class="center">✅ (dev)</td></tr>
-<tr><td><code>SUPABASE_PREVIEW_*</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
-<tr><td><code>ADMIN_PASSWORD</code></td><td class="center">✅ (preview)</td><td class="center">✅</td><td class="center">–</td><td class="center">✅ (dev)</td></tr>
-<tr><td><code>RENDER_DEPLOY_HOOK</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
-<tr><td><code>CF_API_TOKEN</code> / <code>CF_ACCOUNT_ID</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
-<tr><td><code>SENTRY_DSN_BACKEND</code></td><td class="center">–</td><td class="center">✅</td><td class="center">–</td><td class="center">optional</td></tr>
-<tr><td><code>SENTRY_DSN_FRONTEND</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">optional</td></tr>
-<tr><td><code>CODECOV_TOKEN</code></td><td class="center">✅</td><td class="center">–</td><td class="center">–</td><td class="center">–</td></tr>
-<tr><td><code>VITE_SUPABASE_URL</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
-<tr><td><code>VITE_SUPABASE_ANON_KEY</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
-<tr><td><code>VITE_API_URL</code></td><td class="center">–</td><td class="center">–</td><td class="center">✅</td><td class="center">✅ (dev)</td></tr>
-</tbody>
-</table>
+    <p class="muted small">The full secret rotation procedure is in <code>runbook.md</code> §3.</p>
 
-<p>The full secret rotation procedure is in <code>runbook.md</code> §3.</p>
+    <h2 id="not-here">What is <em>not</em> in this diagram</h2>
+    <ul>
+      <li><strong>AWS</strong> — torn down 2026-05-07. The legacy stack lives in <code>Sound-Clash-legacy</code> for reference only; nothing in the new system depends on AWS resources.</li>
+      <li><strong>CDN for YouTube</strong> — YouTube IFrame Player loads its own JS from <code>youtube.com</code>; there's no separate CDN dependency we manage.</li>
+      <li><strong>Email</strong> — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.</li>
+    </ul>
 
-<h2>What is <em>not</em> in this diagram</h2>
+    <footer class="footer">
+      <span>Previous: <a href="./internal.html">← Internal architecture</a></span>
+      <span><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/diagrams/external.md">View Markdown source</a></span>
+    </footer>
 
-<ul>
-  <li><strong>AWS</strong> — torn down 2026-05-07. The legacy stack lives in <code>Sound-Clash-legacy</code> for reference only; nothing in the new system depends on AWS resources.</li>
-  <li><strong>CDN for YouTube</strong> — YouTube IFrame Player loads its own JS from <code>youtube.com</code>; there's no separate CDN dependency we manage.</li>
-  <li><strong>Email</strong> — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.</li>
-</ul>
+  </main>
 
-<script type="module">
-  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
-  mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });
-</script>
+  <aside class="toc">
+    <p class="toc-title">On this page</p>
+    <ul>
+      <li><a href="#service-map">Service map</a></li>
+      <li><a href="#inventory">Service inventory</a></li>
+      <li><a href="#deploy-flow">Deploy flow</a></li>
+      <li><a href="#secrets">Secret-store matrix</a></li>
+      <li><a href="#not-here">What's not here</a></li>
+    </ul>
+  </aside>
+</div>
 
 </body>
 </html>

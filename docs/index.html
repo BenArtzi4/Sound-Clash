@@ -4,102 +4,121 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Sound Clash — Documentation</title>
-<style>
-  :root {
-    --bg: #fafafa;
-    --fg: #1a1a1a;
-    --muted: #666;
-    --accent: #cc6600;
-    --rule: #e5e5e5;
-    --code-bg: #f3f3f3;
-    --link: #1a73e8;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #1a1a1a; --fg: #e8e8e8; --muted: #aaa; --rule: #333; --code-bg: #2a2a2a; --link: #8ab4f8; }
-  }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 2.5rem 1.5rem 4rem;
-    background: var(--bg);
-    color: var(--fg);
-    line-height: 1.6;
-  }
-  h1 { border-bottom: 1px solid var(--rule); padding-bottom: 0.5rem; margin-top: 0; }
-  h2 { margin-top: 2.4rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.3rem; }
-  a { color: var(--link); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
-  ul { padding-left: 1.4rem; }
-  li { margin: 0.45rem 0; }
-  .muted { color: var(--muted); font-size: 0.92em; }
-  .lead { font-size: 1.05em; }
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
-    margin: 1.2rem 0 0;
-  }
-  .card {
-    border: 1px solid var(--rule);
-    border-radius: 6px;
-    padding: 1rem 1.2rem;
-    background: var(--code-bg);
-  }
-  .card h3 { margin: 0 0 0.4rem; font-size: 1.05em; }
-  .card p { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.92em; }
-  .card a.title { color: var(--fg); }
-  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.9em; }
-</style>
+<meta name="description" content="Documentation and architecture diagrams for Sound Clash, a real-time multiplayer music-trivia buzzer game." />
+<link rel="stylesheet" href="assets/style.css" />
+<script defer src="assets/script.js"></script>
 </head>
 <body>
 
-<h1>Sound Clash — Documentation</h1>
-
-<p class="lead">Real-time multiplayer music-trivia buzzer game. Play it at <a href="https://soundclash.org">soundclash.org</a>.</p>
-<p class="muted">This site hosts the rendered architecture diagrams. The full text documentation lives in the <a href="https://github.com/BenArtzi4/Sound-Clash/tree/main/docs"><code>docs/</code> folder on GitHub</a>, where Markdown renders inline.</p>
-
-<h2>Diagrams</h2>
-
-<div class="card-grid">
-  <div class="card">
-    <h3><a class="title" href="diagrams/internal.html">Internal architecture →</a></h3>
-    <p>What lives inside the running game: browser ↔ FastAPI ↔ Supabase. Component map, buzz-race sequence diagram, auth surface table.</p>
+<header class="topnav">
+  <div class="topnav-inner">
+    <a class="topnav-brand" href="./"><span class="dot"></span>Sound Clash <span class="muted small">docs</span></a>
+    <nav class="topnav-crumbs"></nav>
+    <div class="topnav-links">
+      <a href="https://soundclash.org" target="_blank" rel="noopener">
+        <span class="label">Live game</span>
+        <svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3.5 2A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V8a.5.5 0 0 0-1 0v4.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5H8a.5.5 0 0 0 0-1z"/><path d="M9.146.146A.5.5 0 0 1 9.5 0h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0V1.707L6.354 9.354a.5.5 0 1 1-.708-.708L13.293 1H9.5a.5.5 0 0 1-.354-.854"/></svg>
+      </a>
+      <a href="https://github.com/BenArtzi4/Sound-Clash" target="_blank" rel="noopener">
+        <span class="label">GitHub</span>
+        <svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
+      </a>
+      <button id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg class="icon icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>
+        <svg class="icon icon-sun" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6m0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>
+      </button>
+    </div>
   </div>
-  <div class="card">
-    <h3><a class="title" href="diagrams/external.html">External services →</a></h3>
-    <p>The third-party services around the game: Cloudflare, Render, Supabase, Sentry, GitHub Actions, CodeQL, Dependabot, Codecov. Service map, deploy sequence, secret-store matrix.</p>
+</header>
+
+<div class="container">
+
+  <section class="hero">
+    <h1>Sound Clash <span class="muted">documentation</span></h1>
+    <p class="lead">Real-time multiplayer music-trivia buzzer game. The buzzer is a Postgres function called directly from the browser — that's how a sub-200ms hot path coexists with free-tier hosting.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="diagrams/internal.html">View architecture diagrams →</a>
+      <a class="btn btn-secondary" href="https://soundclash.org" target="_blank" rel="noopener">Play the game</a>
+    </div>
+  </section>
+
+  <h2 id="diagrams">Diagrams</h2>
+  <p class="muted">Two visual maps of the system. Click through to see the rendered flowcharts and sequence diagrams.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <span class="card-tag">Inside the game</span>
+      <h3><a href="diagrams/internal.html">Internal architecture <span class="card-arrow">→</span></a></h3>
+      <p>How the React frontend, FastAPI backend, and Supabase Postgres talk to each other. Component map, buzz-race sequence, auth surface table.</p>
+    </div>
+    <div class="card">
+      <span class="card-tag">Outside the game</span>
+      <h3><a href="diagrams/external.html">External services <span class="card-arrow">→</span></a></h3>
+      <p>The third-party services that surround the running game: Cloudflare, Render, Supabase, Sentry, GitHub Actions, CodeQL, Dependabot, Codecov.</p>
+    </div>
   </div>
-</div>
 
-<h2>Text documentation</h2>
+  <h2 id="docs">Text documentation</h2>
+  <p class="muted">All written documentation lives as Markdown in <a href="https://github.com/BenArtzi4/Sound-Clash/tree/main/docs"><code>docs/</code> on GitHub</a>, where it renders inline. Pick a reading path:</p>
 
-<p class="muted">These render as Markdown on GitHub. Start with <code>architecture.md</code> for the executive overview.</p>
+  <details open>
+    <summary>I'm reviewing the design</summary>
+    <ul>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/architecture.md">architecture.md</a> — executive overview</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/realtime-design.md">realtime-design.md</a> — central design decision: no Python in the buzzer path</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/security-rls.md">security-rls.md</a> — auth model, RLS, threat model</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/free-tier-budget.md">free-tier-budget.md</a> — sanity-check capacity claims</li>
+    </ul>
+  </details>
 
-<h3>Read in this order</h3>
-<ul>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/architecture.md">architecture.md</a> — executive summary; one-page overview</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/realtime-design.md">realtime-design.md</a> — the central design decision: why no Python in the buzzer path</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tech-stack.md">tech-stack.md</a> — concrete services with free-tier limits</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/game-rules.md">game-rules.md</a> — gameplay flow, state machine, scoring</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/data-model.md">data-model.md</a> — schema, indexes, ER diagram</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/rpc-functions.md">rpc-functions.md</a> — the six PL/pgSQL functions</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/security-rls.md">security-rls.md</a> — auth, RLS, threat model, CSP</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/api-contracts.md">api-contracts.md</a> — REST + Realtime wire format</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/testing-strategy.md">testing-strategy.md</a> — test types, coverage gates</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/free-tier-budget.md">free-tier-budget.md</a> — quota analysis</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/local-development.md">local-development.md</a> — dev setup + Windows notes</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/runbook.md">runbook.md</a> — day-2+ operations</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/roadmap.md">roadmap.md</a> — phase boundaries and exit criteria</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tooling.md">tooling.md</a> — CI/CD, bots, monitoring (workflows, CodeQL, Dependabot, Codecov, …)</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tasks.md">tasks.md</a> — granular checkboxed task list</li>
-  <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/aws-teardown-checklist.md">aws-teardown-checklist.md</a> — Phase 7 cutover script (historical)</li>
-</ul>
+  <details>
+    <summary>I'm about to start implementing</summary>
+    <ul>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/architecture.md">architecture.md</a></li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/roadmap.md">roadmap.md</a> — phase boundaries and exit criteria</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/local-development.md">local-development.md</a> — dev setup + Windows notes</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tasks.md">tasks.md</a> — granular task list</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/rpc-functions.md">rpc-functions.md</a>, <a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/api-contracts.md">api-contracts.md</a></li>
+    </ul>
+  </details>
 
-<div class="footer">
-  Source: <a href="https://github.com/BenArtzi4/Sound-Clash">github.com/BenArtzi4/Sound-Clash</a> &middot;
-  Live game: <a href="https://soundclash.org">soundclash.org</a>
+  <details>
+    <summary>I need to operate it in production</summary>
+    <ul>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/runbook.md">runbook.md</a> — day-2 operations</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tooling.md">tooling.md</a> — every tool that touches the repo</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/free-tier-budget.md">free-tier-budget.md</a> — alert thresholds</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/security-rls.md">security-rls.md</a> §3 (secrets), §10 (auth failures)</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>Full file index</summary>
+    <ul>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/architecture.md">architecture.md</a> — executive overview</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/realtime-design.md">realtime-design.md</a> — buzzer hot path</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tech-stack.md">tech-stack.md</a> — services + free-tier limits</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/game-rules.md">game-rules.md</a> — gameplay flow</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/data-model.md">data-model.md</a> — schema + indexes</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/rpc-functions.md">rpc-functions.md</a> — the six PL/pgSQL functions</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/security-rls.md">security-rls.md</a> — auth + RLS</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/api-contracts.md">api-contracts.md</a> — REST + Realtime contracts</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/testing-strategy.md">testing-strategy.md</a> — test types + CI gates</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/free-tier-budget.md">free-tier-budget.md</a> — quota analysis</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/local-development.md">local-development.md</a> — dev setup</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/runbook.md">runbook.md</a> — operational procedures</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/roadmap.md">roadmap.md</a> — phases</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tooling.md">tooling.md</a> — dev/CI tooling reference</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/tasks.md">tasks.md</a> — granular checkboxed tasks</li>
+      <li><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/aws-teardown-checklist.md">aws-teardown-checklist.md</a> — Phase 7 cutover (historical)</li>
+    </ul>
+  </details>
+
+  <footer class="footer">
+    <span>Sound Clash — free-tier multiplayer music trivia</span>
+    <span><a href="https://github.com/BenArtzi4/Sound-Clash">github.com/BenArtzi4/Sound-Clash</a></span>
+  </footer>
+
 </div>
 
 </body>
