@@ -168,15 +168,11 @@ def _bonus_blocking(
         ).execute()
     except Exception as exc:
         raise map_postgrest_error(exc) from exc
-    new_total = rpc_resp.data
-    if isinstance(new_total, list):
-        if not new_total:
-            raise NotFoundError("award_bonus returned no row")
-        new_total = new_total[0]
+    # award_bonus returns RETURNS integer — a single scalar new total.
     return {
         "team_id": str(body.team_id),
         "points_awarded": body.points,
-        "team_total_score": int(new_total or 0),
+        "team_total_score": int(rpc_resp.data or 0),
     }
 
 
@@ -319,13 +315,9 @@ async def award_bonus(
     request: Request, game_code: str, body: AwardBonusRequest
 ) -> AwardBonusResponse:
     client = get_supabase_client()
-    try:
-        result = await anyio.to_thread.run_sync(_bonus_blocking, client, game_code, body)
-    except DomainError:
-        raise
-    except Exception as exc:
-        raise map_postgrest_error(exc) from exc
-
+    # _bonus_blocking already maps every Postgres/RPC exception via
+    # map_postgrest_error, so any error reaching here is already a DomainError.
+    result = await anyio.to_thread.run_sync(_bonus_blocking, client, game_code, body)
     return AwardBonusResponse.model_validate(result)
 
 

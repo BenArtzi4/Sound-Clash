@@ -74,7 +74,8 @@ async def test_bonus_rejects_zero_points(client, db) -> None:
         json={"team_id": str(team_id), "points": 0},
         headers=manager_headers(token),
     )
-    assert resp.status_code == 422  # pydantic ge=1
+    assert resp.status_code == 400  # request_validation_error_handler maps to 400
+    assert resp.json()["error"] == "validation_error"
 
 
 async def test_bonus_team_must_be_in_game(client, db) -> None:
