@@ -10,7 +10,6 @@ import { openManagerAndCreateGame } from "./fixtures/manager-context";
 
 test("team identity survives a mid-game tab reload", async ({ browser }) => {
   const manager = await openManagerAndCreateGame(browser, {
-    totalRounds: 1,
     genreName: "Rock",
   });
   const code = manager.gameCode;

@@ -26,7 +26,6 @@ async def create_test_game(
     conn: asyncpg.Connection,
     *,
     status: GameStatus = "playing",
-    total_rounds: int = 5,
     expires_in_hours: int = 4,
     game_code: str | None = None,
 ) -> str:
@@ -34,12 +33,11 @@ async def create_test_game(
     code = game_code or generate_game_code()
     await conn.execute(
         """
-        INSERT INTO active_games (game_code, status, total_rounds, expires_at)
-        VALUES ($1, $2, $3, now() + ($4 || ' hours')::interval)
+        INSERT INTO active_games (game_code, status, expires_at)
+        VALUES ($1, $2, now() + ($3 || ' hours')::interval)
         """,
         code,
         status,
-        total_rounds,
         str(expires_in_hours),
     )
     return code

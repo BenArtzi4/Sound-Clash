@@ -20,7 +20,6 @@ export interface ManagerSession {
 }
 
 interface CreateOpts {
-  totalRounds: number;
   // Display name as it appears in the UI (e.g. "Rock", "Pop"), matched
   // case-insensitively.
   genreName: string;
@@ -42,30 +41,18 @@ export async function openManagerAndCreateGame(
   const genreLabel = page.getByLabel(new RegExp(`^${opts.genreName}$`, "i"));
   await expect(genreLabel).toBeVisible({ timeout: 10_000 });
 
-  // 3. Set the rounds slider. Range inputs need the React-friendly value
-  //    setter so the controlled component picks the change up.
-  await page.getByTestId("rounds-slider").evaluate((el, val) => {
-    const input = el as HTMLInputElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      "value",
-    )?.set;
-    setter?.call(input, String(val));
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  }, opts.totalRounds);
-
-  // 4. Pick a genre and submit.
+  // 3. Pick a genre and submit.
   await genreLabel.check();
   await page.getByRole("button", { name: /create game/i }).click();
 
-  // 5. App navigates to /manager/game/<code> client-side. Read the code
+  // 4. App navigates to /manager/game/<code> client-side. Read the code
   //    out of the URL.
   await page.waitForURL(/\/manager\/game\/[A-Z2-9]{6}$/, { timeout: 15_000 });
   const match = page.url().match(/\/manager\/game\/([A-Z2-9]{6})$/);
   if (!match) throw new Error(`failed to read game code from URL: ${page.url()}`);
   const gameCode = match[1]!;
 
-  // 6. Read the manager token the create-game flow stored in localStorage.
+  // 5. Read the manager token the create-game flow stored in localStorage.
   const managerToken = await page.evaluate(
     (code) => window.localStorage.getItem(`game:${code}:manager-token`),
     gameCode,
@@ -74,7 +61,7 @@ export async function openManagerAndCreateGame(
     throw new Error(`manager token missing in localStorage for ${gameCode}`);
   }
 
-  // 7. Wait for the YouTube player wrapper to flip to ready so the Start
+  // 6. Wait for the YouTube player wrapper to flip to ready so the Start
   //    button enables.
   await expect(page.getByTestId("youtube-player")).toHaveAttribute("data-ready", "true", {
     timeout: 20_000,

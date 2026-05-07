@@ -42,8 +42,7 @@ The manager and display are typically separate physical screens (laptop + TV). T
 |---|---|---|---|
 | (none) | `POST /games` | `waiting` | Manager (admin auth) |
 | `waiting` | manager starts game | `playing` (round 1 active) | Manager (admin auth) |
-| `playing` | round complete + rounds remaining | `playing` (next round) | Manager (admin auth) |
-| `playing` | round complete + last round | `ended` | Manager (admin auth) |
+| `playing` | round complete | `playing` (next round) | Manager (admin auth) |
 | `playing` | manager presses "End game" | `ended` | Manager (admin auth) |
 | any | `expires_at < now()` | (deleted) | `pg_cron` |
 

@@ -101,7 +101,6 @@ export function joinTeam(gameCode: string, name: string): Promise<Team> {
 }
 
 export function createGame(body: {
-  total_rounds: number;
   selected_genres: string[];
 }): Promise<CreateGameResponse> {
   return request("POST", "/games", { body });

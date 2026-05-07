@@ -64,7 +64,6 @@ CREATE TABLE active_games (
   game_code         text PRIMARY KEY,
   status            text NOT NULL DEFAULT 'waiting'
                      CHECK (status IN ('waiting','playing','ended')),
-  total_rounds      integer NOT NULL,
   selected_genres   uuid[] NOT NULL DEFAULT '{}',
   round_number      integer NOT NULL DEFAULT 0,
   current_song_id   uuid REFERENCES songs(id) ON DELETE SET NULL,

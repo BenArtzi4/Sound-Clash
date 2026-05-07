@@ -19,7 +19,6 @@ TeamName = Annotated[
 class CreateGameRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    total_rounds: int = Field(default=10, ge=1, le=50)
     selected_genres: list[UUID] = Field(min_length=1)
 
 
@@ -28,7 +27,6 @@ class CreateGameResponse(BaseModel):
 
     game_code: str
     status: str
-    total_rounds: int
     selected_genres: list[UUID]
     started_at: datetime
     expires_at: datetime

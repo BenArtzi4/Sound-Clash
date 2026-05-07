@@ -19,7 +19,6 @@ export interface Genre {
 interface CreateGameResponse {
   game_code: string;
   status: string;
-  total_rounds: number;
   selected_genres: string[];
   started_at: string;
   expires_at: string;
@@ -100,7 +99,6 @@ export async function listGenres(): Promise<Genre[]> {
 }
 
 export async function createGame(opts: {
-  totalRounds: number;
   genreSlugs: string[];
 }): Promise<CreateGameResponse> {
   const all = await listGenres();
@@ -110,7 +108,6 @@ export async function createGame(opts: {
     return match.id;
   });
   return adminPost<CreateGameResponse>("/games", {
-    total_rounds: opts.totalRounds,
     selected_genres: wanted,
   });
 }

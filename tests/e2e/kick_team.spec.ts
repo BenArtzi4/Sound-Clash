@@ -19,7 +19,6 @@ async function openDisplay(browser: Browser, code: string) {
 
 test("manager kicks a team; that team's tab redirects, other team stays", async ({ browser }) => {
   const manager = await openManagerAndCreateGame(browser, {
-    totalRounds: 1,
     genreName: "Rock",
   });
   const code = manager.gameCode;

@@ -95,11 +95,11 @@ POP_ID=$(jq -r '.[] | select(.slug == "pop") | .id' <<<"$GENRES")
 # 3. create game
 # ---------------------------------------------------------------------------
 
-log "2/6 POST /games (total_rounds=1, genres=rock+pop)"
+log "2/6 POST /games (genres=rock+pop)"
 CREATE_BODY=$(jq -n \
   --arg rock "$ROCK_ID" \
   --arg pop "$POP_ID" \
-  '{total_rounds: 1, selected_genres: [$rock, $pop]}')
+  '{selected_genres: [$rock, $pop]}')
 
 CREATE=$(http POST /games --data "$CREATE_BODY")
 GAME_CODE=$(jq -r '.game_code // empty' <<<"$CREATE")

@@ -66,7 +66,6 @@ describe("ManagerCreateGamePage", () => {
     vi.mocked(createGame).mockResolvedValueOnce({
       game_code: "ZZZZZZ",
       status: "waiting",
-      total_rounds: 10,
       selected_genres: ["g1"],
       started_at: "2026-05-05T12:00:00Z",
       expires_at: "2026-05-05T16:00:00Z",
@@ -78,7 +77,6 @@ describe("ManagerCreateGamePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create game/i }));
     await waitFor(() => expect(screen.getByText("game console")).toBeInTheDocument());
     expect(createGame).toHaveBeenCalledWith({
-      total_rounds: 10,
       selected_genres: ["g1"],
     });
     expect(getManagerToken("ZZZZZZ")).toBe("abc-token-123");

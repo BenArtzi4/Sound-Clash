@@ -61,7 +61,7 @@ async def test_create_game_returns_token_that_authorizes(client, db) -> None:
     genres = await fetch_genre_ids(db, slugs=["rock"])
     create = await client.post(
         "/games",
-        json={"total_rounds": 3, "selected_genres": [str(genres[0])]},
+        json={"selected_genres": [str(genres[0])]},
     )
     assert create.status_code == 201
     body = create.json()

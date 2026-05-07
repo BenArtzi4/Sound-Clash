@@ -13,7 +13,6 @@ export function ManagerCreateGamePage() {
 
   const [genres, setGenres] = useState<Genre[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [totalRounds, setTotalRounds] = useState(10);
   const [busy, setBusy] = useState(false);
   const [genresLoading, setGenresLoading] = useState(true);
 
@@ -50,7 +49,6 @@ export function ManagerCreateGamePage() {
     setBusy(true);
     try {
       const game = await createGame({
-        total_rounds: totalRounds,
         selected_genres: Array.from(selected),
       });
       setManagerToken(game.game_code, game.manager_token);
@@ -67,26 +65,10 @@ export function ManagerCreateGamePage() {
     <main className={styles.shell}>
       <header>
         <h1>Host a game</h1>
-        <p className="muted">Pick at least one genre and the round count.</p>
+        <p className="muted">Pick at least one genre to start.</p>
       </header>
 
       <form className="stack" onSubmit={handleSubmit}>
-        <div className={styles.field}>
-          <span className={styles.label}>Rounds</span>
-          <div className={styles.rounds}>
-            <input
-              type="range"
-              min={1}
-              max={50}
-              value={totalRounds}
-              onChange={(e) => setTotalRounds(Number(e.target.value))}
-              aria-label="Rounds"
-              data-testid="rounds-slider"
-            />
-            <span className={styles.roundsValue}>{totalRounds}</span>
-          </div>
-        </div>
-
         <div className={styles.field}>
           <span className={styles.label}>
             Genres <span className="muted">({selected.size} selected)</span>

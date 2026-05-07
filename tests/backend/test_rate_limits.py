@@ -11,7 +11,7 @@ pytestmark = pytest.mark.needs_docker
 
 async def test_create_game_limit_10_per_minute(client, db) -> None:
     genres = await fetch_genre_ids(db, slugs=["rock"])
-    payload = {"total_rounds": 3, "selected_genres": [str(genres[0])]}
+    payload = {"selected_genres": [str(genres[0])]}
 
     statuses: list[int] = []
     for _ in range(11):
@@ -27,7 +27,7 @@ async def test_create_game_limit_10_per_minute(client, db) -> None:
 
 async def test_429_envelope_shape(client, db) -> None:
     genres = await fetch_genre_ids(db, slugs=["rock"])
-    payload = {"total_rounds": 3, "selected_genres": [str(genres[0])]}
+    payload = {"selected_genres": [str(genres[0])]}
     last_resp = None
     for _ in range(11):
         last_resp = await client.post("/games", json=payload)

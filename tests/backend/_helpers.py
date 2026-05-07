@@ -82,7 +82,6 @@ async def insert_game(
     db: asyncpg.Connection,
     *,
     status: str = "playing",
-    total_rounds: int = 5,
     selected_genres: list[UUID] | None = None,
     expires_in_hours: int = 4,
     game_code: str | None = None,
@@ -90,13 +89,12 @@ async def insert_game(
     code = game_code or random_game_code()
     row = await db.fetchrow(
         """
-        INSERT INTO active_games (game_code, status, total_rounds, selected_genres, expires_at)
-        VALUES ($1, $2, $3, $4::uuid[], now() + ($5 || ' hours')::interval)
+        INSERT INTO active_games (game_code, status, selected_genres, expires_at)
+        VALUES ($1, $2, $3::uuid[], now() + ($4 || ' hours')::interval)
         RETURNING manager_token
         """,
         code,
         status,
-        total_rounds,
         selected_genres or [],
         str(expires_in_hours),
     )
@@ -130,13 +128,10 @@ async def insert_team(
 async def create_game_via_api(
     client: Any,
     selected_genres: list[UUID],
-    *,
-    total_rounds: int = 5,
 ) -> dict[str, Any]:
     resp = await client.post(
         "/games",
         json={
-            "total_rounds": total_rounds,
             "selected_genres": [str(g) for g in selected_genres],
         },
     )

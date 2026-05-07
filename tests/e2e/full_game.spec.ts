@@ -8,7 +8,6 @@ import { openManagerAndCreateGame } from "./fixtures/manager-context";
 
 test("3-round game: award accumulates and podium renders on display", async ({ browser }) => {
   const manager = await openManagerAndCreateGame(browser, {
-    totalRounds: 3,
     genreName: "Rock",
   });
   const code = manager.gameCode;
@@ -36,9 +35,9 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
     await expect(manager.page.getByTestId("start-round")).toBeEnabled();
     await manager.page.getByTestId("start-round").click();
 
-    // Manager header shows "Round N of 3" once start_round has completed.
+    // Manager header shows "Round N" once start_round has completed.
     await expect(
-      manager.page.getByText(new RegExp(`Round ${roundNum} of 3`, "i")),
+      manager.page.getByText(new RegExp(`Round ${roundNum}$`, "i")),
     ).toBeVisible({ timeout: 10_000 });
 
     // Team can now buzz.
@@ -67,30 +66,16 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
     ).toBeVisible({ timeout: 10_000 });
   }
 
-  // ManagerConsolePage.tsx:165 attempts to auto-end the game after the last
-  // round's `End round`. In production that fires reliably, but in the e2e
-  // env the closure-captured `state` can race with the round_number Realtime
-  // update, leaving the game in `playing` and forcing the manager to use the
-  // explicit End-game flow. Tolerate both paths so the test exercises whichever
-  // one happens.
+  // The host explicitly ends the game; there's no auto-end behavior to fall back on.
   const endScreenHeading = display.getByRole("heading", { name: /final results/i });
   const endGameBtn = manager.page.getByTestId("end-game");
-  let autoEnded = false;
-  try {
-    await endScreenHeading.waitFor({ state: "visible", timeout: 5_000 });
-    autoEnded = true;
-  } catch {
-    /* fall through to the explicit click */
-  }
-  if (!autoEnded) {
-    await expect(endGameBtn).toBeEnabled();
-    await endGameBtn.click();
-    const dialog = manager.page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: /^end game$/i }).click();
-  }
+  await expect(endGameBtn).toBeEnabled();
+  await endGameBtn.click();
+  const dialog = manager.page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /^end game$/i }).click();
 
-  // Display flips to the EndScreen on either path.
+  // Display flips to the EndScreen.
   await expect(endScreenHeading).toBeVisible({ timeout: 15_000 });
   await expect(display.getByText("WINNER")).toBeVisible();
   await expect(display.getByText("Solo")).toBeVisible();

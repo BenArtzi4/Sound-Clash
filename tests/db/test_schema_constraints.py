@@ -55,8 +55,8 @@ async def test_duplicate_round_number_in_same_game_rejected(
 async def test_invalid_status_rejected(db: asyncpg.Connection) -> None:
     with pytest.raises(asyncpg.CheckViolationError):
         await db.execute(
-            "INSERT INTO active_games (game_code, status, total_rounds) "
-            "VALUES ('XX1234', 'paused', 5)"
+            "INSERT INTO active_games (game_code, status) "
+            "VALUES ('XX1234', 'paused')"
         )
 
 

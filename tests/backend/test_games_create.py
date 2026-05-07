@@ -18,13 +18,12 @@ async def test_happy_path(client, db) -> None:
     genres = await fetch_genre_ids(db, slugs=["rock"])
     resp = await client.post(
         "/games",
-        json={"total_rounds": 5, "selected_genres": [str(genres[0])]},
+        json={"selected_genres": [str(genres[0])]},
     )
     assert resp.status_code == 201
     body = resp.json()
     assert GAME_CODE_RE.match(body["game_code"]) is not None
     assert body["status"] == "waiting"
-    assert body["total_rounds"] == 5
     assert "started_at" in body
     assert "expires_at" in body
     # The host's manager token is returned in the body so the browser can
@@ -34,35 +33,15 @@ async def test_happy_path(client, db) -> None:
 
 
 async def test_validation_requires_genres(client) -> None:
-    resp = await client.post(
-        "/games", json={"total_rounds": 5, "selected_genres": []}
-    )
+    resp = await client.post("/games", json={"selected_genres": []})
     assert resp.status_code == 400
     assert resp.json()["error"] == "validation_error"
-
-
-async def test_total_rounds_out_of_range(client, db) -> None:
-    genres = await fetch_genre_ids(db, slugs=["rock"])
-    resp = await client.post(
-        "/games",
-        json={"total_rounds": 99, "selected_genres": [str(genres[0])]},
-    )
-    assert resp.status_code == 400
-
-
-async def test_default_total_rounds(client, db) -> None:
-    genres = await fetch_genre_ids(db, slugs=["rock"])
-    resp = await client.post(
-        "/games", json={"selected_genres": [str(genres[0])]}
-    )
-    assert resp.status_code == 201
-    assert resp.json()["total_rounds"] == 10
 
 
 async def test_unique_token_per_game(client, db) -> None:
     """Each game's manager_token is independently random."""
     genres = await fetch_genre_ids(db, slugs=["rock"])
-    payload = {"total_rounds": 3, "selected_genres": [str(genres[0])]}
+    payload = {"selected_genres": [str(genres[0])]}
     r1 = await client.post("/games", json=payload)
     r2 = await client.post("/games", json=payload)
     assert r1.status_code == 201
@@ -81,8 +60,8 @@ async def test_collision_retry(client, db, monkeypatch) -> None:
     forced = "BENCHX"
     await db.execute(
         """
-        INSERT INTO active_games (game_code, status, total_rounds, expires_at)
-        VALUES ($1, 'waiting', 5, now() + interval '4 hours')
+        INSERT INTO active_games (game_code, status, expires_at)
+        VALUES ($1, 'waiting', now() + interval '4 hours')
         """,
         forced,
     )
@@ -98,7 +77,7 @@ async def test_collision_retry(client, db, monkeypatch) -> None:
     genres = await fetch_genre_ids(db, slugs=["rock"])
     resp = await client.post(
         "/games",
-        json={"total_rounds": 5, "selected_genres": [str(genres[0])]},
+        json={"selected_genres": [str(genres[0])]},
     )
     assert resp.status_code == 201, resp.text
     assert resp.json()["game_code"] != forced

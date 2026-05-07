@@ -93,7 +93,7 @@ describe("DisplayPage board", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByText(/round 2 of 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/round 2$/i)).toBeInTheDocument();
   });
 
   it("renders the buzzed banner when a team locks", async () => {

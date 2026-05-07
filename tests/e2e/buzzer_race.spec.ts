@@ -19,7 +19,6 @@ test("two teams race the buzzer; exactly one wins; all contexts agree", async ({
   // 1. Manager creates the game via the UI (REST create would force a
   //    hard nav to /manager/game/<code> and lose the in-memory password).
   const manager = await openManagerAndCreateGame(browser, {
-    totalRounds: 1,
     genreName: "Rock",
   });
   const code = manager.gameCode;

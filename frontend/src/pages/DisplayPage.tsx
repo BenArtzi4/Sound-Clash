@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
+import { QRPanel } from "../components/QRPanel";
 import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useGameSounds } from "../hooks/useGameSounds";
@@ -132,14 +133,17 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     );
   }
 
+  const roundLabel = game.status === "playing" ? `Round ${game.round_number}` : null;
+
   let bannerClass = styles.banner;
   let bannerText = "Waiting for the host…";
   if (lockedTeam) {
     bannerClass = `${styles.banner} ${styles.bannerLocked}`;
     bannerText = `${lockedTeam.name} buzzed in!`;
-  } else if (game.status === "playing") {
-    bannerText = `Round ${game.round_number} of ${game.total_rounds}`;
+  } else if (roundLabel) {
+    bannerText = roundLabel;
   }
+  const showRoundSubhead = lockedTeam != null && roundLabel != null;
 
   return (
     <main className={styles.shell}>
@@ -160,17 +164,22 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
       </header>
 
       <div className={bannerClass} role="status" aria-live="polite">
-        {bannerText}
+        <span className={styles.bannerText}>{bannerText}</span>
+        {showRoundSubhead ? <span className={styles.bannerSubhead}>{roundLabel}</span> : null}
       </div>
 
       <div className={styles.scores}>
         {teams.length === 0 ? (
           <div className={styles.emptyBoard}>
             <p className={styles.emptyBoardTitle}>Waiting for teams</p>
-            <p className={styles.emptyBoardHint}>
-              Share <span className={styles.emptyBoardCode}>{gameCode}</span> with players to get
-              started.
-            </p>
+            <p className={styles.emptyBoardHint}>Scan to join, or enter the code on your phone.</p>
+            <div className={styles.emptyBoardQR}>
+              <QRPanel
+                gameCode={gameCode}
+                joinUrl={`${window.location.origin}/join/${gameCode}`}
+                size={280}
+              />
+            </div>
           </div>
         ) : (
           <ol className={styles.bigList}>

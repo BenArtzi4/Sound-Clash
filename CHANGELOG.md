@@ -13,6 +13,14 @@ This project does not currently cut versioned releases; every change lands direc
 ### Changed
 
 - 2026-05-07: Repo README pivots to a player-facing pitch with a "Play it at https://soundclash.org" CTA. The developer "Quick start" is removed; the repo is a public showcase, not soliciting external PRs. (PR #41)
+- 2026-05-07: Trimmed the home page intro and moved "How to Play" to its own `/how-to-play` page (with roles, game flow, and scoring sections). The home page now shows only the title, tagline, three role cards, and a small "How to Play" link.
+- 2026-05-07: Bumped role-card and hero font sizes on the home page so the three role CTAs (Host / Join / Display) read as primary actions; smaller copy bumps on the How-to-Play page.
+- 2026-05-07: Team page (player's phone) now shows a "Round N" pill in the header and highlights the player's own row in the scoreboard with a "you" tag.
+- 2026-05-07: Display screen empty state now shows a scannable QR code so players can join without typing the 6-letter code; the round number stays visible on screen even when a team buzzes in.
+
+### Removed
+
+- 2026-05-07: Removed the "Rounds" picker from the Create-Game form. Games now run for as many rounds as the host wants and end only when the host clicks "End game"; round counters across the team page, display, and manager console show "Round N" without a denominator.
 
 ## 2026-05-07: Phase 7 cutover
 
