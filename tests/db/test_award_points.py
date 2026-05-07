@@ -1,6 +1,6 @@
 """award_points() — happy path, idempotency, timeout case, accumulation.
 
-Spec: docs/rpc-functions.md §3.
+Spec: docs/rpc-functions.md §3 and db/migrations/014_scoring_revamp.sql.
 """
 
 from __future__ import annotations
@@ -25,13 +25,8 @@ async def _start_round_and_buzz(
     round_id = await conn.fetchval("SELECT start_round($1, $2)", game_code, song_id)
     assert round_id is not None
     await call_buzz_in(conn, game_code, team_id)
-    # The round row's buzzed_team_id is updated by the manager UI in production
-    # via a separate update; mimic that here so award_points reads it.
-    await conn.execute(
-        "UPDATE game_rounds SET buzzed_team_id = $1 WHERE id = $2",
-        team_id,
-        round_id,
-    )
+    # The round row's buzzed_team_id is updated by buzz_in itself (migration 011);
+    # the older comment that the manager UI did this is stale.
     return round_id
 
 
@@ -48,7 +43,7 @@ async def test_award_points_happy_path(db: asyncpg.Connection) -> None:
         round_id,
         2,  # title
         1,  # artist
-        0,  # source
+        0,  # wrong_buzz
         0,  # timeout
     )
     assert len(rows) == 1
@@ -57,15 +52,14 @@ async def test_award_points_happy_path(db: asyncpg.Connection) -> None:
     assert rows[0]["team_total_score"] == 3
 
     round_row = await db.fetchrow(
-        "SELECT title_points, artist_points, source_points, timeout_penalty, ended_at "
+        "SELECT title_points, artist_points, wrong_buzz_penalty, ended_at "
         "FROM game_rounds WHERE id = $1",
         round_id,
     )
     assert round_row is not None
     assert round_row["title_points"] == 2
     assert round_row["artist_points"] == 1
-    assert round_row["source_points"] == 0
-    assert round_row["timeout_penalty"] == 0
+    assert round_row["wrong_buzz_penalty"] == 0
     assert round_row["ended_at"] is not None
 
     game = await db.fetchrow(
@@ -92,35 +86,73 @@ async def test_award_points_idempotency_raises_on_second_call(
 
 
 @pytest.mark.asyncio
-async def test_award_points_timeout_penalty_no_buzz(db: asyncpg.Connection) -> None:
+async def test_award_points_wrong_buzz_deducts(db: asyncpg.Connection) -> None:
     game_code = await create_test_game(db, status="playing")
     team_id = await create_test_team(db, game_code)
-    # Give the team some baseline points so we can prove the timeout case
-    # doesn't accidentally subtract from their score.
+    # Seed baseline so we can see the deduction.
+    await db.execute("UPDATE game_teams SET score = 10 WHERE id = $1", team_id)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    rows = await db.fetch(
+        "SELECT team_id, points_awarded, team_total_score "
+        "FROM award_points($1, $2, 0, 0, 3, 0)",
+        game_code,
+        round_id,
+    )
+    assert rows[0]["team_id"] == team_id
+    assert rows[0]["points_awarded"] == -3
+    assert rows[0]["team_total_score"] == 7
+
+    round_row = await db.fetchrow(
+        "SELECT wrong_buzz_penalty FROM game_rounds WHERE id = $1", round_id
+    )
+    assert round_row is not None
+    assert round_row["wrong_buzz_penalty"] == 3
+
+
+@pytest.mark.asyncio
+async def test_award_points_wrong_buzz_with_correct_raises(
+    db: asyncpg.Connection,
+) -> None:
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await db.execute(
+            "SELECT award_points($1, $2, 10, 0, 3, 0)", game_code, round_id
+        )
+    assert exc.value.sqlstate == "P0001"
+
+
+@pytest.mark.asyncio
+async def test_award_points_timeout_no_score_change(db: asyncpg.Connection) -> None:
+    """timeout=1 ends the round but never moves any team's score."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
     await db.execute("UPDATE game_teams SET score = 5 WHERE id = $1", team_id)
 
     song_id = await create_test_song(db)
     round_id = await db.fetchval("SELECT start_round($1, $2)", game_code, song_id)
 
-    # No buzz happened — round.buzzed_team_id stays NULL.
     rows = await db.fetch(
-        "SELECT team_id, points_awarded, team_total_score FROM award_points($1, $2, 0, 0, 0, 2)",
+        "SELECT team_id, points_awarded, team_total_score "
+        "FROM award_points($1, $2, 0, 0, 0, 1)",
         game_code,
         round_id,
     )
     assert len(rows) == 1
     assert rows[0]["team_id"] is None
-    assert rows[0]["points_awarded"] == -2  # 0 + 0 + 0 - 2
+    assert rows[0]["points_awarded"] == 0
 
     round_row = await db.fetchrow(
-        "SELECT timeout_penalty, ended_at FROM game_rounds WHERE id = $1",
+        "SELECT wrong_buzz_penalty, ended_at FROM game_rounds WHERE id = $1",
         round_id,
     )
     assert round_row is not None
-    assert round_row["timeout_penalty"] == 2
+    assert round_row["wrong_buzz_penalty"] == 0
     assert round_row["ended_at"] is not None
 
-    # Score unchanged for the team — no buzz means no penalty applied.
     score = await db.fetchval("SELECT score FROM game_teams WHERE id = $1", team_id)
     assert score == 5
 
@@ -134,7 +166,9 @@ async def test_award_points_accumulates_across_rounds(
 
     for points in (1, 2, 3):
         round_id = await _start_round_and_buzz(db, game_code, team_id)
-        await db.execute("SELECT award_points($1, $2, $3, 0, 0, 0)", game_code, round_id, points)
+        await db.execute(
+            "SELECT award_points($1, $2, $3, 0, 0, 0)", game_code, round_id, points
+        )
 
     score = await db.fetchval("SELECT score FROM game_teams WHERE id = $1", team_id)
     assert score == 6

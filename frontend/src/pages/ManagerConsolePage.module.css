@@ -319,6 +319,151 @@
   cursor: not-allowed;
 }
 
+.scoreRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 600px) {
+  .scoreRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.scoreBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 12px 10px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    color 200ms ease,
+    transform 100ms ease,
+    box-shadow 200ms ease;
+  min-height: 64px;
+}
+
+.scoreBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.scoreBtn:not(:disabled):hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+
+.scoreBtn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.scoreLabel {
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+.scorePoints {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.scorePositive .scorePoints {
+  color: var(--color-success);
+}
+
+.scoreNegative .scorePoints {
+  color: var(--color-danger);
+}
+
+.scoreBonus .scorePoints {
+  color: var(--color-warning);
+}
+
+.scoreActive {
+  border-color: var(--color-success);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0.04) 100%);
+  color: #065f46;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+.scoreActive:not(:disabled):hover {
+  border-color: var(--color-success);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.26) 0%, rgba(16, 185, 129, 0.08) 100%);
+  color: #065f46;
+}
+
+.scoreActiveNeg {
+  border-color: var(--color-danger);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(239, 68, 68, 0.04) 100%);
+  color: #991b1b;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.22);
+}
+
+.scoreActiveNeg:not(:disabled):hover {
+  border-color: var(--color-danger);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.26) 0%, rgba(239, 68, 68, 0.08) 100%);
+  color: #991b1b;
+}
+
+.scoreActiveBonus {
+  border-color: var(--color-warning);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0.04) 100%);
+  color: #92400e;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.22);
+}
+
+.scoreActiveBonus:not(:disabled):hover {
+  border-color: var(--color-warning);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.26) 0%, rgba(245, 158, 11, 0.08) 100%);
+  color: #92400e;
+}
+
+.scoreRow[aria-disabled="true"] .scoreBtn {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bonusPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px dashed var(--color-warning);
+  border-radius: var(--radius-md);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.bonusPickerHint {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bonusPickerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .actionsInline {
   display: flex;
   flex-wrap: wrap;
@@ -352,7 +497,7 @@
 @media (max-width: 768px) {
   .mobileBar {
     display: grid;
-    grid-template-columns: 1fr 1.4fr 1fr;
+    grid-template-columns: 1fr 1.6fr 1fr;
     gap: 0.5rem;
     position: fixed;
     bottom: 0;

@@ -35,8 +35,7 @@ export interface GameRound {
   buzzed_team_id: string | null;
   title_points: number;
   artist_points: number;
-  source_points: number;
-  timeout_penalty: number;
+  wrong_buzz_penalty: number;
   ended_at: string | null;
 }
 
@@ -118,13 +117,24 @@ export interface AwardPointsRequest {
   round_id: string;
   title_correct: boolean;
   artist_correct: boolean;
-  source_correct: boolean;
+  wrong_buzz: boolean;
   timeout: boolean;
 }
 
 export interface AwardPointsResponse {
   round_id: string;
   team_id: string | null;
+  points_awarded: number;
+  team_total_score: number;
+}
+
+export interface AwardBonusRequest {
+  team_id: string;
+  points?: number;
+}
+
+export interface AwardBonusResponse {
+  team_id: string;
   points_awarded: number;
   team_total_score: number;
 }

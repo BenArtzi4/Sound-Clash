@@ -1,6 +1,8 @@
 import { env } from "./env";
 import type {
   ApiErrorBody,
+  AwardBonusRequest,
+  AwardBonusResponse,
   AwardPointsRequest,
   AwardPointsResponse,
   BulkImportSummary,
@@ -122,6 +124,17 @@ export function awardPoints(
   body: AwardPointsRequest,
 ): Promise<AwardPointsResponse> {
   return request("POST", `/games/${gameCode}/award-points`, {
+    managerToken,
+    body,
+  });
+}
+
+export function awardBonus(
+  gameCode: string,
+  managerToken: string,
+  body: AwardBonusRequest,
+): Promise<AwardBonusResponse> {
+  return request("POST", `/games/${gameCode}/bonus`, {
     managerToken,
     body,
   });

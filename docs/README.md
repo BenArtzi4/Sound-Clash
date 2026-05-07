@@ -9,7 +9,7 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 3. **[tech-stack.md](tech-stack.md)** — the concrete services (Supabase, Render, Cloudflare Pages, …) with free-tier limits and alternatives considered.
 4. **[game-rules.md](game-rules.md)** — gameplay flow, state machine, scoring, edge cases. Read this first if you don't know what Sound Clash is.
 5. **[data-model.md](data-model.md)** — schema, indexes, ER diagram.
-6. **[rpc-functions.md](rpc-functions.md)** — the five PL/pgSQL functions that hold the system's logic.
+6. **[rpc-functions.md](rpc-functions.md)** — the six PL/pgSQL functions that hold the system's logic.
 7. **[security-rls.md](security-rls.md)** — auth model, RLS policies, threat model, rate limits, CSP.
 8. **[api-contracts.md](api-contracts.md)** — REST + Realtime wire-format contracts.
 9. **[testing-strategy.md](testing-strategy.md)** — test types, coverage gates, CI enforcement; the doc CI gates against.

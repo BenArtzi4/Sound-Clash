@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
+  awardBonus,
   awardPoints,
   bulkImportSongs,
   createGame,
@@ -136,7 +137,7 @@ describe("api - manager-token routes", () => {
       round_id: "r1",
       title_correct: true,
       artist_correct: true,
-      source_correct: false,
+      wrong_buzz: false,
       timeout: false,
     });
     expect(res.points_awarded).toBe(15);
@@ -146,8 +147,27 @@ describe("api - manager-token routes", () => {
     expect(JSON.parse(init.body as string)).toMatchObject({
       title_correct: true,
       artist_correct: true,
+      wrong_buzz: false,
       timeout: false,
     });
+  });
+
+  it("awardBonus posts to /bonus with the chosen team", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        team_id: "t9",
+        points_awarded: 4,
+        team_total_score: 14,
+      }),
+    );
+    const res = await awardBonus("ABCDEF", TOKEN, { team_id: "t9" });
+    expect(res.team_total_score).toBe(14);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/games/ABCDEF/bonus");
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Manager-Token"]).toBe(TOKEN);
+    expect(JSON.parse(init.body as string)).toEqual({ team_id: "t9" });
   });
 
   it("endGame returns parsed body", async () => {

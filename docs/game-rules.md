@@ -80,21 +80,32 @@ Per-round point components (locked at MVP, configurable later):
 
 | Component | Points | When awarded |
 |---|---|---|
-| Song title correct | **+10** | Manager judges title correct |
-| Artist correct | **+5** | Manager judges artist correct |
-| Source (movie/TV show) correct | **+5** | Only for soundtrack songs (`is_soundtrack = true`) |
-| Timeout penalty | **−2** | Round ended with no buzz |
+| Correct Song | **+10** | Manager judges the song title correct |
+| Correct Artist | **+5** | Manager judges the artist correct |
+| Wrong | **−3** | Team buzzed but got neither title nor artist right |
+| Timeout | **0** | Round ends with no buzz; no team's score moves |
 
-Maximum per round: **20** (title + artist + source for a soundtrack song). For non-soundtrack songs, the max is **15** and the source component is N/A.
+Maximum per round from `award_points`: **+15** (title + artist correct). Minimum: **−3** (wrong buzz). The host can also award a discretionary **+4 Bonus** to any team at any time — see §4a.
 
 Scores are integers; ties are allowed. The team with the highest score at game end is the winner; tied teams share the win (no tiebreaker round in MVP — see §11).
 
 ### Scoring rules
 
-- Points are added to `game_teams.score` only when a team buzzed AND the manager awards them.
-- The timeout penalty is applied to no team — it's just a `game_rounds.timeout_penalty` value for the round record. (Past versions deducted from a buzzing team; the new version does not.)
-- Negative team scores are allowed (if a future rule penalizes a wrong buzz).
+- `Correct Song` and `Correct Artist` are **accumulating toggles** — the host may select either, both, or neither.
+- `Wrong` is **mutually exclusive** with the two correct toggles, both in the UI and in the SQL function (`P0001 wrong_buzz_with_correct`).
+- `End Round` finalizes whatever is toggled. With no toggles selected and a buzzed team, the round ends with zero score change.
+- `End Round` with no buzz sends `timeout=true` — round ends, no score change.
+- Negative team scores are allowed.
 - The manager cannot retroactively change a previous round's score in MVP. (Future: an "edit last round" undo flow.)
+
+## 4a. Bonus
+
+A separate manager action, independent of round and buzz state.
+
+- Anytime during a `playing` or `waiting` game, the manager can press **+4 Bonus** in the console.
+- A team picker appears listing every team currently in the game. The manager picks one, and that team's score gains **+4** (configurable via the API; the UI uses the default).
+- The bonus does **not** end a round, does not touch `game_rounds`, and is not visible in the round-detail breakdown — only in the team's running `game_teams.score`.
+- Endpoint: `POST /games/{code}/bonus` (see `api-contracts.md §2.6`). Function: `award_bonus` (see `rpc-functions.md §3a`).
 
 ## 5. Song Selection
 

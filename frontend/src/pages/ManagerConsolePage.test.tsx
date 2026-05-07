@@ -22,6 +22,7 @@ vi.mock("../lib/api", () => ({
   },
   selectSong: vi.fn(),
   awardPoints: vi.fn(),
+  awardBonus: vi.fn(),
   endGame: vi.fn(),
   kickTeam: vi.fn(),
 }));
@@ -48,7 +49,7 @@ vi.mock("../components/YouTubePlayer", () => ({
   }),
 }));
 
-import { awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
+import { awardBonus, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
@@ -70,6 +71,7 @@ beforeEach(() => {
   onReadyHandler = null;
   vi.mocked(selectSong).mockReset();
   vi.mocked(awardPoints).mockReset();
+  vi.mocked(awardBonus).mockReset();
   vi.mocked(endGame).mockReset();
   vi.mocked(kickTeam).mockReset();
 });
@@ -169,7 +171,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
   });
 
-  it("award button enables only when a team is buzzed", async () => {
+  it("score buttons enable only when a team is buzzed", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -186,10 +188,13 @@ describe("ManagerConsolePage", () => {
     const banner = screen.getByText(/buzzed in/i).closest('[role="status"]');
     expect(banner?.textContent).toMatch(/alice/i);
     expect(banner?.textContent).toMatch(/buzzed in/i);
-    expect(screen.getByRole("button", { name: /award points/i })).toBeEnabled();
+    expect(screen.getByTestId("score-title")).toBeEnabled();
+    expect(screen.getByTestId("score-artist")).toBeEnabled();
+    expect(screen.getByTestId("score-wrong")).toBeEnabled();
+    expect(screen.getByTestId("end-round")).toBeEnabled();
   });
 
-  it("calls awardPoints with the manager token + checkbox state", async () => {
+  it("calls awardPoints with the manager token + toggled buttons", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -209,20 +214,55 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByLabelText(/^title$/i));
-    fireEvent.click(screen.getByRole("button", { name: /award points/i }));
+    fireEvent.click(screen.getByTestId("score-title"));
+    fireEvent.click(screen.getByTestId("end-round"));
     await waitFor(() =>
       expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
         round_id: "r1",
         title_correct: true,
         artist_correct: false,
-        source_correct: false,
+        wrong_buzz: false,
         timeout: false,
       }),
     );
   });
 
-  it("skip button awards with timeout=true even when checkboxes are checked", async () => {
+  it("Wrong button sends wrong_buzz=true and clears positives", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardPoints).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: -3,
+      team_total_score: 0,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Toggle title first, then Wrong should clear it.
+    fireEvent.click(screen.getByTestId("score-title"));
+    fireEvent.click(screen.getByTestId("score-wrong"));
+    fireEvent.click(screen.getByTestId("end-round"));
+    await waitFor(() =>
+      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: false,
+        artist_correct: false,
+        wrong_buzz: true,
+        timeout: false,
+      }),
+    );
+  });
+
+  it("End round with no buzz sends timeout=true", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -242,16 +282,42 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    const skips = screen.getAllByRole("button", { name: /^skip$/i });
-    fireEvent.click(skips[0]!);
+    const ends = screen.getAllByTestId(/^end-round/);
+    fireEvent.click(ends[0]!);
     await waitFor(() =>
       expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
         round_id: "r1",
         title_correct: false,
         artist_correct: false,
-        source_correct: false,
+        wrong_buzz: false,
         timeout: true,
       }),
+    );
+  });
+
+  it("Bonus opens a team picker and posts to awardBonus", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [
+        makeTeam({ id: "t1", name: "Alice" }),
+        makeTeam({ id: "t2", name: "Bob" }),
+      ],
+      rounds: [],
+    });
+    vi.mocked(awardBonus).mockResolvedValueOnce({
+      team_id: "t2",
+      points_awarded: 4,
+      team_total_score: 4,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-bonus"));
+    await waitFor(() => screen.getByTestId("bonus-team-t2"));
+    fireEvent.click(screen.getByTestId("bonus-team-t2"));
+    await waitFor(() =>
+      expect(awardBonus).toHaveBeenCalledWith("ABCDEF", TOKEN, { team_id: "t2" }),
     );
   });
 
@@ -339,7 +405,7 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
     // Round controls should be gone — the End screen short-circuits the rest of the layout.
-    expect(screen.queryByRole("button", { name: /^skip$/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("end-round")).not.toBeInTheDocument();
   });
 
   it("auto-ends the game after the final round is awarded", async () => {
@@ -369,7 +435,7 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByRole("button", { name: /award points/i }));
+    fireEvent.click(screen.getByTestId("end-round"));
     await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(getManagerToken("ABCDEF")).toBeNull());
   });
@@ -396,7 +462,7 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    fireEvent.click(screen.getByRole("button", { name: /award points/i }));
+    fireEvent.click(screen.getByTestId("end-round"));
     await waitFor(() => expect(awardPoints).toHaveBeenCalled());
     expect(endGame).not.toHaveBeenCalled();
   });

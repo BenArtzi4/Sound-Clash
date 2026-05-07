@@ -1,8 +1,8 @@
-"""RLS — anon EXECUTE grants on the 5 RPC functions.
+"""RLS — anon EXECUTE grants on the 6 RPC functions.
 
 Spec: docs/security-rls.md §2.
 
-Only buzz_in is callable by anon. The other four functions must reject.
+Only buzz_in is callable by anon. The other five functions must reject.
 """
 
 from __future__ import annotations
@@ -50,6 +50,18 @@ async def test_anon_cannot_execute_award_points(
     with pytest.raises(asyncpg.InsufficientPrivilegeError):
         await anon_conn.execute(
             "SELECT award_points($1, $2, 0, 0, 0, 0)",
+            "ABCDEF",
+            uuid.uuid4(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_anon_cannot_execute_award_bonus(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await anon_conn.execute(
+            "SELECT award_bonus($1, $2)",
             "ABCDEF",
             uuid.uuid4(),
         )

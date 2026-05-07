@@ -10,7 +10,7 @@ import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { serverTimeNow } from "../hooks/useServerTime";
-import { ApiError, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
+import { ApiError, awardBonus, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import type { Song } from "../lib/types";
 import styles from "./ManagerConsolePage.module.css";
@@ -31,10 +31,11 @@ export function ManagerConsolePage() {
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [titleCorrect, setTitleCorrect] = useState(false);
   const [artistCorrect, setArtistCorrect] = useState(false);
-  const [sourceCorrect, setSourceCorrect] = useState(false);
+  const [wrongBuzz, setWrongBuzz] = useState(false);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => serverTimeNow().getTime());
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [bonusOpen, setBonusOpen] = useState(false);
 
   // Tick once a second so the timer re-renders.
   useEffect(() => {
@@ -108,10 +109,37 @@ export function ManagerConsolePage() {
   function resetAwardChecks() {
     setTitleCorrect(false);
     setArtistCorrect(false);
-    setSourceCorrect(false);
+    setWrongBuzz(false);
   }
 
-  async function handleAward(timeout: boolean) {
+  function toggleTitle() {
+    setTitleCorrect((v) => {
+      const next = !v;
+      if (next) setWrongBuzz(false);
+      return next;
+    });
+  }
+
+  function toggleArtist() {
+    setArtistCorrect((v) => {
+      const next = !v;
+      if (next) setWrongBuzz(false);
+      return next;
+    });
+  }
+
+  function toggleWrong() {
+    setWrongBuzz((v) => {
+      const next = !v;
+      if (next) {
+        setTitleCorrect(false);
+        setArtistCorrect(false);
+      }
+      return next;
+    });
+  }
+
+  async function handleEndRound(timeout: boolean) {
     if (!state?.currentRound || busy || !managerToken) return;
     setBusy(true);
     try {
@@ -119,7 +147,7 @@ export function ManagerConsolePage() {
         round_id: state.currentRound.id,
         title_correct: timeout ? false : titleCorrect,
         artist_correct: timeout ? false : artistCorrect,
-        source_correct: timeout ? false : sourceCorrect,
+        wrong_buzz: timeout ? false : wrongBuzz,
         timeout,
       });
       resetAwardChecks();
@@ -128,6 +156,8 @@ export function ManagerConsolePage() {
         toast("Round skipped", { variant: "info" });
       } else if (result.points_awarded > 0) {
         toast(`+${result.points_awarded} pts awarded`, { variant: "success" });
+      } else if (result.points_awarded < 0) {
+        toast(`${result.points_awarded} pts (wrong buzz)`, { variant: "info" });
       } else {
         toast("No points awarded", { variant: "info" });
       }
@@ -141,6 +171,20 @@ export function ManagerConsolePage() {
           reportError(endErr);
         }
       }
+    } catch (err) {
+      reportError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleBonus(teamId: string, teamName: string) {
+    if (busy || !managerToken) return;
+    setBusy(true);
+    try {
+      await awardBonus(gameCode, managerToken, { team_id: teamId });
+      toast(`+4 bonus to ${teamName}`, { variant: "success" });
+      setBonusOpen(false);
     } catch (err) {
       reportError(err);
     } finally {
@@ -259,10 +303,11 @@ export function ManagerConsolePage() {
 
   const nextRoundDisabled =
     busy || !player.ready || (game.status === "playing" && game.round_number >= game.total_rounds);
-  const skipDisabled = busy || game.status !== "playing";
   const restartDisabled =
     busy || game.status !== "playing" || !currentSong || !player.ready || lockedTeam != null;
-  const awardDisabled = busy || !lockedTeam;
+  const scoringDisabled = busy || !lockedTeam;
+  const endRoundDisabled = busy || game.status !== "playing";
+  const bonusDisabled = busy || teams.length === 0;
   const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
 
   return (
@@ -336,35 +381,78 @@ export function ManagerConsolePage() {
               </div>
             ) : null}
 
-            <div className={styles.checkRow} aria-disabled={!lockedTeam}>
-              <label className={`${styles.checkLabel} ${titleCorrect ? styles.checkChecked : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={titleCorrect}
-                  disabled={!lockedTeam}
-                  onChange={(e) => setTitleCorrect(e.target.checked)}
-                />
-                <span>Title</span>
-              </label>
-              <label className={`${styles.checkLabel} ${artistCorrect ? styles.checkChecked : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={artistCorrect}
-                  disabled={!lockedTeam}
-                  onChange={(e) => setArtistCorrect(e.target.checked)}
-                />
-                <span>Artist</span>
-              </label>
-              <label className={`${styles.checkLabel} ${sourceCorrect ? styles.checkChecked : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={sourceCorrect}
-                  disabled={!lockedTeam || !currentSong?.is_soundtrack}
-                  onChange={(e) => setSourceCorrect(e.target.checked)}
-                />
-                <span>Source</span>
-              </label>
+            <div className={styles.scoreRow} aria-disabled={scoringDisabled}>
+              <button
+                type="button"
+                className={`${styles.scoreBtn} ${styles.scorePositive} ${titleCorrect ? styles.scoreActive : ""}`}
+                onClick={toggleTitle}
+                disabled={scoringDisabled}
+                aria-pressed={titleCorrect}
+                data-testid="score-title"
+              >
+                <span className={styles.scoreLabel}>Correct Song</span>
+                <span className={styles.scorePoints}>+10</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.scoreBtn} ${styles.scorePositive} ${artistCorrect ? styles.scoreActive : ""}`}
+                onClick={toggleArtist}
+                disabled={scoringDisabled}
+                aria-pressed={artistCorrect}
+                data-testid="score-artist"
+              >
+                <span className={styles.scoreLabel}>Correct Artist</span>
+                <span className={styles.scorePoints}>+5</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.scoreBtn} ${styles.scoreNegative} ${wrongBuzz ? styles.scoreActiveNeg : ""}`}
+                onClick={toggleWrong}
+                disabled={scoringDisabled}
+                aria-pressed={wrongBuzz}
+                data-testid="score-wrong"
+              >
+                <span className={styles.scoreLabel}>Wrong</span>
+                <span className={styles.scorePoints}>-3</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.scoreBtn} ${styles.scoreBonus} ${bonusOpen ? styles.scoreActiveBonus : ""}`}
+                onClick={() => setBonusOpen((o) => !o)}
+                disabled={bonusDisabled}
+                aria-expanded={bonusOpen}
+                aria-controls="bonus-team-picker"
+                data-testid="score-bonus"
+              >
+                <span className={styles.scoreLabel}>Bonus</span>
+                <span className={styles.scorePoints}>+4</span>
+              </button>
             </div>
+
+            {bonusOpen ? (
+              <div
+                id="bonus-team-picker"
+                className={styles.bonusPicker}
+                role="group"
+                aria-label="Pick a team for the bonus"
+              >
+                <span className={styles.bonusPickerHint}>Award +4 to:</span>
+                <div className={styles.bonusPickerList}>
+                  {teams.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => void handleBonus(t.id, t.name)}
+                      disabled={busy}
+                      data-testid={`bonus-team-${t.id}`}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className={styles.actionsInline}>
               <button
@@ -376,20 +464,12 @@ export function ManagerConsolePage() {
                 Restart song
               </button>
               <button
-                className="btn btn-ghost"
-                onClick={() => void handleAward(true)}
-                disabled={skipDisabled}
-                data-testid="skip-round"
-              >
-                Skip
-              </button>
-              <button
                 className={`btn btn-primary ${styles.awardBtn}`}
-                onClick={() => void handleAward(false)}
-                disabled={awardDisabled}
-                data-testid="award-points"
+                onClick={() => void handleEndRound(!lockedTeam)}
+                disabled={endRoundDisabled}
+                data-testid="end-round"
               >
-                Award points
+                End round
               </button>
               <button
                 className="btn btn-primary"
@@ -458,20 +538,12 @@ export function ManagerConsolePage() {
           Restart
         </button>
         <button
-          className="btn btn-ghost"
-          onClick={() => void handleAward(true)}
-          disabled={skipDisabled}
-          data-testid="skip-round-mobile"
-        >
-          Skip
-        </button>
-        <button
           className={`btn btn-primary ${styles.awardBtn}`}
-          onClick={() => void handleAward(false)}
-          disabled={awardDisabled}
-          data-testid="award-points-mobile"
+          onClick={() => void handleEndRound(!lockedTeam)}
+          disabled={endRoundDisabled}
+          data-testid="end-round-mobile"
         >
-          Award
+          End round
         </button>
         <button
           className="btn btn-primary"

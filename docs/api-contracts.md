@@ -136,7 +136,7 @@ Server-side: calls Postgres `start_round(p_game_code, p_song_id)` RPC. Returns t
 
 ### 2.5 `POST /games/{game_code}/award-points`
 
-Manager: evaluate the buzzed team's answer and award points. **Manager-token auth required.**
+Manager: evaluate the buzzed team's answer and end the round. **Manager-token auth required.**
 
 **Headers**: `X-Manager-Token: <token>`
 
@@ -146,16 +146,18 @@ Manager: evaluate the buzzed team's answer and award points. **Manager-token aut
   "round_id": "<round_uuid>",
   "title_correct": true,
   "artist_correct": true,
-  "source_correct": false,
+  "wrong_buzz": false,
   "timeout": false
 }
 ```
 
 Server translates to point values:
-- `title_correct: true` → +10
-- `artist_correct: true` → +5
-- `source_correct: true` → +5 (only valid if the song `is_soundtrack`)
-- `timeout: true` → −2 timeout penalty (only valid if `buzzed_team_id IS NULL`); if true, the other booleans are ignored.
+- `title_correct: true` → +10 to the buzzed team
+- `artist_correct: true` → +5 to the buzzed team
+- `wrong_buzz: true` → −3 to the buzzed team. Mutually exclusive with the two flags above.
+- `timeout: true` → end the round, no team's score changes. Mutually exclusive with everything else.
+
+If neither team buzzed, the host should send `timeout: true`. If the round had a buzz but the host wants to end it without scoring, send all four flags `false`.
 
 **Response 200**:
 ```json
@@ -167,13 +169,46 @@ Server translates to point values:
 }
 ```
 
+`points_awarded` may be negative (wrong-buzz) or zero (timeout / decline-to-award).
+
 Server-side: calls Postgres `award_points` RPC.
 
-**Errors**: `unauthorized` (401), `not_found` (404), `validation_error` (400 — source_correct on non-soundtrack song; multiple non-mutually-exclusive flags).
+**Errors**: `unauthorized` (401), `not_found` (404), `validation_error` (400 — `wrong_buzz` combined with `title_correct`/`artist_correct`, or `timeout` combined with anything else).
 
 ---
 
-### 2.6 `POST /games/{game_code}/end`
+### 2.6 `POST /games/{game_code}/bonus`
+
+Manager: award a discretionary bonus to any team in the game. Independent of round state and the buzz lock — the host picks the team. **Manager-token auth required.**
+
+**Headers**: `X-Manager-Token: <token>`
+
+**Request body**:
+```json
+{
+  "team_id": "<team_uuid>",
+  "points": 4
+}
+```
+
+`points` is optional and defaults to `4`. Must be `>= 1`.
+
+**Response 200**:
+```json
+{
+  "team_id": "<team_uuid>",
+  "points_awarded": 4,
+  "team_total_score": 18
+}
+```
+
+Server-side: calls Postgres `award_bonus` RPC. Does not touch round state.
+
+**Errors**: `unauthorized` (401), `not_found` (404 — team not in this game, or game does not exist), `conflict` (409 — game already ended), `validation_error` (422 — non-positive `points`).
+
+---
+
+### 2.7 `POST /games/{game_code}/end`
 
 Manager: end the game manually. **Manager-token auth required.**
 
@@ -192,7 +227,7 @@ Manager: end the game manually. **Manager-token auth required.**
 
 ---
 
-### 2.7 `DELETE /games/{game_code}/teams/{team_id}`
+### 2.8 `DELETE /games/{game_code}/teams/{team_id}`
 
 Manager: kick a team. **Manager-token auth required.**
 
@@ -206,7 +241,7 @@ Cascade: any future actions by the kicked team are rejected because their row is
 
 ---
 
-### 2.8 `GET /genres`
+### 2.9 `GET /genres`
 
 Public. List all genres.
 
@@ -220,7 +255,7 @@ Public. List all genres.
 
 ---
 
-### 2.9 Admin Songs CRUD
+### 2.10 Admin Songs CRUD
 
 All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (`X-Admin-Password` header). This is the only surface that still uses the global admin password — game hosting is open.
 
