@@ -1,7 +1,3 @@
-<!--
-This file goes in the new repo at: .github/ISSUE_TEMPLATE/feature_request.md
--->
-
 ---
 name: Feature request
 about: Suggest a new feature or improvement
