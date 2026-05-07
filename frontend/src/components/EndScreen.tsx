@@ -130,19 +130,72 @@ function TrophyIcon() {
   );
 }
 
-export function EndScreen({ teams, gameCode }: Props) {
-  const sorted = useMemo(
-    () =>
-      [...teams].sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return a.joined_at.localeCompare(b.joined_at);
-      }),
-    [teams],
+// Group teams by distinct score, highest first. Teams within a group share a
+// rank — game-rules.md §4: "tied teams share the win".
+function groupByScore(teams: Team[]): Team[][] {
+  const sorted = [...teams].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.joined_at.localeCompare(b.joined_at);
+  });
+  const groups: Team[][] = [];
+  for (const t of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && last[0]!.score === t.score) {
+      last.push(t);
+    } else {
+      groups.push([t]);
+    }
+  }
+  return groups;
+}
+
+function PodiumCard({
+  teams,
+  place,
+  className,
+  startDelayMs,
+}: {
+  teams: Team[];
+  place: 1 | 2 | 3;
+  className: string | undefined;
+  startDelayMs: number;
+}) {
+  const isWinner = place === 1;
+  return (
+    <div className={`${styles.podiumCard} ${className}`}>
+      {isWinner ? (
+        <span className={styles.crown} aria-hidden="true">
+          ★
+        </span>
+      ) : null}
+      <div className={styles.medal}>{place}</div>
+      <div className={styles.podiumTeams}>
+        {teams.map((t, i) => (
+          <div key={t.id} className={styles.podiumTeam}>
+            <div className={styles.teamName}>{t.name}</div>
+            <div className={styles.teamScore}>
+              <CountUp value={t.score} delay={startDelayMs + i * 150} />
+              <span className={styles.scoreUnit}>pts</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {isWinner ? (
+        <div className={styles.winnerLabel}>{teams.length > 1 ? "WINNERS" : "WINNER"}</div>
+      ) : null}
+    </div>
   );
+}
+
+export function EndScreen({ teams, gameCode }: Props) {
+  const groups = useMemo(() => groupByScore(teams), [teams]);
   const confetti = useMemo(() => generateConfetti(), []);
 
-  const [first, second, third, ...rest] = sorted;
-  const teamCount = sorted.length;
+  const goldGroup = groups[0];
+  const silverGroup = groups[1];
+  const bronzeGroup = groups[2];
+  const restTeams = groups.slice(3).flat();
+  const teamCount = teams.length;
 
   return (
     <div className={styles.shell}>
@@ -181,53 +234,43 @@ export function EndScreen({ teams, gameCode }: Props) {
       ) : (
         <>
           <div className={styles.podium}>
-            {second ? (
-              <div className={`${styles.podiumCard} ${styles.silver}`}>
-                <div className={styles.medal}>2</div>
-                <div className={styles.teamName}>{second.name}</div>
-                <div className={styles.teamScore}>
-                  <CountUp value={second.score} delay={400} />
-                  <span className={styles.scoreUnit}>pts</span>
-                </div>
-              </div>
+            {silverGroup ? (
+              <PodiumCard
+                teams={silverGroup}
+                place={2}
+                className={styles.silver}
+                startDelayMs={400}
+              />
             ) : (
               <div className={styles.podiumPlaceholder} />
             )}
 
-            {first ? (
-              <div className={`${styles.podiumCard} ${styles.gold}`}>
-                <span className={styles.crown} aria-hidden="true">
-                  ★
-                </span>
-                <div className={styles.medal}>1</div>
-                <div className={styles.teamName}>{first.name}</div>
-                <div className={styles.teamScore}>
-                  <CountUp value={first.score} delay={800} />
-                  <span className={styles.scoreUnit}>pts</span>
-                </div>
-                <div className={styles.winnerLabel}>WINNER</div>
-              </div>
+            {goldGroup ? (
+              <PodiumCard
+                teams={goldGroup}
+                place={1}
+                className={styles.gold}
+                startDelayMs={800}
+              />
             ) : null}
 
-            {third ? (
-              <div className={`${styles.podiumCard} ${styles.bronze}`}>
-                <div className={styles.medal}>3</div>
-                <div className={styles.teamName}>{third.name}</div>
-                <div className={styles.teamScore}>
-                  <CountUp value={third.score} delay={200} />
-                  <span className={styles.scoreUnit}>pts</span>
-                </div>
-              </div>
+            {bronzeGroup ? (
+              <PodiumCard
+                teams={bronzeGroup}
+                place={3}
+                className={styles.bronze}
+                startDelayMs={200}
+              />
             ) : (
               <div className={styles.podiumPlaceholder} />
             )}
           </div>
 
-          {rest.length > 0 ? (
+          {restTeams.length > 0 ? (
             <div className={styles.rest}>
               <h2 className={styles.restTitle}>Other teams</h2>
               <ol className={styles.restList} start={4}>
-                {rest.map((t) => (
+                {restTeams.map((t) => (
                   <li key={t.id} className={styles.restRow}>
                     <span className={styles.restName}>{t.name}</span>
                     <span className={styles.restScore}>{t.score}</span>

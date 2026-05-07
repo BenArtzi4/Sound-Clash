@@ -325,4 +325,159 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^home$/i }));
     await waitFor(() => expect(screen.getByText("home page")).toBeInTheDocument());
   });
+
+  it("renders the EndScreen with the FINAL RESULTS heading when the game is ended", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "ended" }),
+      teams: [makeTeam({ id: "t1", name: "Alice", score: 30 })],
+      rounds: [],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByText(/final results/i)).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    // Round controls should be gone — the End screen short-circuits the rest of the layout.
+    expect(screen.queryByRole("button", { name: /^skip$/i })).not.toBeInTheDocument();
+  });
+
+  it("auto-ends the game after the final round is awarded", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+        round_number: 5,
+        total_rounds: 5,
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardPoints).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 10,
+      team_total_score: 10,
+    });
+    vi.mocked(endGame).mockResolvedValueOnce({
+      game_code: "ABCDEF",
+      status: "ended",
+      ended_at: "2026-05-05T13:00:00Z",
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /award points/i }));
+    await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() => expect(getManagerToken("ABCDEF")).toBeNull());
+  });
+
+  it("does not auto-end before the final round", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+        round_number: 2,
+        total_rounds: 5,
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardPoints).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 10,
+      team_total_score: 10,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /award points/i }));
+    await waitFor(() => expect(awardPoints).toHaveBeenCalled());
+    expect(endGame).not.toHaveBeenCalled();
+  });
+
+  it("Restart song re-selects the current song via selectSong with a song_id", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1, current_round_id: "r1" }),
+      teams: [],
+      rounds: [makeRound({ id: "r1", song_id: "song-A" })],
+    });
+    vi.mocked(selectSong).mockResolvedValueOnce({
+      round_id: "r2",
+      round_number: 2,
+      song: {
+        id: "song-A",
+        title: "Bohemian Rhapsody",
+        artist: "Queen",
+        youtube_id: "abcdefghijk",
+        start_time: 0,
+        is_soundtrack: false,
+        source: null,
+      },
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    // Restart needs `currentSong` (local React state populated by a successful
+    // selectSong). Trigger one Next-round click to seed it, then Restart.
+    const next = screen.getAllByRole("button", { name: /^next round$/i })[0]!;
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
+
+    // Set up the next response for the Restart click — same song.
+    vi.mocked(selectSong).mockResolvedValueOnce({
+      round_id: "r3",
+      round_number: 3,
+      song: {
+        id: "song-A",
+        title: "Bohemian Rhapsody",
+        artist: "Queen",
+        youtube_id: "abcdefghijk",
+        start_time: 0,
+        is_soundtrack: false,
+        source: null,
+      },
+    });
+    const restart = screen.getAllByRole("button", { name: /^restart song$/i })[0]!;
+    await waitFor(() => expect(restart).toBeEnabled());
+    fireEvent.click(restart);
+    await waitFor(() =>
+      expect(selectSong).toHaveBeenLastCalledWith("ABCDEF", TOKEN, "song-A"),
+    );
+  });
+
+  it("shows a clear toast when the song pool is exhausted", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1, total_rounds: 5 }),
+      teams: [],
+      rounds: [],
+    });
+    const { ApiError } = await import("../lib/api");
+    const exhausted = new ApiError("conflict", "no songs left", 409);
+    Object.assign(exhausted, { details: { reason: "no_more_songs" } });
+    vi.mocked(selectSong).mockRejectedValueOnce(exhausted);
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    const next = screen.getAllByRole("button", { name: /^next round$/i })[0]!;
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    await waitFor(() =>
+      expect(screen.getByText(/all songs in your selected genres have been played/i)).toBeInTheDocument(),
+    );
+  });
 });

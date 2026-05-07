@@ -225,6 +225,19 @@ async def join_team(request: Request, game_code: str, body: JoinTeamRequest) -> 
     return JoinTeamResponse.model_validate(row)
 
 
+def _fetch_song_blocking(client: SupabaseClientLike, song_id: str) -> dict[str, Any]:
+    resp = (
+        client.table("songs")
+        .select("id,title,artist,youtube_id,start_time,is_soundtrack,source")
+        .eq("id", song_id)
+        .execute()
+    )
+    rows = resp.data or []
+    if not rows:
+        raise NotFoundError(f"song {song_id} not found")
+    return dict(rows[0])
+
+
 @router.post(
     "/games/{game_code}/select-song",
     response_model=SelectSongResponse,
@@ -234,7 +247,6 @@ async def join_team(request: Request, game_code: str, body: JoinTeamRequest) -> 
 async def select_song(
     request: Request, game_code: str, body: SelectSongRequest | None = None
 ) -> SelectSongResponse:
-    _ = body
     client = get_supabase_client()
     game = await anyio.to_thread.run_sync(_fetch_game_blocking, client, game_code)
     if game["status"] == "ended" or game.get("ended_at"):
@@ -244,7 +256,15 @@ async def select_song(
     if not genre_ids:
         raise ConflictError("game has no selected genres")
 
-    song = await pick_random_song(client, game_code, genre_ids)
+    if body is not None and body.song_id is not None:
+        # Manual pick — bypass the picker and start the round with this exact
+        # song. The "no repeats" check is intentionally skipped: the docs spec
+        # the Restart-song flow as "old round row remains as a no-points
+        # artifact." See docs/game-rules.md §11.
+        song = await anyio.to_thread.run_sync(_fetch_song_blocking, client, str(body.song_id))
+    else:
+        song = await pick_random_song(client, game_code, genre_ids)
+
     round_id, round_number = await anyio.to_thread.run_sync(
         _start_round_blocking, client, game_code, song
     )
