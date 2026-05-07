@@ -1,4 +1,4 @@
-"""slowapi rate limits — exceed window → 429."""
+"""slowapi rate limits; exceed window → 429."""
 
 from __future__ import annotations
 

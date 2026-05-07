@@ -6,7 +6,7 @@ Thanks for your interest. This is a small project; the contribution bar is "is i
 
 1. Read [`docs/architecture.md`](docs/architecture.md) (one page).
 2. Skim [`docs/roadmap.md`](docs/roadmap.md) to know what phase the project is in.
-3. Check [open issues](https://github.com/BenArtzi4/Sound-Clash/issues) — pick one or open a new one to discuss before doing significant work.
+3. Check [open issues](https://github.com/BenArtzi4/Sound-Clash/issues): pick one or open a new one to discuss before doing significant work.
 4. For substantive changes, open the issue first. Code without a discussed direction may be closed without merge.
 
 ## Local setup
@@ -49,7 +49,7 @@ See [`docs/local-development.md`](docs/local-development.md). TL;DR: `supabase s
 
 Conventions:
 - Type hints on all public functions.
-- No `print()` — use the `logging` module.
+- No `print()`; use the `logging` module.
 - No catch-all `except Exception` unless you re-raise or log + re-raise.
 - Imports sorted by ruff (isort-compatible).
 - Module docstrings only when non-obvious.
@@ -66,7 +66,7 @@ Conventions:
 - Functional components + hooks; no class components.
 - Co-locate component tests next to the component (`Foo.tsx` + `Foo.test.tsx`).
 - No CSS-in-JS dependencies; use plain CSS modules.
-- No state management library (Redux, Zustand, etc.) — local React state and Supabase Realtime are sufficient.
+- No state management library (Redux, Zustand, etc.); local React state and Supabase Realtime are sufficient.
 
 ### SQL (migrations)
 
@@ -79,9 +79,9 @@ Conventions:
 
 | Change | Required tests |
 |---|---|
-| New REST endpoint | `tests/backend/` — happy path + auth + at least one validation case |
-| New PL/pgSQL function | `tests/db/` — happy path + at least one error case |
-| New React component with logic | `tests/` co-located — at least one render + one interaction test |
+| New REST endpoint | `tests/backend/`: happy path + auth + at least one validation case |
+| New PL/pgSQL function | `tests/db/`: happy path + at least one error case |
+| New React component with logic | `tests/` co-located: at least one render + one interaction test |
 | Buzzer-related change | A relevant `tests/e2e/` Playwright scenario |
 | Migration | Re-run `db/migrate.sh` from a clean DB; commit only if successful |
 | Bug fix | A regression test that fails on `main` and passes on your branch |
@@ -101,7 +101,7 @@ Specifically:
 
 ## What we don't merge
 
-- Changes that re-introduce dropped features (see `docs/data-model.md` §9 — `play_count`, `is_active`, AI selection cache, etc.) without a discussed plan.
+- Changes that re-introduce dropped features (see `docs/data-model.md` §9: `play_count`, `is_active`, AI selection cache, etc.) without a discussed plan.
 - Changes that put Python in the buzzer hot path. The `<200ms` requirement is structural; see `docs/realtime-design.md` §2.
 - Changes that increase free-tier consumption substantially without an alert or upgrade plan in `docs/free-tier-budget.md`.
 - "Cleanup" PRs that mix refactoring with feature work. Split them.

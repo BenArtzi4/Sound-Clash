@@ -1,4 +1,4 @@
-"""Manager-token dependency — gates per-game host actions."""
+"""Manager-token dependency; gates per-game host actions."""
 
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ async def test_create_game_returns_token_that_authorizes(client, db) -> None:
 
 
 def test_compare_digest_used_in_module_source() -> None:
-    """Constant-time compare guard — mirrors test_admin_auth."""
+    """Constant-time compare guard; mirrors test_admin_auth."""
     from app.middleware import manager_auth
 
     assert "compare_digest" in manager_auth.secrets.__dict__

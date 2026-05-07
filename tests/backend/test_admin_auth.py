@@ -1,4 +1,4 @@
-"""Admin auth header check — gates the song catalog (/admin/songs).
+"""Admin auth header check; gates the song catalog (/admin/songs).
 
 Game-management endpoints (/games/{code}/*) are no longer behind this gate;
 they use a per-game manager token (see ``test_manager_token.py``). The admin
@@ -25,7 +25,7 @@ async def test_wrong_header_returns_401(client) -> None:
         headers={"X-Admin-Password": "definitely-wrong"},
     )
     assert resp.status_code == 401
-    # Generic message — no info leak about why it failed.
+    # Generic message: no info leak about why it failed.
     assert resp.json()["error"] == "unauthorized"
 
 
@@ -35,7 +35,7 @@ async def test_correct_header_passes(admin_client) -> None:
 
 
 def test_compare_digest_used_in_module_source() -> None:
-    """The module relies on ``secrets.compare_digest`` — guard against drift."""
+    """The module relies on ``secrets.compare_digest``; guard against drift."""
     from app.middleware import admin_auth
 
     source = admin_auth.require_admin.__code__.co_consts

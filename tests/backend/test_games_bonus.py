@@ -1,4 +1,4 @@
-"""POST /games/{code}/bonus — host-discretion bonus to a chosen team."""
+"""POST /games/{code}/bonus; host-discretion bonus to a chosen team."""
 
 from __future__ import annotations
 

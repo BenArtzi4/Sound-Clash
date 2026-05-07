@@ -1,14 +1,14 @@
-# Sound Clash — Realtime Design
+# Sound Clash: Realtime Design
 
 This is the central design document of the rewrite. It describes how the system achieves <200ms buzzer latency on a free-tier infrastructure that has no always-on Python WebSocket server. Every other doc references this one for the details below.
 
 ## 1. The Problem in One Paragraph
 
 A buzzer game is hard to build on free hosting because the buzzer needs:
-1. **Atomic single-winner ordering** — when two teams tap within milliseconds, exactly one wins.
-2. **Server-authoritative timestamps** — clients can't be trusted to order themselves.
-3. **Low fan-out latency** — all clients see the lock within ~200ms of the press.
-4. **Always-available endpoint** — no cold starts in the press path.
+1. **Atomic single-winner ordering**: when two teams tap within milliseconds, exactly one wins.
+2. **Server-authoritative timestamps**: clients can't be trusted to order themselves.
+3. **Low fan-out latency**: all clients see the lock within ~200ms of the press.
+4. **Always-available endpoint**: no cold starts in the press path.
 
 Free-tier Python (Render free / Cloud Run scale-to-zero) violates #4 with multi-second cold starts. Free-tier WebSocket platforms either limit connections (Pusher: 100) or burn through quotas. The current architecture (FastAPI WebSocket service in-process broadcast) cannot cost-effectively run 24/7 for free.
 
@@ -74,7 +74,7 @@ The browser calls Postgres directly via PostgREST; Python is never in the buzz p
 | **Caller round-trip** | **45–85 ms** | Buzzer team sees confirmation |
 | **Other clients see lock** | **75–195 ms** | Fan-out total |
 
-**Worst-case acceptable**: ~250ms in adverse network conditions. **Hard fail threshold**: >500ms — investigate.
+**Worst-case acceptable**: ~250ms in adverse network conditions. **Hard fail threshold**: >500ms; investigate.
 
 ## 4. Race Correctness
 
@@ -114,9 +114,9 @@ This test is required to pass 100 consecutive runs before merging Phase 3.
 
 Each browser opens **one Realtime channel per game** and subscribes to three table change streams (filtered by `game_code`):
 
-- `active_games` — the live game row (status, current round, buzz state)
-- `game_teams` — team list and scores
-- `game_rounds` — round history (used for "song already played" enforcement and the round info card)
+- `active_games`: the live game row (status, current round, buzz state)
+- `game_teams`: team list and scores
+- `game_rounds`: round history (used for "song already played" enforcement and the round info card)
 
 The frontend reduces these change streams into a derived state object:
 
@@ -133,7 +133,7 @@ State updates are applied in the order Realtime delivers events. Postgres replic
 
 ## 6. Initial State and Reconciliation
 
-When a client subscribes, it does NOT automatically receive a snapshot of current state — Realtime only forwards future changes. Therefore:
+When a client subscribes, it does NOT automatically receive a snapshot of current state; Realtime only forwards future changes. Therefore:
 
 ```ts
 // 1. Subscribe (sets up the channel; will start receiving events)
@@ -158,7 +158,7 @@ The order matters: subscribe first, then fetch. If we fetched first then subscri
 
 ## 7. Reconnection
 
-`supabase-js` reconnects automatically with exponential backoff (1s, 2s, 4s, ..., capped). On reconnect, it re-establishes the WebSocket and resubscribes existing channels. Missed events during disconnect are NOT replayed — Realtime is not durable.
+`supabase-js` reconnects automatically with exponential backoff (1s, 2s, 4s, ..., capped). On reconnect, it re-establishes the WebSocket and resubscribes existing channels. Missed events during disconnect are NOT replayed; Realtime is not durable.
 
 The recovery strategy:
 
@@ -266,7 +266,7 @@ This is non-trivial UX and is explicitly out of MVP. Today the invariant is "the
 | Pusher Channels | 100-connection limit too tight for parallel games; Python still needed for atomic claim → still need warm Python |
 | Cloudflare Durable Objects | Requires a JavaScript runtime; user requested Python primary |
 | Run Python on Fly.io | Free tier requires CC and is being phased out; long-term free not guaranteed |
-| Run Python on Oracle Always Free | Genuine free always-on VM; viable but adds ops burden (own VM, own monitoring, own SSL) — Supabase + Render is lower ops cost |
+| Run Python on Oracle Always Free | Genuine free always-on VM; viable but adds ops burden (own VM, own monitoring, own SSL): Supabase + Render is lower ops cost |
 | AWS AppSync | Not free tier above small caps; AWS lock-in is what we're moving away from |
 | Roll our own WebSocket on Cloudflare Workers | Reinvents Realtime; Durable Objects already exist; not Python |
 

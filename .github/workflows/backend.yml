@@ -52,7 +52,7 @@ jobs:
       - name: Reject coverage pragmas in app code
         run: |
           if grep -rn "pragma:[[:space:]]*no cover" app/; then
-            echo "::error::Found 'pragma: no cover' in app code — banned per docs/testing-strategy.md §2"
+            echo "::error::Found 'pragma: no cover' in app code; banned per docs/testing-strategy.md §2"
             exit 1
           fi
 

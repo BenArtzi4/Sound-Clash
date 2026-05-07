@@ -1,4 +1,4 @@
-"""POST /games/{code}/select-song — random song picker + start_round RPC."""
+"""POST /games/{code}/select-song; random song picker + start_round RPC."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 // Server-clock offset, computed from the first observed Realtime
-// commit_timestamp. Subsequent observations are ignored — one measurement is
+// commit_timestamp. Subsequent observations are ignored; one measurement is
 // enough to keep the manager's countdown consistent across tabs (see
 // docs/realtime-design.md §8).
 

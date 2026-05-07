@@ -1,4 +1,4 @@
-"""Migrations are idempotent — re-applying produces no errors and no diff.
+"""Migrations are idempotent; re-applying produces no errors and no diff.
 
 This is also enforced in CI by db-migrate.yml (apply, then re-apply). The test
 here gives the same coverage to local-dev runs.

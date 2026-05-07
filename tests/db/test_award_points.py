@@ -1,4 +1,4 @@
-"""award_points() — happy path, idempotency, timeout case, accumulation.
+"""award_points(): happy path, idempotency, timeout case, accumulation.
 
 Spec: docs/rpc-functions.md §3 and db/migrations/014_scoring_revamp.sql.
 """

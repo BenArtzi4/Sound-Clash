@@ -160,5 +160,5 @@ The full secret rotation procedure is in `runbook.md` §3.
 
 ## What is **not** in this diagram
 
-- **CDN for YouTube** — YouTube IFrame Player loads its own JS from `youtube.com`; there's no separate CDN dependency we manage.
-- **Email** — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.
+- **CDN for YouTube**: YouTube IFrame Player loads its own JS from `youtube.com`; there's no separate CDN dependency we manage.
+- **Email**: there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.

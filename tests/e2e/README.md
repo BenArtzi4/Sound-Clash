@@ -2,7 +2,7 @@
 
 Playwright multi-context tests. Run against the `Sound-Clash-Preview` Supabase project (a separate Supabase free-tier project from prod).
 
-**Status:** all seven specs from [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 are landed: `buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_songs_crud` (API-driven — the `/admin/songs` UI is a deferred carve-out), `kick_team`, `mobile_team`. The legacy `admin_login` spec was removed when the manager password was retired in favour of per-game manager tokens (hosting is open). The multi-browser matrix (firefox / webkit / iPhone-SE project) is declared in `playwright.config.ts` but the CI job runs `--project=chromium` only.
+**Status:** all seven specs from [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.4 are landed: `buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_songs_crud` (API-driven; the `/admin/songs` UI is a deferred carve-out), `kick_team`, `mobile_team`. The legacy `admin_login` spec was removed when the manager password was retired in favour of per-game manager tokens (hosting is open). The multi-browser matrix (firefox / webkit / iPhone-SE project) is declared in `playwright.config.ts` but the CI job runs `--project=chromium` only.
 
 ## One-time preview project setup
 
@@ -21,7 +21,7 @@ Then set GitHub repo secrets so the `E2E` workflow can run on PRs labeled `run-e
 | `SUPABASE_PREVIEW_URL` | preview project settings → API → URL |
 | `SUPABASE_PREVIEW_ANON_KEY` | preview project settings → API → anon/public key |
 | `SUPABASE_PREVIEW_SERVICE_ROLE_KEY` | preview project settings → API → service_role key |
-| `PREVIEW_ADMIN_PASSWORD` | choose any string; backend reads `ADMIN_PASSWORD`. Gates `/admin/songs` only — game hosting is open. |
+| `PREVIEW_ADMIN_PASSWORD` | choose any string; backend reads `ADMIN_PASSWORD`. Gates `/admin/songs` only; game hosting is open. |
 
 ## Running locally
 
@@ -34,7 +34,7 @@ npx playwright test --ui                       # interactive runner
 npx playwright test buzzer_race                # one spec
 ```
 
-The Playwright config auto-starts a local backend (`uvicorn` on port 8000) and the Vite dev server (port 5173). It does **not** spin up Supabase — you must point the backend at a real Supabase project (preview or local Docker).
+The Playwright config auto-starts a local backend (`uvicorn` on port 8000) and the Vite dev server (port 5173). It does **not** spin up Supabase; you must point the backend at a real Supabase project (preview or local Docker).
 
 ### Required env vars
 
@@ -65,4 +65,4 @@ API_URL=http://localhost:8000
 
 - **Never run against the prod Supabase project.** Preview only.
 - **Never embed secrets** in test code; always env vars.
-- The buzzer race relies on Postgres deciding the winner — do not weaken `expect.poll` timeouts trying to make the race deterministic on the client.
+- The buzzer race relies on Postgres deciding the winner; do not weaken `expect.poll` timeouts trying to make the race deterministic on the client.

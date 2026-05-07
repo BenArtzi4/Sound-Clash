@@ -1,4 +1,4 @@
-"""Admin songs CRUD — list, get, create, update, delete."""
+"""Admin songs CRUD; list, get, create, update, delete."""
 
 from __future__ import annotations
 

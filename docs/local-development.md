@@ -1,4 +1,4 @@
-# Sound Clash — Local Development
+# Sound Clash: Local Development
 
 How to run the system on your laptop. Read this before opening a code editor.
 
@@ -91,7 +91,7 @@ psql postgres://postgres:postgres@localhost:54322/postgres -f db/seed/genres.sql
 python scripts/import-songs.py --target local --source data/songs.csv
 ```
 
-(Once `data/songs.csv` is exported from the legacy AWS RDS — see Phase 2 of the roadmap.)
+(Once `data/songs.csv` is exported from the legacy AWS RDS; see Phase 2 of the roadmap.)
 
 ## 4. Environment Variable Templates
 
@@ -181,7 +181,7 @@ pytest tests/backend -k "test_games"   # subset
 pytest -x --pdb                     # stop on first fail, drop into debugger
 ```
 
-The DB layer tests (`tests/db/`) use **testcontainers** — they spin up an ephemeral Postgres container per test session. Requires Docker running.
+The DB layer tests (`tests/db/`) use **testcontainers**: they spin up an ephemeral Postgres container per test session. Requires Docker running.
 
 ### Frontend (vitest)
 

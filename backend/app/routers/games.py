@@ -1,4 +1,4 @@
-"""Game lifecycle endpoints — see ``docs/api-contracts.md §2``.
+"""Game lifecycle endpoints; see ``docs/api-contracts.md §2``.
 
 The router never calls ``buzz_in``; that stays browser-direct via PostgREST
 to keep Python out of the buzzer hot path. Service-role-only RPCs
@@ -171,7 +171,7 @@ def _bonus_blocking(
         ).execute()
     except Exception as exc:
         raise map_postgrest_error(exc) from exc
-    # award_bonus returns RETURNS integer — a single scalar new total.
+    # award_bonus returns RETURNS integer: a single scalar new total.
     return {
         "team_id": str(body.team_id),
         "points_awarded": body.points,
@@ -265,7 +265,7 @@ async def select_song(
         raise ConflictError("game has no selected genres")
 
     if body is not None and body.song_id is not None:
-        # Manual pick — bypass the picker and start the round with this exact
+        # Manual pick: bypass the picker and start the round with this exact
         # song. The "no repeats" check is intentionally skipped: the docs spec
         # the Restart-song flow as "old round row remains as a no-points
         # artifact." See docs/game-rules.md §11.

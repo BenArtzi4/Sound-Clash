@@ -15,7 +15,7 @@
 --      round, no score change" signal.
 --   4. New manager action: bonus. Anytime, host picks any team and grants
 --      +4 (configurable). Independent of round/buzz state, hence a separate
---      function and a separate endpoint — no combined "award + bonus".
+--      function and a separate endpoint; no combined "award + bonus".
 --
 -- What changes:
 --   game_rounds: drop source_points, drop timeout_penalty, add wrong_buzz_penalty.
@@ -41,7 +41,7 @@ ALTER TABLE game_rounds
 --    Inputs:
 --      p_title       0 or TITLE_POINTS  (10)
 --      p_artist      0 or ARTIST_POINTS (5)
---      p_wrong_buzz  0 or WRONG_BUZZ_PENALTY (3) — applied as a deduction
+--      p_wrong_buzz  0 or WRONG_BUZZ_PENALTY (3): applied as a deduction
 --      p_timeout     0 or 1 (flag)
 --
 --    Behavior:
@@ -117,7 +117,7 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- 3. award_bonus — host-discretion award to a chosen team. service_role only.
+-- 3. award_bonus; host-discretion award to a chosen team. service_role only.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION award_bonus(
   p_game_code char(6),

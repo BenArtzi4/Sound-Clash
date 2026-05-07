@@ -1,4 +1,4 @@
-# Sound Clash — Free-Tier Budget
+# Sound Clash: Free-Tier Budget
 
 This is the early-warning system. It quantifies how many games you can run per month before hitting any free-tier ceiling, and which numbers to watch.
 
@@ -22,7 +22,7 @@ A typical Sound Clash game has these characteristics (used as the unit of capaci
 | Realtime messages per game | ~250 |
 | FastAPI requests per game | ~30 (create, joins, song picks, awards, end) |
 
-These numbers are pessimistic — real-world will be lower. Round up for safety.
+These numbers are pessimistic; real-world will be lower. Round up for safety.
 
 ## 2. Service-by-Service Quota Analysis
 
@@ -49,7 +49,7 @@ These numbers are pessimistic — real-world will be lower. Round up for safety.
 
 | Resource | Limit | Notes |
 |---|---|---|
-| Service hours | 750 / mo | Single service uses ~720 (24/7) — below cap |
+| Service hours | 750 / mo | Single service uses ~720 (24/7): below cap |
 | RAM | 512 MB | FastAPI + supabase-py easily fits |
 | Build minutes | included | |
 | Bandwidth | 100 GB / mo | ~30 KB per game request × 30 reqs × 8000 games ≈ 7 GB; safe |
@@ -84,7 +84,7 @@ Free, no quotas relevant to this project.
 
 **Recommendation**: keep the new `Sound-Clash` repo public. Saves CI worry.
 
-### 2.6 Sentry (free tier — error tracking)
+### 2.6 Sentry (free tier: error tracking)
 
 | Resource | Limit | Notes |
 |---|---|---|
@@ -174,7 +174,7 @@ If you ever ship publicly and run 1000+ concurrent games, the bottleneck is Supa
 
 ## 6. What Costs Money If You're Not Careful
 
-Listed for awareness — none of these are in the current design, but they're easy mistakes to make later:
+Listed for awareness; none of these are in the current design, but they're easy mistakes to make later:
 
 - **Sending audio via Realtime.** Don't. Audio is YouTube-embedded; messages are JSON state changes only. A single audio packet would blow the message budget.
 - **Subscribing to entire tables instead of filtered rows.** Always include `filter: 'game_code=eq.XXXXXX'` on `postgres_changes` subscriptions, otherwise every client receives every game's events → quota exhaustion.
@@ -182,7 +182,7 @@ Listed for awareness — none of these are in the current design, but they're ea
 - **Logging Realtime payloads at INFO level on the server.** Log volumes climb fast. Use DEBUG, sample, or skip.
 - **Running database migrations from CI on every push.** Run them on manual dispatch only.
 - **AWS resources still up after migration.** Verify AWS Cost Explorer = $0 forecast post-cutover. CloudFront is the most likely lingering cost.
-- **NAT Gateway anywhere.** $32/month minimum on AWS. The new design has no AWS — but if you ever go back, never put a service behind a NAT.
+- **NAT Gateway anywhere.** $32/month minimum on AWS. The new design has no AWS; but if you ever go back, never put a service behind a NAT.
 
 ## 7. Cost Comparison vs. Current Architecture
 

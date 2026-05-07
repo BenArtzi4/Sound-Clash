@@ -8,7 +8,7 @@
 // the X-Manager-Token header automatically.
 //
 // For specs that need to drive the backend RPCs directly (e.g. forced
-// expiration), `openManagerAndCreateGame` also returns the token — read
+// expiration), `openManagerAndCreateGame` also returns the token; read
 // it from `ManagerSession.managerToken` and forward it on REST requests.
 
 import { type Browser, type Page, expect } from "@playwright/test";

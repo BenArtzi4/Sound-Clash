@@ -1,6 +1,6 @@
 # AWS Teardown Checklist (Phase 7)
 
-The exact, ordered list of AWS resources to destroy after the new Supabase/Render/Pages stack is live and stable. Follow top-to-bottom. Each item has a verification step — don't move on without confirming.
+The exact, ordered list of AWS resources to destroy after the new Supabase/Render/Pages stack is live and stable. Follow top-to-bottom. Each item has a verification step; don't move on without confirming.
 
 **Pre-conditions** (must all be true before starting):
 - [ ] New `Sound-Clash` deployed at `https://soundclash.org` and `https://api.soundclash.org`
@@ -15,16 +15,16 @@ The exact, ordered list of AWS resources to destroy after the new Supabase/Rende
 
 ---
 
-## Step 0 — Snapshot before destroying
+## Step 0: Snapshot before destroying
 
 - [ ] Export legacy songs CSV one last time as a belt-and-suspenders backup:
   ```bash
   aws s3 cp s3://soundclash-songs-data/songs.csv ./backups/songs-$(date +%Y%m%d).csv
   ```
-  Store this file outside AWS (e.g., in a private GitHub gist or the planning directory). After teardown, the S3 bucket is gone — this is your last copy from AWS.
+  Store this file outside AWS (e.g., in a private GitHub gist or the planning directory). After teardown, the S3 bucket is gone; this is your last copy from AWS.
 - [ ] Note current AWS bill ($/month) for comparison: AWS Console → Billing → "Bills".
 
-## Step 1 — Destroy Fargate + ALB stacks (legacy on-demand)
+## Step 1: Destroy Fargate + ALB stacks (legacy on-demand)
 
 These are cheap to recreate but have ongoing cost while up. Tear down first.
 
@@ -33,10 +33,10 @@ These are cheap to recreate but have ongoing cost while up. Tear down first.
   ./destroy-all.sh
   ```
   This invokes `cdk destroy` on the on-demand ALB and Fargate stacks. Takes ~8–10 min.
-- [ ] **Verify**: AWS Console → ECS → Clusters — the `ondemand` cluster either gone or shows no running tasks.
-- [ ] **Verify**: AWS Console → EC2 → Load Balancers — no on-demand ALB present.
+- [ ] **Verify**: AWS Console → ECS → Clusters; the `ondemand` cluster either gone or shows no running tasks.
+- [ ] **Verify**: AWS Console → EC2 → Load Balancers; no on-demand ALB present.
 
-## Step 2 — Destroy any remaining always-on stacks
+## Step 2: Destroy any remaining always-on stacks
 
 If the always-on `infrastructure/` stack was ever deployed (it may not have been used recently), destroy it now.
 
@@ -46,9 +46,9 @@ If the always-on `infrastructure/` stack was ever deployed (it may not have been
   cdk destroy --all        # destroy what's there; will prompt
   ```
 - [ ] **Verify**: `cdk list` after destroy shows no deployed stacks.
-- [ ] **Verify**: AWS Console → CloudFormation → Stacks — no `Sound-Clash-*` stacks remaining.
+- [ ] **Verify**: AWS Console → CloudFormation → Stacks; no `Sound-Clash-*` stacks remaining.
 
-## Step 3 — Empty + delete S3 buckets
+## Step 3: Empty + delete S3 buckets
 
 CDK won't delete S3 buckets that contain objects. Empty them first.
 
@@ -73,7 +73,7 @@ CDK won't delete S3 buckets that contain objects. Empty them first.
   Empty + delete any that come up.
 - [ ] **Verify**: `aws s3 ls | grep -i soundclash` returns nothing.
 
-## Step 4 — Disable + delete CloudFront distribution
+## Step 4: Disable + delete CloudFront distribution
 
 This is the slow one. CloudFront takes ~15 min to fully disable before it can be deleted.
 
@@ -88,9 +88,9 @@ This is the slow one. CloudFront takes ~15 min to fully disable before it can be
 - [ ] Delete it: AWS Console → CloudFront → select distribution → "Delete".
 - [ ] **Verify**: `aws cloudfront list-distributions` no longer shows a distribution for `soundclash.org`.
 
-## Step 5 — Delete ECR repositories
+## Step 5: Delete ECR repositories
 
-Container image registry — small but not zero cost when you have many images.
+Container image registry; small but not zero cost when you have many images.
 
 - [ ] List the legacy repos:
   ```bash
@@ -104,7 +104,7 @@ Container image registry — small but not zero cost when you have many images.
   ```
 - [ ] **Verify**: `aws ecr describe-repositories` shows no `ondemand/*` or `soundclash*` repos.
 
-## Step 6 — Delete ACM certificates
+## Step 6: Delete ACM certificates
 
 - [ ] List wildcard cert(s) for the domain:
   ```bash
@@ -118,7 +118,7 @@ Container image registry — small but not zero cost when you have many images.
   ```
 - [ ] **Verify**: list command above returns empty.
 
-## Step 7 — Delete CloudWatch log groups
+## Step 7: Delete CloudWatch log groups
 
 Free at idle but they accumulate over time and can incur cost.
 
@@ -133,27 +133,27 @@ Free at idle but they accumulate over time and can incur cost.
   ```
 - [ ] **Verify**: list command returns empty.
 
-## Step 8 — Check for stragglers
+## Step 8: Check for stragglers
 
 These may or may not exist depending on what was ever deployed. Check each:
 
-- [ ] **RDS**: `aws rds describe-db-instances --query 'DBInstances[?contains(DBInstanceIdentifier, `soundclash`) || contains(DBInstanceIdentifier, `sound-clash`)].DBInstanceIdentifier'` — if any, take a final snapshot then delete.
-- [ ] **DynamoDB**: `aws dynamodb list-tables --query 'TableNames[?contains(@, `soundclash`) || contains(@, `sound-clash`)]'` — delete each.
-- [ ] **ElastiCache**: `aws elasticache describe-cache-clusters --query 'CacheClusters[?contains(CacheClusterId, `soundclash`)].CacheClusterId'` — delete each.
+- [ ] **RDS**: `aws rds describe-db-instances --query 'DBInstances[?contains(DBInstanceIdentifier, `soundclash`) || contains(DBInstanceIdentifier, `sound-clash`)].DBInstanceIdentifier'`: if any, take a final snapshot then delete.
+- [ ] **DynamoDB**: `aws dynamodb list-tables --query 'TableNames[?contains(@, `soundclash`) || contains(@, `sound-clash`)]'`: delete each.
+- [ ] **ElastiCache**: `aws elasticache describe-cache-clusters --query 'CacheClusters[?contains(CacheClusterId, `soundclash`)].CacheClusterId'`: delete each.
 - [ ] **Route 53**: any hosted zones for `soundclash.org`? Domain DNS lives at Cloudflare now, so any Route 53 zone is unused. AWS Console → Route 53 → Hosted zones.
 - [ ] **Secrets Manager / SSM Parameter Store**: any `/soundclash/*` entries? Console → Systems Manager → Parameter Store; Console → Secrets Manager.
 - [ ] **VPC**: a custom VPC for the legacy stack? If everything used the default VPC, skip. Otherwise: Console → VPC → confirm any custom VPC has no remaining ENIs/instances/load balancers, then delete.
-- [ ] **EIPs**: `aws ec2 describe-addresses` — any unattached Elastic IPs charge $0.005/hour. Release.
-- [ ] **NAT Gateways**: `aws ec2 describe-nat-gateways --filter Name=state,Values=available` — these are $32/mo each. Should be none, but verify.
+- [ ] **EIPs**: `aws ec2 describe-addresses`: any unattached Elastic IPs charge $0.005/hour. Release.
+- [ ] **NAT Gateways**: `aws ec2 describe-nat-gateways --filter Name=state,Values=available`: these are $32/mo each. Should be none, but verify.
 
-## Step 9 — Verify $0
+## Step 9: Verify $0
 
 - [ ] Wait at least one hour after Step 8 for the AWS bill to update.
 - [ ] AWS Console → Billing → "Cost Explorer" → set range to "next month" forecast.
 - [ ] **Forecast should be $0** (or within a few cents for trailing line items like cross-region data transfer).
 - [ ] If forecast is non-zero, drill into the report to find what's still running. Common culprits: an EIP not released, a Route 53 hosted zone, a CloudWatch alarm with a Lambda destination.
 
-## Step 10 — Final cleanup
+## Step 10: Final cleanup
 
 - [ ] Update `Sound-Clash-legacy/README.md` with a teardown notice: "AWS resources for this codebase were torn down on YYYY-MM-DD. The deploy scripts no longer function."
 - [ ] Add `LEGACY.md` (template at `Sound-Clash-Plan/templates/LEGACY.md`) to the legacy repo's root.
@@ -164,9 +164,9 @@ These may or may not exist depending on what was ever deployed. Check each:
 
 ## What CAN'T be deleted (and that's fine)
 
-- **AWS account itself** — keep it; it's free at $0 spend. May be useful for future projects.
-- **CloudTrail logs older than 90 days** — auto-prune unless you've configured a long retention. No cost concern.
-- **IAM users/roles created during legacy** — review and remove unused ones for security hygiene, but they don't cost anything.
+- **AWS account itself**: keep it; it's free at $0 spend. May be useful for future projects.
+- **CloudTrail logs older than 90 days**: auto-prune unless you've configured a long retention. No cost concern.
+- **IAM users/roles created during legacy**: review and remove unused ones for security hygiene, but they don't cost anything.
 
 ## Rollback (don't actually do this without strong reason)
 
@@ -176,7 +176,7 @@ If you're in the middle of teardown and decide you need the legacy stack back:
 2. From `Sound-Clash-legacy/scripts/ondemand/`: `./deploy-all.sh` re-creates the on-demand stack. ~15–20 min.
 3. DNS revert: Cloudflare → `soundclash.org` apex → CNAME back to the new CloudFront distribution that was just recreated.
 
-This works **only** if you stop before Step 4 (CloudFront delete). After Step 4, the original distribution ID is gone; you'd get a new one and need to update other references. After Step 5 (ECR), the deploy scripts also fail because the image registry is gone — you'd need to rebuild + push images first.
+This works **only** if you stop before Step 4 (CloudFront delete). After Step 4, the original distribution ID is gone; you'd get a new one and need to update other references. After Step 5 (ECR), the deploy scripts also fail because the image registry is gone; you'd need to rebuild + push images first.
 
 In short: Steps 1–3 are reversible in ~30 min. Steps 4+ are not practically reversible.
 

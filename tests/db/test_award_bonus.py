@@ -1,4 +1,4 @@
-"""award_bonus() — host-discretion award to any team.
+"""award_bonus(): host-discretion award to any team.
 
 Spec: docs/rpc-functions.md and db/migrations/014_scoring_revamp.sql.
 """

@@ -1,4 +1,4 @@
-/* Sound Clash docs — shared script
+/* Sound Clash docs: shared script
  *
  * Single source of truth for navigation. Each HTML page declares its identity
  * via <html data-page="..."> and includes <header id="topnav"></header> +

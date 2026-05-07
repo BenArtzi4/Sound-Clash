@@ -1,4 +1,4 @@
-# Sound Clash — Postgres RPC Functions
+# Sound Clash: Postgres RPC Functions
 
 The six PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
@@ -12,7 +12,7 @@ Functions live in `db/migrations/005_rpc_functions.sql` (the original five) and 
 - Functions are named with `snake_case`. Parameter names prefixed with `p_`.
 - Return types are explicit `TABLE(...)` for multi-column results; void for fire-and-forget ops.
 
-## 1. `buzz_in` — atomic buzzer claim
+## 1. `buzz_in`: atomic buzzer claim
 
 The hot path. Called by browsers via PostgREST. <100ms RTT.
 
@@ -116,7 +116,7 @@ async def test_buzz_when_game_waiting(db):
 
 Phase 3 exit criterion: the race test passes 100 consecutive runs without a single failure.
 
-## 2. `start_round` — manager advances to next song
+## 2. `start_round`: manager advances to next song
 
 Called by FastAPI (`POST /games/{code}/select-song`). Not exposed to anon.
 
@@ -187,7 +187,7 @@ Not idempotent. Each call increments `round_number` and creates a new row. Calle
 
 - FastAPI `POST /games/{code}/select-song` after picking a random song.
 
-## 3. `award_points` — manager evaluates the answer
+## 3. `award_points`: manager evaluates the answer
 
 Called by FastAPI (`POST /games/{code}/award-points`). Not exposed to anon. Reshaped in migration 014: the `p_source` parameter is gone (the soundtrack-source bonus is no longer scored), and the timeout penalty is gone (timeout is now a pure "end the round, no score change" signal). The new fourth integer is `p_wrong_buzz`, which deducts from the buzzed team when the host marks a buzz as wrong.
 
@@ -223,15 +223,15 @@ Behavior:
 
 ### Idempotency
 
-Idempotent on `round_id` via the `ended_at IS NOT NULL` check — second call raises an exception that FastAPI maps to a 409 (Conflict). This protects against double-award on retry.
+Idempotent on `round_id` via the `ended_at IS NOT NULL` check; second call raises an exception that FastAPI maps to a 409 (Conflict). This protects against double-award on retry.
 
 ### Callers
 
 - FastAPI `POST /games/{code}/award-points`.
 
-## 3a. `award_bonus` — host-discretion bonus to a chosen team
+## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
-Added in migration 014. Independent of round state and the buzz lock — the host picks any team in the game and grants a positive number of points (default 4). Does not touch `game_rounds`. Called by FastAPI (`POST /games/{code}/bonus`). Not exposed to anon.
+Added in migration 014. Independent of round state and the buzz lock; the host picks any team in the game and grants a positive number of points (default 4). Does not touch `game_rounds`. Called by FastAPI (`POST /games/{code}/bonus`). Not exposed to anon.
 
 ```sql
 CREATE OR REPLACE FUNCTION award_bonus(
@@ -261,7 +261,7 @@ Not idempotent. Each call adds `p_points` to the team's score. The host is expec
 
 - FastAPI `POST /games/{code}/bonus`.
 
-## 4. `end_game` — manager ends the game
+## 4. `end_game`: manager ends the game
 
 Called by FastAPI (`POST /games/{code}/end`). Not exposed to anon.
 
@@ -312,13 +312,13 @@ Not idempotent on the game-state side (raises on repeat call). FastAPI returns 4
 
 ### Side effects
 
-The pg_cron sweeper (§5) will eventually delete the game row. Setting `status = 'ended'` does not trigger immediate deletion — the game and its scoreboard remain queryable until `expires_at` is reached.
+The pg_cron sweeper (§5) will eventually delete the game row. Setting `status = 'ended'` does not trigger immediate deletion; the game and its scoreboard remain queryable until `expires_at` is reached.
 
 ### Callers
 
 - FastAPI `POST /games/{code}/end`.
 
-## 5. `cleanup_expired_games` — pg_cron sweeper
+## 5. `cleanup_expired_games`: pg_cron sweeper
 
 Called by `pg_cron` hourly. Not exposed to anyone else.
 
@@ -410,17 +410,17 @@ async def test_cleanup_deletes_expired(db):
 
 You could implement these in FastAPI as raw SQL UPDATEs. We don't, because:
 
-1. **Atomicity for `buzz_in`** — must be a single statement, server-side. A function is the cleanest way to express "atomic UPDATE + return current state."
-2. **Race-free RPC for the browser** — the browser must call `buzz_in` directly to bypass Python cold starts. PostgREST exposes only functions and tables; complex logic needs a function.
-3. **Encapsulation** — the function is the contract. Future implementations (e.g., adding tournament mode) can change internals without touching callers.
-4. **Single-place enforcement of state-machine rules** — the `IF v_status = 'ended'` checks live in one place, not scattered across HTTP routes.
-5. **Server-authoritative timestamps** — `now()` runs in the database, not the application. No clock-skew bugs.
+1. **Atomicity for `buzz_in`**: must be a single statement, server-side. A function is the cleanest way to express "atomic UPDATE + return current state."
+2. **Race-free RPC for the browser**: the browser must call `buzz_in` directly to bypass Python cold starts. PostgREST exposes only functions and tables; complex logic needs a function.
+3. **Encapsulation**: the function is the contract. Future implementations (e.g., adding tournament mode) can change internals without touching callers.
+4. **Single-place enforcement of state-machine rules**: the `IF v_status = 'ended'` checks live in one place, not scattered across HTTP routes.
+5. **Server-authoritative timestamps**: `now()` runs in the database, not the application. No clock-skew bugs.
 
 The cost is some PL/pgSQL learning curve for the team. Worth it for the hot-path correctness alone.
 
 ## 8. What These Functions Don't Do
 
-- **No authentication checks**. Auth lives at the layer above — RLS for anon, FastAPI's admin middleware for service-role calls.
+- **No authentication checks**. Auth lives at the layer above; RLS for anon, FastAPI's admin middleware for service-role calls.
 - **No business-rule validation that depends on external state** (e.g., "is this song already played in this game?"). FastAPI does that before calling the RPC.
 - **No transactional bundling beyond their own scope**. Each function is one transaction; cross-function bundling is the caller's job (rare; the boundaries are well-aligned).
 - **No long-running work**. All functions complete in single-digit milliseconds.
@@ -433,4 +433,4 @@ These functions are added in `db/migrations/005_rpc_functions.sql`. To modify a 
 2. Apply via `db-migrate` GitHub Actions workflow.
 3. Deploy any caller code changes (FastAPI, frontend) to use the new contract.
 
-`CREATE OR REPLACE` is safe for callers — it doesn't break existing transactions. But changing the **return type or parameter list** is a breaking change; coordinate with caller deploys.
+`CREATE OR REPLACE` is safe for callers; it doesn't break existing transactions. But changing the **return type or parameter list** is a breaking change; coordinate with caller deploys.

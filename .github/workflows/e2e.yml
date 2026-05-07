@@ -39,7 +39,7 @@ jobs:
       - name: Install frontend deps
         working-directory: frontend
         # frontend/package-lock.json is intentionally untracked (see commit
-        # 888a5ab — npm 10 esbuild optional-deps bug). Mirror frontend.yml.
+        # 888a5ab: npm 10 esbuild optional-deps bug). Mirror frontend.yml.
         run: |
           if [ -f package-lock.json ]; then
             npm ci

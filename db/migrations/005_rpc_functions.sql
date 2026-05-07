@@ -12,7 +12,7 @@
 -- CREATE OR REPLACE makes this migration idempotent.
 
 -- =============================================================================
--- buzz_in — atomic buzzer claim. The hot path.
+-- buzz_in: atomic buzzer claim. The hot path.
 -- =============================================================================
 CREATE OR REPLACE FUNCTION buzz_in(
   p_game_code char(6),
@@ -42,7 +42,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- start_round — manager advances to next song.
+-- start_round: manager advances to next song.
 -- =============================================================================
 CREATE OR REPLACE FUNCTION start_round(
   p_game_code char(6),
@@ -86,7 +86,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- award_points — manager evaluates the answer.
+-- award_points: manager evaluates the answer.
 -- =============================================================================
 -- DROP guard so later migrations that rename parameters (e.g. 014's source→wrong_buzz)
 -- can be re-applied alongside this file without `cannot change name of input parameter`.
@@ -147,7 +147,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- end_game — manager ends the game.
+-- end_game: manager ends the game.
 -- =============================================================================
 CREATE OR REPLACE FUNCTION end_game(p_game_code char(6))
 RETURNS timestamptz
@@ -180,7 +180,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- cleanup_expired_games — pg_cron sweeper, hourly.
+-- cleanup_expired_games: pg_cron sweeper, hourly.
 -- =============================================================================
 CREATE OR REPLACE FUNCTION cleanup_expired_games()
 RETURNS integer

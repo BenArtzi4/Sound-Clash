@@ -1,4 +1,4 @@
-# Sound Clash — Game Rules
+# Sound Clash: Game Rules
 
 This is the canonical specification of how the game is played. Other docs reference this one for behaviour. If a rule conflicts with another document, this doc wins.
 
@@ -68,11 +68,11 @@ Each round is one song. The round's micro-state is encoded in `active_games` (`b
 
 ### Round events (server-authoritative)
 
-1. **Round starts** — manager picks (or system random-picks) a song; `start_round` RPC clears prior buzz state and assigns `current_song_id`.
-2. **Song plays** — manager controls YouTube IFrame Player.
-3. **Buzz** — first team to call `buzz_in` RPC wins; `locked_at` is the server timestamp.
-4. **Evaluation** — manager judges the buzzing team's verbal answer and awards points per component (or a timeout penalty).
-5. **Round ends** — `award_points` RPC writes the result and clears buzz state for the next round.
+1. **Round starts**: manager picks (or system random-picks) a song; `start_round` RPC clears prior buzz state and assigns `current_song_id`.
+2. **Song plays**: manager controls YouTube IFrame Player.
+3. **Buzz**: first team to call `buzz_in` RPC wins; `locked_at` is the server timestamp.
+4. **Evaluation**: manager judges the buzzing team's verbal answer and awards points per component (or a timeout penalty).
+5. **Round ends**: `award_points` RPC writes the result and clears buzz state for the next round.
 
 ## 4. Scoring
 
@@ -85,16 +85,16 @@ Per-round point components (locked at MVP, configurable later):
 | Wrong | **−3** | Team buzzed but got neither title nor artist right |
 | Timeout | **0** | Round ends with no buzz; no team's score moves |
 
-Maximum per round from `award_points`: **+15** (title + artist correct). Minimum: **−3** (wrong buzz). The host can also award a discretionary **+4 Bonus** to any team at any time — see §4a.
+Maximum per round from `award_points`: **+15** (title + artist correct). Minimum: **−3** (wrong buzz). The host can also award a discretionary **+4 Bonus** to any team at any time; see §4a.
 
-Scores are integers; ties are allowed. The team with the highest score at game end is the winner; tied teams share the win (no tiebreaker round in MVP — see §11).
+Scores are integers; ties are allowed. The team with the highest score at game end is the winner; tied teams share the win (no tiebreaker round in MVP; see §11).
 
 ### Scoring rules
 
-- `Correct Song` and `Correct Artist` are **accumulating toggles** — the host may select either, both, or neither.
+- `Correct Song` and `Correct Artist` are **accumulating toggles**: the host may select either, both, or neither.
 - `Wrong` is **mutually exclusive** with the two correct toggles, both in the UI and in the SQL function (`P0001 wrong_buzz_with_correct`).
 - `End Round` finalizes whatever is toggled. With no toggles selected and a buzzed team, the round ends with zero score change.
-- `End Round` with no buzz sends `timeout=true` — round ends, no score change.
+- `End Round` with no buzz sends `timeout=true`: round ends, no score change.
 - Negative team scores are allowed.
 - The manager cannot retroactively change a previous round's score in MVP. (Future: an "edit last round" undo flow.)
 
@@ -104,7 +104,7 @@ A separate manager action, independent of round and buzz state.
 
 - Anytime during a `playing` or `waiting` game, the manager can press **+4 Bonus** in the console.
 - A team picker appears listing every team currently in the game. The manager picks one, and that team's score gains **+4** (configurable via the API; the UI uses the default).
-- The bonus does **not** end a round, does not touch `game_rounds`, and is not visible in the round-detail breakdown — only in the team's running `game_teams.score`.
+- The bonus does **not** end a round, does not touch `game_rounds`, and is not visible in the round-detail breakdown; only in the team's running `game_teams.score`.
 - Endpoint: `POST /games/{code}/bonus` (see `api-contracts.md §2.6`). Function: `award_bonus` (see `rpc-functions.md §3a`).
 
 ## 5. Song Selection
@@ -122,23 +122,23 @@ A separate manager action, independent of round and buzz state.
 - The buzz button is enabled only while `active_games.status = 'playing'` AND `buzzed_team_id IS NULL`.
 - After lock, the button is disabled for ALL teams until the manager either awards points or restarts the song.
 - The `locked_at` timestamp is server-authoritative. Clients display "X locked it" with no client-side ordering logic.
-- Rejected buzz attempts (lock already held) get a quiet UI signal — no error toast, just disabled state.
+- Rejected buzz attempts (lock already held) get a quiet UI signal; no error toast, just disabled state.
 
 ## 7. Reconnection (teams)
 
 The current Sound Clash has a 15-second grace window for team disconnect. The new design simplifies this:
 
 - A team's identity is `{ game_team_id (uuid), game_code }`. Both are stored in `localStorage` on join.
-- On page reload or temporary disconnect, the page reads `localStorage`, re-subscribes to the Realtime channel, and resumes — no server-side state restoration needed.
+- On page reload or temporary disconnect, the page reads `localStorage`, re-subscribes to the Realtime channel, and resumes; no server-side state restoration needed.
 - If the team's row was deleted (e.g., game expired or the manager kicked them), the page redirects to the join screen with a message.
 - No "reconnect grace period" is enforced. If a team disconnects, the game continues. They can rejoin while the game is `waiting` or `playing`.
 
 ## 8. Reconnection (manager)
 
 - Manager identity is "whoever holds the per-game manager token in their browser's localStorage" (`game:<code>:manager-token`). The token is generated at game creation and returned by `POST /games`. Game state is recoverable from the `active_games` row.
-- If the manager closes the tab mid-game, the game stays in its current state (`playing`, `buzzed_team_id` still set if mid-buzz). The manager can reload `/manager/game/{code}` in the same browser and resume — the token survives a hard refresh.
+- If the manager closes the tab mid-game, the game stays in its current state (`playing`, `buzzed_team_id` still set if mid-buzz). The manager can reload `/manager/game/{code}` in the same browser and resume; the token survives a hard refresh.
 - A second device cannot resume management without the token. Losing the host browser ends practical management (the game still runs to its 4-hour TTL; players can keep playing what's already started but no new rounds can be selected without the token).
-- **Two manager tabs problem**: opening the same game in two tabs of the same browser shares the token (same localStorage), so both tabs can issue `start_round` / `award_points` RPCs. Practical impact is low (typical use is one host on one device). Mitigation deferred — see §11.
+- **Two manager tabs problem**: opening the same game in two tabs of the same browser shares the token (same localStorage), so both tabs can issue `start_round` / `award_points` RPCs. Practical impact is low (typical use is one host on one device). Mitigation deferred; see §11.
 
 ## 9. Timeouts
 
@@ -150,7 +150,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 ### Answer-evaluation window
 
 - After buzz lock, the manager has unbounded time to listen and evaluate. No server timeout.
-- (Future: optional 10-second answer countdown for tournament mode — out of MVP.)
+- (Future: optional 10-second answer countdown for tournament mode; out of MVP.)
 
 ## 10. Game Expiration & TTL
 
@@ -181,14 +181,14 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 ## 12. UX Constraints (informational, for frontend work)
 
-- Buzz button must respond in **<100ms** of tap (UI feedback) — the actual lock confirmation comes via Realtime in <200ms. Optimistic UI: button shows "buzzing…" immediately, then "locked!" or "too slow" once the Realtime row update arrives.
+- Buzz button must respond in **<100ms** of tap (UI feedback): the actual lock confirmation comes via Realtime in <200ms. Optimistic UI: button shows "buzzing…" immediately, then "locked!" or "too slow" once the Realtime row update arrives.
 - Display screen must be readable at 3+ meters (large fonts; high contrast).
 - Team page should work on iOS Safari and Chrome Android. iPhone SE viewport is the smallest supported size.
 - No notifications, no permissions prompts.
 
 ## 13. What is NOT a Game Rule
 
-For clarity — these are out of scope and explicitly NOT enforced by the system:
+For clarity; these are out of scope and explicitly NOT enforced by the system:
 
 - Players' real identities (no accounts, no profiles)
 - Team chat

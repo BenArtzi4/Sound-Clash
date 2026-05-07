@@ -115,7 +115,7 @@ def map_postgrest_error(exc: Exception) -> DomainError:
     if sqlstate == "23505":
         return ConflictError(msg)
     if sqlstate == "23503":
-        # Foreign-key violation — typically means parent (game) doesn't exist.
+        # Foreign-key violation: typically means parent (game) doesn't exist.
         return NotFoundError(msg)
 
     return InternalError(msg)

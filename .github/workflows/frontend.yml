@@ -55,7 +55,7 @@ jobs:
       - name: Reject skipped tests
         run: |
           if grep -rEn "(it|test)\.skip\(|@pytest\.mark\.skip|xfail" src/; then
-            echo "::error::Found skipped tests — banned per docs/testing-strategy.md §6"
+            echo "::error::Found skipped tests; banned per docs/testing-strategy.md §6"
             exit 1
           fi
 

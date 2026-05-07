@@ -1,4 +1,4 @@
-"""start_round() — happy path + state-machine errors.
+"""start_round(): happy path + state-machine errors.
 
 Spec: docs/rpc-functions.md §2.
 """

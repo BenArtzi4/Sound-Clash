@@ -2,7 +2,7 @@
 // cleanup_expired_games(): all open clients (manager, team, display)
 // surface the "gone" banner once Realtime delivers the DELETE on
 // active_games. Reuses the existing UI status banners (no /expired
-// route — see the plan).
+// route; see the plan).
 //
 // Spec ref: docs/testing-strategy.md §4.4 + db/migrations/005_rpc_functions.sql
 // (cleanup_expired_games at line 178) + frontend/src/hooks/useGameChannel.ts

@@ -543,7 +543,7 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
           />
         </label>
         <label className={`${styles.field} ${styles.fieldFull}`}>
-          <span>Source (optional — film, game, album)</span>
+          <span>Source (optional: film, game, album)</span>
           <input
             type="text"
             value={form.source}

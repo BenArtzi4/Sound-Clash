@@ -1,10 +1,10 @@
-# Sound Clash — Testing Strategy
+# Sound Clash: Testing Strategy
 
 The standard for this project: **CI is the gate; merging implies the tests passed.** No "I'll test it later", no flaky-test escape hatch, no skipped tests on `main`.
 
 ## 1. What we're optimizing for
 
-Not 100% line coverage — that incentivizes testing trivialities.
+Not 100% line coverage; that incentivizes testing trivialities.
 
 We're optimizing for **confidence in correctness under realistic conditions** for the high-stakes parts of the system:
 
@@ -31,7 +31,7 @@ We're optimizing for **confidence in correctness under realistic conditions** fo
 | Frontend line coverage | ≥ 85% | `vitest run --coverage` with v8 + threshold | `frontend.yml` |
 | PL/pgSQL function coverage | 100% | manual: every function has a happy + every error case | reviewed in PR |
 | Buzz race test | passes 100 consecutive runs | dedicated CI job loops the test | `e2e.yml` (gated on label `run-stress`) |
-| Buzz E2E latency | p95 < 200ms (informational only — flaky in cloud CI) | Playwright trace + report | `e2e.yml` |
+| Buzz E2E latency | p95 < 200ms (informational only; flaky in cloud CI) | Playwright trace + report | `e2e.yml` |
 | No `# pragma: no cover` | banned outside generated code | `ruff` rule + grep in CI | `backend.yml` |
 | No `it.skip` / `test.skip` | banned on main | grep in CI | `frontend.yml` |
 | No `xfail` without an open issue link | enforced via PR review | reviewer | code review |
@@ -58,9 +58,9 @@ PRs that drop coverage below threshold fail. PRs that introduce skipped tests on
 
 Numbers are targets at end of Phase 6. Don't game them; let the test count emerge from real coverage need.
 
-## 4. Test Categories — What and Where
+## 4. Test Categories: What and Where
 
-### 4.1 Database tests — `tests/db/`
+### 4.1 Database tests: `tests/db/`
 
 Spin up Postgres via `testcontainers-postgres`. Apply all migrations from `db/migrations/`. Run tests against the fresh DB.
 
@@ -80,7 +80,7 @@ Spin up Postgres via `testcontainers-postgres`. Apply all migrations from `db/mi
 
 P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 
-### 4.2 Backend tests — `tests/backend/`
+### 4.2 Backend tests: `tests/backend/`
 
 `pytest + httpx` against the FastAPI app, with a testcontainer Postgres + applied migrations as the DB.
 
@@ -101,7 +101,7 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 | `test_validation.py` | invalid YouTube IDs; oversized team names; out-of-range total_rounds |
 | `test_error_mapping.py` | Postgres P0001/P0002 → HTTP 4xx with structured body |
 
-### 4.3 Frontend unit tests — co-located `*.test.ts(x)`
+### 4.3 Frontend unit tests: co-located `*.test.ts(x)`
 
 `vitest + @testing-library/react`. Mock the Supabase client.
 
@@ -120,7 +120,7 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 | `components/Scoreboard.test.tsx` | sorts by score desc; ties shown together |
 | `lib/managerToken.test.ts` (covered inline by `pages/ManagerConsolePage.test.tsx` + `pages/ManagerCreateGamePage.test.tsx`) | localStorage round-trip; absent token → "not the host" branch |
 
-### 4.4 E2E tests — `tests/e2e/`
+### 4.4 E2E tests: `tests/e2e/`
 
 Playwright with multi-browser-context. Runs against a dedicated `Sound-Clash-Preview` Supabase project.
 
@@ -130,13 +130,13 @@ Playwright with multi-browser-context. Runs against a dedicated `Sound-Clash-Pre
 | `full_game.spec.ts` | 3-round happy path with score accumulation |
 | `reconnection.spec.ts` | team disconnects mid-game; reload; state restored; can buzz |
 | `expiration.spec.ts` | game with expires_at in past; cron runs; all clients redirect to "expired" page |
-| `admin_songs_crud.spec.ts` | create/edit/delete song via admin API + bulk-import idempotency (UI deferred — see roadmap) |
+| `admin_songs_crud.spec.ts` | create/edit/delete song via admin API + bulk-import idempotency (UI deferred; see roadmap) |
 | `kick_team.spec.ts` | manager kicks team; team's tab redirects |
 | `mobile_team.spec.ts` | iPhone viewport; buzzer reachable + tappable |
 
 Multi-browser matrix: chromium + firefox + webkit. Each spec must pass in all three.
 
-### 4.5 Smoke tests — `tests/smoke/`
+### 4.5 Smoke tests: `tests/smoke/`
 
 Run manually after each prod deploy.
 
@@ -149,7 +149,7 @@ Run manually after each prod deploy.
 
 | Phase | Tests written | Coverage gates active? |
 |---|---|---|
-| Phase 1 (scaffolding) | dummy passing tests in each suite (so CI runs green) | Configured but at low thresholds (e.g., 0% — passes with empty code) |
+| Phase 1 (scaffolding) | dummy passing tests in each suite (so CI runs green) | Configured but at low thresholds (e.g., 0%; passes with empty code) |
 | Phase 2 (data migration) | smoke check on imported songs | n/a |
 | Phase 3 (Postgres logic) | All `tests/db/*` | DB tests: 100% functions tested + race test 100× |
 | Phase 4 (backend port) | All `tests/backend/*` | Backend coverage gate raised to 90% |
@@ -172,7 +172,7 @@ Coverage thresholds in CI start LOW in Phase 1 (so the empty repo doesn't block)
 | `it.skip` to "fix later" | Tests are either green or deleted; no gray zone |
 | 100% line coverage by testing getters | Optimize for branch coverage on real logic |
 | Snapshot tests for everything | Snapshots without intent become regression-blockers without value |
-| Coverage reports that summarize but don't fail CI | Threshold-only — humans don't reliably check coverage trends |
+| Coverage reports that summarize but don't fail CI | Threshold-only; humans don't reliably check coverage trends |
 
 ## 7. Tooling
 
@@ -215,7 +215,7 @@ test: {
 ```ts
 // playwright.config.ts
 {
-  retries: process.env.CI ? 1 : 0,    // single retry only — surface flake
+  retries: process.env.CI ? 1 : 0,    // single retry only; surface flake
   workers: process.env.CI ? 2 : undefined,
   projects: [
     { name: 'chromium', use: devices['Desktop Chrome'] },
@@ -289,7 +289,7 @@ Full suite expected to be runnable in <2 min locally (excluding E2E and DB stres
 - **Mutation testing** (e.g., `mutmut`) on the PL/pgSQL functions: would catch tests that pass without actually validating the logic. Worth considering once the test suite stabilizes.
 - **Property-based testing** (e.g., `hypothesis` for game-code generator collision rate, score arithmetic): nice-to-have.
 - **Performance regression tests** (track `buzz_in` p95 over time): not in MVP.
-- **Visual regression tests** for the manager/display UI: not in MVP — game is functional, not pixel-perfect.
+- **Visual regression tests** for the manager/display UI: not in MVP; game is functional, not pixel-perfect.
 
 ## 11. What This Doc Doesn't Cover
 

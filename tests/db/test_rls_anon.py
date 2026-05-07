@@ -1,4 +1,4 @@
-"""RLS — the anon role can SELECT but never mutate any table.
+"""RLS; the anon role can SELECT but never mutate any table.
 
 Spec: docs/security-rls.md §2.
 """

@@ -42,7 +42,7 @@ frontend/package-lock.json
 # Production frontend env: explicitly tracked. Only contains values that ship
 # to the browser bundle anyway (Supabase anon key, Sentry DSN public form, etc).
 # Service-role keys / admin password / deploy hooks live in GitHub Actions
-# secrets and .claude/phase7-secrets.local — never in the repo.
+# secrets and .claude/phase7-secrets.local: never in the repo.
 !frontend/.env.production
 
 # Editor / OS

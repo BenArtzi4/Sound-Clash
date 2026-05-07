@@ -1,4 +1,4 @@
-# Sound Clash — Migration Roadmap
+# Sound Clash: Migration Roadmap
 
 Eight phases (Phase 0 + seven core) from naming/account setup to production cutover. Each phase has a goal, deliverables, exit criteria, dependencies, estimated time, and known risks.
 
@@ -8,7 +8,7 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 0 — Naming & Repo Hygiene
+## Phase 0: Naming & Repo Hygiene
 
 **Goal**: Free up the name `Sound-Clash` for the new codebase by renaming the existing repo to `Sound-Clash-legacy`.
 
@@ -29,21 +29,21 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 1 — Infrastructure Setup
+## Phase 1: Infrastructure Setup
 
 **Goal**: Provision the free-tier accounts and skeleton the new repo. No code yet.
 
 **Deliverables**
 - New GitHub repo: **`Sound-Clash`** (public to get unlimited Actions minutes)
 - Skeleton repo layout:
-  - `backend/` — FastAPI app placeholder
-  - `frontend/` — React + Vite placeholder
-  - `db/migrations/` — empty
-  - `tests/` — empty
-  - `.github/workflows/` — empty
-  - `docs/` — copies of relevant planning docs from `Sound-Clash-Plan/`
+  - `backend/`: FastAPI app placeholder
+  - `frontend/`: React + Vite placeholder
+  - `db/migrations/`: empty
+  - `tests/`: empty
+  - `.github/workflows/`: empty
+  - `docs/`: copies of relevant planning docs from `Sound-Clash-Plan/`
   - `README.md`, `.gitignore`, `.env.example`
-- Supabase project `Sound-Clash` created (region: matching primary user geography — see `tech-stack.md` §3)
+- Supabase project `Sound-Clash` created (region: matching primary user geography; see `tech-stack.md` §3)
 - Render web service created with `Dockerfile` autodetect
 - Cloudflare Pages project created, linked to GitHub repo
 - DNS records (Cloudflare): `soundclash.org` → Pages; `api.soundclash.org` CNAME → Render
@@ -63,14 +63,14 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 2 — Data Migration
+## Phase 2: Data Migration
 
 **Goal**: Move the song catalog from the existing AWS RDS / S3 CSV (in `Sound-Clash-legacy`) into Supabase Postgres.
 
 **Deliverables**
-- `scripts/export-songs.py` — re-uses the existing export logic from `Sound-Clash-legacy/scripts/`; outputs `songs.json` and `genres.json`
-- `scripts/import-songs.py` — reads the JSON, inserts into Supabase via `supabase-py` using the service-role key
-- `db/seed/genres.sql` — manual seed of canonical genres (rock, pop, hiphop, classical, soundtrack, ...)
+- `scripts/export-songs.py`: re-uses the existing export logic from `Sound-Clash-legacy/scripts/`; outputs `songs.json` and `genres.json`
+- `scripts/import-songs.py`: reads the JSON, inserts into Supabase via `supabase-py` using the service-role key
+- `db/seed/genres.sql`: manual seed of canonical genres (rock, pop, hiphop, classical, soundtrack, ...)
 - `docs/data-migration.md` describing how to re-run the import
 
 **Exit criteria**
@@ -82,27 +82,27 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 **Estimated time**: 1 day
 
-**Risks**: schema mismatch (the legacy system stores `is_soundtrack` differently per service — reconcile during export); duplicate songs in source data
+**Risks**: schema mismatch (the legacy system stores `is_soundtrack` differently per service; reconcile during export); duplicate songs in source data
 
 ---
 
-## Phase 3 — Postgres Logic
+## Phase 3: Postgres Logic
 
 **Goal**: Land the schema, RPC functions, RLS, and pg_cron job. **The buzzer race correctness is proven here, before any frontend.**
 
 **Deliverables**
-- `db/migrations/001_extensions.sql` … `008_seed_genres.sql` — see **`data-model.md`** §7 for the full ordering, **`rpc-functions.md`** for the function bodies, **`security-rls.md`** for the RLS policies
-- `tests/db/test_buzz_in_race.py` — pytest using `testcontainers-postgres` that fires 10 concurrent `buzz_in` calls; asserts exactly one returns `locked=true`
-- `tests/db/test_rls_policies.py` — connects as `anon` role; verifies allowed/denied operations
-- `tests/db/test_cron_cleanup.py` — manually invokes `cleanup_expired_games()`; asserts deletion + cascade
-- `db/migrate.sh` — applies migrations in order via `psql` (used by GitHub Actions and locally)
+- `db/migrations/001_extensions.sql` … `008_seed_genres.sql`: see **`data-model.md`** §7 for the full ordering, **`rpc-functions.md`** for the function bodies, **`security-rls.md`** for the RLS policies
+- `tests/db/test_buzz_in_race.py`: pytest using `testcontainers-postgres` that fires 10 concurrent `buzz_in` calls; asserts exactly one returns `locked=true`
+- `tests/db/test_rls_policies.py`: connects as `anon` role; verifies allowed/denied operations
+- `tests/db/test_cron_cleanup.py`: manually invokes `cleanup_expired_games()`; asserts deletion + cascade
+- `db/migrate.sh`: applies migrations in order via `psql` (used by GitHub Actions and locally)
 
 **Exit criteria**
 - Buzz race test passes 100 times consecutively
 - RLS test confirms anon can SELECT but cannot mutate
 - pg_cron job is registered and visible in `cron.job` table
 
-**Dependencies**: Phase 1 (Supabase) — does not need Phase 2
+**Dependencies**: Phase 1 (Supabase): does not need Phase 2
 
 **Estimated time**: 2 days
 
@@ -110,20 +110,20 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 4 — Backend Port
+## Phase 4: Backend Port
 
-**Goal**: Single FastAPI app on Render replaces the three-service legacy backend. **WebSocket service is deleted entirely** — Supabase Realtime is the replacement.
+**Goal**: Single FastAPI app on Render replaces the three-service legacy backend. **WebSocket service is deleted entirely**: Supabase Realtime is the replacement.
 
 **Deliverables**
-- `backend/app/main.py` — FastAPI app entry, mounts routers, configures CORS for `soundclash.org`
-- `backend/app/middleware/admin_auth.py` — header check `X-Admin-Password` vs env var, constant-time comparison
-- `backend/app/routers/games.py` — see **`api-contracts.md`** §2 for the endpoint contract
-- `backend/app/routers/admin_songs.py` — admin-gated CRUD + bulk CSV import
-- `backend/app/routers/genres.py` — public GET endpoints
-- `backend/app/db/supabase_client.py` — thin wrapper around `supabase-py`, holds service-role key
-- `backend/Dockerfile` — multi-stage, non-root user, `uvicorn` entrypoint
-- `backend/pyproject.toml` — `fastapi`, `uvicorn`, `supabase`, `pytest`, `httpx`, `ruff`, `mypy`
-- `.github/workflows/backend.yml` — runs ruff, mypy, pytest; on main triggers Render deploy hook
+- `backend/app/main.py`: FastAPI app entry, mounts routers, configures CORS for `soundclash.org`
+- `backend/app/middleware/admin_auth.py`: header check `X-Admin-Password` vs env var, constant-time comparison
+- `backend/app/routers/games.py`: see **`api-contracts.md`** §2 for the endpoint contract
+- `backend/app/routers/admin_songs.py`: admin-gated CRUD + bulk CSV import
+- `backend/app/routers/genres.py`: public GET endpoints
+- `backend/app/db/supabase_client.py`: thin wrapper around `supabase-py`, holds service-role key
+- `backend/Dockerfile`: multi-stage, non-root user, `uvicorn` entrypoint
+- `backend/pyproject.toml`: `fastapi`, `uvicorn`, `supabase`, `pytest`, `httpx`, `ruff`, `mypy`
+- `.github/workflows/backend.yml`: runs ruff, mypy, pytest; on main triggers Render deploy hook
 
 **Exit criteria**
 - `pytest` passes against testcontainers Postgres
@@ -139,22 +139,22 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 5 — Realtime Wiring & Frontend Port ✅ shipped
+## Phase 5: Realtime Wiring & Frontend Port ✅ shipped
 
 **Goal**: React frontend works against Supabase Realtime + the new FastAPI backend. The buzzer makes a direct PostgREST RPC call from the browser.
 
 **Deliverables**
-- `frontend/src/lib/supabase.ts` — `createClient(SUPABASE_URL, SUPABASE_ANON_KEY)`, exported singleton
-- `frontend/src/hooks/useGameChannel.ts` — subscribes to `active_games`, `game_teams`, `game_rounds` for a `game_code`; reducer pattern (see **`realtime-design.md`** §5)
-- `frontend/src/hooks/useBuzzer.ts` — calls `supabase.rpc('buzz_in', ...)`; exposes `{ buzz, isLocking, lockedTeam, lockedAt }`
-- Refactored pages: `TeamGameplay.tsx`, `ManagerConsole.tsx`, `DisplayScreen.tsx` — all use the new hooks
+- `frontend/src/lib/supabase.ts`: `createClient(SUPABASE_URL, SUPABASE_ANON_KEY)`, exported singleton
+- `frontend/src/hooks/useGameChannel.ts`: subscribes to `active_games`, `game_teams`, `game_rounds` for a `game_code`; reducer pattern (see **`realtime-design.md`** §5)
+- `frontend/src/hooks/useBuzzer.ts`: calls `supabase.rpc('buzz_in', ...)`; exposes `{ buzz, isLocking, lockedTeam, lockedAt }`
+- Refactored pages: `TeamGameplay.tsx`, `ManagerConsole.tsx`, `DisplayScreen.tsx`: all use the new hooks
 - **Deleted**: `frontend/src/services/websocket/` from legacy code
-- `frontend/src/context/AuthContext.tsx` — kept (admin-password gate UX preserved)
-- `frontend/src/components/YouTubePlayer.tsx` — kept; gated by `playerReady` (see **`realtime-design.md`** §9)
-- `frontend/.env.example` — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`
+- `frontend/src/context/AuthContext.tsx`: kept (admin-password gate UX preserved)
+- `frontend/src/components/YouTubePlayer.tsx`: kept; gated by `playerReady` (see **`realtime-design.md`** §9)
+- `frontend/.env.example`: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`
 - `frontend/vitest.config.ts` + component tests with mocked Supabase client
 - `_headers` file with CSP (see **`security-rls.md`** §7)
-- `.github/workflows/frontend.yml` — `npm ci`, `vitest run`, `npm run build`, `wrangler pages deploy` on main
+- `.github/workflows/frontend.yml`: `npm ci`, `vitest run`, `npm run build`, `wrangler pages deploy` on main
 
 **Exit criteria**
 - Local dev: 3 browser tabs (manager + 2 teams + display) play a full game end-to-end
@@ -169,18 +169,18 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 6 — End-to-End Testing
+## Phase 6: End-to-End Testing
 
 **Goal**: Automated proof that the full system works under realistic concurrency, on a real Supabase project, with measured latency.
 
 **Status**: complete. Seven specs from §4.4 are landed (`buzzer_race`, `full_game`, `reconnection`, `expiration`, `admin_songs_crud`, `kick_team`, `mobile_team`). The legacy `admin_login.spec.ts` was removed when the manager password gate was retired in favour of per-game manager tokens (game hosting is open as of 2026-05-06). `admin_songs_crud` is API-driven (the `/admin/songs` UI is a deferred Phase 5 carve-out; the backend contract is exercised end-to-end). The multi-browser matrix (firefox / webkit / iPhone-SE project) and the 100×-stress `buzz_race_stress` job stay declared but label-gated. Creating the `Sound-Clash-Preview` Supabase project + setting GitHub secrets is an out-of-band setup step (see `tests/e2e/README.md`).
 
 **Deliverables**
-- `tests/e2e/playwright.config.ts` — multi-context test runner
-- `tests/e2e/buzzer_race.spec.ts` — 4 browser contexts (manager, team1, team2, display); race the buzz; assertions per **`realtime-design.md`** §3
-- `tests/e2e/full_game.spec.ts` — happy-path 3-round game end-to-end
-- `tests/e2e/admin_songs_crud.spec.ts` — song CRUD via admin API (UI deferred)
-- `.github/workflows/e2e.yml` — runs Playwright against a dedicated `Sound-Clash-Preview` Supabase project; gates merges to main
+- `tests/e2e/playwright.config.ts`: multi-context test runner
+- `tests/e2e/buzzer_race.spec.ts`: 4 browser contexts (manager, team1, team2, display); race the buzz; assertions per **`realtime-design.md`** §3
+- `tests/e2e/full_game.spec.ts`: happy-path 3-round game end-to-end
+- `tests/e2e/admin_songs_crud.spec.ts`: song CRUD via admin API (UI deferred)
+- `.github/workflows/e2e.yml`: runs Playwright against a dedicated `Sound-Clash-Preview` Supabase project; gates merges to main
 - A separate `Sound-Clash-Preview` Supabase project for E2E isolation
 
 **Exit criteria**
@@ -196,13 +196,13 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 ---
 
-## Phase 7 — Deploy & Cutover
+## Phase 7: Deploy & Cutover
 
 **Goal**: `soundclash.org` traffic moves from the AWS stack (in `Sound-Clash-legacy`) to the new system; AWS resources are torn down; bill goes to $0.
 
 **Deliverables**
-- `docs/runbook.md` — copied from `Sound-Clash-Plan/runbook.md`; ops procedures
-- `docs/aws-teardown-checklist.md` — explicit steps:
+- `docs/runbook.md`: copied from `Sound-Clash-Plan/runbook.md`; ops procedures
+- `docs/aws-teardown-checklist.md`: explicit steps:
   - `cdk destroy` on `infrastructure-ondemand/` (in `Sound-Clash-legacy`)
   - `cdk destroy` on `infrastructure/` if anything still up
   - empty + delete S3 buckets: `ondemand-frontend-…`, `soundclash-songs-data` (only after Supabase has the songs)
@@ -211,19 +211,19 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
   - delete ACM cert
   - delete CloudWatch log groups
 - DNS cutover: change apex `soundclash.org` from CloudFront to Cloudflare Pages
-- Smoke test: `tests/smoke/post_deploy.sh` — curl health endpoints, confirm a synthetic game can be created and a round can run
+- Smoke test: `tests/smoke/post_deploy.sh`: curl health endpoints, confirm a synthetic game can be created and a round can run
 
-**Exit criteria — Definition of Done** (cutover completed 2026-05-07)
+**Exit criteria; Definition of Done** (cutover completed 2026-05-07)
 - [x] `https://soundclash.org` serves the new frontend (apex `soundclash.org` → URL-redirect to `https://www.soundclash.org`, which is the Pages custom domain)
 - [x] `https://api.soundclash.org/health` returns 200
-- [x] A real end-to-end game playable from a clean browser session (verified via `tests/e2e/smoke/prod_realtime.spec.ts` — manager + 2 teams + buzzer race + scoring all pass against canonical URLs)
+- [x] A real end-to-end game playable from a clean browser session (verified via `tests/e2e/smoke/prod_realtime.spec.ts`: manager + 2 teams + buzzer race + scoring all pass against canonical URLs)
 - [x] Smoke-test script passes (`./tests/smoke/post_deploy.sh https://api.soundclash.org` PASS, game `QA34DD`)
-- [x] AWS Cost Explorer shows $0 forecasted for next month (actual daily spend from 2026-05-03 onward is $0.0001 — fractions of a cent. Forecast still displayed $19.93 immediately after teardown because it's based on the prior 30-day window; collapses to $0 once a few all-zero days accumulate.)
-- [x] All AWS resources from the teardown checklist are confirmed deleted (CloudFormation stacks, S3 buckets, CloudFront, ACM cert, ECR repos, CloudWatch logs all gone — verified via `aws` CLI sweep)
+- [x] AWS Cost Explorer shows $0 forecasted for next month (actual daily spend from 2026-05-03 onward is $0.0001; fractions of a cent. Forecast still displayed $19.93 immediately after teardown because it's based on the prior 30-day window; collapses to $0 once a few all-zero days accumulate.)
+- [x] All AWS resources from the teardown checklist are confirmed deleted (CloudFormation stacks, S3 buckets, CloudFront, ACM cert, ECR repos, CloudWatch logs all gone; verified via `aws` CLI sweep)
 - [x] `Sound-Clash-legacy` README updated with teardown notice pointing at `Sound-Clash`
 - [x] `Sound-Clash` README has setup, dev, deploy, runbook links (see "Documentation" section)
 - [x] Monitoring active: Render workspace-default failure notifications, Supabase free-tier auto-quota emails, Sentry "new issue" alert rules on both `sound-clash-frontend` and `sound-clash-backend` projects, cron-job.org keepalive on `https://api.soundclash.org/health` every 14 min
-- [x] Rollback plan documented — see `docs/runbook.md §2.4`. **Note**: as of teardown (2026-05-07) the DNS-revert path is no longer available; recovery now requires rebuilding AWS from scratch per `runbook.md §6`.
+- [x] Rollback plan documented; see `docs/runbook.md §2.4`. **Note**: as of teardown (2026-05-07) the DNS-revert path is no longer available; recovery now requires rebuilding AWS from scratch per `runbook.md §6`.
 
 **Dependencies**: Phase 6
 
@@ -241,24 +241,24 @@ The new code lives in **`Sound-Clash`** (GitHub). The current AWS-based code is 
 
 | Doc | Used in phase(s) |
 |---|---|
-| `architecture.md` | All — read first |
-| `realtime-design.md` | 3, 5, 6 — central design reference |
-| `tech-stack.md` | 1 — provisioning checklist |
-| `data-model.md` | 2, 3 — schema source of truth |
-| `rpc-functions.md` | 3 — function spec |
-| `security-rls.md` | 3, 4, 5 — RLS + auth |
-| `api-contracts.md` | 4, 5 — frontend/backend pact |
-| `game-rules.md` | 4, 5 — gameplay flow |
-| `local-development.md` | All — dev setup |
-| `free-tier-budget.md` | 1, 6, 7 — capacity + alerts |
-| `runbook.md` | 7 onward — ops |
-| `tasks.md` | All — granular tasks |
+| `architecture.md` | All; read first |
+| `realtime-design.md` | 3, 5, 6; central design reference |
+| `tech-stack.md` | 1; provisioning checklist |
+| `data-model.md` | 2, 3; schema source of truth |
+| `rpc-functions.md` | 3; function spec |
+| `security-rls.md` | 3, 4, 5; RLS + auth |
+| `api-contracts.md` | 4, 5; frontend/backend pact |
+| `game-rules.md` | 4, 5; gameplay flow |
+| `local-development.md` | All; dev setup |
+| `free-tier-budget.md` | 1, 6, 7; capacity + alerts |
+| `runbook.md` | 7 onward; ops |
+| `tasks.md` | All; granular tasks |
 
 ## Out of Scope (NOT in roadmap)
 
-- Multi-tenant (per-host accounts) — future work; data model leaves room
-- Game history / leaderboards — ephemeral by user choice
-- Direct audio uploads — YouTube-only by design
-- Mobile app — web-only
-- Internationalization — single language for now
-- Frontend state-machine library / Redux — local React state is enough at this scope
+- Multi-tenant (per-host accounts): future work; data model leaves room
+- Game history / leaderboards; ephemeral by user choice
+- Direct audio uploads; YouTube-only by design
+- Mobile app; web-only
+- Internationalization; single language for now
+- Frontend state-machine library / Redux; local React state is enough at this scope

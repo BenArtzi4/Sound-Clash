@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sound-clash-backend"
 version = "0.0.0"
-description = "Sound Clash — FastAPI backend"
+description = "Sound Clash FastAPI backend"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Ben Artzi", email = "benartzi4@gmail.com" }]
@@ -64,7 +64,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-# Ratcheted at the end of Phase 4 — see docs/testing-strategy.md §5.
+# Ratcheted at the end of Phase 4: see docs/testing-strategy.md §5.
 fail_under = 90
 precision = 2
 show_missing = true

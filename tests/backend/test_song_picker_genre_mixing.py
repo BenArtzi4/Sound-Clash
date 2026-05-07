@@ -1,7 +1,7 @@
 """Songs from multiple selected genres must be interleaved, not played in batches.
 
 User requirement: when a manager selects two or more genres, the round-by-round
-sequence should mix them throughout the game — not play "all rock, then all
+sequence should mix them throughout the game; not play "all rock, then all
 pop." The picker uses ``secrets.randbelow`` over the union of candidate songs,
 so genre-blind uniform sampling is the implementation. This test guards against
 a future refactor that re-introduces per-genre batching (e.g., grouping by
@@ -65,7 +65,7 @@ async def test_two_genres_are_interleaved_across_picks(client, db) -> None:
     assert sequence.count("rock") == SONGS_PER_GENRE
     assert sequence.count("pop") == SONGS_PER_GENRE
 
-    # 1) Both genres must appear in the first quarter — the game shouldn't open
+    # 1) Both genres must appear in the first quarter: the game shouldn't open
     #    with a single-genre run. Probability of all-one-genre across 25 picks
     #    from 50/50 pool is C(50,25)/C(100,25) ≈ 5e-15, effectively zero.
     first_quarter = set(sequence[: TOTAL // 4])
@@ -73,7 +73,7 @@ async def test_two_genres_are_interleaved_across_picks(client, db) -> None:
         f"first 25 picks were single-genre: {sequence[: TOTAL // 4]}"
     )
 
-    # 2) Both genres must appear in the LAST quarter — guards against the
+    # 2) Both genres must appear in the LAST quarter: guards against the
     #    inverse failure (last block monogenre).
     last_quarter = set(sequence[-(TOTAL // 4) :])
     assert last_quarter == {"rock", "pop"}, (
@@ -84,9 +84,9 @@ async def test_two_genres_are_interleaved_across_picks(client, db) -> None:
     #    has exactly 1 transition; the expected value for a uniform random
     #    shuffle of 50/50 is ~50. The bound here is loose enough that random
     #    sampling never trips it but any per-genre batching does.
-    # zip without strict — the two iterables differ in length by 1 by design.
+    # zip without strict: the two iterables differ in length by 1 by design.
     transitions = sum(1 for a, b in zip(sequence[:-1], sequence[1:], strict=True) if a != b)
     assert transitions >= 15, (
-        f"only {transitions} genre transitions across {TOTAL} picks — "
+        f"only {transitions} genre transitions across {TOTAL} picks; "
         "looks like the picker is batching by genre"
     )

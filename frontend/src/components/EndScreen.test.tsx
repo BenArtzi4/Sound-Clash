@@ -54,7 +54,7 @@ describe("EndScreen", () => {
       { ...baseTeam, id: "3", name: "Carol", score: 10, joined_at: "2026-05-05T12:00:00Z" },
     ];
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
-    // Bob (20 pts) should be the winner — both his name and the WINNER badge live in the same card.
+    // Bob (20 pts) should be the winner; both his name and the WINNER badge live in the same card.
     const winnerCard = screen.getByText(/winner/i).parentElement;
     expect(winnerCard?.textContent).toMatch(/Bob/);
     expect(screen.getByText("Alice")).toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("EndScreen", () => {
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
     // Alice alone on gold.
     expect(screen.getByText(/^winner$/i)).toBeInTheDocument();
-    // Bob and Carol share silver — Dave gets bronze, no "Other teams" because only 4 teams.
+    // Bob and Carol share silver; Dave gets bronze, no "Other teams" because only 4 teams.
     expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.getByText("Carol")).toBeInTheDocument();
     expect(screen.getByText("Dave")).toBeInTheDocument();

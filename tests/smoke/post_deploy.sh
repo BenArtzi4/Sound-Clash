@@ -46,7 +46,7 @@ require_cmd jq
 
 # Wrapper that asserts a 2xx and emits the body to stdout. Uses
 # --fail-with-body (curl 7.76+) so curl exits non-zero on HTTP errors
-# while still streaming the body — gives us the detail in the failure
+# while still streaming the body: gives us the detail in the failure
 # message without the -w '%{http_code}' invocation that trips git-bash
 # bundled curl 8.8.0 (exits 43). Portable across git-bash, macOS, and
 # CI Ubuntu.
@@ -149,7 +149,7 @@ log "      round_id=$ROUND_ID song=\"$SONG_TITLE\""
 # ---------------------------------------------------------------------------
 # 6. award-points
 #
-# We don't have a real buzz race in smoke — we just verify the host-only
+# We don't have a real buzz race in smoke: we just verify the host-only
 # path returns 200. With no buzz recorded, award_points will credit no
 # team (points_awarded=0); that's expected for smoke.
 # ---------------------------------------------------------------------------

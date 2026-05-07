@@ -1,8 +1,8 @@
-/* Sound Clash docs — shared stylesheet
+/* Sound Clash docs: shared stylesheet
  * Used by docs/index.html and docs/diagrams/*.html
  *
  * Page-tab navigation, prev/next footer, and theme toggle are rendered by
- * assets/script.js from the PAGES list — adding a 4th HTML page = one entry
+ * assets/script.js from the PAGES list; adding a 4th HTML page = one entry
  * there, no edits here.
  */
 
@@ -136,7 +136,7 @@ body {
   backdrop-filter: saturate(180%) blur(10px);
   -webkit-backdrop-filter: saturate(180%) blur(10px);
 }
-/* Fallback for browsers without backdrop-filter — opaque background */
+/* Fallback for browsers without backdrop-filter; opaque background */
 @supports not (backdrop-filter: blur(1px)) {
   .topnav { background: var(--bg-elevated); }
 }

@@ -1,4 +1,4 @@
-"""Request body validation — Pydantic constraints surface as 400."""
+"""Request body validation; Pydantic constraints surface as 400."""
 
 from __future__ import annotations
 

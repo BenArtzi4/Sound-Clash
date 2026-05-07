@@ -34,7 +34,7 @@ test("team identity survives a mid-game tab reload", async ({ browser }) => {
     team.page.getByRole("status").filter({ hasText: /Buzz when you know it/i }),
   ).toBeVisible({ timeout: 15_000 });
 
-  // Hard reload — useGameChannel re-subscribes, hydrate refetches, and the
+  // Hard reload; useGameChannel re-subscribes, hydrate refetches, and the
   // stored team identity is read again from localStorage.
   await team.page.reload();
 

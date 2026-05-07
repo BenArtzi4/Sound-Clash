@@ -252,7 +252,7 @@ def test_award_blocking_handles_postgrest_list_shape() -> None:
 
 
 def test_award_blocking_accepts_legacy_dict_shape() -> None:
-    """Older test mocks pass a bare dict — keep working with both shapes."""
+    """Older test mocks pass a bare dict; keep working with both shapes."""
     from app.routers.games import _award_blocking
 
     client = _StubSupabaseClient(

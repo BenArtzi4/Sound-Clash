@@ -1,4 +1,4 @@
-# Sound Clash backend — multi-stage Dockerfile.
+# Sound Clash backend: multi-stage Dockerfile.
 # Builder installs into a venv, runtime image copies it and runs as non-root.
 # Render sets $PORT at runtime; uvicorn picks it up.
 # See docs/tech-stack.md and docs/local-development.md for context.

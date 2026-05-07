@@ -1,4 +1,4 @@
-# Sound Clash — Tech Stack
+# Sound Clash: Tech Stack
 
 The concrete services that constitute the system, why each was chosen over alternatives, and the free-tier limits relevant to operations.
 
@@ -17,7 +17,7 @@ For quota analysis (capacity in games/month), see `free-tier-budget.md`. For why
 | Render keepalive | cron-job.org | 50 cron jobs |
 | Domain | Namecheap (existing) | $12/yr (only paid item) |
 
-## 2. Backend Runtime — Render
+## 2. Backend Runtime: Render
 
 **FastAPI in a single Docker container deployed to Render's free web service tier.**
 
@@ -56,7 +56,7 @@ For quota analysis (capacity in games/month), see `free-tier-budget.md`. For why
 - Build command: autodetected from Dockerfile.
 - Start command: autodetected (`uvicorn app.main:app --host 0.0.0.0 --port $PORT`).
 
-## 3. Database, Realtime, RPC — Supabase
+## 3. Database, Realtime, RPC: Supabase
 
 **Supabase is the entire backend data layer.** Postgres for storage, PostgREST for direct-from-browser RPC, Realtime for fan-out, pg_cron for the 4-hour TTL sweep.
 
@@ -88,13 +88,13 @@ For quota analysis (capacity in games/month), see `free-tier-budget.md`. For why
 - **Project pause**: free projects pause after 7 days of zero activity. A weekly cron (`SELECT 1`) prevents this. See `runbook.md`.
 - **Single region per project**: pick at creation, can't move.
 - **No PITR on free**: 1-day daily backup is the recovery floor.
-- **No connection pooler on free** (PgBouncer is Pro-tier in Supabase). FastAPI uses `supabase-py`'s built-in HTTP client, which doesn't need a pooler — calls go through PostgREST, not directly to Postgres. Safe.
+- **No connection pooler on free** (PgBouncer is Pro-tier in Supabase). FastAPI uses `supabase-py`'s built-in HTTP client, which doesn't need a pooler; calls go through PostgREST, not directly to Postgres. Safe.
 
 ### Region choice
 
 Pick the region closest to the primary user geography. For an Israel-based maintainer with EU and Israeli users, `eu-central-1` (Frankfurt) is the closest free-tier region. For US users, `us-east-1`. Decided at project-creation time; immovable later.
 
-## 4. Frontend — Cloudflare Pages
+## 4. Frontend: Cloudflare Pages
 
 **Static React + Vite SPA hosted on Cloudflare Pages.**
 
@@ -128,7 +128,7 @@ Pick the region closest to the primary user geography. For an Israel-based maint
 - Custom domain: `soundclash.org` (apex via Cloudflare DNS CNAME flattening).
 - `_headers` file in repo defines CSP and security headers (see `security-rls.md` §7).
 
-## 5. DNS — Cloudflare
+## 5. DNS: Cloudflare
 
 **`soundclash.org` already lives at Cloudflare.** No migration needed.
 
@@ -139,7 +139,7 @@ Records:
 
 The legacy AWS records (CloudFront distribution, ALB hostname) are deleted as part of Phase 7 cutover.
 
-## 6. CI/CD — GitHub Actions
+## 6. CI/CD: GitHub Actions
 
 **Three workflows + one manual-dispatch.**
 
@@ -152,21 +152,21 @@ The legacy AWS records (CloudFront distribution, ALB hostname) are deleted as pa
 
 ### Why public repo
 
-GitHub Actions is **unlimited minutes for public repos**, 2,000/mo for private. The codebase has no proprietary IP — public is the right call. Saves CI worry forever.
+GitHub Actions is **unlimited minutes for public repos**, 2,000/mo for private. The codebase has no proprietary IP; public is the right call. Saves CI worry forever.
 
 ### Why not GitLab / CircleCI
 
 - GitHub Actions is bundled with the repo host; one less service to manage.
 - Integrations with Render, Cloudflare, Sentry are all first-class.
 
-## 7. Error Tracking — Sentry
+## 7. Error Tracking: Sentry
 
 **Frontend and backend both report to a single Sentry project.**
 
 ### Why Sentry
 
-- 5,000 errors/mo on free tier — enough at expected volume.
-- 10,000 performance events/mo — enough to instrument the buzzer hot path.
+- 5,000 errors/mo on free tier; enough at expected volume.
+- 10,000 performance events/mo; enough to instrument the buzzer hot path.
 - First-class integrations for FastAPI and React.
 - Source-map upload for readable browser stack traces.
 
@@ -184,7 +184,7 @@ GitHub Actions is **unlimited minutes for public repos**, 2,000/mo for private. 
 - Admin passwords (scrubbed by header filters)
 - PII (none collected anyway)
 
-## 8. Render Keepalive — cron-job.org
+## 8. Render Keepalive: cron-job.org
 
 **External cron pings `https://api.soundclash.org/health` every 14 minutes** to defeat Render's 15-minute idle sleep.
 
@@ -202,7 +202,7 @@ If cron-job.org breaks, Render sleeps. The first game creation after sleep stall
 
 - Run the keepalive in a GitHub Actions cron schedule. Burns 5 minutes per ping × 96 pings/day = 480 min/day = 14,400 min/month. Way over the 2,000-min free tier. Disqualified.
 
-## 9. Local Development — Supabase CLI
+## 9. Local Development: Supabase CLI
 
 **`supabase start` spins up the entire data layer in Docker** for local dev.
 
@@ -229,17 +229,17 @@ For each tier, the alternative considered and the reason for the choice:
 | Errors | Sentry | LogRocket | Wider FastAPI/React support |
 | Keepalive | cron-job.org | GitHub Actions schedule | Doesn't burn CI minutes |
 
-## 11. Anti-Stack — Things We Explicitly Don't Use
+## 11. Anti-Stack: Things We Explicitly Don't Use
 
-- **Redis / ElastiCache** — Realtime + Postgres do the work; nothing to cache.
-- **DynamoDB** — was used in legacy AWS for ephemeral state; replaced by Postgres rows + pg_cron.
-- **AWS S3 / Cloudflare R2 / any object storage** — songs are YouTube IDs; no audio files.
-- **Kafka / RabbitMQ / message broker** — fan-out is Realtime; no queueing.
-- **Kubernetes / ECS** — single FastAPI container on Render is enough.
-- **Terraform / Pulumi / CDK** — managed services; clicking a few dashboards once is faster than IaC for this scope. Reconsider if the stack grows.
-- **Prometheus / Grafana** — Render and Supabase dashboards cover what's needed; Sentry handles errors. No need for a separate metrics stack.
-- **NGINX / HAProxy** — Render and Cloudflare terminate TLS; no reverse-proxy layer needed.
-- **Background workers (Celery / RQ)** — no async work that doesn't fit a Postgres function or pg_cron.
+- **Redis / ElastiCache**: Realtime + Postgres do the work; nothing to cache.
+- **DynamoDB**: was used in legacy AWS for ephemeral state; replaced by Postgres rows + pg_cron.
+- **AWS S3 / Cloudflare R2 / any object storage**: songs are YouTube IDs; no audio files.
+- **Kafka / RabbitMQ / message broker**: fan-out is Realtime; no queueing.
+- **Kubernetes / ECS**: single FastAPI container on Render is enough.
+- **Terraform / Pulumi / CDK**: managed services; clicking a few dashboards once is faster than IaC for this scope. Reconsider if the stack grows.
+- **Prometheus / Grafana**: Render and Supabase dashboards cover what's needed; Sentry handles errors. No need for a separate metrics stack.
+- **NGINX / HAProxy**: Render and Cloudflare terminate TLS; no reverse-proxy layer needed.
+- **Background workers (Celery / RQ)**: no async work that doesn't fit a Postgres function or pg_cron.
 
 The smallest stack that solves the problem is the one we want. Each entry above is a service we'd **add** if a real need appears, not one we removed for fashion.
 
