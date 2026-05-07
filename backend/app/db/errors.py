@@ -13,6 +13,8 @@ multiple fallback fields.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 
@@ -119,3 +121,18 @@ def map_postgrest_error(exc: Exception) -> DomainError:
         return NotFoundError(msg)
 
     return InternalError(msg)
+
+
+@contextmanager
+def mapped_postgrest_errors() -> Iterator[None]:
+    """Wrap a Supabase call and translate raw exceptions to DomainErrors.
+
+    DomainErrors raised inside the block (already shaped) propagate untouched;
+    every other exception goes through ``map_postgrest_error``.
+    """
+    try:
+        yield
+    except DomainError:
+        raise
+    except Exception as exc:
+        raise map_postgrest_error(exc) from exc

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, joinTeam } from "../lib/api";
+import { setStoredTeam } from "../lib/teamStorage";
 import styles from "./JoinTeamPage.module.css";
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
@@ -8,10 +9,6 @@ const CODE_CHAR_RE = /[A-Z2-9]/g;
 
 function normalizeCode(raw: string): string {
   return (raw.toUpperCase().match(CODE_CHAR_RE) ?? []).join("").slice(0, 6);
-}
-
-function teamStorageKey(gameCode: string): string {
-  return `game:${gameCode}:team`;
 }
 
 export function JoinTeamPage() {
@@ -35,10 +32,7 @@ export function JoinTeamPage() {
     setError(null);
     try {
       const team = await joinTeam(code, trimmedName);
-      window.localStorage.setItem(
-        teamStorageKey(code),
-        JSON.stringify({ id: team.id, name: team.name }),
-      );
+      setStoredTeam(code, { id: team.id, name: team.name });
       navigate(`/team/${code}`);
     } catch (err) {
       if (err instanceof ApiError) {
