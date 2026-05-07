@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @.claude/rules/dependencies.md
 @.claude/rules/binary-assets.md
 @.claude/rules/lessons-learned.md
+@.claude/rules/changelog.md
 
 ## Project status
 
