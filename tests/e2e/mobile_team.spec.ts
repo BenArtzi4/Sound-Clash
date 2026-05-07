@@ -56,8 +56,8 @@ test("mobile viewport: team can join, buzz, and score", async ({ browser }) => {
 
   // Award and confirm the score reaches the team's own scoreboard on
   // the small viewport.
-  await manager.page.getByLabel(/^title$/i).check();
-  await manager.page.getByTestId("award-points").click();
+  await manager.page.getByTestId("score-title").click();
+  await manager.page.getByTestId("end-round").click();
   await expect(
     team.page.locator('[data-team-id]:has-text("Mobile"):has-text("10")').first(),
   ).toBeVisible({ timeout: 10_000 });

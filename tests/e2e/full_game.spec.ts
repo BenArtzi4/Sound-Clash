@@ -50,14 +50,14 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
       timeout: 10_000,
     });
 
-    // Manager checks the right boxes and awards.
+    // Manager toggles the right scoring buttons and ends the round.
     if (r.title) {
-      await manager.page.getByLabel(/^title$/i).check();
+      await manager.page.getByTestId("score-title").click();
     }
     if (r.artist) {
-      await manager.page.getByLabel(/^artist$/i).check();
+      await manager.page.getByTestId("score-artist").click();
     }
-    await manager.page.getByTestId("award-points").click();
+    await manager.page.getByTestId("end-round").click();
 
     runningTotal += r.expected;
 

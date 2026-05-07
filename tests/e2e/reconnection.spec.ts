@@ -61,8 +61,8 @@ test("team identity survives a mid-game tab reload", async ({ browser }) => {
   });
 
   // Award and verify the score lands on the (reloaded) team's own scoreboard.
-  await manager.page.getByLabel(/^title$/i).check();
-  await manager.page.getByTestId("award-points").click();
+  await manager.page.getByTestId("score-title").click();
+  await manager.page.getByTestId("end-round").click();
   await expect(
     team.page.locator('[data-team-id]:has-text("Persistent"):has-text("10")').first(),
   ).toBeVisible({ timeout: 10_000 });
