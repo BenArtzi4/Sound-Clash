@@ -54,6 +54,11 @@ class JoinTeamResponse(BaseModel):
 class SelectSongRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Optional manual pick. When set, the picker is bypassed and the round
+    # starts with this exact song. Used by the manager's "Restart song"
+    # action — see docs/game-rules.md §11.
+    song_id: UUID | None = None
+
 
 class SelectSongResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")

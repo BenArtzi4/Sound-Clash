@@ -105,10 +105,14 @@ export function createGame(body: {
   return request("POST", "/games", { body });
 }
 
-export function selectSong(gameCode: string, managerToken: string): Promise<SelectSongResponse> {
+export function selectSong(
+  gameCode: string,
+  managerToken: string,
+  songId?: string,
+): Promise<SelectSongResponse> {
   return request("POST", `/games/${gameCode}/select-song`, {
     managerToken,
-    body: {},
+    body: songId ? { song_id: songId } : {},
   });
 }
 

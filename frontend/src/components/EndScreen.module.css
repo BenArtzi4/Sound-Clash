@@ -239,6 +239,25 @@
   background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
 }
 
+.podiumTeams {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.podiumTeam {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.podiumTeams > .podiumTeam + .podiumTeam {
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(15, 23, 42, 0.18);
+}
+
 .teamName {
   font-size: 1.25rem;
   font-weight: 800;

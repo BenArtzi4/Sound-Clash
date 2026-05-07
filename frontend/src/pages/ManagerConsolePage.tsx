@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { EndScreen } from "../components/EndScreen";
 import { QRPanel } from "../components/QRPanel";
 import { Scoreboard } from "../components/Scoreboard";
 import { Skeleton } from "../components/Skeleton";
@@ -9,7 +10,7 @@ import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { serverTimeNow } from "../hooks/useServerTime";
-import { awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
+import { ApiError, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import type { Song } from "../lib/types";
 import styles from "./ManagerConsolePage.module.css";
@@ -49,7 +50,28 @@ export function ManagerConsolePage() {
   }, [state?.game.buzzed_team_id]);
 
   function reportError(err: unknown) {
+    if (err instanceof ApiError) {
+      const reason =
+        err.details && typeof err.details === "object" && err.details !== null
+          ? (err.details as { reason?: unknown }).reason
+          : undefined;
+      if (err.status === 409 && reason === "no_more_songs") {
+        toast(
+          "All songs in your selected genres have been played. End the game or start a new one with more genres.",
+          { variant: "error" },
+        );
+        return;
+      }
+    }
     toast(err instanceof Error ? err.message : "Request failed", { variant: "error" });
+  }
+
+  async function loadSongIntoPlayer(song: Song) {
+    if (player.ready) {
+      playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
+    } else {
+      player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
+    }
   }
 
   async function handleNextRound() {
@@ -59,14 +81,23 @@ export function ManagerConsolePage() {
       const result = await selectSong(gameCode, managerToken);
       setCurrentSong(result.song);
       resetAwardChecks();
-      if (player.ready) {
-        playerRef.current?.loadVideoById(result.song.youtube_id, result.song.start_time);
-      } else {
-        player.enqueueSong({
-          youtube_id: result.song.youtube_id,
-          start_time: result.song.start_time,
-        });
-      }
+      await loadSongIntoPlayer(result.song);
+    } catch (err) {
+      reportError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRestartSong() {
+    if (busy || !managerToken || !currentSong) return;
+    setBusy(true);
+    try {
+      const result = await selectSong(gameCode, managerToken, currentSong.id);
+      setCurrentSong(result.song);
+      resetAwardChecks();
+      await loadSongIntoPlayer(result.song);
+      toast("Song restarted", { variant: "info" });
     } catch (err) {
       reportError(err);
     } finally {
@@ -99,6 +130,16 @@ export function ManagerConsolePage() {
         toast(`+${result.points_awarded} pts awarded`, { variant: "success" });
       } else {
         toast("No points awarded", { variant: "info" });
+      }
+      // game-rules.md §2: "round complete + last round" auto-transitions to `ended`.
+      if (state.game.round_number >= state.game.total_rounds) {
+        try {
+          await endGame(gameCode, managerToken);
+          clearManagerToken(gameCode);
+          toast("Game complete!", { variant: "success" });
+        } catch (endErr) {
+          reportError(endErr);
+        }
       }
     } catch (err) {
       reportError(err);
@@ -187,6 +228,20 @@ export function ManagerConsolePage() {
 
   const game = state.game;
   const teams = Array.from(state.teams.values());
+
+  if (game.status === "ended") {
+    return (
+      <main className={styles.shell}>
+        <EndScreen teams={teams} gameCode={gameCode} />
+        <div className={styles.endActions}>
+          <Link to="/" className="btn btn-primary">
+            Back to home
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
 
   const roundStartedAt = state.currentRound?.started_at;
@@ -198,19 +253,17 @@ export function ManagerConsolePage() {
     : ROUND_DURATION_SEC;
   const timerActive = game.status === "playing" && lockedTeam == null && state.currentRound != null;
 
-  const statusClass =
-    game.status === "playing"
-      ? styles.statusPlaying
-      : game.status === "ended"
-        ? styles.statusEnded
-        : styles.statusWaiting;
+  // TS narrows game.status to "playing" | "waiting" past the EndScreen early
+  // return — the "ended" arm is unreachable here.
+  const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
   const nextRoundDisabled =
     busy ||
-    game.status === "ended" ||
     !player.ready ||
     (game.status === "playing" && game.round_number >= game.total_rounds);
   const skipDisabled = busy || game.status !== "playing";
+  const restartDisabled =
+    busy || game.status !== "playing" || !currentSong || !player.ready || lockedTeam != null;
   const awardDisabled = busy || !lockedTeam;
   const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
 
@@ -231,7 +284,7 @@ export function ManagerConsolePage() {
           <button
             className="btn btn-danger"
             onClick={() => setPending({ kind: "end" })}
-            disabled={busy || game.status === "ended"}
+            disabled={busy}
             data-testid="end-game"
           >
             End game
@@ -318,6 +371,14 @@ export function ManagerConsolePage() {
             <div className={styles.actionsInline}>
               <button
                 className="btn btn-ghost"
+                onClick={() => void handleRestartSong()}
+                disabled={restartDisabled}
+                data-testid="restart-song"
+              >
+                Restart song
+              </button>
+              <button
+                className="btn btn-ghost"
                 onClick={() => void handleAward(true)}
                 disabled={skipDisabled}
                 data-testid="skip-round"
@@ -390,6 +451,14 @@ export function ManagerConsolePage() {
       </div>
 
       <div className={styles.mobileBar} role="toolbar" aria-label="Round actions">
+        <button
+          className="btn btn-ghost"
+          onClick={() => void handleRestartSong()}
+          disabled={restartDisabled}
+          data-testid="restart-song-mobile"
+        >
+          Restart
+        </button>
         <button
           className="btn btn-ghost"
           onClick={() => void handleAward(true)}

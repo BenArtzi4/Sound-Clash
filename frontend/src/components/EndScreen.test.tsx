@@ -70,4 +70,52 @@ describe("EndScreen", () => {
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
     expect(screen.queryByText(/other teams/i)).not.toBeInTheDocument();
   });
+
+  it("places multiple teams on the gold podium when tied for first", () => {
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 30 },
+      { ...baseTeam, id: "2", name: "Bob", score: 30 },
+      { ...baseTeam, id: "3", name: "Carol", score: 10 },
+    ];
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    expect(screen.getByText(/winners/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^winner$/i)).not.toBeInTheDocument();
+    // Both tied teams sit inside the same gold card.
+    const winnersCard = screen.getByText(/winners/i).parentElement;
+    expect(winnersCard?.textContent).toMatch(/Alice/);
+    expect(winnersCard?.textContent).toMatch(/Bob/);
+    // Carol (10 pts) gets the silver podium since no team has the second-highest distinct score above hers.
+    expect(screen.getByText("Carol")).toBeInTheDocument();
+  });
+
+  it("ties at second/third stack on the same podium card", () => {
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 50 },
+      { ...baseTeam, id: "2", name: "Bob", score: 30 },
+      { ...baseTeam, id: "3", name: "Carol", score: 30 },
+      { ...baseTeam, id: "4", name: "Dave", score: 10 },
+    ];
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    // Alice alone on gold.
+    expect(screen.getByText(/^winner$/i)).toBeInTheDocument();
+    // Bob and Carol share silver — Dave gets bronze, no "Other teams" because only 4 teams.
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+    expect(screen.getByText("Carol")).toBeInTheDocument();
+    expect(screen.getByText("Dave")).toBeInTheDocument();
+    expect(screen.queryByText(/other teams/i)).not.toBeInTheDocument();
+  });
+
+  it("groups all teams on gold when everyone is tied", () => {
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 10 },
+      { ...baseTeam, id: "2", name: "Bob", score: 10 },
+      { ...baseTeam, id: "3", name: "Carol", score: 10 },
+    ];
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    expect(screen.getByText(/winners/i)).toBeInTheDocument();
+    const winnersCard = screen.getByText(/winners/i).parentElement;
+    expect(winnersCard?.textContent).toMatch(/Alice/);
+    expect(winnersCard?.textContent).toMatch(/Bob/);
+    expect(winnersCard?.textContent).toMatch(/Carol/);
+  });
 });

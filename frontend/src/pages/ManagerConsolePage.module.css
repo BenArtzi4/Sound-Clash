@@ -462,3 +462,9 @@
     font-size: 1.1rem;
   }
 }
+
+.endActions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
