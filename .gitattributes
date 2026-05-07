@@ -27,7 +27,7 @@ Dockerfile text eol=lf
 # Shell scripts must be LF or they break on Linux.
 *.sh text eol=lf
 
-# Binary file types — explicitly mark to avoid mangling.
+# Binary file types: explicitly mark to avoid mangling.
 *.png    binary
 *.jpg    binary
 *.jpeg   binary

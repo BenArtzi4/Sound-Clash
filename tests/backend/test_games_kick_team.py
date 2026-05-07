@@ -1,4 +1,4 @@
-"""DELETE /games/{code}/teams/{team_id} — manager kicks a team."""
+"""DELETE /games/{code}/teams/{team_id}; manager kicks a team."""
 
 from __future__ import annotations
 

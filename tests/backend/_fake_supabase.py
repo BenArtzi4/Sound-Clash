@@ -396,11 +396,11 @@ class _Rpc:
             if not rows:
                 data = None
             elif len(rows[0]) == 1 and self._name not in {"award_points", "buzz_in"}:
-                # scalar-returning function — unwrap single column
+                # scalar-returning function: unwrap single column
                 data = _normalize(list(rows[0].values())[0])
             else:
                 # Real PostgREST always returns TABLE-shaped functions as a
-                # list of row-dicts, even for single-row results — never
+                # list of row-dicts, even for single-row results: never
                 # auto-unwraps. Match that. (Earlier this fake unwrapped a
                 # length-1 list into a bare dict; that masked the regression
                 # in d49cb6f where _award_blocking dropped its list-defensive

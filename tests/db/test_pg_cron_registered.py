@@ -1,4 +1,4 @@
-"""pg_cron — the cleanup-expired-games job is registered.
+"""pg_cron; the cleanup-expired-games job is registered.
 
 Skipped on Postgres installs without pg_cron (testcontainers postgres:15).
 On Supabase preview/prod, this verifies the schedule exists with the right

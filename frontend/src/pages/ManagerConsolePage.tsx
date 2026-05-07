@@ -228,7 +228,7 @@ export function ManagerConsolePage() {
   // Visiting /manager/game/<code> without having created the game (or after
   // having ended it / cleared storage) shouldn't surface the console UI.
   // The check sits ABOVE the gone/skeleton branches because it doesn't
-  // depend on a Realtime payload — a non-host should bounce immediately.
+  // depend on a Realtime payload; a non-host should bounce immediately.
   if (!managerToken) {
     return (
       <main className={styles.shell}>
@@ -298,7 +298,7 @@ export function ManagerConsolePage() {
   const timerActive = game.status === "playing" && lockedTeam == null && state.currentRound != null;
 
   // TS narrows game.status to "playing" | "waiting" past the EndScreen early
-  // return — the "ended" arm is unreachable here.
+  // return; the "ended" arm is unreachable here.
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
   const nextRoundDisabled =
@@ -351,7 +351,7 @@ export function ManagerConsolePage() {
                     <p className={styles.songLine}>{currentSong.title}</p>
                     <p className={styles.songMeta}>
                       {currentSong.artist}
-                      {currentSong.source ? ` — ${currentSong.source}` : ""}
+                      {currentSong.source ? ` - ${currentSong.source}` : ""}
                     </p>
                   </>
                 ) : (
@@ -376,7 +376,7 @@ export function ManagerConsolePage() {
 
             {lockedTeam ? (
               <div className={styles.lockedBanner} role="status" aria-live="polite">
-                <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score the
+                <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in. Score the
                 answer:
               </div>
             ) : null}
@@ -500,7 +500,7 @@ export function ManagerConsolePage() {
               <div className={styles.emptyTeams}>
                 <p className={styles.emptyTeamsTitle}>No teams have joined yet.</p>
                 <p className={styles.emptyTeamsHint}>
-                  Share <span className={styles.emptyTeamsCode}>{gameCode}</span> with players —
+                  Share <span className={styles.emptyTeamsCode}>{gameCode}</span> with players -
                   they'll appear here once they join.
                 </p>
               </div>

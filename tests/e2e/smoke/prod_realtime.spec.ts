@@ -1,7 +1,7 @@
 // Phase 7 prod smoke: a single buzzer round end-to-end against the live
 // deployment. Mirrors tests/e2e/buzzer_race.spec.ts but trimmed to the
-// minimum that proves the architectural keystone — browser → Supabase
-// RPC → Realtime fan-out — survived deploy.
+// minimum that proves the architectural keystone; browser → Supabase
+// RPC → Realtime fan-out; survived deploy.
 //
 // Manual / on-demand. NOT wired into any CI workflow. See tests/smoke/README.md
 // for the run command.
@@ -78,7 +78,7 @@ test("prod smoke: one buzzer round end-to-end against the deployed app", async (
       headers: { "X-Manager-Token": token },
     });
     if (!resp.ok()) {
-      // Don't mask the original failure — log and continue.
+      // Don't mask the original failure; log and continue.
       console.warn(`prod smoke cleanup: end-game returned ${resp.status()} for ${code}`);
     }
     await ctx.dispose();

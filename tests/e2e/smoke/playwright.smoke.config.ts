@@ -1,7 +1,7 @@
 // Smoke-only Playwright config.
 //
 // Differs from tests/e2e/playwright.config.ts by omitting the `webServer`
-// block — smoke specs hit a live deployment, not a locally-spun stack.
+// block; smoke specs hit a live deployment, not a locally-spun stack.
 //
 // Lives under tests/e2e/ rather than tests/smoke/ because @playwright/test
 // is installed in tests/e2e/node_modules and Node's module resolution

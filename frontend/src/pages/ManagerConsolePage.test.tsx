@@ -536,7 +536,7 @@ describe("ManagerConsolePage", () => {
     });
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
-    // Round controls should be gone — the End screen short-circuits the rest of the layout.
+    // Round controls should be gone; the End screen short-circuits the rest of the layout.
     expect(screen.queryByTestId("end-round")).not.toBeInTheDocument();
   });
 
@@ -632,7 +632,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(next);
     await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
 
-    // Set up the next response for the Restart click — same song.
+    // Set up the next response for the Restart click; same song.
     vi.mocked(selectSong).mockResolvedValueOnce({
       round_id: "r3",
       round_number: 3,

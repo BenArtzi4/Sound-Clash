@@ -1,4 +1,4 @@
-"""Song models — admin CRUD payloads."""
+"""Song models; admin CRUD payloads."""
 
 from __future__ import annotations
 

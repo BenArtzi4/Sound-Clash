@@ -1,6 +1,6 @@
 // Admin song catalog CRUD against the /admin/songs REST endpoints.
 //
-// This spec is API-driven (no /admin/songs UI exists yet — that page is
+// This spec is API-driven (no /admin/songs UI exists yet; that page is
 // a deferred Phase 5 carve-out). The contract under test is:
 //   POST   /admin/songs              -> 201 SongPayload
 //   GET    /admin/songs/{id}         -> 200 SongPayload | 404
@@ -28,7 +28,7 @@ import {
 // and prune anything that survived a mid-test failure.
 const TAG = "E2ETEMPCRUD";
 
-// 11-char strings matching ^[A-Za-z0-9_-]{11}$ — required by the
+// 11-char strings matching ^[A-Za-z0-9_-]{11}$; required by the
 // SongCreate.youtube_id validator. E2ETEMP prefix mirrors the existing
 // E2ETEST seed prefix in db/seed/songs.sql so the rows are easy to spot.
 const Y1 = "E2ETEMPaa01";

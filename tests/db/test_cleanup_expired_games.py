@@ -1,4 +1,4 @@
-"""cleanup_expired_games() — TTL sweep + cascade.
+"""cleanup_expired_games(): TTL sweep + cascade.
 
 Spec: docs/rpc-functions.md §5.
 """

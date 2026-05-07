@@ -100,7 +100,7 @@ async function signIn() {
   await waitFor(() => screen.getByText("Alpha"));
 }
 
-describe("AdminSongsPage — gate", () => {
+describe("AdminSongsPage: gate", () => {
   it("renders the password gate when no password is set", () => {
     renderPage();
     expect(screen.getByLabelText(/admin password/i)).toBeInTheDocument();
@@ -138,7 +138,7 @@ describe("AdminSongsPage — gate", () => {
   });
 });
 
-describe("AdminSongsPage — list", () => {
+describe("AdminSongsPage: list", () => {
   it("renders songs returned by listSongs", async () => {
     renderPage();
     await signIn();
@@ -215,7 +215,7 @@ describe("AdminSongsPage — list", () => {
   });
 });
 
-describe("AdminSongsPage — create + edit + delete", () => {
+describe("AdminSongsPage: create + edit + delete", () => {
   it("creates a song with the form values", async () => {
     vi.mocked(createSong).mockResolvedValue(SONG_A);
     renderPage();
@@ -313,7 +313,7 @@ describe("AdminSongsPage — create + edit + delete", () => {
   });
 });
 
-describe("AdminSongsPage — bulk import", () => {
+describe("AdminSongsPage: bulk import", () => {
   it("uploads a CSV file and toasts the summary", async () => {
     vi.mocked(bulkImportSongs).mockResolvedValue({ inserted: 2, updated: 1, total: 3 });
     renderPage();

@@ -28,7 +28,7 @@ async def test_same_team_name_allowed_across_games(db: asyncpg.Connection) -> No
     code_a = await create_test_game(db)
     code_b = await create_test_game(db)
     await create_test_team(db, code_a, name="Alpha")
-    # Should not raise — the unique key is (game_code, name).
+    # Should not raise: the unique key is (game_code, name).
     await create_test_team(db, code_b, name="Alpha")
 
 

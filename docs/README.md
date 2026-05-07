@@ -1,26 +1,26 @@
-# Sound Clash — Documentation
+# Sound Clash: Documentation
 
 Design and operational documentation for Sound Clash. Each file has a single, distinct purpose; cross-references use bare filenames so links work on GitHub, in an IDE, or as plain Markdown.
 
 ## Read in this order
 
-1. **[architecture.md](architecture.md)** — executive summary; one-page overview with links to depth.
-2. **[realtime-design.md](realtime-design.md)** — THE central design decision: why no Python in the buzzer path; how <200ms is achieved on free hosting.
-3. **[tech-stack.md](tech-stack.md)** — the concrete services (Supabase, Render, Cloudflare Pages, …) with free-tier limits and alternatives considered.
-4. **[game-rules.md](game-rules.md)** — gameplay flow, state machine, scoring, edge cases. Read this first if you don't know what Sound Clash is.
-5. **[data-model.md](data-model.md)** — schema, indexes, ER diagram.
-6. **[rpc-functions.md](rpc-functions.md)** — the six PL/pgSQL functions that hold the system's logic.
-7. **[security-rls.md](security-rls.md)** — auth model, RLS policies, threat model, rate limits, CSP.
-8. **[api-contracts.md](api-contracts.md)** — REST + Realtime wire-format contracts.
-9. **[testing-strategy.md](testing-strategy.md)** — test types, coverage gates, CI enforcement; the doc CI gates against.
-10. **[free-tier-budget.md](free-tier-budget.md)** — quota analysis; how many games/month before any service runs out.
-11. **[local-development.md](local-development.md)** — how to run the stack on your laptop.
-12. **[runbook.md](runbook.md)** — day-2+ operations: deploy, rollback, secrets, incidents.
-13. **[roadmap.md](roadmap.md)** — eight-phase migration plan with exit criteria.
-14. **[tasks.md](tasks.md)** — granular checkboxed task list grouped by area.
-15. **[aws-teardown-checklist.md](aws-teardown-checklist.md)** — step-by-step Phase 7 cutover script for tearing down the legacy AWS stack.
-16. **[tooling.md](tooling.md)** — every tool that touches the repo: GitHub Actions workflows, CodeQL, Dependabot, Codecov, pre-commit, deploy automation, monitoring.
-17. **[diagrams/](diagrams/)** — visual architecture diagrams (Mermaid in Markdown + standalone HTML mirrors). [`internal.md`](diagrams/internal.md) for what's inside the game; [`external.md`](diagrams/external.md) for the third-party services around it.
+1. **[architecture.md](architecture.md)**: executive summary; one-page overview with links to depth.
+2. **[realtime-design.md](realtime-design.md)**: THE central design decision: why no Python in the buzzer path; how <200ms is achieved on free hosting.
+3. **[tech-stack.md](tech-stack.md)**: the concrete services (Supabase, Render, Cloudflare Pages, …) with free-tier limits and alternatives considered.
+4. **[game-rules.md](game-rules.md)**: gameplay flow, state machine, scoring, edge cases. Read this first if you don't know what Sound Clash is.
+5. **[data-model.md](data-model.md)**: schema, indexes, ER diagram.
+6. **[rpc-functions.md](rpc-functions.md)**: the six PL/pgSQL functions that hold the system's logic.
+7. **[security-rls.md](security-rls.md)**: auth model, RLS policies, threat model, rate limits, CSP.
+8. **[api-contracts.md](api-contracts.md)**: REST + Realtime wire-format contracts.
+9. **[testing-strategy.md](testing-strategy.md)**: test types, coverage gates, CI enforcement; the doc CI gates against.
+10. **[free-tier-budget.md](free-tier-budget.md)**: quota analysis; how many games/month before any service runs out.
+11. **[local-development.md](local-development.md)**: how to run the stack on your laptop.
+12. **[runbook.md](runbook.md)**: day-2+ operations: deploy, rollback, secrets, incidents.
+13. **[roadmap.md](roadmap.md)**: eight-phase migration plan with exit criteria.
+14. **[tasks.md](tasks.md)**: granular checkboxed task list grouped by area.
+15. **[aws-teardown-checklist.md](aws-teardown-checklist.md)**: step-by-step Phase 7 cutover script for tearing down the legacy AWS stack.
+16. **[tooling.md](tooling.md)**: every tool that touches the repo: GitHub Actions workflows, CodeQL, Dependabot, Codecov, pre-commit, deploy automation, monitoring.
+17. **[diagrams/](diagrams/)**: visual architecture diagrams (Mermaid in Markdown + standalone HTML mirrors). [`internal.md`](diagrams/internal.md) for what's inside the game; [`external.md`](diagrams/external.md) for the third-party services around it.
 
 ## Suggested reading paths
 
@@ -50,7 +50,7 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 2. `runbook.md` §2.4 (DNS rollback if needed)
 
 ### "I want to know what's NOT in scope"
-- `architecture.md` §10 — pointer index of what each doc doesn't cover
+- `architecture.md` §10; pointer index of what each doc doesn't cover
 - `roadmap.md` "Out of Scope" section
 - `game-rules.md` §13 (NOT a game rule)
 - Each doc has a "doesn't cover" or "out of scope" section near the end
@@ -97,5 +97,5 @@ Out-of-date docs are worse than missing ones.
 | `roadmap.md` | 8-phase migration plan |
 | `tasks.md` | Granular task checklist |
 | `aws-teardown-checklist.md` | Phase 7 step-by-step cutover script |
-| `tooling.md` | Dev/CI tooling reference — workflows, bots, deploy automation |
+| `tooling.md` | Dev/CI tooling reference; workflows, bots, deploy automation |
 | `diagrams/` | Architecture diagrams (Mermaid `.md` + standalone `.html`) |

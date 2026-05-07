@@ -2,7 +2,7 @@
 -- Add ephemeral tables to the `supabase_realtime` publication so that
 -- INSERT/UPDATE/DELETE row changes are broadcast over Supabase Realtime
 -- (WebSocket). Without this, every client subscribes successfully but
--- never receives a single event — the publication filters them out.
+-- never receives a single event; the publication filters them out.
 --
 -- Idempotent: guards each ALTER PUBLICATION with a pg_publication_tables
 -- check. Skips entirely when the publication doesn't exist (vanilla

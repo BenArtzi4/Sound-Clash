@@ -1,4 +1,4 @@
-"""RLS — anon EXECUTE grants on the 6 RPC functions.
+"""RLS; anon EXECUTE grants on the 6 RPC functions.
 
 Spec: docs/security-rls.md §2.
 

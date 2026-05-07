@@ -1,12 +1,12 @@
 # Tests
 
-Five test categories live here. The split is intentional — see [`docs/testing-strategy.md`](../docs/testing-strategy.md) for the complete strategy.
+Five test categories live here. The split is intentional; see [`docs/testing-strategy.md`](../docs/testing-strategy.md) for the complete strategy.
 
 | Directory | What goes here | Tool | Phase |
 |---|---|---|---|
 | [`db/`](db/) | PL/pgSQL function tests, RLS policy tests, migration idempotency, pg_cron | pytest + testcontainers-postgres | 3 |
 | [`backend/`](backend/) | FastAPI endpoint tests against an in-process app with testcontainer DB | pytest + httpx + testcontainers | 4 |
-| [`frontend/`](frontend/) | (Empty) — frontend unit tests are co-located with components in `frontend/src/**/*.test.ts(x)`. This dir exists only for cross-component integration tests if needed. | vitest | 5 |
+| [`frontend/`](frontend/) | (Empty): frontend unit tests are co-located with components in `frontend/src/**/*.test.ts(x)`. This dir exists only for cross-component integration tests if needed. | vitest | 5 |
 | [`e2e/`](e2e/) | Playwright multi-browser, multi-context end-to-end | Playwright | 6 |
 | [`smoke/`](smoke/) | Post-deploy synthetic checks against prod or preview | bash + Playwright | 7 |
 

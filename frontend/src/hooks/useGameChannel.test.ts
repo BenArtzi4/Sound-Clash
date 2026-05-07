@@ -326,7 +326,7 @@ describe("useGameChannel - subscription", () => {
     setHydrate({ game, teams: [], rounds: [] });
     const { result } = renderHook(() => useGameChannel("ABCDEF"));
 
-    // Begin subscription handshake but don't await it yet — we want to
+    // Begin subscription handshake but don't await it yet; we want to
     // interleave a Realtime UPDATE before hydrate's SELECTs settle.
     const subPromise = fireSubscribed();
 

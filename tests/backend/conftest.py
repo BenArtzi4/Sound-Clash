@@ -7,10 +7,10 @@ test gets a freshly truncated DB plus a fake supabase client backed by
 direct asyncpg.
 
 Each test sees:
-- ``db`` — fresh connection on a truncated DB (durable tables re-seeded).
-- ``fake_supabase`` — supabase-py-shaped client backed by the same DSN.
-- ``client`` — ``httpx.AsyncClient`` against the FastAPI app.
-- ``admin_client`` — same, but with the admin password header baked in.
+- ``db``; fresh connection on a truncated DB (durable tables re-seeded).
+- ``fake_supabase``; supabase-py-shaped client backed by the same DSN.
+- ``client``; ``httpx.AsyncClient`` against the FastAPI app.
+- ``admin_client``; same, but with the admin password header baked in.
 """
 
 from __future__ import annotations

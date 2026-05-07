@@ -1,4 +1,4 @@
-# Sound Clash — API Contracts
+# Sound Clash: API Contracts
 
 This is the wire-format contract between the frontend and the backend (FastAPI on Render + Supabase). It is the document the frontend codes against and the backend implements. Drift between this doc and reality is a bug.
 
@@ -33,7 +33,7 @@ Liveness probe. No auth.
 { "status": "ok", "version": "<git_sha>", "supabase": "ok" }
 ```
 
-`supabase` is `"ok"` if the server can reach Supabase, `"degraded"` otherwise (still 200 — the server is up).
+`supabase` is `"ok"` if the server can reach Supabase, `"degraded"` otherwise (still 200; the server is up).
 
 ---
 
@@ -99,7 +99,7 @@ Validation:
 
 The frontend stores `id` in `localStorage` keyed by `game_code` for reconnection.
 
-**Errors**: `validation_error` (400 — bad name), `not_found` (404 — game doesn't exist), `gone` (410 — game expired or ended), `conflict` (409 — name already taken).
+**Errors**: `validation_error` (400; bad name), `not_found` (404; game doesn't exist), `gone` (410; game expired or ended), `conflict` (409; name already taken).
 
 ---
 
@@ -130,7 +130,7 @@ Manager: pick the next song (random within `selected_genres`, excluding songs al
 
 Server-side: calls Postgres `start_round(p_game_code, p_song_id)` RPC. Returns the new round id.
 
-**Errors**: `unauthorized` (401), `not_found` (404), `gone` (410), `conflict` (409 — game not in `playing` state, or all songs in selected genres exhausted).
+**Errors**: `unauthorized` (401), `not_found` (404), `gone` (410), `conflict` (409; game not in `playing` state, or all songs in selected genres exhausted).
 
 ---
 
@@ -173,13 +173,13 @@ If neither team buzzed, the host should send `timeout: true`. If the round had a
 
 Server-side: calls Postgres `award_points` RPC.
 
-**Errors**: `unauthorized` (401), `not_found` (404), `validation_error` (400 — `wrong_buzz` combined with `title_correct`/`artist_correct`, or `timeout` combined with anything else).
+**Errors**: `unauthorized` (401), `not_found` (404), `validation_error` (400; `wrong_buzz` combined with `title_correct`/`artist_correct`, or `timeout` combined with anything else).
 
 ---
 
 ### 2.6 `POST /games/{game_code}/bonus`
 
-Manager: award a discretionary bonus to any team in the game. Independent of round state and the buzz lock — the host picks the team. **Manager-token auth required.**
+Manager: award a discretionary bonus to any team in the game. Independent of round state and the buzz lock; the host picks the team. **Manager-token auth required.**
 
 **Headers**: `X-Manager-Token: <token>`
 
@@ -204,7 +204,7 @@ Manager: award a discretionary bonus to any team in the game. Independent of rou
 
 Server-side: calls Postgres `award_bonus` RPC. Does not touch round state.
 
-**Errors**: `unauthorized` (401), `not_found` (404 — team not in this game, or game does not exist), `conflict` (409 — game already ended), `validation_error` (422 — non-positive `points`).
+**Errors**: `unauthorized` (401), `not_found` (404; team not in this game, or game does not exist), `conflict` (409; game already ended), `validation_error` (422; non-positive `points`).
 
 ---
 
@@ -223,7 +223,7 @@ Manager: end the game manually. **Manager-token auth required.**
 }
 ```
 
-**Errors**: `unauthorized` (401), `not_found` (404), `conflict` (409 — already ended).
+**Errors**: `unauthorized` (401), `not_found` (404), `conflict` (409; already ended).
 
 ---
 
@@ -257,7 +257,7 @@ Public. List all genres.
 
 ### 2.10 Admin Songs CRUD
 
-All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (`X-Admin-Password` header). This is the only surface that still uses the global admin password — game hosting is open.
+All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (`X-Admin-Password` header). This is the only surface that still uses the global admin password; game hosting is open.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -426,10 +426,10 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 ## 7. Idempotency
 
 - `POST /games`: not idempotent (each call creates a new game). Frontend must not retry on network error without user confirmation.
-- `POST /games/{code}/teams`: idempotent on `(game_code, name)` — UNIQUE constraint catches retries.
-- `POST /games/{code}/select-song`: not idempotent — each call advances the round number. Frontend must not retry without user confirmation.
-- `POST /games/{code}/award-points`: idempotent on `round_id` — server checks `game_rounds.ended_at IS NULL` before applying points.
-- `POST /games/{code}/end`: idempotent — calling on an already-`ended` game is a 409 (conflict), not a no-op, to surface the inconsistency to the manager UI.
+- `POST /games/{code}/teams`: idempotent on `(game_code, name)`: UNIQUE constraint catches retries.
+- `POST /games/{code}/select-song`: not idempotent; each call advances the round number. Frontend must not retry without user confirmation.
+- `POST /games/{code}/award-points`: idempotent on `round_id`: server checks `game_rounds.ended_at IS NULL` before applying points.
+- `POST /games/{code}/end`: idempotent; calling on an already-`ended` game is a 409 (conflict), not a no-op, to surface the inconsistency to the manager UI.
 - `buzz_in` RPC: implicitly idempotent (the `IS NULL` predicate prevents double-claim).
 
 ---

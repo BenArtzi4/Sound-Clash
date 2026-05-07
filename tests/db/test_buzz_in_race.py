@@ -1,4 +1,4 @@
-"""buzz_in race correctness — the headline Phase 3 exit criterion.
+"""buzz_in race correctness; the headline Phase 3 exit criterion.
 
 10 concurrent calls to buzz_in() must produce exactly 1 winner. The test is
 marked `stress` so the e2e.yml `buzz_race_stress` job runs it 100 times in a

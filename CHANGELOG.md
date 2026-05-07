@@ -2,19 +2,19 @@
 
 All notable user-visible changes to Sound Clash. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-This project does not currently cut versioned releases — every change lands directly in `main` and ships to `https://soundclash.org` via the deploy hooks. The `[Unreleased]` block below is therefore the canonical "what's currently live" list. Internal refactors, test-only changes, CI tweaks, and doc syncs are deliberately omitted; see `git log` for that level of detail.
+This project does not currently cut versioned releases; every change lands directly in `main` and ships to `https://soundclash.org` via the deploy hooks. The `[Unreleased]` block below is therefore the canonical "what's currently live" list. Internal refactors, test-only changes, CI tweaks, and doc syncs are deliberately omitted; see `git log` for that level of detail.
 
 ## [Unreleased]
 
 ### Fixed
 
-- 2026-05-07 — `/award-points` no longer 500s on prod. The PR-#38 deploy regressed `_award_blocking` by assuming `supabase-py.rpc().data` was always a dict; real PostgREST returns a list of row-dicts for TABLE-returning functions. (PR #40)
+- 2026-05-07: `/award-points` no longer 500s on prod. The PR-#38 deploy regressed `_award_blocking` by assuming `supabase-py.rpc().data` was always a dict; real PostgREST returns a list of row-dicts for TABLE-returning functions. (PR #40)
 
 ### Changed
 
-- 2026-05-07 — Repo README pivots to a player-facing pitch with a "Play it at https://soundclash.org" CTA. The developer "Quick start" is removed; the repo is a public showcase, not soliciting external PRs. (PR #41)
+- 2026-05-07: Repo README pivots to a player-facing pitch with a "Play it at https://soundclash.org" CTA. The developer "Quick start" is removed; the repo is a public showcase, not soliciting external PRs. (PR #41)
 
-## 2026-05-07 — Phase 7 cutover
+## 2026-05-07: Phase 7 cutover
 
 `https://soundclash.org` cut over from the legacy AWS stack to the new free-tier Supabase + Render + Cloudflare Pages stack. AWS resources torn down; bill drops to $0/month. See `docs/roadmap.md` §7.
 

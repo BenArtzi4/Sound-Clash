@@ -1,4 +1,4 @@
-"""POST /games — game creation and code generation."""
+"""POST /games; game creation and code generation."""
 
 from __future__ import annotations
 

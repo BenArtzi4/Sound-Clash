@@ -15,7 +15,7 @@ export function useBuzzer(
 } {
   const [isBuzzing, setIsBuzzing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  // Synchronous in-flight guard so two rapid clicks can't both fire — React
+  // Synchronous in-flight guard so two rapid clicks can't both fire; React
   // state updates aren't applied between the two calls within the same tick.
   const inFlightRef = useRef(false);
 
@@ -34,7 +34,7 @@ export function useBuzzer(
         p_team_id: teamId,
       });
       if (rpcError) throw rpcError;
-      // We deliberately do not act on the BuzzResult here — the source of
+      // We deliberately do not act on the BuzzResult here; the source of
       // truth is the Realtime UPDATE on active_games, which useGameChannel
       // applies to gameState. This keeps the UI consistent across all tabs.
     } catch (e) {

@@ -1,8 +1,8 @@
-# Sound Clash — Security & RLS
+# Sound Clash: Security & RLS
 
 How the system protects itself. Read this if you're auditing the design or adding new tables/endpoints.
 
-The threat model is small (no PII, no payments, ephemeral game data) but not zero — service-role key leakage, game-code enumeration, and DoS on free-tier infrastructure are all things to address.
+The threat model is small (no PII, no payments, ephemeral game data) but not zero; service-role key leakage, game-code enumeration, and DoS on free-tier infrastructure are all things to address.
 
 ## 1. Two-Principal Model
 
@@ -15,7 +15,7 @@ Every interaction with Postgres happens as one of two principals:
 
 There are no other roles in MVP. No `authenticated`, no per-user scoping, no JWTs from Supabase Auth. This is by design (matches today's behavior: anonymous teams + per-game manager tokens for hosts + a single admin password for the durable song catalog).
 
-The anon key ships in the frontend bundle — it's not a secret. RLS policies prevent it from being abused.
+The anon key ships in the frontend bundle; it's not a secret. RLS policies prevent it from being abused.
 
 The service-role key is server-only. **It must never reach the browser.** The build pipeline for the frontend has zero environment variables prefixed `SUPABASE_SERVICE_ROLE_*` available; only `VITE_SUPABASE_ANON_KEY` and `VITE_SUPABASE_URL`. Verified in CI.
 
@@ -54,7 +54,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 ### Why anon can SELECT any game
 
-Game codes are 6 chars from a 32-character alphabet → ~1 billion combinations. Knowing a code IS the auth. This matches today's behaviour (anyone with the code can join). RLS doesn't try to prevent enumeration — it would require per-game JWTs, which are not in MVP.
+Game codes are 6 chars from a 32-character alphabet → ~1 billion combinations. Knowing a code IS the auth. This matches today's behaviour (anyone with the code can join). RLS doesn't try to prevent enumeration; it would require per-game JWTs, which are not in MVP.
 
 ### Policies (DDL)
 
@@ -133,7 +133,7 @@ Rotation procedures: see `runbook.md` §3.
 
 ## 6. Rate Limiting
 
-FastAPI uses `slowapi` (in-memory, per-instance — fine for single Render instance):
+FastAPI uses `slowapi` (in-memory, per-instance; fine for single Render instance):
 
 ```python
 from slowapi import Limiter
@@ -156,7 +156,7 @@ async def create_game(...):
 | `GET /health` | unlimited | Used by keepalive |
 | `GET /genres` | unlimited | Cached, cheap |
 
-`buzz_in` (PostgREST RPC) is NOT rate-limited — Postgres handles concurrency safely. If abuse is observed, add Postgres-level rate limit via `pg_throttle` extension.
+`buzz_in` (PostgREST RPC) is NOT rate-limited; Postgres handles concurrency safely. If abuse is observed, add Postgres-level rate limit via `pg_throttle` extension.
 
 ## 7. CSP and HTTP Headers
 
@@ -211,12 +211,12 @@ Reject anything that doesn't fit. Don't try to "fix" invalid input.
 
 | Scenario | Behaviour |
 |---|---|
-| `X-Admin-Password` header missing or wrong (`/admin/songs/*`) | 401 Unauthorized, generic message ("admin authentication required") — do NOT distinguish missing from wrong |
+| `X-Admin-Password` header missing or wrong (`/admin/songs/*`) | 401 Unauthorized, generic message ("admin authentication required"): do NOT distinguish missing from wrong |
 | `X-Manager-Token` missing or wrong (`/games/{code}/*`) | 401 Unauthorized, generic message ("manager token required") |
-| `/games/{code}/*` against a non-existent game | 404 — the dependency runs the lookup before the auth check, so a non-host gets the same 404 a real host would |
-| `/games/{code}/*` against an already-ended game | 410 Gone — short-circuited before the route body |
+| `/games/{code}/*` against a non-existent game | 404; the dependency runs the lookup before the auth check, so a non-host gets the same 404 a real host would |
+| `/games/{code}/*` against an already-ended game | 410 Gone; short-circuited before the route body |
 | Anon key omitted on Supabase RPC | PostgREST 401 |
-| Service-role key omitted on FastAPI internal call | Should never happen — code path bug; alert via Sentry |
+| Service-role key omitted on FastAPI internal call | Should never happen; code path bug; alert via Sentry |
 
 The auth middleware uses constant-time comparison (`secrets.compare_digest`) to prevent timing attacks on the admin password.
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>External Services — Sound Clash</title>
+<title>External Services; Sound Clash</title>
 <meta name="description" content="The third-party services Sound Clash depends on, and how they're glued together." />
 <link rel="stylesheet" href="../assets/style.css" />
 <script defer src="../assets/script.js"></script>
@@ -99,9 +99,9 @@ flowchart LR
     <div class="legend">
       <p class="legend-title">Legend</p>
       <ul>
-        <li><strong>Red</strong> — paid (just the domain)</li>
-        <li><strong>Green</strong> — free-tier services in the request path</li>
-        <li><strong>Blue</strong> — developer / CI infrastructure that doesn't sit on the request path</li>
+        <li><strong>Red</strong>: paid (just the domain)</li>
+        <li><strong>Green</strong>: free-tier services in the request path</li>
+        <li><strong>Blue</strong>: developer / CI infrastructure that doesn't sit on the request path</li>
       </ul>
     </div>
 
@@ -201,8 +201,8 @@ sequenceDiagram
 
     <h2 id="not-here">What is <em>not</em> in this diagram</h2>
     <ul>
-      <li><strong>CDN for YouTube</strong> — YouTube IFrame Player loads its own JS from <code>youtube.com</code>; there's no separate CDN dependency we manage.</li>
-      <li><strong>Email</strong> — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.</li>
+      <li><strong>CDN for YouTube</strong>: YouTube IFrame Player loads its own JS from <code>youtube.com</code>; there's no separate CDN dependency we manage.</li>
+      <li><strong>Email</strong>: there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.</li>
     </ul>
 
     <!-- Prev/next nav populated by assets/script.js -->

@@ -124,7 +124,7 @@ Why this works: Postgres' `UPDATE ... WHERE buzzed_team_id IS NULL` is atomic at
 
 ## What's deliberately **not** here
 
-- No object storage. Audio is YouTube IFrame Player only — the catalog stores `youtube_id` + `start_time`.
+- No object storage. Audio is YouTube IFrame Player only; the catalog stores `youtube_id` + `start_time`.
 - No state-management library. React local state + Supabase Realtime is the entire client model.
 - No user accounts or JWT identity. The two credentials in the system (`X-Manager-Token`, `X-Admin-Password`) are scoped to specific surfaces; there is no profile, no login, no session.
 - No WebSocket service in FastAPI. Supabase Realtime is the broadcast plane.

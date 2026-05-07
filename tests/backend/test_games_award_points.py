@@ -1,4 +1,4 @@
-"""POST /games/{code}/award-points — boolean translation + RPC dispatch."""
+"""POST /games/{code}/award-points; boolean translation + RPC dispatch."""
 
 from __future__ import annotations
 

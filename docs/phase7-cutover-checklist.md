@@ -1,6 +1,6 @@
-# Phase 7 — Cutover Checklist
+# Phase 7: Cutover Checklist
 
-> **Status: completed retrospectively on 2026-05-07.** Cutover is live and `https://soundclash.org` serves the new stack. The per-step boxes below were not ticked individually as the cutover progressed — instead, each step was performed and signed off via the Definition of Done in [`roadmap.md`](roadmap.md) §7 (lines 217–227, all checked). This file remains as a runbook reference for anyone repeating a similar migration.
+> **Status: completed retrospectively on 2026-05-07.** Cutover is live and `https://soundclash.org` serves the new stack. The per-step boxes below were not ticked individually as the cutover progressed; instead, each step was performed and signed off via the Definition of Done in [`roadmap.md`](roadmap.md) §7 (lines 217–227, all checked). This file remains as a runbook reference for anyone repeating a similar migration.
 
 Pre-cutover sequencing for moving `soundclash.org` from the legacy AWS stack to the new Supabase + Render + Cloudflare Pages system. Walk top-to-bottom; do not skip ahead. Each step has a verification gate that must pass before moving to the next.
 
@@ -30,7 +30,7 @@ Create one project per surface so frontend and backend errors land in separate i
 
 **Verify:** both projects appear in your Sentry dashboard with the "Waiting for first event" placeholder.
 
-Free-tier limits documented in [`free-tier-budget.md`](free-tier-budget.md) §2.6 and [`tech-stack.md`](tech-stack.md) §7. The SDK code is already conditional — both surfaces are no-ops until the DSN is set, so it is safe to leave these blank during preview testing.
+Free-tier limits documented in [`free-tier-budget.md`](free-tier-budget.md) §2.6 and [`tech-stack.md`](tech-stack.md) §7. The SDK code is already conditional; both surfaces are no-ops until the DSN is set, so it is safe to leave these blank during preview testing.
 
 ---
 
@@ -38,11 +38,11 @@ Free-tier limits documented in [`free-tier-budget.md`](free-tier-budget.md) §2.
 
 The deploy workflows reference these by name. Set them at GitHub repo → Settings → Secrets and variables → Actions.
 
-- [ ] `CF_API_TOKEN` — Cloudflare Pages deploy token. Create at Cloudflare dashboard → My Profile → API Tokens → Create Token → "Edit Cloudflare Pages" template (or custom: `Account.Cloudflare Pages: Edit`). Used at [`.github/workflows/frontend.yml:113`](../.github/workflows/frontend.yml).
-- [ ] `CF_ACCOUNT_ID` — Cloudflare account ID, visible in the Cloudflare dashboard URL or the right sidebar of any zone overview. Used at [`.github/workflows/frontend.yml:112`](../.github/workflows/frontend.yml).
-- [ ] `RENDER_DEPLOY_HOOK` — populated in step 4 below.
+- [ ] `CF_API_TOKEN`: Cloudflare Pages deploy token. Create at Cloudflare dashboard → My Profile → API Tokens → Create Token → "Edit Cloudflare Pages" template (or custom: `Account.Cloudflare Pages: Edit`). Used at [`.github/workflows/frontend.yml:113`](../.github/workflows/frontend.yml).
+- [ ] `CF_ACCOUNT_ID`: Cloudflare account ID, visible in the Cloudflare dashboard URL or the right sidebar of any zone overview. Used at [`.github/workflows/frontend.yml:112`](../.github/workflows/frontend.yml).
+- [ ] `RENDER_DEPLOY_HOOK`: populated in step 4 below.
 
-If they are not already set, also confirm the Supabase secrets the backend tests (and prod) require, per [`local-development.md`](local-development.md) §4: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `ADMIN_PASSWORD`, and `SUPABASE_DATABASE_URL` (Session pooler — see [`runbook.md`](runbook.md) §1.3 gotcha).
+If they are not already set, also confirm the Supabase secrets the backend tests (and prod) require, per [`local-development.md`](local-development.md) §4: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `ADMIN_PASSWORD`, and `SUPABASE_DATABASE_URL` (Session pooler; see [`runbook.md`](runbook.md) §1.3 gotcha).
 
 **Verify:** GitHub Settings → Secrets shows each name with a recent "Updated" timestamp.
 
@@ -56,12 +56,12 @@ The frontend deploy job runs `wrangler pages deploy dist --project-name=sound-cl
 - [ ] Project name: `sound-clash` (must match the wrangler arg above).
 - [ ] Production branch: `main`. Build command: leave blank (CI builds and uploads via wrangler; we don't want Pages to also build). Build output directory: `dist`.
 - [ ] Set environment variables for production:
-  - `VITE_SUPABASE_URL` — Supabase project URL
-  - `VITE_SUPABASE_ANON_KEY` — Supabase anon key
-  - `VITE_API_URL` — `https://api.soundclash.org`
-  - `VITE_SENTRY_DSN` — frontend DSN from step 1
+  - `VITE_SUPABASE_URL`: Supabase project URL
+  - `VITE_SUPABASE_ANON_KEY`: Supabase anon key
+  - `VITE_API_URL`: `https://api.soundclash.org`
+  - `VITE_SENTRY_DSN`: frontend DSN from step 1
 
-**Verify:** project shows in Workers & Pages list. Initial empty deploy may exist — that is fine.
+**Verify:** project shows in Workers & Pages list. Initial empty deploy may exist; that is fine.
 
 ---
 
@@ -74,11 +74,11 @@ Backend deploys via `Dockerfile` autodetect, triggered from a deploy hook. The h
 - [ ] Set environment variables (mirror [`backend/.env.example`](../backend/.env.example)):
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
-  - `ADMIN_PASSWORD` — generate a fresh ≥16-char random string; save in password manager
-  - `CORS_ORIGINS` — `https://soundclash.org`
-  - `LOG_LEVEL` — `INFO`
-  - `SENTRY_DSN_BACKEND` — backend DSN from step 1
-  - `PORT` — leave to Render default (it injects this; the Dockerfile reads it)
+  - `ADMIN_PASSWORD`: generate a fresh ≥16-char random string; save in password manager
+  - `CORS_ORIGINS`: `https://soundclash.org`
+  - `LOG_LEVEL`: `INFO`
+  - `SENTRY_DSN_BACKEND`: backend DSN from step 1
+  - `PORT`: leave to Render default (it injects this; the Dockerfile reads it)
 - [ ] First deploy will be triggered automatically on save. Let it complete; verify health checks pass in the Render logs.
 - [ ] Render dashboard → service → Settings → "Deploy Hook" → copy the URL.
 - [ ] Paste the URL as GitHub secret `RENDER_DEPLOY_HOOK` (the empty slot from step 2).
@@ -123,13 +123,13 @@ Cloudflare DNS holds `soundclash.org`. Move the apex record off CloudFront and a
 
 - [ ] Cloudflare dashboard → `soundclash.org` → DNS.
 - [ ] Apex `soundclash.org`: change record from CNAME → CloudFront (`d…cloudfront.net`) to CNAME → Cloudflare Pages target (`sound-clash.pages.dev`). Proxy status: proxied (orange cloud).
-- [ ] Add CNAME `api` → `<render-host>.onrender.com`. Proxy status: DNS-only (grey cloud — Render terminates TLS itself).
+- [ ] Add CNAME `api` → `<render-host>.onrender.com`. Proxy status: DNS-only (grey cloud; Render terminates TLS itself).
 - [ ] In Cloudflare Pages → project → Custom domains → add `soundclash.org`. Cloudflare wires the cert automatically.
 - [ ] In Render → service → Settings → Custom Domains → add `api.soundclash.org`. Confirm cert provisioning (1–5 min).
 
 **Verify:** `dig soundclash.org` and `dig api.soundclash.org` both resolve to the new targets. `https://soundclash.org` loads the new app. `https://api.soundclash.org/health` returns 200.
 
-DNS rollback path is documented in [`runbook.md`](runbook.md) §2.4 — flip the apex CNAME back to the CloudFront distribution `E2NIDUY011R5N4` if anything goes wrong in the next 24h. Until step 10 (AWS teardown) executes, this rollback is reversible.
+DNS rollback path is documented in [`runbook.md`](runbook.md) §2.4; flip the apex CNAME back to the CloudFront distribution `E2NIDUY011R5N4` if anything goes wrong in the next 24h. Until step 10 (AWS teardown) executes, this rollback is reversible.
 
 ---
 
@@ -169,10 +169,10 @@ Thresholds and tools are spelled out in [`free-tier-budget.md`](free-tier-budget
 Wait at least 24 hours after step 7 before starting. The whole window is your rollback budget.
 
 - [ ] Confirm prod has been stable for 24h: zero SEV1/SEV2 in Sentry, no unexpected 5xx in Render logs, traffic patterns look normal.
-- [ ] Walk [`aws-teardown-checklist.md`](aws-teardown-checklist.md) in order. Do not skip the verification commands at each step — they catch the case where something is still depending on the resource you are about to delete.
+- [ ] Walk [`aws-teardown-checklist.md`](aws-teardown-checklist.md) in order. Do not skip the verification commands at each step; they catch the case where something is still depending on the resource you are about to delete.
 - [ ] Once CloudFront distribution `E2NIDUY011R5N4` is deleted, the rollback path in [`runbook.md`](runbook.md) §2.4 is gone. There is no going back from this step without re-provisioning AWS from scratch.
 
-**Verify:** AWS Cost Explorer → Forecast for next month → $0 (excluding Route 53 hosted-zone fees if you keep DNS at AWS, which we do not — DNS is at Cloudflare).
+**Verify:** AWS Cost Explorer → Forecast for next month → $0 (excluding Route 53 hosted-zone fees if you keep DNS at AWS, which we do not; DNS is at Cloudflare).
 
 ---
 

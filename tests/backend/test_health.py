@@ -1,4 +1,4 @@
-"""GET /health — liveness + Supabase reachability."""
+"""GET /health; liveness + Supabase reachability."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ async def test_health_supabase_ok_against_fake(client) -> None:
 
 
 async def test_sentry_not_initialised_in_tests() -> None:
-    """``SENTRY_DSN_BACKEND`` is unset in tests — no SDK init."""
+    """``SENTRY_DSN_BACKEND`` is unset in tests; no SDK init."""
     import sentry_sdk
 
     client_obj = getattr(sentry_sdk.Hub.current, "client", None)

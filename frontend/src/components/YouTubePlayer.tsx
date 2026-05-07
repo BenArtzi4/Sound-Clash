@@ -136,7 +136,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         role={errorCode !== null ? "alert" : undefined}
       >
         {errorCode !== null ? (
-          <span className={styles.error}>Video unavailable — manager can pick a new song.</span>
+          <span className={styles.error}>Video unavailable; manager can pick a new song.</span>
         ) : (
           <span className={styles.loading}>{loaded ? "Ready" : "Loading player..."}</span>
         )}

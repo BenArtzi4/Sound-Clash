@@ -1,4 +1,4 @@
-"""POST /games/{code}/teams — public team join."""
+"""POST /games/{code}/teams; public team join."""
 
 from __future__ import annotations
 

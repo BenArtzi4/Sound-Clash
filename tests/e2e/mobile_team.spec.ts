@@ -36,7 +36,7 @@ test("mobile viewport: team can join, buzz, and score", async ({ browser }) => {
   const team = await joinAsMobileTeam(browser, code, "Mobile");
 
   // Buzzer should be visible on the small viewport without horizontal
-  // scrolling — Playwright's auto-scroll-into-view + visible check
+  // scrolling; Playwright's auto-scroll-into-view + visible check
   // approximates this.
   const buzz = team.page.getByTestId("buzz");
   await expect(buzz).toBeVisible();

@@ -153,7 +153,7 @@ export function kickTeam(gameCode: string, managerToken: string, teamId: string)
   });
 }
 
-// Admin song-catalog wrappers — gated by X-Admin-Password.
+// Admin song-catalog wrappers; gated by X-Admin-Password.
 
 export interface ListSongsParams {
   page?: number;

@@ -131,7 +131,7 @@ function TrophyIcon() {
 }
 
 // Group teams by distinct score, highest first. Teams within a group share a
-// rank — game-rules.md §4: "tied teams share the win".
+// rank; game-rules.md §4: "tied teams share the win".
 function groupByScore(teams: Team[]): Team[][] {
   const sorted = [...teams].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;

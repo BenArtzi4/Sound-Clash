@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Internal Architecture — Sound Clash</title>
+<title>Internal Architecture; Sound Clash</title>
 <meta name="description" content="Component map of the Sound Clash backend: browser ↔ FastAPI ↔ Supabase, plus the buzzer hot path." />
 <link rel="stylesheet" href="../assets/style.css" />
 <script defer src="../assets/script.js"></script>
@@ -88,9 +88,9 @@ flowchart TB
     <div class="legend">
       <p class="legend-title">Legend</p>
       <ul>
-        <li><strong>Yellow / thick edges</strong> — the buzzer hot path. Browser fires <code>supabase.rpc('buzz_in', ...)</code> over PostgREST; Postgres does an atomic conditional <code>UPDATE</code>; Realtime fans the row change to all subscribers. No Python in the loop.</li>
-        <li><strong>Blue / dashed edges</strong> — REST traffic to FastAPI. Cold-start tolerant: game creation, song selection, scoring, admin CRUD. Always uses the service-role key server-side.</li>
-        <li><strong>Solid arrows</strong> — synchronous request/response. <strong>Dashed arrows</strong> — subscription / pub-sub.</li>
+        <li><strong>Yellow / thick edges</strong>: the buzzer hot path. Browser fires <code>supabase.rpc('buzz_in', ...)</code> over PostgREST; Postgres does an atomic conditional <code>UPDATE</code>; Realtime fans the row change to all subscribers. No Python in the loop.</li>
+        <li><strong>Blue / dashed edges</strong>: REST traffic to FastAPI. Cold-start tolerant: game creation, song selection, scoring, admin CRUD. Always uses the service-role key server-side.</li>
+        <li><strong>Solid arrows</strong>: synchronous request/response. <strong>Dashed arrows</strong>: subscription / pub-sub.</li>
       </ul>
     </div>
 
@@ -157,7 +157,7 @@ sequenceDiagram
 
     <h2 id="not-here">What's deliberately <em>not</em> here</h2>
     <ul>
-      <li><strong>No object storage.</strong> Audio is YouTube IFrame Player only — the catalog stores <code>youtube_id</code> + <code>start_time</code>.</li>
+      <li><strong>No object storage.</strong> Audio is YouTube IFrame Player only; the catalog stores <code>youtube_id</code> + <code>start_time</code>.</li>
       <li><strong>No state-management library.</strong> React local state + Supabase Realtime is the entire client model.</li>
       <li><strong>No user accounts or JWT identity.</strong> The two credentials in the system (<code>X-Manager-Token</code>, <code>X-Admin-Password</code>) are scoped to specific surfaces; there is no profile, no login, no session.</li>
       <li><strong>No WebSocket service in FastAPI.</strong> Supabase Realtime is the broadcast plane.</li>

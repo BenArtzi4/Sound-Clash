@@ -26,7 +26,7 @@ export function setManagerToken(gameCode: string, token: string): void {
     window.localStorage.setItem(managerKey(gameCode), token);
   } catch {
     // Storage may be unavailable (private mode, quota); the host can still
-    // play in the current tab — they just can't refresh.
+    // play in the current tab; they just can't refresh.
   }
 }
 

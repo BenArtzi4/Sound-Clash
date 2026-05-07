@@ -1,4 +1,4 @@
-"""POST /games/{code}/end — manager closes the game."""
+"""POST /games/{code}/end; manager closes the game."""
 
 from __future__ import annotations
 

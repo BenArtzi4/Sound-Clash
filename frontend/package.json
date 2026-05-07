@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Sound Clash — React + Vite SPA",
+  "description": "Sound Clash React + Vite SPA",
   "license": "MIT",
   "scripts": {
     "dev": "vite",

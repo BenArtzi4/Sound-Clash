@@ -2,7 +2,7 @@
 -- Change `game_code` from char(6) to text on all three ephemeral tables.
 --
 -- Why: Supabase Realtime's logical-replication WAL decoder mishandles
--- bpchar (char(n)) types — it returns only the first character. For
+-- bpchar (char(n)) types; it returns only the first character. For
 -- game_teams and game_rounds that's harmless because their primary key
 -- is `id uuid` (decoded correctly), so Realtime resolves the row via
 -- the uuid PK and the filter matches against the actual stored

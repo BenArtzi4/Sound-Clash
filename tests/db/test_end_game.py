@@ -1,4 +1,4 @@
-"""end_game() — happy path + state-machine errors.
+"""end_game(): happy path + state-machine errors.
 
 Spec: docs/rpc-functions.md §4.
 """

@@ -18,7 +18,7 @@ I'll acknowledge within 7 days and provide a target fix timeline within 14 days.
 | Version | Supported |
 |---|---|
 | latest `main` | ✅ |
-| anything else | ❌ — fix forward in `main` |
+| anything else | ❌ fix forward in `main` |
 
 This is a small project; there are no LTS branches.
 

@@ -1,4 +1,4 @@
-// Database row shapes — mirror docs/data-model.md and the SQL in
+// Database row shapes; mirror docs/data-model.md and the SQL in
 // db/migrations/{002_durable_tables,003_ephemeral_tables}.sql.
 
 export type GameStatus = "waiting" | "playing" | "ended";
@@ -62,7 +62,7 @@ export interface BuzzResult {
   locked_at: string | null;
 }
 
-// Realtime postgres_changes payload — see docs/api-contracts.md §4.2.
+// Realtime postgres_changes payload; see docs/api-contracts.md §4.2.
 export type RealtimeEventType = "INSERT" | "UPDATE" | "DELETE";
 
 export interface PostgresChangePayload<TRow> {
@@ -75,7 +75,7 @@ export interface PostgresChangePayload<TRow> {
   errors: string[] | null;
 }
 
-// Reduced UI state — see docs/realtime-design.md §5.
+// Reduced UI state; see docs/realtime-design.md §5.
 export interface GameState {
   game: ActiveGame;
   teams: Map<string, Team>;
@@ -90,7 +90,7 @@ export type GameAction =
   | { type: "ROUND_CHANGE"; payload: PostgresChangePayload<GameRound> }
   | { type: "GAME_DELETED" };
 
-// REST error envelope — backend/app/middleware error mapping.
+// REST error envelope; backend/app/middleware error mapping.
 export interface ApiErrorBody {
   error: string;
   message: string;

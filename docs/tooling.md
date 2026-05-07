@@ -1,4 +1,4 @@
-# Sound Clash — Tooling & Automation Guide
+# Sound Clash: Tooling & Automation Guide
 
 This is the guide to every tool that touches the repo or the development workflow. The runtime services that the live game depends on (Supabase, Render, Cloudflare Pages) are documented in [`tech-stack.md`](tech-stack.md). This file covers everything *else*: CI workflows, code health, dependency bots, coverage, deploy automation, monitoring, and what runs on every PR.
 
@@ -59,14 +59,14 @@ Runs after `test` succeeds, only on push to `main`. `curl -fsSL -X POST $RENDER_
 
 **Job: `test`**
 1. Checkout
-2. Set up Node 22 (npm cache disabled — see comment in the file about the unpinned `package-lock.json`)
+2. Set up Node 22 (npm cache disabled; see comment in the file about the unpinned `package-lock.json`)
 3. `npm ci` (or `npm install --no-audit --no-fund` if no lockfile)
 4. `npm run lint` (ESLint)
 5. `npm run format:check` (Prettier)
 6. `npm run typecheck` (`tsc --noEmit`)
 7. Reject skipped tests (`it.skip`, `test.skip`, `xfail` outside generated code)
 8. `npm run test:coverage` (vitest)
-9. `npm run build` and grep `dist/` for `SUPABASE_SERVICE_ROLE` — fails the build if found
+9. `npm run build` and grep `dist/` for `SUPABASE_SERVICE_ROLE`: fails the build if found
 10. Upload `coverage/lcov.info` to Codecov (with `flags: frontend`)
 
 **Job: `deploy` (main only)**
@@ -88,13 +88,13 @@ The frontend gets `VITE_API_URL=http://localhost:8000` and the spec helpers get 
 
 **Job: `buzz_race_stress` (label-gated: `run-stress`)**
 
-Heavy stress test — boots a Postgres 15 container as a workflow service, then runs `pytest -x -m stress ../tests/db/test_buzz_in_race.py` 100 times in a row, exiting on first failure. This is the Phase-3 race-correctness gate, kept around as the canary for any future change that touches `buzz_in`.
+Heavy stress test; boots a Postgres 15 container as a workflow service, then runs `pytest -x -m stress ../tests/db/test_buzz_in_race.py` 100 times in a row, exiting on first failure. This is the Phase-3 race-correctness gate, kept around as the canary for any future change that touches `buzz_in`.
 
 ### 2.4 `db-migrate.yml`
 
 **Triggers**: `workflow_dispatch` only. Two inputs:
-- `target` — `preview` or `prod` (binds the `environment:` for env-secret resolution)
-- `confirm` — must be the literal string `MIGRATE` or the job is gated out
+- `target`: `preview` or `prod` (binds the `environment:` for env-secret resolution)
+- `confirm`: must be the literal string `MIGRATE` or the job is gated out
 
 **Steps**:
 1. Install `postgresql-client` (`psql`)
@@ -122,11 +122,11 @@ Configured in `.github/dependabot.yml`. Five package ecosystems, all on a weekly
 **How to interact with a Dependabot PR**:
 - Status green + diff is patch/minor → review the diff, merge if it looks safe
 - Major bump → read the upstream changelog before merging
-- `@dependabot rebase` — re-sync against latest `main`
-- `@dependabot ignore this minor version` — skip a single version
-- `@dependabot ignore this dependency` — stop opening PRs for this dep entirely
+- `@dependabot rebase`: re-sync against latest `main`
+- `@dependabot ignore this minor version`: skip a single version
+- `@dependabot ignore this dependency`: stop opening PRs for this dep entirely
 
-Project rule: **flag any new dependency before installing it** (keep the project lean). Dependabot only bumps existing deps, so it never violates the rule — but reviewing its PRs is a good moment to spot transitive growth.
+Project rule: **flag any new dependency before installing it** (keep the project lean). Dependabot only bumps existing deps, so it never violates the rule; but reviewing its PRs is a good moment to spot transitive growth.
 
 ---
 
@@ -147,7 +147,7 @@ The advanced workflow (`.github/workflows/codeql.yml`) was removed in commit `99
 - False positive → dismiss with reason via the Security tab
 - In-code suppression: `// codeql[<rule-id>]` annotation; use sparingly and document why
 
-CodeQL is advisory in branch protection — it can't block a merge — but a finding should never be ignored without justification.
+CodeQL is advisory in branch protection; it can't block a merge; but a finding should never be ignored without justification.
 
 ---
 
@@ -163,7 +163,7 @@ Coverage reporting service. The `coverage.xml` (backend) and `lcov.info` (fronte
 
 **Flags**: backend uploads use `flags: backend`, frontend uses `flags: frontend`. This lets the dashboard show per-area coverage.
 
-There is no `codecov.yml` config file; defaults are fine. The Codecov comment is **advisory** — coverage drops are reported but not enforced as a hard block. The actual hard gate lives in `pyproject.toml` (`--cov-fail-under=90`); see [`testing-strategy.md`](testing-strategy.md) §5 for ratchet plan.
+There is no `codecov.yml` config file; defaults are fine. The Codecov comment is **advisory**: coverage drops are reported but not enforced as a hard block. The actual hard gate lives in `pyproject.toml` (`--cov-fail-under=90`); see [`testing-strategy.md`](testing-strategy.md) §5 for ratchet plan.
 
 ---
 
@@ -190,7 +190,7 @@ pre-commit install
 | `no-skip-tests` | local pygrep | `it.skip`, `test.skip`, `xfail` outside generated code |
 | `no-pragma-no-cover` | local pygrep | `# pragma: no cover` under `backend/app/` |
 
-Project rule: **bypassing a hook with `--no-verify` is not allowed** — fix the underlying issue.
+Project rule: **bypassing a hook with `--no-verify` is not allowed**: fix the underlying issue.
 
 ---
 
@@ -219,7 +219,7 @@ The apex `soundclash.org` is a 301 redirect to `www.` (Cloudflare Page Rule).
 
 ### 7.3 Database (manual)
 
-`db-migrate.yml` is the **one production write that requires human intervention**. Migrations are not auto-applied on push — you dispatch the workflow with the target env (`preview` or `prod`) and the confirmation string `MIGRATE`. See [`runbook.md`](runbook.md) §1.3 for the deploy-with-migration playbook.
+`db-migrate.yml` is the **one production write that requires human intervention**. Migrations are not auto-applied on push; you dispatch the workflow with the target env (`preview` or `prod`) and the confirmation string `MIGRATE`. See [`runbook.md`](runbook.md) §1.3 for the deploy-with-migration playbook.
 
 ---
 
@@ -240,11 +240,11 @@ Both projects are skipped when their DSN env var is empty (so `pytest` runs and 
 
 **DSNs** are GitHub repo secrets (`SENTRY_DSN_FRONTEND`, `SENTRY_DSN_BACKEND`) and also baked into the Render env / Cloudflare Pages env so the deployed builds have them.
 
-### 8.2 Render keepalive — cron-job.org
+### 8.2 Render keepalive: cron-job.org
 
 The Render free tier sleeps after 15 min of idle. cron-job.org pings `https://api.soundclash.org/health` every 14 min to keep the worker warm.
 
-Account credentials are kept out of the repo — see your password manager.
+Account credentials are kept out of the repo; see your password manager.
 
 If the keepalive stops (cron-job.org outage, account locked), the symptom is a 30s wait on the first game-creation after an idle period. The buzzer is unaffected because it doesn't go through Render.
 
@@ -258,14 +258,14 @@ Configured in the Supabase dashboard under each project's settings. Email thresh
 
 Approximate order in which checks complete on a typical PR:
 
-1. **Pre-commit** — runs locally before the commit lands (sub-second)
-2. **CodeQL** — completes ~2–5 min after push
-3. **Backend / Frontend** workflows — complete ~3–7 min
-4. **Codecov comment** — appears once the workflows have uploaded
-5. **E2E** (only if labelled `run-e2e`) — 10–15 min
-6. **Stress** (only if labelled `run-stress`) — up to 30 min
+1. **Pre-commit**: runs locally before the commit lands (sub-second)
+2. **CodeQL**: completes ~2–5 min after push
+3. **Backend / Frontend** workflows; complete ~3–7 min
+4. **Codecov comment**: appears once the workflows have uploaded
+5. **E2E** (only if labelled `run-e2e`): 10–15 min
+6. **Stress** (only if labelled `run-stress`): up to 30 min
 
-If a PR sits without checks running, the most likely cause is path filtering — the PR didn't change any file under the workflow's `paths:` filter. Force a run with `workflow_dispatch` or a no-op file touch.
+If a PR sits without checks running, the most likely cause is path filtering; the PR didn't change any file under the workflow's `paths:` filter. Force a run with `workflow_dispatch` or a no-op file touch.
 
 ---
 
@@ -279,9 +279,9 @@ Configured on `main`:
 - Do not allow force pushes
 - Do not allow deletions
 
-E2E, CodeQL, and Codecov are **not** required checks — they're advisory. Adding them as required checks is a one-line settings change but would block merges when the preview Supabase is being maintained.
+E2E, CodeQL, and Codecov are **not** required checks; they're advisory. Adding them as required checks is a one-line settings change but would block merges when the preview Supabase is being maintained.
 
-Project rule: **changing branch protection requires explicit user approval** — automation tools should not modify it autonomously.
+Project rule: **changing branch protection requires explicit user approval**: automation tools should not modify it autonomously.
 
 ---
 

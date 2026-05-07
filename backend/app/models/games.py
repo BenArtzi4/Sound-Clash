@@ -1,4 +1,4 @@
-"""Game and team models — request/response shapes per ``api-contracts.md``."""
+"""Game and team models; request/response shapes per ``api-contracts.md``."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ class SelectSongRequest(BaseModel):
 
     # Optional manual pick. When set, the picker is bypassed and the round
     # starts with this exact song. Used by the manager's "Restart song"
-    # action — see docs/game-rules.md §11.
+    # action: see docs/game-rules.md §11.
     song_id: UUID | None = None
 
 

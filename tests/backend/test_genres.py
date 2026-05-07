@@ -1,4 +1,4 @@
-"""GET /genres — public listing."""
+"""GET /genres; public listing."""
 
 from __future__ import annotations
 

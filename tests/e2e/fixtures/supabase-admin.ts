@@ -45,7 +45,7 @@ export async function cleanupExpiredGames(): Promise<number> {
   if (!res.ok) {
     throw new Error(`rpc/cleanup_expired_games failed: ${res.status} ${text}`);
   }
-  // PostgREST RPC returns the bare scalar — `cleanup_expired_games()`
+  // PostgREST RPC returns the bare scalar; `cleanup_expired_games()`
   // returns the number of deleted rows.
   return Number(text);
 }

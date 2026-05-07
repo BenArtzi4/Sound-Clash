@@ -1,4 +1,4 @@
-"""POST /admin/songs/bulk-import — CSV upload, idempotent on youtube_id."""
+"""POST /admin/songs/bulk-import; CSV upload, idempotent on youtube_id."""
 
 from __future__ import annotations
 

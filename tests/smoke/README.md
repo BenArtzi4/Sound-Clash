@@ -6,9 +6,9 @@ These are lightweight, take well under 2 minutes, and hit the real prod URL with
 
 ## Scripts
 
-- `post_deploy.sh` (here) — bash + curl + jq. Exercises `/health`, open game creation, two team joins, and the manager-token-gated `select-song` / `award-points` / `end` chain. Cleans up the game it created. No secrets needed (game hosting is open).
-- `tests/e2e/smoke/prod_realtime.spec.ts` — Playwright. One buzzer race round end-to-end via the deployed UI. Proves the architectural keystone (browser → Supabase RPC → Realtime fan-out) survived the deploy. Lives under `tests/e2e/smoke/` rather than here because `@playwright/test` is only installed in `tests/e2e/node_modules`.
-- `tests/e2e/smoke/playwright.smoke.config.ts` — Playwright config used by the spec above. Differs from `tests/e2e/playwright.config.ts` by omitting the `webServer` block, since smoke targets a live deployment. The regular e2e config excludes `smoke/**` so this spec doesn't run on the normal e2e CI job.
+- `post_deploy.sh` (here): bash + curl + jq. Exercises `/health`, open game creation, two team joins, and the manager-token-gated `select-song` / `award-points` / `end` chain. Cleans up the game it created. No secrets needed (game hosting is open).
+- `tests/e2e/smoke/prod_realtime.spec.ts`: Playwright. One buzzer race round end-to-end via the deployed UI. Proves the architectural keystone (browser → Supabase RPC → Realtime fan-out) survived the deploy. Lives under `tests/e2e/smoke/` rather than here because `@playwright/test` is only installed in `tests/e2e/node_modules`.
+- `tests/e2e/smoke/playwright.smoke.config.ts`: Playwright config used by the spec above. Differs from `tests/e2e/playwright.config.ts` by omitting the `webServer` block, since smoke targets a live deployment. The regular e2e config excludes `smoke/**` so this spec doesn't run on the normal e2e CI job.
 
 ## Running
 

@@ -18,7 +18,7 @@
 -- end to end against real Postgres.
 --
 -- CREATE OR REPLACE keeps the same (char, uuid) signature so PostgREST
--- continues to route browser calls to the same function — no API break.
+-- continues to route browser calls to the same function; no API break.
 
 CREATE OR REPLACE FUNCTION buzz_in(
   p_game_code char(6),
@@ -47,7 +47,7 @@ BEGIN
   IF FOUND THEN
     -- Mirror the lock onto the round so award_points has a durable
     -- pointer to the winning team. Skip if there's no current round
-    -- (defensive — should not happen during status='playing').
+    -- (defensive; should not happen during status='playing').
     IF v_round_id IS NOT NULL THEN
       UPDATE game_rounds
          SET buzzed_team_id = p_team_id
