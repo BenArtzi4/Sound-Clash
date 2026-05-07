@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-page="external">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,32 +10,13 @@
 </head>
 <body>
 
-<header class="topnav">
-  <div class="topnav-inner">
-    <a class="topnav-brand" href="../"><span class="dot"></span>Sound Clash <span class="muted small">docs</span></a>
-    <nav class="topnav-crumbs">
-      <a href="../">Docs</a><span class="sep">/</span>
-      <a href="./README.md">Diagrams</a><span class="sep">/</span>
-      <span>External services</span>
-    </nav>
-    <div class="topnav-links">
-      <a href="./internal.html">
-        <span class="label">← Internal</span>
-      </a>
-      <a href="https://github.com/BenArtzi4/Sound-Clash" target="_blank" rel="noopener">
-        <span class="label">GitHub</span>
-        <svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
-      </a>
-      <button id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
-        <svg class="icon icon-moon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>
-        <svg class="icon icon-sun" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6m0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>
-      </button>
-    </div>
-  </div>
-</header>
+<a class="skip-link" href="#content">Skip to content</a>
+
+<!-- Top nav rendered by assets/script.js -->
+<header id="topnav"></header>
 
 <div class="layout-with-toc">
-  <main>
+  <main id="content">
     <h1>External services</h1>
     <p class="lead">The third-party services Sound Clash depends on, and how they're glued together. <a href="./internal.html">Internal architecture</a> covers what's <em>inside</em> the game.</p>
 
@@ -224,9 +205,12 @@ sequenceDiagram
       <li><strong>Email</strong> — there is no transactional email in the system. Only ops alerts (Sentry "new issue", Render failure, Supabase quota) email the workspace owner directly.</li>
     </ul>
 
+    <!-- Prev/next nav rendered by assets/script.js -->
+    <nav id="page-nav" aria-label="Page navigation"></nav>
+
     <footer class="footer">
-      <span>Previous: <a href="./internal.html">← Internal architecture</a></span>
       <span><a href="https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/diagrams/external.md">View Markdown source</a></span>
+      <span><a href="https://github.com/BenArtzi4/Sound-Clash">github.com/BenArtzi4/Sound-Clash</a></span>
     </footer>
 
   </main>
