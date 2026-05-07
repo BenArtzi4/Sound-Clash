@@ -21,6 +21,11 @@ The `.md` files are the source of truth — they're text, version-controlled, an
 3. Open the `.html` locally in a browser to verify the diagram renders.
 4. Commit both files in the same change.
 
-## Why not GitHub Pages
+## Where the HTML versions live
 
-The `.md` versions render natively at `https://github.com/BenArtzi4/Sound-Clash/blob/main/docs/diagrams/internal.md`. The `.html` versions render fully when opened locally. Hosting a separate docs site would add a maintenance surface (and a second public URL alongside `https://soundclash.org`) for negligible benefit on a solo project. If that calculus changes, flipping on Pages is a single repo-Settings toggle.
+The whole `docs/` directory is published via GitHub Pages from `main`. The HTML diagrams render at:
+
+- `https://benartzi4.github.io/Sound-Clash/diagrams/internal.html`
+- `https://benartzi4.github.io/Sound-Clash/diagrams/external.html`
+
+The `.md` versions still render natively on GitHub at `github.com/BenArtzi4/Sound-Clash/blob/main/docs/diagrams/internal.md` — that's the source of truth and what code reviews comment on. The published HTML is a convenience for sharing, presenting, or browsing offline (`open docs/diagrams/internal.html` in a browser works without any server).

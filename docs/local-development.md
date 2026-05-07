@@ -29,8 +29,6 @@ git clone https://github.com/BenArtzi4/Sound-Clash.git
 cd Sound-Clash
 ```
 
-(After Phase 1 of the roadmap is done. Until then, the repo is empty.)
-
 ```
 Sound-Clash/
 ├── backend/               # FastAPI app
