@@ -223,17 +223,13 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
       {round && game.status === "playing" ? (
         <div className={styles.tokenChips} aria-label="Round token state">
           <span
-            className={`${styles.tokenChip} ${
-              titleClaimedById ? styles.tokenChipClaimed : ""
-            }`}
+            className={`${styles.tokenChip} ${titleClaimedById ? styles.tokenChipClaimed : ""}`}
             data-testid="display-token-title"
           >
             Song {titleClaimedById ? `✓ ${titleClaimedByName ?? "?"}` : "open"}
           </span>
           <span
-            className={`${styles.tokenChip} ${
-              artistClaimedById ? styles.tokenChipClaimed : ""
-            }`}
+            className={`${styles.tokenChip} ${artistClaimedById ? styles.tokenChipClaimed : ""}`}
             data-testid="display-token-artist"
           >
             Artist {artistClaimedById ? `✓ ${artistClaimedByName ?? "?"}` : "open"}

@@ -307,10 +307,7 @@ export function ManagerConsolePage() {
   const wrongToggleDisabled = busy || !lockedTeam;
   const scoringDisabled = busy || !lockedTeam;
   const continueDisabled =
-    busy ||
-    !lockedTeam ||
-    bothClaimed ||
-    !(titleCorrect || artistCorrect || wrongBuzz);
+    busy || !lockedTeam || bothClaimed || !(titleCorrect || artistCorrect || wrongBuzz);
   const nextRoundDisabled = busy || !player.ready;
   const bonusDisabled = busy || teams.length === 0;
   const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
