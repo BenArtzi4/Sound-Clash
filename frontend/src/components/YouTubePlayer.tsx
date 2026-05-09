@@ -171,8 +171,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     [],
   );
 
-  const overlayHidden =
-    hideOverlay && loaded && errorCode === null && !ended && !coverWhilePaused;
+  const overlayHidden = hideOverlay && loaded && errorCode === null && !ended && !coverWhilePaused;
   return (
     <div className={styles.wrapper} data-testid="youtube-player" data-ready={loaded}>
       <div ref={containerRef} className={styles.player} />
