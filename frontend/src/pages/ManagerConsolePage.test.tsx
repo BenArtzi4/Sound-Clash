@@ -21,8 +21,9 @@ vi.mock("../lib/api", () => ({
     }
   },
   selectSong: vi.fn(),
-  awardPoints: vi.fn(),
+  awardAttempt: vi.fn(),
   awardBonus: vi.fn(),
+  endRound: vi.fn(),
   endGame: vi.fn(),
 }));
 
@@ -39,8 +40,6 @@ let lastHandle: MockHandle | null = null;
 vi.mock("../components/YouTubePlayer", () => ({
   YouTubePlayer: forwardRef<MockHandle, { onReady?: () => void }>((props, ref) => {
     onReadyHandler = props.onReady ?? null;
-    // Use a stable handle across renders so test assertions on
-    // `lastHandle.loadVideoById` see calls from any render's playerRef.
     useImperativeHandle(ref, () => {
       if (!lastHandle) {
         lastHandle = {
@@ -56,7 +55,7 @@ vi.mock("../components/YouTubePlayer", () => ({
   }),
 }));
 
-import { awardBonus, awardPoints, endGame, selectSong } from "../lib/api";
+import { awardAttempt, awardBonus, endGame, endRound, selectSong } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
@@ -79,7 +78,8 @@ beforeEach(() => {
   onReadyHandler = null;
   lastHandle = null;
   vi.mocked(selectSong).mockReset();
-  vi.mocked(awardPoints).mockReset();
+  vi.mocked(awardAttempt).mockReset();
+  vi.mocked(endRound).mockReset();
   vi.mocked(awardBonus).mockReset();
   vi.mocked(endGame).mockReset();
 });
@@ -195,14 +195,12 @@ describe("ManagerConsolePage", () => {
     });
     const banner = screen.getByText(/buzzed in/i).closest('[role="status"]');
     expect(banner?.textContent).toMatch(/alice/i);
-    expect(banner?.textContent).toMatch(/buzzed in/i);
     expect(screen.getByTestId("score-title")).toBeEnabled();
     expect(screen.getByTestId("score-artist")).toBeEnabled();
     expect(screen.getByTestId("score-wrong")).toBeEnabled();
-    expect(screen.getByTestId("end-round")).toBeEnabled();
   });
 
-  it("calls awardPoints with the manager token + toggled buttons", async () => {
+  it("Continue round calls awardAttempt with the toggled flags and resets toggles", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -212,25 +210,26 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
+    vi.mocked(awardAttempt).mockResolvedValueOnce({
       round_id: "r1",
       team_id: "t1",
       points_awarded: 10,
       team_total_score: 10,
+      title_claimed_by: "t1",
+      artist_claimed_by: null,
     });
     renderConsole();
     await act(async () => {
       await fireSubscribed();
     });
     fireEvent.click(screen.getByTestId("score-title"));
-    fireEvent.click(screen.getByTestId("end-round"));
+    fireEvent.click(screen.getByTestId("continue-round"));
     await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
         round_id: "r1",
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
-        timeout: false,
       }),
     );
   });
@@ -245,62 +244,167 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
+    vi.mocked(awardAttempt).mockResolvedValueOnce({
       round_id: "r1",
       team_id: "t1",
       points_awarded: -3,
       team_total_score: 0,
+      title_claimed_by: null,
+      artist_claimed_by: null,
     });
     renderConsole();
     await act(async () => {
       await fireSubscribed();
     });
-    // Toggle title first, then Wrong should clear it.
     fireEvent.click(screen.getByTestId("score-title"));
     fireEvent.click(screen.getByTestId("score-wrong"));
-    fireEvent.click(screen.getByTestId("end-round"));
+    fireEvent.click(screen.getByTestId("continue-round"));
     await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
         round_id: "r1",
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
-        timeout: false,
       }),
     );
   });
 
-  it("End round with no buzz sends timeout=true", async () => {
+  it("Next round with a held buzz scores then ends the round and selects a new song", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttempt).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 15,
+      team_total_score: 15,
+      title_claimed_by: "t1",
+      artist_claimed_by: "t1",
+    });
+    vi.mocked(endRound).mockResolvedValueOnce({
+      round_id: "r1",
+      ended_at: "2026-05-10T12:00:00Z",
+    });
+    vi.mocked(selectSong).mockResolvedValueOnce({
+      round_id: "r2",
+      round_number: 2,
+      song: {
+        id: "s2",
+        title: "Next",
+        artist: "Up",
+        youtube_id: "abcdefghijk",
+        start_time: 0,
+        is_soundtrack: false,
+        source: null,
+      },
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    fireEvent.click(screen.getByTestId("score-title"));
+    fireEvent.click(screen.getByTestId("score-artist"));
+    const nextBtns = screen.getAllByTestId(/^start-round/);
+    fireEvent.click(nextBtns[0]!);
+    await waitFor(() =>
+      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: true,
+        artist_correct: true,
+        wrong_buzz: false,
+      }),
+    );
+    await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
+    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
+  });
+
+  it("Next round with no buzz skips the attempt call (timeout/skip)", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
         buzzed_team_id: null,
         current_round_id: "r1",
       }),
-      teams: [],
+      teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
+    vi.mocked(endRound).mockResolvedValueOnce({
       round_id: "r1",
-      team_id: null,
-      points_awarded: 0,
-      team_total_score: 0,
+      ended_at: "2026-05-10T12:00:00Z",
+    });
+    vi.mocked(selectSong).mockResolvedValueOnce({
+      round_id: "r2",
+      round_number: 2,
+      song: {
+        id: "s2",
+        title: "Next",
+        artist: "Up",
+        youtube_id: "abcdefghijk",
+        start_time: 0,
+        is_soundtrack: false,
+        source: null,
+      },
     });
     renderConsole();
     await act(async () => {
       await fireSubscribed();
     });
-    const ends = screen.getAllByTestId(/^end-round/);
-    fireEvent.click(ends[0]!);
-    await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
-        round_id: "r1",
-        title_correct: false,
-        artist_correct: false,
-        wrong_buzz: false,
-        timeout: true,
+    act(() => {
+      onReadyHandler?.();
+    });
+    const nextBtns = screen.getAllByTestId(/^start-round/);
+    fireEvent.click(nextBtns[0]!);
+    await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
+    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    expect(awardAttempt).not.toHaveBeenCalled();
+  });
+
+  it("Continue round is disabled when no toggle is set", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
       }),
-    );
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByTestId("continue-round")).toBeDisabled();
+  });
+
+  it("title toggle is disabled when title token is already claimed", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t2",
+        current_round_id: "r1",
+      }),
+      teams: [
+        makeTeam({ id: "t1", name: "Alpha" }),
+        makeTeam({ id: "t2", name: "Bravo" }),
+      ],
+      rounds: [makeRound({ id: "r1", title_claimed_by: "t1" })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByTestId("score-title")).toBeDisabled();
+    expect(screen.getByTestId("score-artist")).toBeEnabled();
+    expect(screen.getByTestId("score-wrong")).toBeEnabled();
   });
 
   it("Bonus opens a team picker and posts to awardBonus", async () => {
@@ -323,107 +427,6 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("bonus-team-t2"));
     await waitFor(() =>
       expect(awardBonus).toHaveBeenCalledWith("ABCDEF", TOKEN, { team_id: "t2" }),
-    );
-  });
-
-  it("Title + Artist combine to send both flags true", async () => {
-    setHydrate({
-      game: makeActiveGame({
-        status: "playing",
-        buzzed_team_id: "t1",
-        current_round_id: "r1",
-      }),
-      teams: [makeTeam({ id: "t1" })],
-      rounds: [makeRound({ id: "r1" })],
-    });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
-      round_id: "r1",
-      team_id: "t1",
-      points_awarded: 15,
-      team_total_score: 15,
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByTestId("score-title"));
-    fireEvent.click(screen.getByTestId("score-artist"));
-    fireEvent.click(screen.getByTestId("end-round"));
-    await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
-        round_id: "r1",
-        title_correct: true,
-        artist_correct: true,
-        wrong_buzz: false,
-        timeout: false,
-      }),
-    );
-  });
-
-  it("Artist clears Wrong (mutex from the artist direction)", async () => {
-    setHydrate({
-      game: makeActiveGame({
-        status: "playing",
-        buzzed_team_id: "t1",
-        current_round_id: "r1",
-      }),
-      teams: [makeTeam({ id: "t1" })],
-      rounds: [makeRound({ id: "r1" })],
-    });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
-      round_id: "r1",
-      team_id: "t1",
-      points_awarded: 5,
-      team_total_score: 5,
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    // Wrong first, then Artist should clear wrong.
-    fireEvent.click(screen.getByTestId("score-wrong"));
-    fireEvent.click(screen.getByTestId("score-artist"));
-    fireEvent.click(screen.getByTestId("end-round"));
-    await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
-        round_id: "r1",
-        title_correct: false,
-        artist_correct: true,
-        wrong_buzz: false,
-        timeout: false,
-      }),
-    );
-  });
-
-  it("End round with a buzz but no toggle sends all flags false (no score change)", async () => {
-    setHydrate({
-      game: makeActiveGame({
-        status: "playing",
-        buzzed_team_id: "t1",
-        current_round_id: "r1",
-      }),
-      teams: [makeTeam({ id: "t1" })],
-      rounds: [makeRound({ id: "r1" })],
-    });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
-      round_id: "r1",
-      team_id: "t1",
-      points_awarded: 0,
-      team_total_score: 0,
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByTestId("end-round"));
-    await waitFor(() =>
-      expect(awardPoints).toHaveBeenCalledWith("ABCDEF", TOKEN, {
-        round_id: "r1",
-        title_correct: false,
-        artist_correct: false,
-        wrong_buzz: false,
-        timeout: false,
-      }),
     );
   });
 
@@ -496,41 +499,10 @@ describe("ManagerConsolePage", () => {
     });
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
-    // Round controls should be gone; the End screen short-circuits the rest of the layout.
-    expect(screen.queryByTestId("end-round")).not.toBeInTheDocument();
-  });
-
-  it("never auto-ends after end round, regardless of round number", async () => {
-    setHydrate({
-      game: makeActiveGame({
-        status: "playing",
-        buzzed_team_id: "t1",
-        current_round_id: "r1",
-        round_number: 99,
-      }),
-      teams: [makeTeam({ id: "t1" })],
-      rounds: [makeRound({ id: "r1" })],
-    });
-    vi.mocked(awardPoints).mockResolvedValueOnce({
-      round_id: "r1",
-      team_id: "t1",
-      points_awarded: 10,
-      team_total_score: 10,
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByTestId("end-round"));
-    await waitFor(() => expect(awardPoints).toHaveBeenCalled());
-    expect(endGame).not.toHaveBeenCalled();
-    expect(getManagerToken("ABCDEF")).toBe(TOKEN);
+    expect(screen.queryByTestId("continue-round")).not.toBeInTheDocument();
   });
 
   it("rehydrates the current song after a manager refresh mid-round", async () => {
-    // Repro for the playwright-mcp finding (2026-05-09): hitting F5 mid-round
-    // used to drop the manager into "No round started yet." even though the
-    // server still had a live round with a song_id.
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -551,13 +523,8 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    // The round-controls card should show the song details once the lookup
-    // resolves. Without the rehydrate effect this title never appears.
     await waitFor(() => expect(screen.getByText("Sweet Caroline")).toBeInTheDocument());
     expect(screen.getByText("Neil Diamond")).toBeInTheDocument();
-    // The fetch resolved while the player was still loading, so the song was
-    // queued via enqueueSong. Once the YT iframe fires onReady it should be
-    // flushed into loadVideoById.
     act(() => {
       onReadyHandler?.();
     });

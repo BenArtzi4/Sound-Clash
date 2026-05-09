@@ -1,13 +1,14 @@
 import { env } from "./env";
 import type {
   ApiErrorBody,
+  AttemptRequest,
+  AttemptResponse,
   AwardBonusRequest,
   AwardBonusResponse,
-  AwardPointsRequest,
-  AwardPointsResponse,
   BulkImportSummary,
   CreateGameResponse,
   EndGameResponse,
+  EndRoundResponse,
   Genre,
   SelectSongResponse,
   Song,
@@ -115,14 +116,25 @@ export function selectSong(
   });
 }
 
-export function awardPoints(
+export function awardAttempt(
   gameCode: string,
   managerToken: string,
-  body: AwardPointsRequest,
-): Promise<AwardPointsResponse> {
-  return request("POST", `/games/${gameCode}/award-points`, {
+  body: AttemptRequest,
+): Promise<AttemptResponse> {
+  return request("POST", `/games/${gameCode}/attempt`, {
     managerToken,
     body,
+  });
+}
+
+export function endRound(
+  gameCode: string,
+  managerToken: string,
+  roundId: string,
+): Promise<EndRoundResponse> {
+  return request("POST", `/games/${gameCode}/end-round`, {
+    managerToken,
+    body: { round_id: roundId },
   });
 }
 

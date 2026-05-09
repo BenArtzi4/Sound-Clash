@@ -94,9 +94,9 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     const laterTeam = parseInt(((await teamTimer.textContent()) ?? "").replace(/\D/g, ""), 10);
     expect(laterTeam).toBeLessThan(startTeam);
 
-    // Manager scores; lock clears; timers disappear on team + display.
+    // Manager scores + advances; lock clears; timers disappear on team + display.
     await manager.page.getByTestId("score-title").click();
-    await manager.page.getByTestId("end-round").click();
+    await manager.page.getByTestId("start-round").click();
     await expect(team.page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
     await expect(display.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
 

@@ -56,11 +56,12 @@ test("team identity survives a mid-game tab reload", async ({ browser }) => {
     timeout: 10_000,
   });
 
-  // Award and verify the round closes (the team page no longer renders a
-  // scoreboard; correctness of the score-update path is covered by
-  // full_game.spec.ts and buzzer_race.spec.ts via the display).
+  // Score + advance via "Next round" (the multi-buzz manager UI bundles
+  // award_attempt + end_round + select-song into one button when toggles
+  // are set). Correctness of the score-update path is covered by
+  // full_game.spec.ts and buzzer_race.spec.ts via the display.
   await manager.page.getByTestId("score-title").click();
-  await manager.page.getByTestId("end-round").click();
+  await manager.page.getByTestId("start-round").click();
   await expect(team.page.getByTestId("buzz")).not.toHaveAttribute("data-tone", "winner", {
     timeout: 10_000,
   });

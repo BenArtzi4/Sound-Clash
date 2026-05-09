@@ -49,10 +49,12 @@ test("mobile viewport: team can join, buzz, and score", async ({ browser }) => {
   await buzz.click();
   await expect(buzz).toHaveAttribute("data-tone", "winner", { timeout: 10_000 });
 
-  // Award and confirm the round closes (buzz button leaves the winner tone
-  // once the manager scores). Score correctness is covered by buzzer_race
-  // and full_game; this spec only asserts mobile UX still wires up.
+  // Award and advance to the next round (the multi-buzz model lets manager
+  // score+advance via "Next round" in one shot). The buzz button leaves
+  // the winner tone once the lock clears. Score correctness is covered by
+  // buzzer_race and full_game; this spec only asserts mobile UX still wires
+  // up.
   await manager.page.getByTestId("score-title").click();
-  await manager.page.getByTestId("end-round").click();
+  await manager.page.getByTestId("start-round").click();
   await expect(buzz).not.toHaveAttribute("data-tone", "winner", { timeout: 10_000 });
 });

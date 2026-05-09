@@ -12,6 +12,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-10: Rounds now allow multiple buzzes on the same song. The +10 Title token and +5 Artist token are claimed independently — Team A can take Title, Team B can take Artist, all on the same song. A wrong buzz still costs −3 but no longer locks the team out: the same team can buzz again. The manager has a new "Continue round" button (re-arm buzzers, same song) alongside "Next round" (advance song). Display screens show small chips for each token's claim state.
 - 2026-05-10: Team buzzer page is now a single-purpose surface: just team name, round pill, and the buzz button. Status banner ("Waiting for the host…", "Buzz when you know it!", "{team} locked it.", "You buzzed in!"), the "Connected" pill, the game code, and the secondary scoreboard are all removed - the buzz button's own colour and label communicate the round state.
 - 2026-05-10: The "You buzzed" buzz button is now blue (was amber) so the colour no longer reads as a yellow "warning / waiting" cue.
 - 2026-05-10: BUZZ button copy slimmed down: idle reads just "BUZZ" (no subtitle), waiting reads "WAITING / for the game to start", you-buzzed reads just "YOU BUZZED".
@@ -19,6 +20,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Removed
 
+- 2026-05-10: One-buzz-per-round model is gone, along with the `/award-points` endpoint. Replaced by the multi-buzz model with `/attempt` (per-buzz scoring) + `/end-round` (close the round explicitly).
 - 2026-05-10: Removed the "Home" and "Restart song" buttons from the manager console. The header trims to just "End game"; the round-controls toolbar trims to "End round" + "Next round" / "Start game".
 
 ### Fixed

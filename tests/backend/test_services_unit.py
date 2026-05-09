@@ -13,62 +13,57 @@ from app.services import codes, csv_import, scoring
 
 
 def test_scoring_title_only() -> None:
-    out = scoring.to_rpc_points(
+    out = scoring.to_attempt_args(
         title_correct=True,
         artist_correct=False,
         wrong_buzz=False,
-        timeout=False,
     )
-    assert out == (10, 0, 0, 0)
+    assert out == (10, 0, 0)
 
 
 def test_scoring_title_plus_artist() -> None:
-    out = scoring.to_rpc_points(
+    out = scoring.to_attempt_args(
         title_correct=True,
         artist_correct=True,
         wrong_buzz=False,
-        timeout=False,
     )
-    assert out == (10, 5, 0, 0)
+    assert out == (10, 5, 0)
+
+
+def test_scoring_artist_only() -> None:
+    out = scoring.to_attempt_args(
+        title_correct=False,
+        artist_correct=True,
+        wrong_buzz=False,
+    )
+    assert out == (0, 5, 0)
 
 
 def test_scoring_wrong_buzz() -> None:
-    out = scoring.to_rpc_points(
+    out = scoring.to_attempt_args(
         title_correct=False,
         artist_correct=False,
         wrong_buzz=True,
-        timeout=False,
     )
-    assert out == (0, 0, scoring.WRONG_BUZZ_PENALTY, 0)
+    assert out == (0, 0, scoring.WRONG_BUZZ_PENALTY)
 
 
 def test_scoring_wrong_buzz_with_positive_raises() -> None:
     with pytest.raises(ValidationError):
-        scoring.to_rpc_points(
+        scoring.to_attempt_args(
             title_correct=True,
             artist_correct=False,
             wrong_buzz=True,
-            timeout=False,
         )
 
 
-def test_scoring_timeout_alone() -> None:
-    out = scoring.to_rpc_points(
-        title_correct=False,
-        artist_correct=False,
-        wrong_buzz=False,
-        timeout=True,
-    )
-    assert out == (0, 0, 0, 1)
-
-
-def test_scoring_timeout_with_other_flags_raises() -> None:
+def test_scoring_no_flags_raises() -> None:
+    """An attempt must commit to at least one outcome."""
     with pytest.raises(ValidationError):
-        scoring.to_rpc_points(
-            title_correct=True,
+        scoring.to_attempt_args(
+            title_correct=False,
             artist_correct=False,
             wrong_buzz=False,
-            timeout=True,
         )
 
 
@@ -194,7 +189,7 @@ def test_parse_csv_strips_bom() -> None:
     assert rows[0].title == "Hi"
 
 
-# ----- _award_blocking shape handling -----------------------------------
+# ----- _attempt_blocking shape handling ---------------------------------
 
 
 class _StubExecuteResponse:
@@ -219,58 +214,59 @@ class _StubSupabaseClient:
         return _StubRpc(self._rpc_data)
 
 
-def _award_body() -> object:
+def _attempt_body() -> object:
     from uuid import UUID
 
-    from app.models.games import AwardPointsRequest
+    from app.models.games import AttemptRequest
 
-    return AwardPointsRequest(
+    return AttemptRequest(
         round_id=UUID("00000000-0000-0000-0000-000000000001"),
         title_correct=True,
         artist_correct=False,
         wrong_buzz=False,
-        timeout=False,
     )
 
 
-def test_award_blocking_handles_postgrest_list_shape() -> None:
+def test_attempt_blocking_handles_postgrest_list_shape() -> None:
     """Real PostgREST returns TABLE-shaped functions as a list of row-dicts."""
-    from app.routers.games import _award_blocking
+    from app.routers.games import _attempt_blocking
 
     client = _StubSupabaseClient(
         rpc_data=[
             {
                 "team_id": "11111111-1111-1111-1111-111111111111",
-                "points_awarded": 10,
+                "points_delta": 10,
                 "team_total_score": 10,
+                "title_claimed_by": "11111111-1111-1111-1111-111111111111",
+                "artist_claimed_by": None,
             }
         ],
     )
-    out = _award_blocking(client, "ABCDEF", _award_body())
-    assert out["points_awarded"] == 10
+    out = _attempt_blocking(client, "ABCDEF", _attempt_body())
+    assert out["points_delta"] == 10
     assert out["team_total_score"] == 10
 
 
-def test_award_blocking_accepts_legacy_dict_shape() -> None:
+def test_attempt_blocking_accepts_legacy_dict_shape() -> None:
     """Older test mocks pass a bare dict; keep working with both shapes."""
-    from app.routers.games import _award_blocking
+    from app.routers.games import _attempt_blocking
 
     client = _StubSupabaseClient(
         rpc_data={
             "team_id": "11111111-1111-1111-1111-111111111111",
-            "points_awarded": 5,
+            "points_delta": 5,
             "team_total_score": 5,
         },
     )
-    out = _award_blocking(client, "ABCDEF", _award_body())
-    assert out["points_awarded"] == 5
+    out = _attempt_blocking(client, "ABCDEF", _attempt_body())
+    assert out["points_delta"] == 5
 
 
-def test_award_blocking_empty_list_raises_not_found() -> None:
+def test_attempt_blocking_empty_list_raises_not_found() -> None:
     """Defensive: an unexpected empty list response surfaces as 404, not 500."""
     from app.db.errors import NotFoundError
-    from app.routers.games import _award_blocking
+    from app.routers.games import _attempt_blocking
 
     client = _StubSupabaseClient(rpc_data=[])
     with pytest.raises(NotFoundError):
-        _award_blocking(client, "ABCDEF", _award_body())
+        _attempt_blocking(client, "ABCDEF", _attempt_body())

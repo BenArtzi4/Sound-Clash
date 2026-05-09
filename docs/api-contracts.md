@@ -65,7 +65,7 @@ Games run for as many rounds as the host wants and end only when the host calls 
 }
 ```
 
-The `manager_token` is generated server-side (`gen_random_uuid()`) and is the host's credential for every other `/games/{code}/*` call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on `select-song`, `award-points`, `end`, and `kick-team`. The token never leaves the host's device.
+The `manager_token` is generated server-side (`gen_random_uuid()`) and is the host's credential for every other `/games/{code}/*` call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on `select-song`, `attempt`, `end-round`, `bonus`, `end`, and `kick-team`. The token never leaves the host's device.
 
 Game-code generation: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O, 1/I/L, no lowercase). On collision (UNIQUE violation), retry up to 5 times then 500.
 
@@ -133,9 +133,9 @@ Server-side: calls Postgres `start_round(p_game_code, p_song_id)` RPC. Returns t
 
 ---
 
-### 2.5 `POST /games/{game_code}/award-points`
+### 2.5 `POST /games/{game_code}/attempt`
 
-Manager: evaluate the buzzed team's answer and end the round. **Manager-token auth required.**
+Manager: score one buzz on the current round. The round stays open after this call so other teams can buzz on the same song. **Manager-token auth required.**
 
 **Headers**: `X-Manager-Token: <token>`
 
@@ -144,35 +144,61 @@ Manager: evaluate the buzzed team's answer and end the round. **Manager-token au
 {
   "round_id": "<round_uuid>",
   "title_correct": true,
-  "artist_correct": true,
-  "wrong_buzz": false,
-  "timeout": false
+  "artist_correct": false,
+  "wrong_buzz": false
 }
 ```
 
 Server translates to point values:
-- `title_correct: true` → +10 to the buzzed team
-- `artist_correct: true` → +5 to the buzzed team
+- `title_correct: true` → +10 to the buzzed team; claims the TITLE token.
+- `artist_correct: true` → +5 to the buzzed team; claims the ARTIST token.
+- Both true → +15 in one shot (claims both tokens).
 - `wrong_buzz: true` → −3 to the buzzed team. Mutually exclusive with the two flags above.
-- `timeout: true` → end the round, no team's score changes. Mutually exclusive with everything else.
 
-If neither team buzzed, the host should send `timeout: true`. If the round had a buzz but the host wants to end it without scoring, send all four flags `false`.
+At least one flag must be true; an attempt with all flags false is a `validation_error` (400).
 
 **Response 200**:
 ```json
 {
   "round_id": "<round_uuid>",
-  "team_id": "<team_uuid_or_null>",
-  "points_awarded": 15,
-  "team_total_score": 35
+  "team_id": "<team_uuid>",
+  "points_awarded": 10,
+  "team_total_score": 35,
+  "title_claimed_by": "<team_uuid_or_null>",
+  "artist_claimed_by": "<team_uuid_or_null>"
 }
 ```
 
-`points_awarded` may be negative (wrong-buzz) or zero (timeout / decline-to-award).
+`points_awarded` may be negative (wrong-buzz). `title_claimed_by` / `artist_claimed_by` reflect the round's claim state after the call (a token claimed earlier in the round by another team is reported here).
 
-Server-side: calls Postgres `award_points` RPC.
+Server-side: calls Postgres `award_attempt` RPC. The buzz lock is cleared after the call so any team can buzz again on the same song until the manager hits "Next round".
 
-**Errors**: `unauthorized` (401), `not_found` (404), `validation_error` (400; `wrong_buzz` combined with `title_correct`/`artist_correct`, or `timeout` combined with anything else).
+**Errors**: `unauthorized` (401), `not_found` (404; round doesn't exist), `conflict` (409; round already ended, no buzz held, or token already claimed), `validation_error` (400; mutually-exclusive flags or no flag set).
+
+---
+
+### 2.5b `POST /games/{game_code}/end-round`
+
+Manager: close the current round (advance to "Next round"). Idempotent. **Manager-token auth required.**
+
+**Headers**: `X-Manager-Token: <token>`
+
+**Request body**:
+```json
+{ "round_id": "<round_uuid>" }
+```
+
+**Response 200**:
+```json
+{
+  "round_id": "<round_uuid>",
+  "ended_at": "<timestamptz>"
+}
+```
+
+Server-side: calls Postgres `end_round` RPC. Stamps `game_rounds.ended_at` and clears any held buzz lock. Calling on an already-ended round is a no-op (returns the existing `ended_at`).
+
+**Errors**: `unauthorized` (401), `not_found` (404; round doesn't exist).
 
 ---
 
@@ -427,7 +453,8 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 - `POST /games`: not idempotent (each call creates a new game). Frontend must not retry on network error without user confirmation.
 - `POST /games/{code}/teams`: idempotent on `(game_code, name)`: UNIQUE constraint catches retries.
 - `POST /games/{code}/select-song`: not idempotent; each call advances the round number. Frontend must not retry without user confirmation.
-- `POST /games/{code}/award-points`: idempotent on `round_id`: server checks `game_rounds.ended_at IS NULL` before applying points.
+- `POST /games/{code}/attempt`: NOT idempotent. Each call records one attempt against the open round. Manager UI guards against double-submit with a busy flag. Calling on an ended round → 409.
+- `POST /games/{code}/end-round`: idempotent. A second call on an already-ended round returns the existing `ended_at`.
 - `POST /games/{code}/end`: idempotent; calling on an already-`ended` game is a 409 (conflict), not a no-op, to surface the inconsistency to the manager UI.
 - `buzz_in` RPC: implicitly idempotent (the `IS NULL` predicate prevents double-claim).
 

@@ -220,6 +220,8 @@ export function makeRound(overrides: Partial<GameRound> = {}): GameRound {
     title_points: 0,
     artist_points: 0,
     wrong_buzz_penalty: 0,
+    title_claimed_by: null,
+    artist_claimed_by: null,
     ended_at: null,
     ...overrides,
   };

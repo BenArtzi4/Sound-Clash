@@ -1,8 +1,8 @@
 # Sound Clash: Postgres RPC Functions
 
-The six PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
+The seven PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five) and `db/migrations/014_scoring_revamp.sql` (the reshaped `award_points` and the new `award_bonus`).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), and `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`).
 
 ## 0. Conventions
 
@@ -187,47 +187,79 @@ Not idempotent. Each call increments `round_number` and creates a new row. Calle
 
 - FastAPI `POST /games/{code}/select-song` after picking a random song.
 
-## 3. `award_points`: manager evaluates the answer
+## 3. `award_attempt`: manager scores one buzz (multi-buzz model)
 
-Called by FastAPI (`POST /games/{code}/award-points`). Not exposed to anon. Reshaped in migration 014: the `p_source` parameter is gone (the soundtrack-source bonus is no longer scored), and the timeout penalty is gone (timeout is now a pure "end the round, no score change" signal). The new fourth integer is `p_wrong_buzz`, which deducts from the buzzed team when the host marks a buzz as wrong.
+Called by FastAPI (`POST /games/{code}/attempt`). Not exposed to anon. Replaces the old `award_points` (migration 016). The crucial behavioural change: `award_attempt` does **not** close the round. A round can accept many `award_attempt` calls — one per buzz — until the manager calls `end_round` (or `start_round` for the next song defensively closes it).
 
 ```sql
-CREATE OR REPLACE FUNCTION award_points(
-  p_game_code  char(6),
+CREATE OR REPLACE FUNCTION award_attempt(
+  p_game_code  text,
   p_round_id   uuid,
   p_title      integer DEFAULT 0,   -- 0 or 10
   p_artist     integer DEFAULT 0,   -- 0 or 5
-  p_wrong_buzz integer DEFAULT 0,   -- 0 or 3 (deducted)
-  p_timeout    integer DEFAULT 0    -- 0 or 1 (flag, no score impact)
+  p_wrong_buzz integer DEFAULT 0    -- 0 or 3 (deducted)
 )
-RETURNS TABLE(team_id uuid, points_awarded integer, team_total_score integer)
+RETURNS TABLE(
+  team_id            uuid,
+  points_delta       integer,
+  team_total_score   integer,
+  title_claimed_by   uuid,
+  artist_claimed_by  uuid
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public;
 ```
 
 Behavior:
-- `p_timeout = 1` → end the round, return `(NULL, 0, 0)`. No team score moves.
+- Reads the current `buzzed_team_id` off `game_rounds`. If null → raises `P0001 no_buzz_to_score`.
 - `p_wrong_buzz > 0 AND (p_title > 0 OR p_artist > 0)` → raises `P0001 wrong_buzz_with_correct`.
-- `p_wrong_buzz > 0` AND a team buzzed → score `-= p_wrong_buzz`, recorded on `game_rounds.wrong_buzz_penalty`.
-- `p_title > 0 OR p_artist > 0` AND a team buzzed → score `+= p_title + p_artist`, recorded on `game_rounds.title_points` / `.artist_points`.
-- All zero AND a team buzzed → end round, no score change.
+- `p_title > 0` while `title_claimed_by` is already set → raises `P0001 title_already_claimed`. Same shape for `artist_already_claimed`.
+- On success: applies score delta to the buzzed team, marks `title_claimed_by` / `artist_claimed_by` if applicable, inserts a `game_round_attempts` row, and clears `active_games.buzzed_team_id` and `locked_at` so other teams can buzz on the same song.
 
 ### Error semantics
 
 | Failure | Exception |
 |---|---|
 | Round doesn't exist | `P0002 round_not_found` |
-| Round already evaluated | `P0001 round_already_ended` |
+| Round already ended | `P0001 round_already_ended` |
+| No buzz currently held | `P0001 no_buzz_to_score` |
 | `wrong_buzz` combined with `title` or `artist` | `P0001 wrong_buzz_with_correct` |
+| Title token already claimed | `P0001 title_already_claimed` |
+| Artist token already claimed | `P0001 artist_already_claimed` |
 
 ### Idempotency
 
-Idempotent on `round_id` via the `ended_at IS NOT NULL` check; second call raises an exception that FastAPI maps to a 409 (Conflict). This protects against double-award on retry.
+Not idempotent. Each successful call records one attempt and may shift token claims. The caller (FastAPI) must guard against double-submit (the React UI does this with a `busy` flag).
 
 ### Callers
 
-- FastAPI `POST /games/{code}/award-points`.
+- FastAPI `POST /games/{code}/attempt`.
+
+## 3b. `end_round`: manager closes the round
+
+Called by FastAPI (`POST /games/{code}/end-round`). Not exposed to anon. Sets `game_rounds.ended_at` and clears any lingering buzz lock. Idempotent; safe to call repeatedly.
+
+```sql
+CREATE OR REPLACE FUNCTION end_round(
+  p_game_code text,
+  p_round_id  uuid
+) RETURNS timestamptz  -- ended_at value
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- If round exists and is open → stamps `ended_at = now()` and returns it.
+- If round exists and is already ended → returns the existing `ended_at` unchanged.
+- If round doesn't exist → raises `P0002 round_not_found`.
+- Always clears `active_games.buzzed_team_id` and `locked_at` for the game.
+
+### Callers
+
+- FastAPI `POST /games/{code}/end-round`.
+- Defensive cleanup inside `start_round` (closes any open prior round before inserting the new one).
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -402,7 +434,9 @@ async def test_cleanup_deletes_expired(db):
 |---|---|---|---|
 | `buzz_in` | ✅ | ✅ | Browser (team page) |
 | `start_round` | ❌ | ✅ | FastAPI POST /games/.../select-song |
-| `award_points` | ❌ | ✅ | FastAPI POST /games/.../award-points |
+| `award_attempt` | ❌ | ✅ | FastAPI POST /games/.../attempt |
+| `end_round` | ❌ | ✅ | FastAPI POST /games/.../end-round |
+| `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
 
