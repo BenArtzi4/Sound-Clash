@@ -48,7 +48,7 @@ describe("TeamGameplayPage", () => {
     expect(screen.getByText("join page")).toBeInTheDocument();
   });
 
-  it("renders the team name and game code from storage", async () => {
+  it("renders the team name from storage", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",
       JSON.stringify({ id: "team-1", name: "Alice" }),
@@ -63,7 +63,6 @@ describe("TeamGameplayPage", () => {
       await fireSubscribed();
     });
     expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
-    expect(screen.getByText("ABCDEF")).toBeInTheDocument();
   });
 
   it("disables buzz when game is waiting", async () => {
@@ -100,7 +99,7 @@ describe("TeamGameplayPage", () => {
     await waitFor(() => expect(screen.getByTestId("buzz")).toBeEnabled());
   });
 
-  it("shows ‘you buzzed’ banner when own team holds the lock", async () => {
+  it("flips the buzz button to the winner tone when own team holds the lock", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",
       JSON.stringify({ id: "team-1", name: "Alice" }),
@@ -117,10 +116,12 @@ describe("TeamGameplayPage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByText(/you buzzed in/i)).toBeInTheDocument();
+    const buzz = screen.getByTestId("buzz");
+    expect(buzz).toHaveAttribute("data-tone", "winner");
+    expect(buzz).toHaveTextContent(/you buzzed/i);
   });
 
-  it("shows other team locked it when someone else holds the lock", async () => {
+  it("flips the buzz button to the locked-other tone when someone else holds the lock", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",
       JSON.stringify({ id: "team-1", name: "Alice" }),
@@ -137,7 +138,9 @@ describe("TeamGameplayPage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByText(/Bob locked it/i)).toBeInTheDocument();
+    const buzz = screen.getByTestId("buzz");
+    expect(buzz).toHaveAttribute("data-tone", "locked-other");
+    expect(buzz).toHaveTextContent(/Bob got it first/i);
   });
 
   it("clears storage and goes home when our team is gone after hydrate", async () => {

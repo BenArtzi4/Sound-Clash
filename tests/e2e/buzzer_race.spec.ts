@@ -39,12 +39,12 @@ test("two teams race the buzzer; exactly one wins; all contexts agree", async ({
   await expect(startBtn).toBeEnabled();
   await startBtn.click();
 
-  // 5. Wait for the team pages to flip into "Buzz when you know it!".
+  // 5. Wait for the team pages to flip into idle (BUZZ) tone.
   await Promise.all([
-    expect(team1.page.getByRole("status").filter({ hasText: /Buzz when you know it/i })).toBeVisible({
+    expect(team1.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
       timeout: 15_000,
     }),
-    expect(team2.page.getByRole("status").filter({ hasText: /Buzz when you know it/i })).toBeVisible({
+    expect(team2.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
       timeout: 15_000,
     }),
   ]);
@@ -79,13 +79,12 @@ test("two teams race the buzzer; exactly one wins; all contexts agree", async ({
   ).toBeVisible({ timeout: 10_000 });
 
   // 9. Manager toggles "Correct Song" and ends the round; the winner's
-  //    score should update on display + both team scoreboards.
+  //    score should update on display (team buzzer screens no longer show
+  //    a scoreboard).
   await manager.page.getByTestId("score-title").click();
   await manager.page.getByTestId("end-round").click();
 
-  for (const page of [team1.page, team2.page, display.page]) {
-    await expect(
-      page.locator(`[data-team-id]:has-text("${winnerName}"):has-text("10")`).first(),
-    ).toBeVisible({ timeout: 10_000 });
-  }
+  await expect(
+    display.page.locator(`[data-team-id]:has-text("${winnerName}"):has-text("10")`).first(),
+  ).toBeVisible({ timeout: 10_000 });
 });

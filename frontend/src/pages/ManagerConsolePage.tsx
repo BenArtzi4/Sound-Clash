@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { Skeleton } from "../components/Skeleton";
@@ -16,7 +16,6 @@ import styles from "./ManagerConsolePage.module.css";
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const managerToken = useMemo(() => getManagerToken(gameCode), [gameCode]);
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
@@ -102,22 +101,6 @@ export function ManagerConsolePage() {
       setCurrentSong(result.song);
       resetAwardChecks();
       await loadSongIntoPlayer(result.song);
-    } catch (err) {
-      reportError(err);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRestartSong() {
-    if (busy || !managerToken || !currentSong) return;
-    setBusy(true);
-    try {
-      const result = await selectSong(gameCode, managerToken, currentSong.id);
-      setCurrentSong(result.song);
-      resetAwardChecks();
-      await loadSongIntoPlayer(result.song);
-      toast("Song restarted", { variant: "info" });
     } catch (err) {
       reportError(err);
     } finally {
@@ -293,17 +276,10 @@ export function ManagerConsolePage() {
 
   const nextRoundDisabled = busy || !player.ready;
   // Once a round has been scored (ended_at set), the only meaningful action is
-  // "Next round". Calling award_points or selectSong(currentSong) again hits a
-  // round_already_ended SQL error, which surfaces as a confusing red toast --
-  // it's clearer to grey the button out so the host knows where to go next.
+  // "Next round". Calling award_points again hits a round_already_ended SQL
+  // error, which surfaces as a confusing red toast -- it's clearer to grey the
+  // button out so the host knows where to go next.
   const roundAlreadyScored = state.currentRound?.ended_at != null;
-  const restartDisabled =
-    busy ||
-    game.status !== "playing" ||
-    !currentSong ||
-    !player.ready ||
-    lockedTeam != null ||
-    roundAlreadyScored;
   const scoringDisabled = busy || !lockedTeam;
   const endRoundDisabled = busy || game.status !== "playing" || roundAlreadyScored;
   const bonusDisabled = busy || teams.length === 0;
@@ -328,9 +304,6 @@ export function ManagerConsolePage() {
             data-testid="end-game"
           >
             End game
-          </button>
-          <button className="btn btn-ghost" onClick={() => navigate("/")}>
-            Home
           </button>
         </div>
       </header>
@@ -443,14 +416,6 @@ export function ManagerConsolePage() {
 
           <div className={styles.actionsInline}>
             <button
-              className="btn btn-ghost"
-              onClick={() => void handleRestartSong()}
-              disabled={restartDisabled}
-              data-testid="restart-song"
-            >
-              Restart song
-            </button>
-            <button
               className={`btn btn-primary ${styles.awardBtn}`}
               onClick={() => void handleEndRound(!lockedTeam)}
               disabled={endRoundDisabled}
@@ -471,14 +436,6 @@ export function ManagerConsolePage() {
       </div>
 
       <div className={styles.mobileBar} role="toolbar" aria-label="Round actions">
-        <button
-          className="btn btn-ghost"
-          onClick={() => void handleRestartSong()}
-          disabled={restartDisabled}
-          data-testid="restart-song-mobile"
-        >
-          Restart
-        </button>
         <button
           className={`btn btn-primary ${styles.awardBtn}`}
           onClick={() => void handleEndRound(!lockedTeam)}

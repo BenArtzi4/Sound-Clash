@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
+import { PointChange } from "../components/PointChange";
 import { QRPanel } from "../components/QRPanel";
 import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useGameSounds } from "../hooks/useGameSounds";
 import { serverTimeNow } from "../hooks/useServerTime";
 import styles from "./DisplayPage.module.css";
+
+interface PointEvent {
+  id: string;
+  teamName: string;
+  delta: number;
+}
 
 const ANSWER_DURATION_SEC = 10;
 
@@ -66,9 +73,11 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const sounds = useGameSounds();
   const [soundOn, setSoundOn] = useState(false);
   const [now, setNow] = useState(() => serverTimeNow().getTime());
+  const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const prevBuzzedRef = useRef<string | null | undefined>(undefined);
   const prevScoresRef = useRef<Record<string, number>>({});
   const prevRoundRef = useRef<number | undefined>(undefined);
+  const eventSeqRef = useRef(0);
 
   // Tick once a second so the post-buzz countdown re-renders.
   useEffect(() => {
@@ -77,28 +86,38 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   }, []);
 
   useEffect(() => {
-    if (!soundOn || !state) return;
+    if (!state) return;
     const game = state.game;
 
-    if (prevBuzzedRef.current !== undefined) {
+    if (soundOn && prevBuzzedRef.current !== undefined) {
       if (game.buzzed_team_id != null && prevBuzzedRef.current !== game.buzzed_team_id) {
         sounds.playBuzz();
       }
     }
     prevBuzzedRef.current = game.buzzed_team_id ?? null;
 
-    if (prevRoundRef.current !== undefined && game.round_number > prevRoundRef.current) {
+    if (soundOn && prevRoundRef.current !== undefined && game.round_number > prevRoundRef.current) {
       sounds.playRoundStart();
     }
     prevRoundRef.current = game.round_number;
 
-    let scoreIncreased = false;
+    const events: PointEvent[] = [];
     for (const t of state.teams.values()) {
       const prev = prevScoresRef.current[t.id];
-      if (prev !== undefined && t.score > prev) scoreIncreased = true;
+      if (prev !== undefined && t.score !== prev) {
+        eventSeqRef.current += 1;
+        events.push({
+          id: `${t.id}-${eventSeqRef.current}`,
+          teamName: t.name,
+          delta: t.score - prev,
+        });
+      }
       prevScoresRef.current[t.id] = t.score;
     }
-    if (scoreIncreased) sounds.playAward();
+    if (events.length > 0) {
+      if (soundOn && events.some((e) => e.delta > 0)) sounds.playAward();
+      setPointEvents((current) => [...current, ...events]);
+    }
   }, [state, sounds, soundOn]);
 
   function toggleSound() {
@@ -163,6 +182,18 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
 
   return (
     <main className={styles.shell}>
+      <div className={styles.pointStack} aria-live="polite">
+        {pointEvents.map((ev) => (
+          <PointChange
+            key={ev.id}
+            teamName={ev.teamName}
+            delta={ev.delta}
+            onDone={() =>
+              setPointEvents((current) => current.filter((existing) => existing.id !== ev.id))
+            }
+          />
+        ))}
+      </div>
       <header className={styles.header}>
         <h1>Sound Clash</h1>
         <div className={styles.headerActions}>

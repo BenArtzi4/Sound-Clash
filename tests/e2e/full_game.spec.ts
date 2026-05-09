@@ -41,7 +41,7 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
     ).toBeVisible({ timeout: 10_000 });
 
     // Team can now buzz.
-    await expect(team.page.getByRole("status").filter({ hasText: /Buzz when you know it/i })).toBeVisible({
+    await expect(team.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
       timeout: 10_000,
     });
     await team.page.getByTestId("buzz").click();

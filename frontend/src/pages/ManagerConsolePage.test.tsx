@@ -484,20 +484,6 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(getManagerToken("ABCDEF")).toBeNull());
   });
 
-  it("Home button navigates back to the landing page", async () => {
-    setHydrate({
-      game: makeActiveGame({ status: "playing" }),
-      teams: [],
-      rounds: [],
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^home$/i }));
-    await waitFor(() => expect(screen.getByText("home page")).toBeInTheDocument());
-  });
-
   it("renders the EndScreen with the FINAL RESULTS heading when the game is ended", async () => {
     setHydrate({
       game: makeActiveGame({ status: "ended" }),
@@ -541,59 +527,6 @@ describe("ManagerConsolePage", () => {
     expect(getManagerToken("ABCDEF")).toBe(TOKEN);
   });
 
-  it("Restart song re-selects the current song via selectSong with a song_id", async () => {
-    setHydrate({
-      game: makeActiveGame({ status: "playing", round_number: 1, current_round_id: "r1" }),
-      teams: [],
-      rounds: [makeRound({ id: "r1", song_id: "song-A" })],
-    });
-    vi.mocked(selectSong).mockResolvedValueOnce({
-      round_id: "r2",
-      round_number: 2,
-      song: {
-        id: "song-A",
-        title: "Bohemian Rhapsody",
-        artist: "Queen",
-        youtube_id: "abcdefghijk",
-        start_time: 0,
-        is_soundtrack: false,
-        source: null,
-      },
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    act(() => {
-      onReadyHandler?.();
-    });
-    // Restart needs `currentSong` (local React state populated by a successful
-    // selectSong). Trigger one Next-round click to seed it, then Restart.
-    const next = screen.getAllByRole("button", { name: /^next round$/i })[0]!;
-    await waitFor(() => expect(next).toBeEnabled());
-    fireEvent.click(next);
-    await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
-
-    // Set up the next response for the Restart click; same song.
-    vi.mocked(selectSong).mockResolvedValueOnce({
-      round_id: "r3",
-      round_number: 3,
-      song: {
-        id: "song-A",
-        title: "Bohemian Rhapsody",
-        artist: "Queen",
-        youtube_id: "abcdefghijk",
-        start_time: 0,
-        is_soundtrack: false,
-        source: null,
-      },
-    });
-    const restart = screen.getAllByRole("button", { name: /^restart song$/i })[0]!;
-    await waitFor(() => expect(restart).toBeEnabled());
-    fireEvent.click(restart);
-    await waitFor(() => expect(selectSong).toHaveBeenLastCalledWith("ABCDEF", TOKEN, "song-A"));
-  });
-
   it("rehydrates the current song after a manager refresh mid-round", async () => {
     // Repro for the playwright-mcp finding (2026-05-09): hitting F5 mid-round
     // used to drop the manager into "No round started yet." even though the
@@ -629,8 +562,6 @@ describe("ManagerConsolePage", () => {
       onReadyHandler?.();
     });
     await waitFor(() => expect(lastHandle?.loadVideoById).toHaveBeenCalledWith("abcdefghijk", 12));
-    // Restart-song now has a currentSong to operate on.
-    expect(screen.getAllByRole("button", { name: /^restart song$/i })[0]).toBeEnabled();
   });
 
   it("shows a clear toast when the song pool is exhausted", async () => {
