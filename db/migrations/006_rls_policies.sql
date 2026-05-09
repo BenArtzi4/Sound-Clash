@@ -45,8 +45,21 @@ GRANT SELECT ON songs, genres, song_genres, active_games, game_teams, game_round
 -- Function grants: only buzz_in is callable by anon.
 REVOKE ALL ON FUNCTION buzz_in(char, uuid)                                       FROM PUBLIC;
 REVOKE ALL ON FUNCTION start_round(char, uuid)                                   FROM PUBLIC;
-REVOKE ALL ON FUNCTION award_points(char, uuid, integer, integer, integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION end_game(char)                                            FROM PUBLIC;
 REVOKE ALL ON FUNCTION cleanup_expired_games()                                   FROM PUBLIC;
+
+-- award_points was retired by migration 016 in favour of award_attempt +
+-- end_round; guard the REVOKE so re-applying this migration after 016
+-- doesn't fail on a dropped function. Migration 016 issues its own
+-- REVOKE for the replacement functions.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+     WHERE n.nspname = 'public' AND p.proname = 'award_points'
+  ) THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION award_points(char, uuid, integer, integer, integer, integer) FROM PUBLIC';
+  END IF;
+END $$;
 
 GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;

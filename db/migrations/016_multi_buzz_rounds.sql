@@ -110,10 +110,13 @@ DECLARE
   v_delta          integer;
   v_score          integer;
 BEGIN
-  SELECT buzzed_team_id, ended_at, title_claimed_by, artist_claimed_by
+  -- Qualify column refs with the table name. RETURNS TABLE introduces
+  -- columns of the same name into the function's namespace; without the
+  -- qualifier PL/pgSQL raises "ambiguous column reference".
+  SELECT gr.buzzed_team_id, gr.ended_at, gr.title_claimed_by, gr.artist_claimed_by
     INTO v_team_id, v_round_ended, v_title_claimed, v_artist_claimed
-    FROM game_rounds
-   WHERE id = p_round_id AND game_code = p_game_code;
+    FROM game_rounds gr
+   WHERE gr.id = p_round_id AND gr.game_code = p_game_code;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'round_not_found' USING ERRCODE = 'P0002';
@@ -189,9 +192,10 @@ BEGIN
      SET buzzed_team_id = NULL, locked_at = NULL
    WHERE game_code = p_game_code;
 
-  SELECT score INTO v_score FROM game_teams WHERE id = v_team_id;
-  SELECT title_claimed_by, artist_claimed_by INTO v_title_claimed, v_artist_claimed
-    FROM game_rounds WHERE id = p_round_id;
+  SELECT gt.score INTO v_score FROM game_teams gt WHERE gt.id = v_team_id;
+  SELECT gr.title_claimed_by, gr.artist_claimed_by
+    INTO v_title_claimed, v_artist_claimed
+    FROM game_rounds gr WHERE gr.id = p_round_id;
 
   RETURN QUERY SELECT v_team_id, v_delta, COALESCE(v_score, 0),
                       v_title_claimed, v_artist_claimed;

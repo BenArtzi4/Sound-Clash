@@ -162,7 +162,16 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- 4. Function grants. anon keeps EXECUTE on buzz_in only. award_points and
 --    award_bonus stay service_role only (FastAPI gates them with manager_token).
---    REVOKE is naturally idempotent.
+--    REVOKE is naturally idempotent. award_points was retired in migration 016;
+--    guard the REVOKE so re-applying this file after 016 doesn't fail.
 -- ---------------------------------------------------------------------------
-REVOKE ALL ON FUNCTION award_points(char, uuid, integer, integer, integer, integer) FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+     WHERE n.nspname = 'public' AND p.proname = 'award_points'
+  ) THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION award_points(char, uuid, integer, integer, integer, integer) FROM PUBLIC';
+  END IF;
+END $$;
 REVOKE ALL ON FUNCTION award_bonus(char, uuid, integer)                              FROM PUBLIC;
