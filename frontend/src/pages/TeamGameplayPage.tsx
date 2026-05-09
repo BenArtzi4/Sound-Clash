@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BuzzButton } from "../components/BuzzButton";
+import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
 import { Scoreboard } from "../components/Scoreboard";
 import { useBuzzer } from "../hooks/useBuzzer";
@@ -108,19 +108,19 @@ export function TeamGameplayPage() {
   const buzzDisabled =
     !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
 
-  const buzzTone: "idle" | "locked-other" | "winner" = lockedByMe
-    ? "winner"
-    : lockedTeam
-      ? "locked-other"
-      : "idle";
-  const buzzSubtitle =
-    game?.status === "playing"
-      ? lockedByMe
-        ? "Wait for the host"
-        : lockedTeam
-          ? `${lockedTeam.name} buzzed first`
-          : "Tap or press space"
-      : undefined;
+  const buzz = ((): { tone: BuzzTone; label: string; subtitle: string } => {
+    if (game?.status === "playing") {
+      if (lockedByMe) return { tone: "winner", label: "YOU BUZZED", subtitle: "Wait for the host" };
+      if (lockedTeam)
+        return {
+          tone: "locked-other",
+          label: "SOMEONE ELSE BUZZED",
+          subtitle: `${lockedTeam.name} got it first`,
+        };
+      return { tone: "idle", label: "PLAYING", subtitle: "Tap to buzz in" };
+    }
+    return { tone: "waiting", label: "WAITING", subtitle: "Waiting for host…" };
+  })();
 
   const connectionLabel = status === "subscribed" ? "Connected" : "Connecting…";
   const connectionStateClass = status === "subscribed" ? styles.connOk : styles.connWait;
@@ -174,9 +174,9 @@ export function TeamGameplayPage() {
         <BuzzButton
           disabled={buzzDisabled}
           isBuzzing={buzzer.isBuzzing}
-          label={lockedByMe ? "LOCKED" : "BUZZ"}
-          subtitle={buzzSubtitle}
-          tone={buzzTone}
+          label={buzz.label}
+          subtitle={buzz.subtitle}
+          tone={buzz.tone}
           onBuzz={() => void buzzer.buzz()}
         />
       </div>

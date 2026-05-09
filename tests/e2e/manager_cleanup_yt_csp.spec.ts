@@ -22,11 +22,11 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
     const team = await joinAsTeam(browser, manager.gameCode, "Solo");
 
-    // Wait for the team to show up in the manager's Teams panel so the
-    // negative assertion below isn't racing the realtime hydrate. The
-    // team name renders in BOTH the Scoreboard and the Teams panel, so
-    // we wait for at least one occurrence.
-    await expect(manager.page.getByText("Solo").first()).toBeVisible({ timeout: 10_000 });
+    // Wait for the manager page to be fully hydrated before negative
+    // assertions. The Round controls card is always present once the
+    // game row has loaded; the manager page no longer shows a Scoreboard
+    // or Teams list, so we can't wait on the team name to appear.
+    await expect(manager.page.getByText(/round controls/i)).toBeVisible({ timeout: 10_000 });
 
     // #1: no "Invite Players" heading anywhere.
     await expect(

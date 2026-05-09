@@ -19,6 +19,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-09: Team buzzer now shows four explicit status modes with matching colors: grey **Waiting** before the host starts the round, green **Playing** when the song is live, gold **You Buzzed** when this team is locked in awaiting adjudication, red **Someone else buzzed** when another team got there first. Replaces the old single-label BUZZ / LOCKED button.
 - 2026-05-09: Team page now shows the same celebratory "FINAL RESULTS" podium (with confetti, trophy, WINNER label) that the display and manager already show, instead of a small "Game over." banner with a still-rendered (disabled) BUZZ button.
 - 2026-05-09: Round timer reworked. There is no longer a 20-second pre-buzz countdown. Instead, when a team buzzes, a 10-second countdown starts on the team and display screens so the buzzed team has a clear answer window. The manager screen no longer shows the timer.
 - 2026-05-07: Repo README pivots to a player-facing pitch with a "Play it at https://soundclash.org" CTA. The developer "Quick start" is removed; the repo is a public showcase, not soliciting external PRs. (PR #41)
@@ -29,6 +30,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Removed
 
+- 2026-05-09: Removed the duplicate scoreboard and teams list from the manager console. Both already render on the Display screen (the projector view), and the host's screen now focuses purely on round controls.
 - 2026-05-09: Removed the "Invite players" QR/URL panel from the manager console - the game code is already prominent in the header and on the empty-teams hint, so the second copy was clutter.
 - 2026-05-09: Removed the per-team "Kick" button from the manager console. To get rid of a team, the host can end the game and start a fresh one.
 - 2026-05-07: Removed the "Rounds" picker from the Create-Game form. Games now run for as many rounds as the host wants and end only when the host clicks "End game"; round counters across the team page, display, and manager console show "Round N" without a denominator.
