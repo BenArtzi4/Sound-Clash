@@ -113,8 +113,8 @@ BEGIN
   -- Qualify column refs with the table name. RETURNS TABLE introduces
   -- columns of the same name into the function's namespace; without the
   -- qualifier PL/pgSQL raises "ambiguous column reference".
-  SELECT gr.buzzed_team_id, gr.ended_at, gr.title_claimed_by, gr.artist_claimed_by
-    INTO v_team_id, v_round_ended, v_title_claimed, v_artist_claimed
+  SELECT gr.ended_at, gr.title_claimed_by, gr.artist_claimed_by
+    INTO v_round_ended, v_title_claimed, v_artist_claimed
     FROM game_rounds gr
    WHERE gr.id = p_round_id AND gr.game_code = p_game_code;
 
@@ -125,6 +125,14 @@ BEGIN
   IF v_round_ended IS NOT NULL THEN
     RAISE EXCEPTION 'round_already_ended' USING ERRCODE = 'P0001';
   END IF;
+
+  -- The "currently buzzed" team lives on active_games, not game_rounds:
+  -- game_rounds.buzzed_team_id is the durable record of *some* buzz
+  -- (set by buzz_in, never cleared by award_attempt) and would falsely
+  -- report a held lock after a successful prior attempt this round.
+  SELECT ag.buzzed_team_id INTO v_team_id
+    FROM active_games ag
+   WHERE ag.game_code = p_game_code;
 
   IF v_team_id IS NULL THEN
     RAISE EXCEPTION 'no_buzz_to_score' USING ERRCODE = 'P0001';
