@@ -164,7 +164,7 @@ describe("TeamGameplayPage", () => {
     expect(screen.getByText("join page")).toBeInTheDocument();
   });
 
-  it("shows the 'Game over.' banner when the game has ended", async () => {
+  it("renders the EndScreen podium when the game has ended", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",
       JSON.stringify({ id: "team-1", name: "Alice" }),
@@ -178,8 +178,8 @@ describe("TeamGameplayPage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByText(/^game over\.$/i)).toBeInTheDocument();
-    expect(screen.getByTestId("buzz")).toBeDisabled();
+    expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("buzz")).not.toBeInTheDocument();
   });
 
   it("does not render the post-buzz timer before any team has buzzed", async () => {
