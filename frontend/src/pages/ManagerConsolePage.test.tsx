@@ -41,21 +41,17 @@ vi.mock("../components/YouTubePlayer", () => ({
     onReadyHandler = props.onReady ?? null;
     // Use a stable handle across renders so test assertions on
     // `lastHandle.loadVideoById` see calls from any render's playerRef.
-    useImperativeHandle(
-      ref,
-      () => {
-        if (!lastHandle) {
-          lastHandle = {
-            loadVideoById: vi.fn(),
-            pause: vi.fn(),
-            play: vi.fn(),
-            stop: vi.fn(),
-          };
-        }
-        return lastHandle;
-      },
-      [],
-    );
+    useImperativeHandle(ref, () => {
+      if (!lastHandle) {
+        lastHandle = {
+          loadVideoById: vi.fn(),
+          pause: vi.fn(),
+          play: vi.fn(),
+          stop: vi.fn(),
+        };
+      }
+      return lastHandle;
+    }, []);
     return <div data-testid="yt-player" />;
   }),
 }));
@@ -632,9 +628,7 @@ describe("ManagerConsolePage", () => {
     act(() => {
       onReadyHandler?.();
     });
-    await waitFor(() =>
-      expect(lastHandle?.loadVideoById).toHaveBeenCalledWith("abcdefghijk", 12),
-    );
+    await waitFor(() => expect(lastHandle?.loadVideoById).toHaveBeenCalledWith("abcdefghijk", 12));
     // Restart-song now has a currentSong to operate on.
     expect(screen.getAllByRole("button", { name: /^restart song$/i })[0]).toBeEnabled();
   });

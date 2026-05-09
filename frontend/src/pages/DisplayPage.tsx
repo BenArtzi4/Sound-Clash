@@ -156,9 +156,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const showRoundSubhead = lockedTeam != null && roundLabel != null;
 
   const lockedAt = game.locked_at;
-  const elapsedSec = lockedAt
-    ? Math.max(0, Math.floor((now - Date.parse(lockedAt)) / 1000))
-    : 0;
+  const elapsedSec = lockedAt ? Math.max(0, Math.floor((now - Date.parse(lockedAt)) / 1000)) : 0;
   const remainingSec = Math.max(0, ANSWER_DURATION_SEC - elapsedSec);
   const timerActive = game.status === "playing" && lockedTeam != null && lockedAt != null;
   const timerPct = Math.max(0, Math.min(100, (remainingSec / ANSWER_DURATION_SEC) * 100));

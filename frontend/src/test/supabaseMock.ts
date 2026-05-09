@@ -12,7 +12,18 @@ interface State {
   // Map of song id -> row used by from("songs").maybeSingle() lookups so the
   // manager-refresh code path (re-resolves currentRound.song_id back to a
   // song record) can be exercised in unit tests.
-  songsById: Record<string, { id: string; title: string; artist: string; youtube_id: string; start_time: number; is_soundtrack: boolean; source: string | null }>;
+  songsById: Record<
+    string,
+    {
+      id: string;
+      title: string;
+      artist: string;
+      youtube_id: string;
+      start_time: number;
+      is_soundtrack: boolean;
+      source: string | null;
+    }
+  >;
 }
 
 const state: State = {

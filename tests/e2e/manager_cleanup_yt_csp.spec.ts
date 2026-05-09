@@ -160,8 +160,18 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     let youtubeReqs = 0;
     page.on("request", (req) => {
       total++;
-      const url = req.url();
-      if (url.includes("youtube.com") || url.includes("ytimg.com")) {
+      let host: string;
+      try {
+        host = new URL(req.url()).hostname;
+      } catch {
+        return;
+      }
+      if (
+        host === "youtube.com" ||
+        host.endsWith(".youtube.com") ||
+        host === "ytimg.com" ||
+        host.endsWith(".ytimg.com")
+      ) {
         youtubeReqs++;
       }
     });
