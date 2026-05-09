@@ -22,9 +22,8 @@ export async function joinAsTeam(
   await page.getByRole("button", { name: /join game/i }).click();
 
   await expect(page).toHaveURL(new RegExp(`/team/${gameCode}$`));
-  await expect(page.getByRole("status").filter({ hasText: /Connected/i })).toBeVisible({
-    timeout: 15_000,
-  });
+  // BuzzButton mounts only after Realtime SUBSCRIBED — wait for it.
+  await expect(page.getByTestId("buzz")).toBeVisible({ timeout: 15_000 });
 
   return { page, name: teamName };
 }

@@ -6,6 +6,21 @@ This project does not currently cut versioned releases; every change lands direc
 
 ## [Unreleased]
 
+### Added
+
+- 2026-05-10: Display screen now pops a small floating pill ("Alpha +10", "Bravo -3") whenever a team's score changes, so the audience watching the projector can see *who* just got points and how many without having to re-read the scoreboard.
+
+### Changed
+
+- 2026-05-10: Team buzzer page is now a single-purpose surface: just team name, round pill, and the buzz button. Status banner ("Waiting for the host…", "Buzz when you know it!", "{team} locked it.", "You buzzed in!"), the "Connected" pill, the game code, and the secondary scoreboard are all removed - the buzz button's own colour and label communicate the round state.
+- 2026-05-10: The "You buzzed" buzz button is now blue (was amber) so the colour no longer reads as a yellow "warning / waiting" cue.
+- 2026-05-10: BUZZ button copy slimmed down: idle reads just "BUZZ" (no subtitle), waiting reads "WAITING / for the game to start", you-buzzed reads just "YOU BUZZED".
+- 2026-05-10: End-of-game podium heights are now strictly ordered 1st > 2nd > 3rd in pixel height, so when 1st place has one team but 2nd holds two tied teams the gold card still visibly outranks silver.
+
+### Removed
+
+- 2026-05-10: Removed the "Home" and "Restart song" buttons from the manager console. The header trims to just "End game"; the round-controls toolbar trims to "End round" + "Next round" / "Start game".
+
 ### Fixed
 
 - 2026-05-09: When a team buzzes, the manager's YouTube player no longer flashes the paused-state "more videos" tiles (which can include other songs in the same artist's channel and spoil future rounds). The black "Ready" overlay now stays on top of the iframe whenever a buzz is being scored.

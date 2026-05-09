@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
-import { Scoreboard } from "../components/Scoreboard";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { serverTimeNow } from "../hooks/useServerTime";
@@ -56,9 +55,7 @@ export function TeamGameplayPage() {
   if (status === "gone") {
     return (
       <main className={styles.shell}>
-        <div className={`${styles.statusBanner} ${styles.statusEnded}`}>
-          This game has ended or expired.
-        </div>
+        <div className={styles.statusEnded}>This game has ended or expired.</div>
       </main>
     );
   }
@@ -75,7 +72,6 @@ export function TeamGameplayPage() {
     );
   }
 
-  const teams = state ? Array.from(state.teams.values()) : [];
   const game = state?.game;
   const lockedByMe = buzzer.lockedByMe;
   const lockedTeam =
@@ -87,71 +83,35 @@ export function TeamGameplayPage() {
   const timerActive = game?.status === "playing" && lockedTeam != null && lockedAt != null;
   const timerPct = Math.max(0, Math.min(100, (remainingSec / ANSWER_DURATION_SEC) * 100));
 
-  let bannerClass = styles.statusBanner;
-  let bannerText = "Waiting for the host to start…";
-  if (game?.status === "ended") {
-    bannerClass = `${styles.statusBanner} ${styles.statusEnded}`;
-    bannerText = "Game over.";
-  } else if (game?.status === "playing") {
-    if (lockedByMe) {
-      bannerClass = `${styles.statusBanner} ${styles.statusLocked}`;
-      bannerText = "You buzzed in! Wait for the host.";
-    } else if (lockedTeam) {
-      bannerClass = `${styles.statusBanner} ${styles.statusLocked}`;
-      bannerText = `${lockedTeam.name} locked it.`;
-    } else {
-      bannerClass = `${styles.statusBanner} ${styles.statusPlaying}`;
-      bannerText = "Buzz when you know it!";
-    }
-  }
-
   const buzzDisabled =
     !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
 
-  const buzz = ((): { tone: BuzzTone; label: string; subtitle: string } => {
+  const buzz = ((): { tone: BuzzTone; label: string; subtitle?: string } => {
     if (game?.status === "playing") {
-      if (lockedByMe) return { tone: "winner", label: "YOU BUZZED", subtitle: "Wait for the host" };
+      if (lockedByMe) return { tone: "winner", label: "YOU BUZZED" };
       if (lockedTeam)
         return {
           tone: "locked-other",
           label: "SOMEONE ELSE BUZZED",
           subtitle: `${lockedTeam.name} got it first`,
         };
-      return { tone: "idle", label: "PLAYING", subtitle: "Tap to buzz in" };
+      return { tone: "idle", label: "BUZZ" };
     }
-    return { tone: "waiting", label: "WAITING", subtitle: "Waiting for host…" };
+    return { tone: "waiting", label: "WAITING", subtitle: "for the game to start" };
   })();
-
-  const connectionLabel = status === "subscribed" ? "Connected" : "Connecting…";
-  const connectionStateClass = status === "subscribed" ? styles.connOk : styles.connWait;
 
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.identity}>
           <span className={styles.teamName}>{stored.name}</span>
-          <span className={styles.identityMeta}>
-            <span className={styles.gameCode}>{gameCode}</span>
-            {game && game.status !== "waiting" ? (
-              <span className={styles.roundPill} data-testid="round-indicator">
-                Round {game.round_number}
-              </span>
-            ) : null}
-          </span>
-        </div>
-        <div
-          className={`${styles.connection} ${connectionStateClass}`}
-          role="status"
-          aria-live="polite"
-        >
-          <span className={styles.connectionDot} aria-hidden="true" />
-          <span>{connectionLabel}</span>
+          {game && game.status !== "waiting" ? (
+            <span className={styles.roundPill} data-testid="round-indicator">
+              Round {game.round_number}
+            </span>
+          ) : null}
         </div>
       </header>
-
-      <div className={bannerClass} role="status" aria-live="polite">
-        {bannerText}
-      </div>
 
       {timerActive ? (
         <div
@@ -182,15 +142,6 @@ export function TeamGameplayPage() {
       </div>
 
       {buzzer.error ? <p className="error">{buzzer.error.message}</p> : null}
-
-      <section className={styles.scoreCard}>
-        <h2 className={styles.scoreCardTitle}>Scoreboard</h2>
-        <Scoreboard
-          teams={teams}
-          buzzedTeamId={game?.buzzed_team_id ?? null}
-          myTeamId={stored.id}
-        />
-      </section>
     </main>
   );
 }

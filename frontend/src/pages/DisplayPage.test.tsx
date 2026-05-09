@@ -9,7 +9,9 @@ vi.mock("../lib/supabase", async () => {
 
 import {
   fireSubscribed,
+  fireTeam,
   makeActiveGame,
+  makePayload,
   makeTeam,
   resetSupabaseMock,
   setHydrate,
@@ -174,6 +176,47 @@ describe("DisplayPage board", () => {
       await fireSubscribed();
     });
     expect(screen.getByText(/waiting for teams/i)).toBeInTheDocument();
+  });
+
+  it("pops a +N pill when a team's score goes up", async () => {
+    const alice = makeTeam({ id: "t1", name: "Alice", score: 0 });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [alice],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.queryByTestId("point-change")).not.toBeInTheDocument();
+
+    act(() => {
+      fireTeam(makePayload("game_teams", "UPDATE", { new: { ...alice, score: 10 } }));
+    });
+    const pill = await screen.findByTestId("point-change");
+    expect(pill).toHaveTextContent("Alice");
+    expect(pill).toHaveTextContent("+10");
+  });
+
+  it("pops a -N pill when a team's score goes down (wrong buzz)", async () => {
+    const bravo = makeTeam({ id: "t2", name: "Bravo", score: 5 });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [bravo],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    act(() => {
+      fireTeam(makePayload("game_teams", "UPDATE", { new: { ...bravo, score: 2 } }));
+    });
+    const pill = await screen.findByTestId("point-change");
+    expect(pill).toHaveTextContent("Bravo");
+    expect(pill).toHaveTextContent("-3");
   });
 
   it("toggles the sound button between off and on states", async () => {

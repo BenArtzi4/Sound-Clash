@@ -26,12 +26,12 @@ test("team identity survives a mid-game tab reload", async ({ browser }) => {
   expect(parsed.name).toBe("Persistent");
   expect(parsed.id).toMatch(/^[0-9a-f-]{36}$/i);
 
-  // Round starts; the team page flips into "Buzz when you know it!".
+  // Round starts; the team's buzz button flips to the idle (BUZZ) tone.
   await expect(manager.page.getByTestId("start-round")).toBeEnabled();
   await manager.page.getByTestId("start-round").click();
-  await expect(
-    team.page.getByRole("status").filter({ hasText: /Buzz when you know it/i }),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(team.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
+    timeout: 15_000,
+  });
 
   // Hard reload; useGameChannel re-subscribes, hydrate refetches, and the
   // stored team identity is read again from localStorage.
@@ -45,13 +45,10 @@ test("team identity survives a mid-game tab reload", async ({ browser }) => {
   );
   expect(storedAfter).toBe(storedBefore);
 
-  // Realtime should reconnect; banner ought to flip back to "Buzz when you know it!"
-  await expect(
-    team.page.getByRole("status").filter({ hasText: /Connected/i }),
-  ).toBeVisible({ timeout: 15_000 });
-  await expect(
-    team.page.getByRole("status").filter({ hasText: /Buzz when you know it/i }),
-  ).toBeVisible({ timeout: 15_000 });
+  // Realtime reconnects; buzz button flips back to idle tone.
+  await expect(team.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
+    timeout: 15_000,
+  });
 
   // The buzzer is functional after the reconnect.
   await team.page.getByTestId("buzz").click();
@@ -59,10 +56,12 @@ test("team identity survives a mid-game tab reload", async ({ browser }) => {
     timeout: 10_000,
   });
 
-  // Award and verify the score lands on the (reloaded) team's own scoreboard.
+  // Award and verify the round closes (the team page no longer renders a
+  // scoreboard; correctness of the score-update path is covered by
+  // full_game.spec.ts and buzzer_race.spec.ts via the display).
   await manager.page.getByTestId("score-title").click();
   await manager.page.getByTestId("end-round").click();
-  await expect(
-    team.page.locator('[data-team-id]:has-text("Persistent"):has-text("10")').first(),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(team.page.getByTestId("buzz")).not.toHaveAttribute("data-tone", "winner", {
+    timeout: 10_000,
+  });
 });

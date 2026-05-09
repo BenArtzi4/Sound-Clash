@@ -42,14 +42,14 @@ test("prod smoke: one buzzer round end-to-end against the deployed app", async (
     await expect(startBtn).toBeEnabled();
     await startBtn.click();
 
-    // 4. Wait for both team pages to enter "buzz when you know it" state.
+    // 4. Wait for both team buzz buttons to enter idle (BUZZ) tone.
     await Promise.all([
-      expect(
-        team1.page.getByRole("status").filter({ hasText: /Buzz when you know it/i }),
-      ).toBeVisible({ timeout: 20_000 }),
-      expect(
-        team2.page.getByRole("status").filter({ hasText: /Buzz when you know it/i }),
-      ).toBeVisible({ timeout: 20_000 }),
+      expect(team1.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
+        timeout: 20_000,
+      }),
+      expect(team2.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
+        timeout: 20_000,
+      }),
     ]);
 
     // 5. Race. The PL/pgSQL buzz_in function decides the winner atomically.
