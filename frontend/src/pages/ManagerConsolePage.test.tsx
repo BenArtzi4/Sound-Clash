@@ -392,10 +392,7 @@ describe("ManagerConsolePage", () => {
         buzzed_team_id: "t2",
         current_round_id: "r1",
       }),
-      teams: [
-        makeTeam({ id: "t1", name: "Alpha" }),
-        makeTeam({ id: "t2", name: "Bravo" }),
-      ],
+      teams: [makeTeam({ id: "t1", name: "Alpha" }), makeTeam({ id: "t2", name: "Bravo" })],
       rounds: [makeRound({ id: "r1", title_claimed_by: "t1" })],
     });
     renderConsole();

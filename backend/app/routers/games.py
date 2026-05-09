@@ -282,9 +282,7 @@ async def select_song(
     dependencies=[Depends(require_manager_token)],
 )
 @limiter.limit("100/minute")
-async def attempt(
-    request: Request, game_code: str, body: AttemptRequest
-) -> AttemptResponse:
+async def attempt(request: Request, game_code: str, body: AttemptRequest) -> AttemptResponse:
     client = get_supabase_client()
     with mapped_postgrest_errors():
         result = await anyio.to_thread.run_sync(_attempt_blocking, client, game_code, body)
@@ -305,9 +303,7 @@ async def attempt(
     dependencies=[Depends(require_manager_token)],
 )
 @limiter.limit("100/minute")
-async def end_round(
-    request: Request, game_code: str, body: EndRoundRequest
-) -> EndRoundResponse:
+async def end_round(request: Request, game_code: str, body: EndRoundRequest) -> EndRoundResponse:
     client = get_supabase_client()
     result = await anyio.to_thread.run_sync(
         _end_round_blocking, client, game_code, str(body.round_id)
