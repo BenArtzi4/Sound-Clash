@@ -158,16 +158,12 @@ describe("YouTubePlayer", () => {
     act(() => {
       lastConfig?.events?.onStateChange?.({ data: 0 });
     });
-    expect(container.querySelector('[class*="cover"]')?.className).not.toContain(
-      "coverHidden",
-    );
+    expect(container.querySelector('[class*="cover"]')?.className).not.toContain("coverHidden");
     // Manager picks Next round -> loadVideoById on the imperative handle.
     act(() => {
       ref.current?.loadVideoById("xxxxxxxxxxx", 0);
     });
-    expect(container.querySelector('[class*="cover"]')?.className).toContain(
-      "coverHidden",
-    );
+    expect(container.querySelector('[class*="cover"]')?.className).toContain("coverHidden");
   });
 
   it("non-ENDED state changes do not bring the cover back", async () => {
