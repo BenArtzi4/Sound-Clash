@@ -9,6 +9,10 @@ interface State {
   subscribeCallbacks: Array<(status: string) => void | Promise<void>>;
   hydrate: { game: ActiveGame | null; teams: Team[]; rounds: GameRound[] };
   rpcResponse: { data: unknown; error: { message: string } | null };
+  // Map of song id -> row used by from("songs").maybeSingle() lookups so the
+  // manager-refresh code path (re-resolves currentRound.song_id back to a
+  // song record) can be exercised in unit tests.
+  songsById: Record<string, { id: string; title: string; artist: string; youtube_id: string; start_time: number; is_soundtrack: boolean; source: string | null }>;
 }
 
 const state: State = {
@@ -16,6 +20,7 @@ const state: State = {
   subscribeCallbacks: [],
   hydrate: { game: null, teams: [], rounds: [] },
   rpcResponse: { data: [], error: null },
+  songsById: {},
 };
 
 export const channelMock = {
@@ -36,14 +41,23 @@ channelMock.subscribe.mockImplementation((cb: (status: string) => void) => {
   return channelMock;
 });
 
-function buildSelect(table: TableName) {
+function buildSelect(table: TableName | "songs") {
+  let pendingId: string | null = null;
   const builder = {
     select: vi.fn(() => builder),
-    eq: vi.fn(() => builder),
+    eq: vi.fn((column: string, value: unknown) => {
+      if (table === "songs" && column === "id" && typeof value === "string") {
+        pendingId = value;
+      }
+      return builder;
+    }),
     order: vi.fn(() => builder),
     maybeSingle: vi.fn(async () => {
       if (table === "active_games") {
         return { data: state.hydrate.game, error: null };
+      }
+      if (table === "songs" && pendingId !== null) {
+        return { data: state.songsById[pendingId] ?? null, error: null };
       }
       return { data: null, error: null };
     }),
@@ -64,7 +78,7 @@ function buildSelect(table: TableName) {
 export const supabaseMock = {
   channel: vi.fn(() => channelMock),
   removeChannel: vi.fn(),
-  from: vi.fn((table: TableName) => buildSelect(table)),
+  from: vi.fn((table: TableName | "songs") => buildSelect(table)),
   rpc: vi.fn(async () => state.rpcResponse),
 };
 
@@ -73,6 +87,7 @@ export function resetSupabaseMock(): void {
   state.subscribeCallbacks = [];
   state.hydrate = { game: null, teams: [], rounds: [] };
   state.rpcResponse = { data: [], error: null };
+  state.songsById = {};
   supabaseMock.channel.mockClear();
   supabaseMock.removeChannel.mockClear();
   supabaseMock.from.mockClear();
@@ -109,6 +124,26 @@ export function setRpcResponse(response: {
   error: { message: string } | null;
 }): void {
   state.rpcResponse = response;
+}
+
+export function setSongFetch(song: {
+  id: string;
+  title: string;
+  artist: string;
+  youtube_id: string;
+  start_time?: number;
+  is_soundtrack?: boolean;
+  source?: string | null;
+}): void {
+  state.songsById[song.id] = {
+    id: song.id,
+    title: song.title,
+    artist: song.artist,
+    youtube_id: song.youtube_id,
+    start_time: song.start_time ?? 0,
+    is_soundtrack: song.is_soundtrack ?? false,
+    source: song.source ?? null,
+  };
 }
 
 export async function fireSubscribed(): Promise<void> {

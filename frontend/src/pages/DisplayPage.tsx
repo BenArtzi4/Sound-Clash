@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
 import { QRPanel } from "../components/QRPanel";
 import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useGameSounds } from "../hooks/useGameSounds";
+import { serverTimeNow } from "../hooks/useServerTime";
 import styles from "./DisplayPage.module.css";
+
+const ANSWER_DURATION_SEC = 10;
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
 const CODE_CHAR_RE = /[A-Z2-9]/g;
@@ -62,9 +65,16 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const { state, status } = useGameChannel(gameCode);
   const sounds = useGameSounds();
   const [soundOn, setSoundOn] = useState(false);
+  const [now, setNow] = useState(() => serverTimeNow().getTime());
   const prevBuzzedRef = useRef<string | null | undefined>(undefined);
   const prevScoresRef = useRef<Record<string, number>>({});
   const prevRoundRef = useRef<number | undefined>(undefined);
+
+  // Tick once a second so the post-buzz countdown re-renders.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(serverTimeNow().getTime()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!soundOn || !state) return;
@@ -145,6 +155,14 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   }
   const showRoundSubhead = lockedTeam != null && roundLabel != null;
 
+  const lockedAt = game.locked_at;
+  const elapsedSec = lockedAt
+    ? Math.max(0, Math.floor((now - Date.parse(lockedAt)) / 1000))
+    : 0;
+  const remainingSec = Math.max(0, ANSWER_DURATION_SEC - elapsedSec);
+  const timerActive = game.status === "playing" && lockedTeam != null && lockedAt != null;
+  const timerPct = Math.max(0, Math.min(100, (remainingSec / ANSWER_DURATION_SEC) * 100));
+
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -167,6 +185,20 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         <span className={styles.bannerText}>{bannerText}</span>
         {showRoundSubhead ? <span className={styles.bannerSubhead}>{roundLabel}</span> : null}
       </div>
+
+      {timerActive ? (
+        <div
+          className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}
+          style={{ "--timer-pct": `${timerPct}%` } as CSSProperties}
+          role="timer"
+          aria-label="Time remaining"
+        >
+          <div className={styles.timerBar}>
+            <div className={styles.timerFill} />
+          </div>
+          <span className={styles.timerValue}>{remainingSec}s</span>
+        </div>
+      ) : null}
 
       <div className={styles.scores}>
         {teams.length === 0 ? (
