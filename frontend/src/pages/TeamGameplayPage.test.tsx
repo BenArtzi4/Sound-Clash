@@ -164,6 +164,41 @@ describe("TeamGameplayPage", () => {
     expect(screen.getByText("join page")).toBeInTheDocument();
   });
 
+  it("shows the 'Game over.' banner when the game has ended", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "ended" }),
+      teams: [makeTeam({ id: "team-1", name: "Alice" })],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByText(/^game over\.$/i)).toBeInTheDocument();
+    expect(screen.getByTestId("buzz")).toBeDisabled();
+  });
+
+  it("does not render the post-buzz timer before any team has buzzed", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "playing", buzzed_team_id: null, locked_at: null }),
+      teams: [makeTeam({ id: "team-1", name: "Alice" })],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+  });
+
   describe("timer accessibility", () => {
     // The countdown only runs AFTER a team buzzes (post-buzz answer timer,
     // 10 seconds total). We hydrate with another team holding the lock so

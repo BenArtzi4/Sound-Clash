@@ -112,6 +112,42 @@ describe("DisplayPage board", () => {
     expect(screen.getByText(/Alice buzzed in/i)).toBeInTheDocument();
   });
 
+  it("renders the post-buzz countdown when the game is locked with a locked_at", async () => {
+    // serverTimeNow is offset-anchored to the first commit_timestamp it sees;
+    // making locked_at recent ensures the countdown sits inside (0, 10] sec.
+    const lockedAt = new Date(Date.now() - 2_000).toISOString();
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        locked_at: lockedAt,
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const timer = screen.getByRole("timer", { name: /time remaining/i });
+    const value = parseInt((timer.textContent ?? "").replace(/\D/g, ""), 10);
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(value).toBeLessThanOrEqual(10);
+  });
+
+  it("does not render the countdown when no team has buzzed yet", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", buzzed_team_id: null, locked_at: null }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+  });
+
   it("renders the end-screen splash when the game is over", async () => {
     setHydrate({
       game: makeActiveGame({ status: "ended" }),
