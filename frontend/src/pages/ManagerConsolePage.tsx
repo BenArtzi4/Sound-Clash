@@ -1,23 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
-import { QRPanel } from "../components/QRPanel";
 import { Scoreboard } from "../components/Scoreboard";
 import { Skeleton } from "../components/Skeleton";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
-import { serverTimeNow } from "../hooks/useServerTime";
-import { ApiError, awardBonus, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
+import { ApiError, awardBonus, awardPoints, endGame, selectSong } from "../lib/api";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
+import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
 import styles from "./ManagerConsolePage.module.css";
-
-const ROUND_DURATION_SEC = 20;
-
-type PendingAction = { kind: "kick"; teamId: string; teamName: string } | { kind: "end" };
 
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
@@ -33,15 +28,8 @@ export function ManagerConsolePage() {
   const [artistCorrect, setArtistCorrect] = useState(false);
   const [wrongBuzz, setWrongBuzz] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(() => serverTimeNow().getTime());
-  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
-
-  // Tick once a second so the timer re-renders.
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(serverTimeNow().getTime()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // When we get the buzz lock signal, pause playback.
   useEffect(() => {
@@ -49,6 +37,38 @@ export function ManagerConsolePage() {
       playerRef.current?.pause();
     }
   }, [state?.game.buzzed_team_id]);
+
+  // After a manager-tab refresh mid-round, currentSong is null but the round
+  // row still has a song_id. Resolve it and push it into the player so the
+  // host doesn't have to abandon the round and click Next round.
+  const currentRoundSongId = state?.currentRound?.song_id ?? null;
+  const playerReady = player.ready;
+  useEffect(() => {
+    if (!currentRoundSongId) return;
+    if (currentSong && currentSong.id === currentRoundSongId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("songs")
+        .select("id,title,artist,youtube_id,start_time,is_soundtrack,source")
+        .eq("id", currentRoundSongId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      const song = data as Song;
+      setCurrentSong(song);
+      if (playerReady) {
+        playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
+      } else {
+        player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // `player` is a stable hook handle; we only need to re-run when the
+    // current round's song changes or the player flips to ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoundSongId, currentSong?.id, playerReady]);
 
   function reportError(err: unknown) {
     if (err instanceof ApiError) {
@@ -182,16 +202,6 @@ export function ManagerConsolePage() {
     }
   }
 
-  async function performKick(teamId: string, teamName: string) {
-    if (!managerToken) return;
-    try {
-      await kickTeam(gameCode, managerToken, teamId);
-      toast(`${teamName} removed from the game`, { variant: "info" });
-    } catch (err) {
-      reportError(err);
-    }
-  }
-
   async function performEnd() {
     if (busy || !managerToken) return;
     setBusy(true);
@@ -278,15 +288,6 @@ export function ManagerConsolePage() {
 
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
 
-  const roundStartedAt = state.currentRound?.started_at;
-  const elapsedSec = roundStartedAt
-    ? Math.max(0, Math.floor((now - Date.parse(roundStartedAt)) / 1000))
-    : 0;
-  const remainingSec = roundStartedAt
-    ? Math.max(0, ROUND_DURATION_SEC - elapsedSec)
-    : ROUND_DURATION_SEC;
-  const timerActive = game.status === "playing" && lockedTeam == null && state.currentRound != null;
-
   // TS narrows game.status to "playing" | "waiting" past the EndScreen early
   // return; the "ended" arm is unreachable here.
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
@@ -313,7 +314,7 @@ export function ManagerConsolePage() {
         <div className={styles.headerActions}>
           <button
             className="btn btn-danger"
-            onClick={() => setPending({ kind: "end" })}
+            onClick={() => setEndConfirmOpen(true)}
             disabled={busy}
             data-testid="end-game"
           >
@@ -345,20 +346,6 @@ export function ManagerConsolePage() {
                   <p className={styles.songMeta}>No round started yet.</p>
                 )}
               </div>
-              {timerActive ? (
-                <div
-                  className={`${styles.timerWrap} ${remainingSec <= 5 ? styles.timerLow : ""}`}
-                  style={
-                    {
-                      "--timer-pct": `${Math.max(0, Math.min(100, (remainingSec / ROUND_DURATION_SEC) * 100))}%`,
-                    } as CSSProperties
-                  }
-                >
-                  <div className={styles.timerRing}>
-                    <span className={styles.timerValue}>{remainingSec}</span>
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             {lockedTeam ? (
@@ -472,11 +459,6 @@ export function ManagerConsolePage() {
 
         <div className={styles.column}>
           <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Invite players</h2>
-            <QRPanel gameCode={gameCode} joinUrl={`${window.location.origin}/join/${gameCode}`} />
-          </section>
-
-          <section className={styles.card}>
             <h2 className={styles.cardTitle}>Scoreboard</h2>
             <Scoreboard teams={teams} buzzedTeamId={game.buzzed_team_id} />
           </section>
@@ -498,14 +480,6 @@ export function ManagerConsolePage() {
                     <span className={styles.teamRowName}>{t.name}</span>
                     <span className={styles.teamRowMeta}>
                       <span>{t.score} pts</span>
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => setPending({ kind: "kick", teamId: t.id, teamName: t.name })}
-                        disabled={busy}
-                        data-testid="kick-team"
-                      >
-                        Kick
-                      </button>
                     </span>
                   </div>
                 ))}
@@ -543,31 +517,16 @@ export function ManagerConsolePage() {
       </div>
 
       <ConfirmDialog
-        open={pending?.kind === "kick"}
-        title={pending?.kind === "kick" ? `Remove ${pending.teamName}?` : ""}
-        message="They'll be disconnected from the game and their score will be lost."
-        confirmLabel="Remove team"
-        destructive
-        onConfirm={() => {
-          if (pending?.kind === "kick") {
-            const { teamId, teamName } = pending;
-            setPending(null);
-            void performKick(teamId, teamName);
-          }
-        }}
-        onCancel={() => setPending(null)}
-      />
-      <ConfirmDialog
-        open={pending?.kind === "end"}
+        open={endConfirmOpen}
         title="End the game now?"
         message="No more rounds can be played and teams will see the final scoreboard."
         confirmLabel="End game"
         destructive
         onConfirm={() => {
-          setPending(null);
+          setEndConfirmOpen(false);
           void performEnd();
         }}
-        onCancel={() => setPending(null)}
+        onCancel={() => setEndConfirmOpen(false)}
       />
     </main>
   );

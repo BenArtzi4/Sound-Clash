@@ -25,12 +25,16 @@
   font-weight: 600;
   letter-spacing: 0.05em;
   font-size: 1.05rem;
-  pointer-events: none;
+  /* Block clicks from reaching the iframe when the cover is visible -- the
+     YT endscreen tiles otherwise stay clickable underneath the "Song ended"
+     overlay and can leak the next song. */
+  pointer-events: auto;
   transition: opacity 320ms ease;
 }
 
 .coverHidden {
   opacity: 0;
+  pointer-events: none;
 }
 
 .loading {

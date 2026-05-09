@@ -165,23 +165,31 @@ describe("TeamGameplayPage", () => {
   });
 
   describe("timer accessibility", () => {
-    function setupRunningRound(secondsAgo: number): void {
+    // The countdown only runs AFTER a team buzzes (post-buzz answer timer,
+    // 10 seconds total). We hydrate with another team holding the lock so
+    // the local team sees the timer without being the one that buzzed.
+    function setupBuzzedRound(secondsAgo: number): void {
       const FIXED_NOW = 1_780_000_000_000;
       vi.spyOn(Date, "now").mockReturnValue(FIXED_NOW);
-      const startedAt = new Date(FIXED_NOW - secondsAgo * 1000).toISOString();
+      const lockedAt = new Date(FIXED_NOW - secondsAgo * 1000).toISOString();
       window.localStorage.setItem(
         "game:ABCDEF:team",
         JSON.stringify({ id: "team-1", name: "Alice" }),
       );
       setHydrate({
-        game: makeActiveGame({ status: "playing", current_round_id: "round-1" }),
-        teams: [makeTeam({ id: "team-1" })],
-        rounds: [makeRound({ id: "round-1", started_at: startedAt })],
+        game: makeActiveGame({
+          status: "playing",
+          current_round_id: "round-1",
+          buzzed_team_id: "team-2",
+          locked_at: lockedAt,
+        }),
+        teams: [makeTeam({ id: "team-1" }), makeTeam({ id: "team-2", name: "Bob" })],
+        rounds: [makeRound({ id: "round-1" })],
       });
     }
 
     it("uses a static aria-label on the timer (no per-tick rewrite)", async () => {
-      setupRunningRound(2);
+      setupBuzzedRound(2);
       renderAt("/team/ABCDEF");
       await act(async () => {
         await fireSubscribed();
@@ -191,7 +199,7 @@ describe("TeamGameplayPage", () => {
     });
 
     it("renders an empty live region when there is plenty of time left", async () => {
-      setupRunningRound(2);
+      setupBuzzedRound(2);
       renderAt("/team/ABCDEF");
       await act(async () => {
         await fireSubscribed();
@@ -202,7 +210,7 @@ describe("TeamGameplayPage", () => {
     });
 
     it("announces low time when remaining seconds drop to the 5→1 tail", async () => {
-      setupRunningRound(17);
+      setupBuzzedRound(7);
       renderAt("/team/ABCDEF");
       await act(async () => {
         await fireSubscribed();

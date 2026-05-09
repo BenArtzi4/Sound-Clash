@@ -24,7 +24,6 @@ vi.mock("../lib/api", () => ({
   awardPoints: vi.fn(),
   awardBonus: vi.fn(),
   endGame: vi.fn(),
-  kickTeam: vi.fn(),
 }));
 
 interface MockHandle {
@@ -35,21 +34,33 @@ interface MockHandle {
 }
 
 let onReadyHandler: (() => void) | null = null;
+let lastHandle: MockHandle | null = null;
 
 vi.mock("../components/YouTubePlayer", () => ({
   YouTubePlayer: forwardRef<MockHandle, { onReady?: () => void }>((props, ref) => {
     onReadyHandler = props.onReady ?? null;
-    useImperativeHandle(ref, () => ({
-      loadVideoById: vi.fn(),
-      pause: vi.fn(),
-      play: vi.fn(),
-      stop: vi.fn(),
-    }));
+    // Use a stable handle across renders so test assertions on
+    // `lastHandle.loadVideoById` see calls from any render's playerRef.
+    useImperativeHandle(
+      ref,
+      () => {
+        if (!lastHandle) {
+          lastHandle = {
+            loadVideoById: vi.fn(),
+            pause: vi.fn(),
+            play: vi.fn(),
+            stop: vi.fn(),
+          };
+        }
+        return lastHandle;
+      },
+      [],
+    );
     return <div data-testid="yt-player" />;
   }),
 }));
 
-import { awardBonus, awardPoints, endGame, kickTeam, selectSong } from "../lib/api";
+import { awardBonus, awardPoints, endGame, selectSong } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
@@ -59,6 +70,7 @@ import {
   makeTeam,
   resetSupabaseMock,
   setHydrate,
+  setSongFetch,
 } from "../test/supabaseMock";
 import { ManagerConsolePage } from "./ManagerConsolePage";
 
@@ -69,11 +81,11 @@ beforeEach(() => {
   window.localStorage.clear();
   setManagerToken("ABCDEF", TOKEN);
   onReadyHandler = null;
+  lastHandle = null;
   vi.mocked(selectSong).mockReset();
   vi.mocked(awardPoints).mockReset();
   vi.mocked(awardBonus).mockReset();
   vi.mocked(endGame).mockReset();
-  vi.mocked(kickTeam).mockReset();
 });
 
 afterEach(() => {
@@ -453,40 +465,6 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
   });
 
-  it("kick opens a confirm dialog and calls api.kickTeam after confirm", async () => {
-    setHydrate({
-      game: makeActiveGame({ status: "playing" }),
-      teams: [makeTeam({ id: "t1", name: "Alice" })],
-      rounds: [],
-    });
-    vi.mocked(kickTeam).mockResolvedValueOnce(undefined);
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^kick$/i }));
-    await waitFor(() => screen.getByRole("dialog"));
-    expect(kickTeam).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /remove team/i }));
-    await waitFor(() => expect(kickTeam).toHaveBeenCalledWith("ABCDEF", TOKEN, "t1"));
-  });
-
-  it("kick can be cancelled from the confirm dialog", async () => {
-    setHydrate({
-      game: makeActiveGame({ status: "playing" }),
-      teams: [makeTeam({ id: "t1", name: "Alice" })],
-      rounds: [],
-    });
-    renderConsole();
-    await act(async () => {
-      await fireSubscribed();
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^kick$/i }));
-    await waitFor(() => screen.getByRole("dialog"));
-    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
-    expect(kickTeam).not.toHaveBeenCalled();
-  });
-
   it("end game confirms, calls endGame, and clears the manager token", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
@@ -618,6 +596,47 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(restart).toBeEnabled());
     fireEvent.click(restart);
     await waitFor(() => expect(selectSong).toHaveBeenLastCalledWith("ABCDEF", TOKEN, "song-A"));
+  });
+
+  it("rehydrates the current song after a manager refresh mid-round", async () => {
+    // Repro for the playwright-mcp finding (2026-05-09): hitting F5 mid-round
+    // used to drop the manager into "No round started yet." even though the
+    // server still had a live round with a song_id.
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        round_number: 2,
+        current_round_id: "r-live",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r-live", round_number: 2, song_id: "song-X" })],
+    });
+    setSongFetch({
+      id: "song-X",
+      title: "Sweet Caroline",
+      artist: "Neil Diamond",
+      youtube_id: "abcdefghijk",
+      start_time: 12,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // The round-controls card should show the song details once the lookup
+    // resolves. Without the rehydrate effect this title never appears.
+    await waitFor(() => expect(screen.getByText("Sweet Caroline")).toBeInTheDocument());
+    expect(screen.getByText("Neil Diamond")).toBeInTheDocument();
+    // The fetch resolved while the player was still loading, so the song was
+    // queued via enqueueSong. Once the YT iframe fires onReady it should be
+    // flushed into loadVideoById.
+    act(() => {
+      onReadyHandler?.();
+    });
+    await waitFor(() =>
+      expect(lastHandle?.loadVideoById).toHaveBeenCalledWith("abcdefghijk", 12),
+    );
+    // Restart-song now has a currentSong to operate on.
+    expect(screen.getAllByRole("button", { name: /^restart song$/i })[0]).toBeEnabled();
   });
 
   it("shows a clear toast when the song pool is exhausted", async () => {

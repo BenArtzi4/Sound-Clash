@@ -16,6 +16,7 @@ let lastConfig: {
   events?: {
     onReady?: () => void;
     onError?: (event: { data: number }) => void;
+    onStateChange?: (event: { data: number }) => void;
   };
 } | null = null;
 
@@ -26,6 +27,7 @@ function installFakeYT() {
       events?: {
         onReady?: () => void;
         onError?: (event: { data: number }) => void;
+        onStateChange?: (event: { data: number }) => void;
       };
     },
   ): FakeYTPlayer {
@@ -120,6 +122,69 @@ describe("YouTubePlayer", () => {
     });
     const alert = await findByRole("alert");
     expect(alert.className).not.toContain("coverHidden");
+  });
+
+  it("re-shows the cover and stops the video when the song ends", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container } = render(<YouTubePlayer ref={ref} hideOverlay />);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    // After ready the cover is hidden so the video is visible.
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    let cover = container.querySelector('[class*="cover"]');
+    expect(cover?.className).toContain("coverHidden");
+    // Now the YT player fires ENDED (state code 0). The cover must come back
+    // (so YouTube's endscreen can't be seen or clicked through to other songs)
+    // and stopVideo must be called to halt playback.
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data: 0 });
+    });
+    cover = container.querySelector('[class*="cover"]');
+    expect(cover?.className).not.toContain("coverHidden");
+    expect(cover?.textContent).toMatch(/song ended/i);
+    expect(lastPlayer?.stopVideo).toHaveBeenCalled();
+  });
+
+  it("hides the cover again when loadVideoById is called after a previous ENDED", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container } = render(<YouTubePlayer ref={ref} hideOverlay />);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data: 0 });
+    });
+    expect(container.querySelector('[class*="cover"]')?.className).not.toContain(
+      "coverHidden",
+    );
+    // Manager picks Next round -> loadVideoById on the imperative handle.
+    act(() => {
+      ref.current?.loadVideoById("xxxxxxxxxxx", 0);
+    });
+    expect(container.querySelector('[class*="cover"]')?.className).toContain(
+      "coverHidden",
+    );
+  });
+
+  it("non-ENDED state changes do not bring the cover back", async () => {
+    installFakeYT();
+    const { container } = render(<YouTubePlayer hideOverlay />);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    // YT.PlayerState.PLAYING = 1, PAUSED = 2, BUFFERING = 3, CUED = 5.
+    for (const code of [1, 2, 3, 5]) {
+      act(() => {
+        lastConfig?.events?.onStateChange?.({ data: code });
+      });
+    }
+    expect(container.querySelector('[class*="cover"]')?.className).toContain("coverHidden");
+    expect(lastPlayer?.stopVideo).not.toHaveBeenCalled();
   });
 
   it("loads the iframe API script when YT is not yet on window", async () => {

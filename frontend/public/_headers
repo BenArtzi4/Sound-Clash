@@ -3,4 +3,4 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.soundclash.org https://o*.ingest.sentry.io https://o*.ingest.de.sentry.io
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.soundclash.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io

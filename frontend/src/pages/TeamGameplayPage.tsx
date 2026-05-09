@@ -8,7 +8,7 @@ import { serverTimeNow } from "../hooks/useServerTime";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
 import styles from "./TeamGameplayPage.module.css";
 
-const ROUND_DURATION_SEC = 20;
+const ANSWER_DURATION_SEC = 10;
 
 export function TeamGameplayPage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
@@ -68,16 +68,14 @@ export function TeamGameplayPage() {
   const lockedTeam =
     game?.buzzed_team_id != null ? (state?.teams.get(game.buzzed_team_id) ?? null) : null;
 
-  const roundStartedAt = state?.currentRound?.started_at;
-  const elapsedSec = roundStartedAt
-    ? Math.max(0, Math.floor((now - Date.parse(roundStartedAt)) / 1000))
+  const lockedAt = game?.locked_at ?? null;
+  const elapsedSec = lockedAt
+    ? Math.max(0, Math.floor((now - Date.parse(lockedAt)) / 1000))
     : 0;
-  const remainingSec = roundStartedAt
-    ? Math.max(0, ROUND_DURATION_SEC - elapsedSec)
-    : ROUND_DURATION_SEC;
+  const remainingSec = Math.max(0, ANSWER_DURATION_SEC - elapsedSec);
   const timerActive =
-    game?.status === "playing" && lockedTeam == null && state?.currentRound != null;
-  const timerPct = Math.max(0, Math.min(100, (remainingSec / ROUND_DURATION_SEC) * 100));
+    game?.status === "playing" && lockedTeam != null && lockedAt != null;
+  const timerPct = Math.max(0, Math.min(100, (remainingSec / ANSWER_DURATION_SEC) * 100));
 
   let bannerClass = styles.statusBanner;
   let bannerText = "Waiting for the host to start…";

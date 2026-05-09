@@ -26,6 +26,15 @@ interface YTErrorEvent {
   data: number;
 }
 
+interface YTStateChangeEvent {
+  data: number;
+}
+
+// YT.PlayerState.ENDED. We don't import the namespace at runtime because the
+// IFrame API loads asynchronously; hard-coding the constant keeps the import
+// surface flat.
+const YT_STATE_ENDED = 0;
+
 interface YTNamespace {
   Player: new (
     el: HTMLElement,
@@ -36,6 +45,7 @@ interface YTNamespace {
       events?: {
         onReady?: () => void;
         onError?: (event: YTErrorEvent) => void;
+        onStateChange?: (event: YTStateChangeEvent) => void;
       };
     },
   ) => YTPlayer;
@@ -75,6 +85,22 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   const playerRef = useRef<YTPlayer | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [errorCode, setErrorCode] = useState<number | null>(null);
+  // True when the current video has played to its natural end. We cover the
+  // iframe again so YouTube's endscreen tiles (which can include other songs
+  // from the same channel even with rel=0) don't spoil future rounds.
+  const [ended, setEnded] = useState(false);
+
+  // Stable callback handles so the mount effect can run with []. Inline
+  // onReady/onError props from a parent that re-renders frequently would
+  // otherwise tear down and rebuild the YT.Player every render -- the iframe
+  // ends up with no videoId set (YT error 153) and the YouTube API/CDN gets
+  // hammered (~10 req/s, hundreds of MB/min).
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onErrorRef.current = onError;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -95,11 +121,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
           onReady: () => {
             setErrorCode(null);
             setLoaded(true);
-            onReady?.();
+            onReadyRef.current?.();
           },
           onError: (event) => {
             setErrorCode(event.data);
-            onError?.(event.data);
+            onErrorRef.current?.(event.data);
+          },
+          onStateChange: (event) => {
+            if (event.data === YT_STATE_ENDED) {
+              setEnded(true);
+              playerRef.current?.stopVideo();
+            }
           },
         },
       });
@@ -109,12 +141,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [onReady, onError]);
+  }, []);
 
   useImperativeHandle(
     ref,
     () => ({
       loadVideoById: (videoId, startSeconds) => {
+        setEnded(false);
         playerRef.current?.loadVideoById({
           videoId,
           startSeconds: startSeconds ?? 0,
@@ -122,12 +155,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       },
       pause: () => playerRef.current?.pauseVideo(),
       play: () => playerRef.current?.playVideo(),
-      stop: () => playerRef.current?.stopVideo(),
+      stop: () => {
+        setEnded(true);
+        playerRef.current?.stopVideo();
+      },
     }),
     [],
   );
 
-  const overlayHidden = hideOverlay && loaded && errorCode === null;
+  const overlayHidden = hideOverlay && loaded && errorCode === null && !ended;
   return (
     <div className={styles.wrapper} data-testid="youtube-player" data-ready={loaded}>
       <div ref={containerRef} className={styles.player} />
@@ -137,6 +173,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       >
         {errorCode !== null ? (
           <span className={styles.error}>Video unavailable; manager can pick a new song.</span>
+        ) : ended ? (
+          <span className={styles.loading}>Song ended</span>
         ) : (
           <span className={styles.loading}>{loaded ? "Ready" : "Loading player..."}</span>
         )}

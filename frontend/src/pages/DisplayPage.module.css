@@ -200,6 +200,64 @@
   border-color: var(--color-border-strong);
 }
 
+.timer {
+  --timer-pct: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem 1.5rem;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+}
+
+.timerBar {
+  flex: 1;
+  height: 14px;
+  background: rgba(245, 158, 11, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.timerFill {
+  height: 100%;
+  width: var(--timer-pct);
+  background: var(--color-warning);
+  border-radius: 999px;
+  transition:
+    width 950ms linear,
+    background 200ms ease;
+}
+
+.timerValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 2rem;
+  color: var(--color-warning);
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.timerLow .timerFill {
+  background: var(--color-danger);
+}
+
+.timerLow .timerValue {
+  color: var(--color-danger);
+  animation: timer-pulse-display 0.7s ease-in-out infinite;
+}
+
+@keyframes timer-pulse-display {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
 .scores {
   flex: 1;
 }
