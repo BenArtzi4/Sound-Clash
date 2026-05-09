@@ -10,6 +10,10 @@ export interface YouTubePlayerHandle {
 
 interface Props {
   hideOverlay?: boolean;
+  // When true, keep the cover visible even while the video is loaded (used by
+  // the manager view during a buzz / scoring pause so YouTube's pause-state
+  // "more videos" tiles can't leak song titles to the room).
+  coverWhilePaused?: boolean;
   onReady?: () => void;
   onError?: (code: number) => void;
 }
@@ -78,7 +82,7 @@ function loadApi(): Promise<YTNamespace> {
 }
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
-  { hideOverlay, onReady, onError },
+  { hideOverlay, coverWhilePaused, onReady, onError },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -116,6 +120,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
           controls: 0,
           disablekb: 1,
           playsinline: 1,
+          // Force English UI strings on the iframe chrome so a host whose
+          // browser is set to e.g. Hebrew doesn't see "הפעלת הסרטון" /
+          // "סרטונים נוספים" in the player overlay.
+          hl: "en",
         },
         events: {
           onReady: () => {
@@ -163,7 +171,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     [],
   );
 
-  const overlayHidden = hideOverlay && loaded && errorCode === null && !ended;
+  const overlayHidden =
+    hideOverlay && loaded && errorCode === null && !ended && !coverWhilePaused;
   return (
     <div className={styles.wrapper} data-testid="youtube-player" data-ready={loaded}>
       <div ref={containerRef} className={styles.player} />

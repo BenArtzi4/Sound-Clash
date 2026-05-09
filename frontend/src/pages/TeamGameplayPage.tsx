@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton } from "../components/BuzzButton";
+import { EndScreen } from "../components/EndScreen";
 import { Scoreboard } from "../components/Scoreboard";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
@@ -58,6 +59,18 @@ export function TeamGameplayPage() {
         <div className={`${styles.statusBanner} ${styles.statusEnded}`}>
           This game has ended or expired.
         </div>
+      </main>
+    );
+  }
+
+  // Once the host has ended the game, surface the same celebratory podium the
+  // display + manager show. The team's own row gets a "YOU" pill via the
+  // EndScreen sort, and the BUZZ button is gone — there's nothing left to do.
+  if (state?.game.status === "ended") {
+    const finalTeams = Array.from(state.teams.values());
+    return (
+      <main className={styles.shell}>
+        <EndScreen teams={finalTeams} gameCode={gameCode} />
       </main>
     );
   }

@@ -293,10 +293,20 @@ export function ManagerConsolePage() {
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
   const nextRoundDisabled = busy || !player.ready;
+  // Once a round has been scored (ended_at set), the only meaningful action is
+  // "Next round". Calling award_points or selectSong(currentSong) again hits a
+  // round_already_ended SQL error, which surfaces as a confusing red toast --
+  // it's clearer to grey the button out so the host knows where to go next.
+  const roundAlreadyScored = state.currentRound?.ended_at != null;
   const restartDisabled =
-    busy || game.status !== "playing" || !currentSong || !player.ready || lockedTeam != null;
+    busy ||
+    game.status !== "playing" ||
+    !currentSong ||
+    !player.ready ||
+    lockedTeam != null ||
+    roundAlreadyScored;
   const scoringDisabled = busy || !lockedTeam;
-  const endRoundDisabled = busy || game.status !== "playing";
+  const endRoundDisabled = busy || game.status !== "playing" || roundAlreadyScored;
   const bonusDisabled = busy || teams.length === 0;
   const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
 
@@ -328,7 +338,12 @@ export function ManagerConsolePage() {
 
       <div className={styles.grid}>
         <div className={styles.column}>
-          <YouTubePlayer ref={playerRef} hideOverlay onReady={onPlayerReady} />
+          <YouTubePlayer
+            ref={playerRef}
+            hideOverlay
+            coverWhilePaused={lockedTeam != null}
+            onReady={onPlayerReady}
+          />
 
           <section className={styles.card}>
             <div className={styles.roundHeader}>
