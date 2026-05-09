@@ -7,7 +7,7 @@ import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePl
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
-import { ApiError, awardBonus, awardPoints, endGame, selectSong } from "../lib/api";
+import { ApiError, awardAttempt, awardBonus, endGame, endRound, selectSong } from "../lib/api";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
@@ -93,21 +93,6 @@ export function ManagerConsolePage() {
     }
   }
 
-  async function handleNextRound() {
-    if (busy || !managerToken) return;
-    setBusy(true);
-    try {
-      const result = await selectSong(gameCode, managerToken);
-      setCurrentSong(result.song);
-      resetAwardChecks();
-      await loadSongIntoPlayer(result.song);
-    } catch (err) {
-      reportError(err);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function resetAwardChecks() {
     setTitleCorrect(false);
     setArtistCorrect(false);
@@ -141,28 +126,74 @@ export function ManagerConsolePage() {
     });
   }
 
-  async function handleEndRound(timeout: boolean) {
+  async function applyAttempt(roundId: string): Promise<boolean> {
+    if (!managerToken) return false;
+    const result = await awardAttempt(gameCode, managerToken, {
+      round_id: roundId,
+      title_correct: titleCorrect,
+      artist_correct: artistCorrect,
+      wrong_buzz: wrongBuzz,
+    });
+    if (result.points_awarded > 0) {
+      toast(`+${result.points_awarded} pts awarded`, { variant: "success" });
+    } else if (result.points_awarded < 0) {
+      toast(`${result.points_awarded} pts (wrong buzz)`, { variant: "info" });
+    }
+    return true;
+  }
+
+  async function handleContinueRound() {
     if (!state?.currentRound || busy || !managerToken) return;
+    const lockedTeamId = state.game.buzzed_team_id;
+    if (!lockedTeamId) return;
+    if (!titleCorrect && !artistCorrect && !wrongBuzz) {
+      toast("Pick a result first (Correct Song, Correct Artist, or Wrong)", {
+        variant: "info",
+      });
+      return;
+    }
     setBusy(true);
     try {
-      const result = await awardPoints(gameCode, managerToken, {
-        round_id: state.currentRound.id,
-        title_correct: timeout ? false : titleCorrect,
-        artist_correct: timeout ? false : artistCorrect,
-        wrong_buzz: timeout ? false : wrongBuzz,
-        timeout,
-      });
+      await applyAttempt(state.currentRound.id);
       resetAwardChecks();
-      playerRef.current?.stop();
-      if (timeout) {
-        toast("Round skipped", { variant: "info" });
-      } else if (result.points_awarded > 0) {
-        toast(`+${result.points_awarded} pts awarded`, { variant: "success" });
-      } else if (result.points_awarded < 0) {
-        toast(`${result.points_awarded} pts (wrong buzz)`, { variant: "info" });
-      } else {
-        toast("No points awarded", { variant: "info" });
+    } catch (err) {
+      reportError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleNextRound() {
+    if (busy || !managerToken) return;
+    setBusy(true);
+    try {
+      const round = state?.currentRound;
+      const lockedTeamId = state?.game.buzzed_team_id ?? null;
+      // If a buzz is held with a verdict toggled, score it before advancing.
+      if (round && lockedTeamId && (titleCorrect || artistCorrect || wrongBuzz)) {
+        try {
+          await applyAttempt(round.id);
+        } catch (err) {
+          reportError(err);
+          return;
+        }
       }
+      // Close the prior round (idempotent; safe even if start_round will close it).
+      if (round && state?.game.status === "playing") {
+        try {
+          await endRound(gameCode, managerToken, round.id);
+        } catch (err) {
+          // round_already_ended is fine; surface anything else.
+          if (!(err instanceof ApiError && err.status === 409)) {
+            reportError(err);
+            return;
+          }
+        }
+      }
+      const result = await selectSong(gameCode, managerToken);
+      setCurrentSong(result.song);
+      resetAwardChecks();
+      await loadSongIntoPlayer(result.song);
     } catch (err) {
       reportError(err);
     } finally {
@@ -207,10 +238,6 @@ export function ManagerConsolePage() {
     }
   }
 
-  // Visiting /manager/game/<code> without having created the game (or after
-  // having ended it / cleared storage) shouldn't surface the console UI.
-  // The check sits ABOVE the gone/skeleton branches because it doesn't
-  // depend on a Realtime payload; a non-host should bounce immediately.
   if (!managerToken) {
     return (
       <main className={styles.shell}>
@@ -228,9 +255,6 @@ export function ManagerConsolePage() {
     );
   }
 
-  // status="gone" must be checked before the skeleton: an active_games
-  // DELETE flips the reducer to null state AND status to "gone" in the
-  // same tick, and the user should see the explanation, not a skeleton.
   if (status === "gone" || (state && !state.game)) {
     return (
       <main className={styles.shell}>
@@ -269,19 +293,25 @@ export function ManagerConsolePage() {
   }
 
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
+  const round = state.currentRound;
+  const titleClaimedById = round?.title_claimed_by ?? null;
+  const artistClaimedById = round?.artist_claimed_by ?? null;
+  const titleClaimedByName = titleClaimedById ? state.teams.get(titleClaimedById)?.name : null;
+  const artistClaimedByName = artistClaimedById ? state.teams.get(artistClaimedById)?.name : null;
+  const bothClaimed = titleClaimedById != null && artistClaimedById != null;
 
-  // TS narrows game.status to "playing" | "waiting" past the EndScreen early
-  // return; the "ended" arm is unreachable here.
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
-  const nextRoundDisabled = busy || !player.ready;
-  // Once a round has been scored (ended_at set), the only meaningful action is
-  // "Next round". Calling award_points again hits a round_already_ended SQL
-  // error, which surfaces as a confusing red toast -- it's clearer to grey the
-  // button out so the host knows where to go next.
-  const roundAlreadyScored = state.currentRound?.ended_at != null;
+  const titleToggleDisabled = busy || !lockedTeam || titleClaimedById != null;
+  const artistToggleDisabled = busy || !lockedTeam || artistClaimedById != null;
+  const wrongToggleDisabled = busy || !lockedTeam;
   const scoringDisabled = busy || !lockedTeam;
-  const endRoundDisabled = busy || game.status !== "playing" || roundAlreadyScored;
+  const continueDisabled =
+    busy ||
+    !lockedTeam ||
+    bothClaimed ||
+    !(titleCorrect || artistCorrect || wrongBuzz);
+  const nextRoundDisabled = busy || !player.ready;
   const bonusDisabled = busy || teams.length === 0;
   const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
 
@@ -332,6 +362,26 @@ export function ManagerConsolePage() {
                 <p className={styles.songMeta}>No round started yet.</p>
               )}
             </div>
+            {round && game.status === "playing" ? (
+              <div className={styles.tokenChips} aria-label="Round token state">
+                <span
+                  className={`${styles.tokenChip} ${
+                    titleClaimedById ? styles.tokenChipClaimed : ""
+                  }`}
+                  data-testid="token-chip-title"
+                >
+                  Song {titleClaimedById ? `✓ ${titleClaimedByName ?? "?"}` : "open"}
+                </span>
+                <span
+                  className={`${styles.tokenChip} ${
+                    artistClaimedById ? styles.tokenChipClaimed : ""
+                  }`}
+                  data-testid="token-chip-artist"
+                >
+                  Artist {artistClaimedById ? `✓ ${artistClaimedByName ?? "?"}` : "open"}
+                </span>
+              </div>
+            ) : null}
           </div>
 
           {lockedTeam ? (
@@ -346,7 +396,7 @@ export function ManagerConsolePage() {
               type="button"
               className={`${styles.scoreBtn} ${styles.scorePositive} ${titleCorrect ? styles.scoreActive : ""}`}
               onClick={toggleTitle}
-              disabled={scoringDisabled}
+              disabled={titleToggleDisabled}
               aria-pressed={titleCorrect}
               data-testid="score-title"
             >
@@ -357,7 +407,7 @@ export function ManagerConsolePage() {
               type="button"
               className={`${styles.scoreBtn} ${styles.scorePositive} ${artistCorrect ? styles.scoreActive : ""}`}
               onClick={toggleArtist}
-              disabled={scoringDisabled}
+              disabled={artistToggleDisabled}
               aria-pressed={artistCorrect}
               data-testid="score-artist"
             >
@@ -368,7 +418,7 @@ export function ManagerConsolePage() {
               type="button"
               className={`${styles.scoreBtn} ${styles.scoreNegative} ${wrongBuzz ? styles.scoreActiveNeg : ""}`}
               onClick={toggleWrong}
-              disabled={scoringDisabled}
+              disabled={wrongToggleDisabled}
               aria-pressed={wrongBuzz}
               data-testid="score-wrong"
             >
@@ -416,15 +466,15 @@ export function ManagerConsolePage() {
 
           <div className={styles.actionsInline}>
             <button
-              className={`btn btn-primary ${styles.awardBtn}`}
-              onClick={() => void handleEndRound(!lockedTeam)}
-              disabled={endRoundDisabled}
-              data-testid="end-round"
+              className={`btn ${styles.continueBtn}`}
+              onClick={() => void handleContinueRound()}
+              disabled={continueDisabled}
+              data-testid="continue-round"
             >
-              End round
+              Continue round
             </button>
             <button
-              className="btn btn-primary"
+              className={`btn btn-primary ${styles.awardBtn}`}
               onClick={() => void handleNextRound()}
               disabled={nextRoundDisabled}
               data-testid="start-round"
@@ -437,15 +487,15 @@ export function ManagerConsolePage() {
 
       <div className={styles.mobileBar} role="toolbar" aria-label="Round actions">
         <button
-          className={`btn btn-primary ${styles.awardBtn}`}
-          onClick={() => void handleEndRound(!lockedTeam)}
-          disabled={endRoundDisabled}
-          data-testid="end-round-mobile"
+          className={`btn ${styles.continueBtn}`}
+          onClick={() => void handleContinueRound()}
+          disabled={continueDisabled}
+          data-testid="continue-round-mobile"
         >
-          End round
+          Continue
         </button>
         <button
-          className="btn btn-primary"
+          className={`btn btn-primary ${styles.awardBtn}`}
           onClick={() => void handleNextRound()}
           disabled={nextRoundDisabled}
           data-testid="start-round-mobile"

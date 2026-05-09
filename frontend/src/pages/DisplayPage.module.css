@@ -385,6 +385,33 @@
   color: #b45309;
 }
 
+.tokenChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: -0.25rem;
+}
+
+.tokenChip {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--color-text-dim);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tokenChipClaimed {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.06) 100%);
+  color: #047857;
+  border-color: var(--color-success);
+}
+
 @media (max-width: 768px) {
   .shell {
     padding: 1.25rem var(--space-md);

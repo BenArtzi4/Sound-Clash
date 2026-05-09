@@ -12,7 +12,7 @@ See [`docs/testing-strategy.md`](../../docs/testing-strategy.md) §4.1 for the f
 
 - `test_buzz_in_race.py`: 10 concurrent calls → exactly 1 winner. **Stress mode runs 100×.**
 - `test_buzz_in_edge_cases.py`: game waiting/ended/missing; bad UUID; lock-already-held.
-- `test_award_points.py`: happy path; **idempotency** (second call → 409); timeout case skips score update.
+- `test_award_attempt.py`: happy path per token (title/artist/both/wrong); multi-buzz on the same round; "token already claimed" rejection; end_round idempotency; start_round defensively closes prior open round.
 - `test_rls_anon.py`: as `anon` role: SELECT works on every table; INSERT/UPDATE/DELETE rejected.
 - `test_rls_function_grants.py`: only `buzz_in` is anon-callable.
 - `test_cleanup_expired_games.py`: manually set `expires_at` to past; invoke cleanup; verify cascade.

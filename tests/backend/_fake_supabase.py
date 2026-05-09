@@ -395,7 +395,7 @@ class _Rpc:
             data: Any
             if not rows:
                 data = None
-            elif len(rows[0]) == 1 and self._name not in {"award_points", "buzz_in"}:
+            elif len(rows[0]) == 1 and self._name not in {"award_attempt", "buzz_in"}:
                 # scalar-returning function: unwrap single column
                 data = _normalize(list(rows[0].values())[0])
             else:

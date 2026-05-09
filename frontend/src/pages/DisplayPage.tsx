@@ -153,6 +153,11 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     return a.joined_at.localeCompare(b.joined_at);
   });
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
+  const round = state.currentRound;
+  const titleClaimedById = round?.title_claimed_by ?? null;
+  const artistClaimedById = round?.artist_claimed_by ?? null;
+  const titleClaimedByName = titleClaimedById ? state.teams.get(titleClaimedById)?.name : null;
+  const artistClaimedByName = artistClaimedById ? state.teams.get(artistClaimedById)?.name : null;
 
   if (game.status === "ended") {
     return (
@@ -214,6 +219,27 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         <span className={styles.bannerText}>{bannerText}</span>
         {showRoundSubhead ? <span className={styles.bannerSubhead}>{roundLabel}</span> : null}
       </div>
+
+      {round && game.status === "playing" ? (
+        <div className={styles.tokenChips} aria-label="Round token state">
+          <span
+            className={`${styles.tokenChip} ${
+              titleClaimedById ? styles.tokenChipClaimed : ""
+            }`}
+            data-testid="display-token-title"
+          >
+            Song {titleClaimedById ? `✓ ${titleClaimedByName ?? "?"}` : "open"}
+          </span>
+          <span
+            className={`${styles.tokenChip} ${
+              artistClaimedById ? styles.tokenChipClaimed : ""
+            }`}
+            data-testid="display-token-artist"
+          >
+            Artist {artistClaimedById ? `✓ ${artistClaimedByName ?? "?"}` : "open"}
+          </span>
+        </div>
+      ) : null}
 
       {timerActive ? (
         <div

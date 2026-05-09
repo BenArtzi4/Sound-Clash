@@ -2,7 +2,8 @@
 
 The router never calls ``buzz_in``; that stays browser-direct via PostgREST
 to keep Python out of the buzzer hot path. Service-role-only RPCs
-(``start_round``, ``award_points``, ``end_game``) are dispatched here.
+(``start_round``, ``award_attempt``, ``end_round``, ``end_game``,
+``award_bonus``) are dispatched here.
 """
 
 from __future__ import annotations
@@ -23,13 +24,15 @@ from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 from app.middleware.manager_auth import require_manager_token
 from app.middleware.rate_limit import limiter
 from app.models.games import (
+    AttemptRequest,
+    AttemptResponse,
     AwardBonusRequest,
     AwardBonusResponse,
-    AwardPointsRequest,
-    AwardPointsResponse,
     CreateGameRequest,
     CreateGameResponse,
     EndGameResponse,
+    EndRoundRequest,
+    EndRoundResponse,
     JoinTeamRequest,
     JoinTeamResponse,
     SelectSongRequest,
@@ -37,7 +40,7 @@ from app.models.games import (
 )
 from app.models.songs import SongPayload
 from app.services.codes import generate_unique_code
-from app.services.scoring import to_rpc_points
+from app.services.scoring import to_attempt_args
 from app.services.song_picker import pick_random_song
 
 router = APIRouter(tags=["games"])
@@ -108,39 +111,47 @@ def _start_round_blocking(
     return str(round_id), int(rows[0]["round_number"])
 
 
-def _award_blocking(
+def _attempt_blocking(
     client: SupabaseClientLike,
     code: str,
-    body: AwardPointsRequest,
+    body: AttemptRequest,
 ) -> dict[str, Any]:
-    title, artist, wrong_buzz, timeout = to_rpc_points(
+    title, artist, wrong_buzz = to_attempt_args(
         title_correct=body.title_correct,
         artist_correct=body.artist_correct,
         wrong_buzz=body.wrong_buzz,
-        timeout=body.timeout,
     )
 
     with mapped_postgrest_errors():
         rpc_resp = client.rpc(
-            "award_points",
+            "award_attempt",
             {
                 "p_game_code": code,
                 "p_round_id": str(body.round_id),
                 "p_title": title,
                 "p_artist": artist,
                 "p_wrong_buzz": wrong_buzz,
-                "p_timeout": timeout,
             },
         ).execute()
-    # PostgREST returns a TABLE-shaped function as a list of row-dicts (a
-    # length-1 list here, since award_points always RETURN QUERY one row).
-    # Some test mocks pass a bare dict, so accept both shapes.
     data = rpc_resp.data
     if isinstance(data, list):
         if not data:
-            raise NotFoundError("award_points returned no row")
+            raise NotFoundError("award_attempt returned no row")
         data = data[0]
     return dict(data)
+
+
+def _end_round_blocking(
+    client: SupabaseClientLike,
+    code: str,
+    round_id: str,
+) -> dict[str, Any]:
+    with mapped_postgrest_errors():
+        rpc_resp = client.rpc(
+            "end_round",
+            {"p_game_code": code, "p_round_id": round_id},
+        ).execute()
+    return {"round_id": round_id, "ended_at": rpc_resp.data}
 
 
 def _bonus_blocking(
@@ -266,24 +277,42 @@ async def select_song(
 
 
 @router.post(
-    "/games/{game_code}/award-points",
-    response_model=AwardPointsResponse,
+    "/games/{game_code}/attempt",
+    response_model=AttemptResponse,
     dependencies=[Depends(require_manager_token)],
 )
 @limiter.limit("100/minute")
-async def award_points(
-    request: Request, game_code: str, body: AwardPointsRequest
-) -> AwardPointsResponse:
+async def attempt(
+    request: Request, game_code: str, body: AttemptRequest
+) -> AttemptResponse:
     client = get_supabase_client()
     with mapped_postgrest_errors():
-        result = await anyio.to_thread.run_sync(_award_blocking, client, game_code, body)
+        result = await anyio.to_thread.run_sync(_attempt_blocking, client, game_code, body)
 
-    return AwardPointsResponse(
+    return AttemptResponse(
         round_id=body.round_id,
         team_id=result.get("team_id"),
-        points_awarded=int(result.get("points_awarded", 0)),
+        points_awarded=int(result.get("points_delta", result.get("points_awarded", 0))),
         team_total_score=int(result.get("team_total_score", 0)),
+        title_claimed_by=result.get("title_claimed_by"),
+        artist_claimed_by=result.get("artist_claimed_by"),
     )
+
+
+@router.post(
+    "/games/{game_code}/end-round",
+    response_model=EndRoundResponse,
+    dependencies=[Depends(require_manager_token)],
+)
+@limiter.limit("100/minute")
+async def end_round(
+    request: Request, game_code: str, body: EndRoundRequest
+) -> EndRoundResponse:
+    client = get_supabase_client()
+    result = await anyio.to_thread.run_sync(
+        _end_round_blocking, client, game_code, str(body.round_id)
+    )
+    return EndRoundResponse.model_validate(result)
 
 
 @router.post(

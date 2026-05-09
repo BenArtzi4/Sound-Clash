@@ -10,8 +10,7 @@
 #   2. POST /games (open hosting) returns a game_code + manager_token
 #   3. Two teams can join
 #   4. select-song works with X-Manager-Token (host-only path)
-#   5. award-points credits the right team (the buzz_in -> award_points
-#      chain that bug b930a1b regressed)
+#   5. end-round closes the round (the host-only manager-token path)
 #   6. end-game flips status to "ended"
 #
 # Prerequisites: bash, curl, jq. No secrets needed (game hosting is open
@@ -147,22 +146,21 @@ SONG_TITLE=$(jq -r '.song.title // empty' <<<"$SELECT")
 log "      round_id=$ROUND_ID song=\"$SONG_TITLE\""
 
 # ---------------------------------------------------------------------------
-# 6. award-points
+# 6. end-round
 #
-# We don't have a real buzz race in smoke: we just verify the host-only
-# path returns 200. With no buzz recorded, award_points will credit no
-# team (points_awarded=0); that's expected for smoke.
+# Multi-buzz model: /attempt requires a held buzz, which the smoke test
+# does not simulate. We exercise /end-round instead (the host-only path
+# the manager hits to advance without scoring).
 # ---------------------------------------------------------------------------
 
-log "5/6 POST /games/$GAME_CODE/award-points"
-AWARD_BODY=$(jq -n \
-  --arg rid "$ROUND_ID" \
-  '{round_id: $rid, title_correct: true, artist_correct: false, wrong_buzz: false, timeout: false}')
-AWARD=$(http POST "/games/$GAME_CODE/award-points" \
+log "5/6 POST /games/$GAME_CODE/end-round"
+END_ROUND_BODY=$(jq -n --arg rid "$ROUND_ID" '{round_id: $rid}')
+END_ROUND=$(http POST "/games/$GAME_CODE/end-round" \
   -H "X-Manager-Token: $TOKEN" \
-  --data "$AWARD_BODY")
-AWARD_POINTS=$(jq -r '.points_awarded // 0' <<<"$AWARD")
-log "      points_awarded=$AWARD_POINTS (0 expected without a buzz)"
+  --data "$END_ROUND_BODY")
+END_ROUND_TS=$(jq -r '.ended_at // empty' <<<"$END_ROUND")
+[[ -n "$END_ROUND_TS" ]] || fail "end-round missing ended_at: $END_ROUND"
+log "      ended_at=$END_ROUND_TS"
 
 # ---------------------------------------------------------------------------
 # 7. end-game

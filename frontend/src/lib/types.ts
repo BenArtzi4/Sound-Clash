@@ -35,6 +35,8 @@ export interface GameRound {
   title_points: number;
   artist_points: number;
   wrong_buzz_penalty: number;
+  title_claimed_by: string | null;
+  artist_claimed_by: string | null;
   ended_at: string | null;
 }
 
@@ -111,19 +113,25 @@ export interface SelectSongResponse {
   song: Song;
 }
 
-export interface AwardPointsRequest {
+export interface AttemptRequest {
   round_id: string;
   title_correct: boolean;
   artist_correct: boolean;
   wrong_buzz: boolean;
-  timeout: boolean;
 }
 
-export interface AwardPointsResponse {
+export interface AttemptResponse {
   round_id: string;
   team_id: string | null;
   points_awarded: number;
   team_total_score: number;
+  title_claimed_by: string | null;
+  artist_claimed_by: string | null;
+}
+
+export interface EndRoundResponse {
+  round_id: string;
+  ended_at: string;
 }
 
 export interface AwardBonusRequest {

@@ -27,3 +27,19 @@ export async function joinAsTeam(
 
   return { page, name: teamName };
 }
+
+export async function buzzAndExpectWinner(team: JoinedTeam): Promise<void> {
+  await expect(team.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
+    timeout: 10_000,
+  });
+  await team.page.getByTestId("buzz").click();
+  await expect(team.page.getByTestId("buzz")).toHaveAttribute("data-tone", "winner", {
+    timeout: 10_000,
+  });
+}
+
+export async function expectBuzzGreen(team: JoinedTeam): Promise<void> {
+  await expect(team.page.getByTestId("buzz")).toHaveAttribute("data-tone", "idle", {
+    timeout: 10_000,
+  });
+}

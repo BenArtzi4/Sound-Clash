@@ -50,28 +50,41 @@ Invalid transitions (e.g., `ended` → `playing`) MUST be rejected by the RPC la
 
 ## 3. Round Lifecycle
 
-Each round is one song. The round's micro-state is encoded in `active_games` (`buzzed_team_id`, `locked_at`, `current_round_id`) plus the matching `game_rounds` row.
+Each round is one song. The song carries **two independent claim tokens — TITLE and ARTIST**. Multiple teams can buzz on the same song until both tokens are claimed (or the manager advances). The round's micro-state lives in `active_games` (`buzzed_team_id`, `locked_at`, `current_round_id`) plus the matching `game_rounds` row (`title_claimed_by`, `artist_claimed_by`, `ended_at`).
 
 ```
-   round_started ──▶ song playing ──▶ team buzzes ──▶ buzzer_locked
-                                                            │
-                                                            ▼
-                                                    manager evaluates
-                                                            │
-                       ┌───── timeout (no buzz) ──┐         │
-                       │                          ▼         ▼
-                       │                  next_round  or  award_points
-                       │                                    │
-                       └────────────────────────────────────┘
+       ┌────────────────────────────────────────────────────────────┐
+       │                                                            │
+       │                       ┌─────── continue ──────┐            │
+       ▼                       │                       │            │
+  round starts ──▶ song ──▶ team buzzes ──▶ manager evaluates       │
+                            (buzzer locks)                          │
+                                  │                                 │
+                                  ▼                                 │
+                          award_attempt RPC                         │
+                          (score, lock cleared)                     │
+                                  │                                 │
+                                  ├──────  next round ──────────────┘
+                                  │
+                                  ▼
+                          end_round + start_round
+                          (new song)
 ```
 
 ### Round events (server-authoritative)
 
-1. **Round starts**: manager picks (or system random-picks) a song; `start_round` RPC clears prior buzz state and assigns `current_song_id`.
+1. **Round starts**: manager picks (or system random-picks) a song; `start_round` RPC defensively closes any prior open round, then clears buzz state and assigns `current_song_id`.
 2. **Song plays**: manager controls YouTube IFrame Player.
-3. **Buzz**: first team to call `buzz_in` RPC wins; `locked_at` is the server timestamp.
-4. **Evaluation**: manager judges the buzzing team's verbal answer and awards points per component (or a timeout penalty).
-5. **Round ends**: `award_points` RPC writes the result and clears buzz state for the next round.
+3. **Buzz**: a team calls `buzz_in` RPC; the first one to satisfy `buzzed_team_id IS NULL` wins. `locked_at` is the server timestamp.
+4. **Evaluation**: manager judges the verbal answer and toggles `Correct Song` / `Correct Artist` / `Wrong` in the console.
+5. **Continue Round**: manager presses "Continue round". `award_attempt` RPC scores the buzz (claiming a token if correct, deducting if wrong), clears the buzz lock, and **leaves the round open**. Other teams (or the same team) can buzz again immediately.
+6. **Next Round**: manager presses "Next round". If a buzz is held with toggles set, `award_attempt` runs first. Then `end_round` closes the current round and `start_round` advances to the next song. Any unclaimed tokens are abandoned (no penalty).
+
+### Token claim rules
+
+- `title_claimed_by` and `artist_claimed_by` start NULL each round. The first team that gets the manager to set the corresponding toggle in their `award_attempt` claims it.
+- A team that claims a token cannot reclaim it. The manager UI greys out the matching toggle on subsequent buzzes; the backend rejects with `P0001 title_already_claimed` / `artist_already_claimed` if the UI is bypassed.
+- Wrong does **not** claim either token. A team can buzz wrong, get -3, and buzz again on the same song.
 
 ## 4. Scoring
 
@@ -79,21 +92,21 @@ Per-round point components (locked at MVP, configurable later):
 
 | Component | Points | When awarded |
 |---|---|---|
-| Correct Song | **+10** | Manager judges the song title correct |
-| Correct Artist | **+5** | Manager judges the artist correct |
-| Wrong | **−3** | Team buzzed but got neither title nor artist right |
-| Timeout | **0** | Round ends with no buzz; no team's score moves |
+| Correct Song | **+10** | Manager toggles "Correct Song" on a buzz; claims TITLE token |
+| Correct Artist | **+5** | Manager toggles "Correct Artist" on a buzz; claims ARTIST token |
+| Wrong | **−3** | Team buzzed but got neither title nor artist right; no token claimed |
+| Skip / abandoned token | **0** | Manager advances with one or both tokens unclaimed; no team's score moves |
 
-Maximum per round from `award_points`: **+15** (title + artist correct). Minimum: **−3** (wrong buzz). The host can also award a discretionary **+4 Bonus** to any team at any time; see §4a.
+Maximum per **buzz** from `award_attempt`: **+15** (title + artist together). Minimum per buzz: **−3** (wrong buzz). A round can accumulate multiple buzz outcomes — e.g. T1 wrong → -3, T2 title → +10, T3 artist → +5. The host can also grant a discretionary **+4 Bonus** to any team at any time; see §4a.
 
 Scores are integers; ties are allowed. The team with the highest score at game end is the winner; tied teams share the win (no tiebreaker round in MVP; see §11).
 
 ### Scoring rules
 
-- `Correct Song` and `Correct Artist` are **accumulating toggles**: the host may select either, both, or neither.
+- `Correct Song` and `Correct Artist` are **accumulating toggles** within a single buzz: the host may select either, both, or neither (which is treated as a no-score; the API rejects an attempt with no flags set).
 - `Wrong` is **mutually exclusive** with the two correct toggles, both in the UI and in the SQL function (`P0001 wrong_buzz_with_correct`).
-- `End Round` finalizes whatever is toggled. With no toggles selected and a buzzed team, the round ends with zero score change.
-- `End Round` with no buzz sends `timeout=true`: round ends, no score change.
+- `Continue Round` calls `award_attempt`: scores the current buzz, clears the lock, leaves the round open. Disabled when no buzz is held, both tokens are claimed, or no toggle is selected.
+- `Next Round` advances to the next song. If a buzz is held with toggles set, it scores first via `award_attempt`. Then `end_round` closes the current round and `start_round` advances.
 - Negative team scores are allowed.
 - The manager cannot retroactively change a previous round's score in MVP. (Future: an "edit last round" undo flow.)
 
@@ -119,7 +132,8 @@ A separate manager action, independent of round and buzz state.
 
 - Only one team can hold the lock at a time. The atomic guarantee is in the `buzz_in` PL/pgSQL function (see `rpc-functions.md`).
 - The buzz button is enabled only while `active_games.status = 'playing'` AND `buzzed_team_id IS NULL`.
-- After lock, the button is disabled for ALL teams until the manager either awards points or restarts the song.
+- After lock, the button is disabled for ALL teams until the manager presses "Continue round" or "Next round" (which clears the lock via `award_attempt` / `end_round`).
+- A team that buzzed wrong (or correct) on the current song is **not** locked out for the remainder of the round; the buzzer re-arms for everyone, including them. The only constraint is that an already-claimed token cannot be re-claimed by anyone.
 - The `locked_at` timestamp is server-authoritative. Clients display "X locked it" with no client-side ordering logic.
 - Rejected buzz attempts (lock already held) get a quiet UI signal; no error toast, just disabled state.
 
@@ -143,7 +157,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 ### Buzz window timeout
 
-- After `start_round`, if no team buzzes within **20 seconds** (configurable), the manager UI shows a "no one buzzed" prompt and the manager presses "End round" with no toggles set → `award_points` is called with `p_timeout = 1` (or all-zero scoring args), the round ends, and no team's score changes. The earlier `-2` timeout penalty was removed in migration 014 because it never actually landed on any team (the SQL guard prevented it) and its UX value was negative.
+- After `start_round`, if no team buzzes within **20 seconds** (configurable), the manager presses "Next round" without selecting any toggles. With no buzz held, `end_round` runs (closing the current round) and `start_round` loads the next song. No team's score changes.
 - The 20-second window is enforced client-side in the manager UI (timer). The server does not auto-timeout.
 
 ### Answer-evaluation window

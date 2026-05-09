@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
+  awardAttempt,
   awardBonus,
-  awardPoints,
   bulkImportSongs,
   createGame,
   createSong,
   deleteSong,
   endGame,
+  endRound,
   getHealth,
   getSong,
   joinTeam,
@@ -123,32 +124,48 @@ describe("api - manager-token routes", () => {
     expect(headers["X-Manager-Token"]).toBe(TOKEN);
   });
 
-  it("awardPoints sends booleans + token", async () => {
+  it("awardAttempt POSTs to /attempt with booleans + token", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         round_id: "r1",
         team_id: "t1",
         points_awarded: 15,
         team_total_score: 30,
+        title_claimed_by: "t1",
+        artist_claimed_by: "t1",
       }),
     );
-    const res = await awardPoints("ABCDEF", TOKEN, {
+    const res = await awardAttempt("ABCDEF", TOKEN, {
       round_id: "r1",
       title_correct: true,
       artist_correct: true,
       wrong_buzz: false,
-      timeout: false,
     });
     expect(res.points_awarded).toBe(15);
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(res.title_claimed_by).toBe("t1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/games/ABCDEF/attempt");
     const headers = init.headers as Record<string, string>;
     expect(headers["X-Manager-Token"]).toBe(TOKEN);
     expect(JSON.parse(init.body as string)).toMatchObject({
       title_correct: true,
       artist_correct: true,
       wrong_buzz: false,
-      timeout: false,
     });
+  });
+
+  it("endRound POSTs to /end-round with the round id + token", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { round_id: "r1", ended_at: "2026-05-10T12:00:00Z" }),
+    );
+    const res = await endRound("ABCDEF", TOKEN, "r1");
+    expect(res.ended_at).toBe("2026-05-10T12:00:00Z");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/games/ABCDEF/end-round");
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Manager-Token"]).toBe(TOKEN);
+    expect(JSON.parse(init.body as string)).toEqual({ round_id: "r1" });
   });
 
   it("awardBonus posts to /bonus with the chosen team", async () => {
