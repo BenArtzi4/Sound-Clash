@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import styles from "./BuzzButton.module.css";
 
-export type BuzzTone = "idle" | "locked-other" | "winner";
+export type BuzzTone = "idle" | "locked-other" | "winner" | "waiting";
 
 interface Props {
   disabled: boolean;
@@ -44,7 +44,13 @@ export function BuzzButton({
   };
 
   const toneClass =
-    tone === "winner" ? styles.toneWinner : tone === "locked-other" ? styles.toneLockedOther : "";
+    tone === "winner"
+      ? styles.toneWinner
+      : tone === "locked-other"
+        ? styles.toneLockedOther
+        : tone === "waiting"
+          ? styles.toneWaiting
+          : "";
 
   const className = [styles.button, pressed ? styles.pressed : "", toneClass]
     .filter(Boolean)

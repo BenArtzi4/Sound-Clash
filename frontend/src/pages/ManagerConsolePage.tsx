@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
-import { Scoreboard } from "../components/Scoreboard";
 import { Skeleton } from "../components/Skeleton";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useToast } from "../context/useToast";
@@ -336,172 +335,139 @@ export function ManagerConsolePage() {
         </div>
       </header>
 
-      <div className={styles.grid}>
-        <div className={styles.column}>
-          <YouTubePlayer
-            ref={playerRef}
-            hideOverlay
-            coverWhilePaused={lockedTeam != null}
-            onReady={onPlayerReady}
-          />
+      <div className={styles.column}>
+        <YouTubePlayer
+          ref={playerRef}
+          hideOverlay
+          coverWhilePaused={lockedTeam != null}
+          onReady={onPlayerReady}
+        />
 
-          <section className={styles.card}>
-            <div className={styles.roundHeader}>
-              <div className={styles.roundHeaderInfo}>
-                <span className={styles.cardTitle}>Round controls</span>
-                {currentSong ? (
-                  <>
-                    <p className={styles.songLine}>{currentSong.title}</p>
-                    <p className={styles.songMeta}>
-                      {currentSong.artist}
-                      {currentSong.source ? ` - ${currentSong.source}` : ""}
-                    </p>
-                  </>
-                ) : (
-                  <p className={styles.songMeta}>No round started yet.</p>
-                )}
-              </div>
+        <section className={styles.card}>
+          <div className={styles.roundHeader}>
+            <div className={styles.roundHeaderInfo}>
+              <span className={styles.cardTitle}>Round controls</span>
+              {currentSong ? (
+                <>
+                  <p className={styles.songLine}>{currentSong.title}</p>
+                  <p className={styles.songMeta}>
+                    {currentSong.artist}
+                    {currentSong.source ? ` - ${currentSong.source}` : ""}
+                  </p>
+                </>
+              ) : (
+                <p className={styles.songMeta}>No round started yet.</p>
+              )}
             </div>
+          </div>
 
-            {lockedTeam ? (
-              <div className={styles.lockedBanner} role="status" aria-live="polite">
-                <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in. Score the
-                answer:
-              </div>
-            ) : null}
-
-            <div className={styles.scoreRow} aria-disabled={scoringDisabled}>
-              <button
-                type="button"
-                className={`${styles.scoreBtn} ${styles.scorePositive} ${titleCorrect ? styles.scoreActive : ""}`}
-                onClick={toggleTitle}
-                disabled={scoringDisabled}
-                aria-pressed={titleCorrect}
-                data-testid="score-title"
-              >
-                <span className={styles.scoreLabel}>Correct Song</span>
-                <span className={styles.scorePoints}>+10</span>
-              </button>
-              <button
-                type="button"
-                className={`${styles.scoreBtn} ${styles.scorePositive} ${artistCorrect ? styles.scoreActive : ""}`}
-                onClick={toggleArtist}
-                disabled={scoringDisabled}
-                aria-pressed={artistCorrect}
-                data-testid="score-artist"
-              >
-                <span className={styles.scoreLabel}>Correct Artist</span>
-                <span className={styles.scorePoints}>+5</span>
-              </button>
-              <button
-                type="button"
-                className={`${styles.scoreBtn} ${styles.scoreNegative} ${wrongBuzz ? styles.scoreActiveNeg : ""}`}
-                onClick={toggleWrong}
-                disabled={scoringDisabled}
-                aria-pressed={wrongBuzz}
-                data-testid="score-wrong"
-              >
-                <span className={styles.scoreLabel}>Wrong</span>
-                <span className={styles.scorePoints}>-3</span>
-              </button>
-              <button
-                type="button"
-                className={`${styles.scoreBtn} ${styles.scoreBonus} ${bonusOpen ? styles.scoreActiveBonus : ""}`}
-                onClick={() => setBonusOpen((o) => !o)}
-                disabled={bonusDisabled}
-                aria-expanded={bonusOpen}
-                aria-controls="bonus-team-picker"
-                data-testid="score-bonus"
-              >
-                <span className={styles.scoreLabel}>Bonus</span>
-                <span className={styles.scorePoints}>+4</span>
-              </button>
+          {lockedTeam ? (
+            <div className={styles.lockedBanner} role="status" aria-live="polite">
+              <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in. Score the
+              answer:
             </div>
+          ) : null}
 
-            {bonusOpen ? (
-              <div
-                id="bonus-team-picker"
-                className={styles.bonusPicker}
-                role="group"
-                aria-label="Pick a team for the bonus"
-              >
-                <span className={styles.bonusPickerHint}>Award +4 to:</span>
-                <div className={styles.bonusPickerList}>
-                  {teams.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => void handleBonus(t.id, t.name)}
-                      disabled={busy}
-                      data-testid={`bonus-team-${t.id}`}
-                    >
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+          <div className={styles.scoreRow} aria-disabled={scoringDisabled}>
+            <button
+              type="button"
+              className={`${styles.scoreBtn} ${styles.scorePositive} ${titleCorrect ? styles.scoreActive : ""}`}
+              onClick={toggleTitle}
+              disabled={scoringDisabled}
+              aria-pressed={titleCorrect}
+              data-testid="score-title"
+            >
+              <span className={styles.scoreLabel}>Correct Song</span>
+              <span className={styles.scorePoints}>+10</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.scoreBtn} ${styles.scorePositive} ${artistCorrect ? styles.scoreActive : ""}`}
+              onClick={toggleArtist}
+              disabled={scoringDisabled}
+              aria-pressed={artistCorrect}
+              data-testid="score-artist"
+            >
+              <span className={styles.scoreLabel}>Correct Artist</span>
+              <span className={styles.scorePoints}>+5</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.scoreBtn} ${styles.scoreNegative} ${wrongBuzz ? styles.scoreActiveNeg : ""}`}
+              onClick={toggleWrong}
+              disabled={scoringDisabled}
+              aria-pressed={wrongBuzz}
+              data-testid="score-wrong"
+            >
+              <span className={styles.scoreLabel}>Wrong</span>
+              <span className={styles.scorePoints}>-3</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.scoreBtn} ${styles.scoreBonus} ${bonusOpen ? styles.scoreActiveBonus : ""}`}
+              onClick={() => setBonusOpen((o) => !o)}
+              disabled={bonusDisabled}
+              aria-expanded={bonusOpen}
+              aria-controls="bonus-team-picker"
+              data-testid="score-bonus"
+            >
+              <span className={styles.scoreLabel}>Bonus</span>
+              <span className={styles.scorePoints}>+4</span>
+            </button>
+          </div>
 
-            <div className={styles.actionsInline}>
-              <button
-                className="btn btn-ghost"
-                onClick={() => void handleRestartSong()}
-                disabled={restartDisabled}
-                data-testid="restart-song"
-              >
-                Restart song
-              </button>
-              <button
-                className={`btn btn-primary ${styles.awardBtn}`}
-                onClick={() => void handleEndRound(!lockedTeam)}
-                disabled={endRoundDisabled}
-                data-testid="end-round"
-              >
-                End round
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => void handleNextRound()}
-                disabled={nextRoundDisabled}
-                data-testid="start-round"
-              >
-                {nextRoundLabel}
-              </button>
-            </div>
-          </section>
-        </div>
-
-        <div className={styles.column}>
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Scoreboard</h2>
-            <Scoreboard teams={teams} buzzedTeamId={game.buzzed_team_id} />
-          </section>
-
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Teams</h2>
-            {teams.length === 0 ? (
-              <div className={styles.emptyTeams}>
-                <p className={styles.emptyTeamsTitle}>No teams have joined yet.</p>
-                <p className={styles.emptyTeamsHint}>
-                  Share <span className={styles.emptyTeamsCode}>{gameCode}</span> with players -
-                  they'll appear here once they join.
-                </p>
-              </div>
-            ) : (
-              <div>
+          {bonusOpen ? (
+            <div
+              id="bonus-team-picker"
+              className={styles.bonusPicker}
+              role="group"
+              aria-label="Pick a team for the bonus"
+            >
+              <span className={styles.bonusPickerHint}>Award +4 to:</span>
+              <div className={styles.bonusPickerList}>
                 {teams.map((t) => (
-                  <div key={t.id} className={styles.teamRow} data-team-id={t.id}>
-                    <span className={styles.teamRowName}>{t.name}</span>
-                    <span className={styles.teamRowMeta}>
-                      <span>{t.score} pts</span>
-                    </span>
-                  </div>
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => void handleBonus(t.id, t.name)}
+                    disabled={busy}
+                    data-testid={`bonus-team-${t.id}`}
+                  >
+                    {t.name}
+                  </button>
                 ))}
               </div>
-            )}
-          </section>
-        </div>
+            </div>
+          ) : null}
+
+          <div className={styles.actionsInline}>
+            <button
+              className="btn btn-ghost"
+              onClick={() => void handleRestartSong()}
+              disabled={restartDisabled}
+              data-testid="restart-song"
+            >
+              Restart song
+            </button>
+            <button
+              className={`btn btn-primary ${styles.awardBtn}`}
+              onClick={() => void handleEndRound(!lockedTeam)}
+              disabled={endRoundDisabled}
+              data-testid="end-round"
+            >
+              End round
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => void handleNextRound()}
+              disabled={nextRoundDisabled}
+              data-testid="start-round"
+            >
+              {nextRoundLabel}
+            </button>
+          </div>
+        </section>
       </div>
 
       <div className={styles.mobileBar} role="toolbar" aria-label="Round actions">
