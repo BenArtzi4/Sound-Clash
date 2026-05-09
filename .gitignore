@@ -58,6 +58,8 @@ Thumbs.db
 .claude/rules/
 .claude/*.local
 .claude/*.local.*
+# Personal scratch notes Claude creates during a session (e.g. "screenshots issues" punch lists)
+.claude/screenshots*
 
 # Supabase local
 supabase/.branches/
@@ -67,6 +69,12 @@ supabase/.temp/
 test-results/
 playwright-report/
 playwright/.cache/
+# Playwright MCP working cache (console + page-snapshot artifacts)
+.playwright-mcp/
+
+# Generated UI snapshots: regenerable from the local dev stack via Playwright MCP.
+# Per .claude/rules/binary-assets.md, don't commit binaries without asking.
+screenshots/
 
 # Wrangler local cache
 .wrangler/

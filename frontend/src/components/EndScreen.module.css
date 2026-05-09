@@ -241,6 +241,12 @@
   gap: 0.55rem;
   width: 100%;
   overflow-y: auto;
+  /* Scroll is only meaningful when 4+ teams tie at one rank; hide the bar
+     so it doesn't render as visual chrome on the typical 1-3-team case. */
+  scrollbar-width: none;
+}
+.podiumTeams::-webkit-scrollbar {
+  display: none;
 }
 
 .podiumTeam {
