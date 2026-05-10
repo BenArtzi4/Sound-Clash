@@ -641,6 +641,8 @@ describe("ManagerConsolePage", () => {
       rounds: [],
     });
     vi.mocked(selectSong).mockResolvedValueOnce({
+      round_id: "r-new",
+      round_number: 2,
       song: {
         id: "song-2",
         title: "Lollipop",
