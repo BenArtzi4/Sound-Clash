@@ -345,6 +345,93 @@ async def test_end_round_clears_buzz_lock(client, db) -> None:
     assert locked is None
 
 
+# ----- free-guess sweetener (migration 017) ----------------------------------
+
+
+async def test_attempt_wrong_after_correct_no_penalty(client, db) -> None:
+    """After any correct attempt, the next wrong returns 0 (free guess)."""
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    await insert_song(db, genre_slugs=["rock"])
+    code, token = await insert_game(db, status="playing", selected_genres=rock)
+    t1 = await insert_team(db, code, name="T1")
+    t2 = await insert_team(db, code, name="T2")
+    pick = await client.post(
+        f"/games/{code}/select-song", json={}, headers=manager_headers(token)
+    )
+    round_id = pick.json()["round_id"]
+
+    # T1 buzzes title correct -> activates the free-guess flag.
+    await _force_buzz(db, code, round_id, t1)
+    r1 = await client.post(
+        f"/games/{code}/attempt",
+        json={"round_id": round_id, "title_correct": True},
+        headers=manager_headers(token),
+    )
+    assert r1.status_code == 200
+    assert r1.json()["points_awarded"] == 10
+
+    # T2 buzzes wrong on artist -> 0 (free).
+    await _force_buzz(db, code, round_id, t2)
+    r2 = await client.post(
+        f"/games/{code}/attempt",
+        json={"round_id": round_id, "wrong_buzz": True},
+        headers=manager_headers(token),
+    )
+    assert r2.status_code == 200
+    assert r2.json()["points_awarded"] == 0
+    assert r2.json()["team_total_score"] == 0
+
+
+async def test_attempt_wrong_before_any_correct_penalizes(client, db) -> None:
+    """Wrong as the first attempt of the round still costs -3."""
+    code, round_id, team_id, token = await _start_round(client, db)
+    resp = await client.post(
+        f"/games/{code}/attempt",
+        json={"round_id": round_id, "wrong_buzz": True},
+        headers=manager_headers(token),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["points_awarded"] == -3
+
+
+async def test_attempt_free_guess_consumed_after_one_attempt(client, db) -> None:
+    """The flag is consumed by the next attempt (whether correct or wrong)."""
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    await insert_song(db, genre_slugs=["rock"])
+    code, token = await insert_game(db, status="playing", selected_genres=rock)
+    t1 = await insert_team(db, code, name="T1")
+    t2 = await insert_team(db, code, name="T2")
+    t3 = await insert_team(db, code, name="T3")
+    pick = await client.post(
+        f"/games/{code}/select-song", json={}, headers=manager_headers(token)
+    )
+    round_id = pick.json()["round_id"]
+
+    # T1 title -> flag on
+    await _force_buzz(db, code, round_id, t1)
+    await client.post(
+        f"/games/{code}/attempt",
+        json={"round_id": round_id, "title_correct": True},
+        headers=manager_headers(token),
+    )
+    # T2 wrong -> 0 (free), flag off
+    await _force_buzz(db, code, round_id, t2)
+    await client.post(
+        f"/games/{code}/attempt",
+        json={"round_id": round_id, "wrong_buzz": True},
+        headers=manager_headers(token),
+    )
+    # T3 wrong -> -3 (flag was consumed)
+    await _force_buzz(db, code, round_id, t3)
+    r3 = await client.post(
+        f"/games/{code}/attempt",
+        json={"round_id": round_id, "wrong_buzz": True},
+        headers=manager_headers(token),
+    )
+    assert r3.status_code == 200
+    assert r3.json()["points_awarded"] == -3
+
+
 async def test_start_round_closes_prior_open_round(client, db) -> None:
     """If the manager advances without explicit end_round, the prior
     round's ended_at gets stamped by start_round automatically."""

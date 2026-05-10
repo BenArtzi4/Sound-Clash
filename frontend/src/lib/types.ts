@@ -37,6 +37,7 @@ export interface GameRound {
   wrong_buzz_penalty: number;
   title_claimed_by: string | null;
   artist_claimed_by: string | null;
+  free_guess_active: boolean;
   ended_at: string | null;
 }
 

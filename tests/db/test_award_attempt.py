@@ -269,6 +269,109 @@ async def test_award_attempt_after_end_round_raises(db: asyncpg.Connection) -> N
     assert exc.value.sqlstate == "P0001"
 
 
+# ----- free-guess sweetener (migration 017) ----------------------------------
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_wrong_before_correct_penalizes(
+    db: asyncpg.Connection,
+) -> None:
+    """A wrong buzz with no prior correct in the round costs the full -3."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    rows = await db.fetch(
+        "SELECT points_delta FROM award_attempt($1, $2, 0, 0, 3)",
+        game_code,
+        round_id,
+    )
+    assert rows[0]["points_delta"] == -3
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_wrong_after_correct_no_penalty(
+    db: asyncpg.Connection,
+) -> None:
+    """After any correct attempt, the next wrong waives the -3 penalty."""
+    game_code = await create_test_game(db, status="playing")
+    t1 = await create_test_team(db, game_code, name="T1")
+    t2 = await create_test_team(db, game_code, name="T2")
+    round_id = await _start_round_and_buzz(db, game_code, t1)
+
+    # T1 scores title correct -> activates free_guess flag for the round.
+    await db.execute("SELECT award_attempt($1, $2, 10, 0, 0)", game_code, round_id)
+
+    # T2 buzzes wrong on artist -> free, delta = 0.
+    await _force_buzz(db, game_code, round_id, t2)
+    rows = await db.fetch(
+        "SELECT points_delta FROM award_attempt($1, $2, 0, 0, 3)",
+        game_code,
+        round_id,
+    )
+    assert rows[0]["points_delta"] == 0
+    # Score did not move.
+    t2_score = await db.fetchval("SELECT score FROM game_teams WHERE id = $1", t2)
+    assert t2_score == 0
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_free_guess_clears_after_one_attempt(
+    db: asyncpg.Connection,
+) -> None:
+    """Flag is consumed by the next attempt regardless of outcome."""
+    game_code = await create_test_game(db, status="playing")
+    t1 = await create_test_team(db, game_code, name="T1")
+    t2 = await create_test_team(db, game_code, name="T2")
+    t3 = await create_test_team(db, game_code, name="T3")
+    round_id = await _start_round_and_buzz(db, game_code, t1)
+
+    # T1 title -> flag on
+    await db.execute("SELECT award_attempt($1, $2, 10, 0, 0)", game_code, round_id)
+
+    # T2 wrong -> 0 (free), flag off
+    await _force_buzz(db, game_code, round_id, t2)
+    await db.execute("SELECT award_attempt($1, $2, 0, 0, 3)", game_code, round_id)
+
+    # T3 wrong -> -3 (flag was consumed)
+    await _force_buzz(db, game_code, round_id, t3)
+    rows = await db.fetch(
+        "SELECT points_delta FROM award_attempt($1, $2, 0, 0, 3)",
+        game_code,
+        round_id,
+    )
+    assert rows[0]["points_delta"] == -3
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_free_guess_reactivates_on_subsequent_correct(
+    db: asyncpg.Connection,
+) -> None:
+    """Wrong consumes the flag; a later correct re-activates it for the next attempt."""
+    game_code = await create_test_game(db, status="playing")
+    t1 = await create_test_team(db, game_code, name="T1")
+    t2 = await create_test_team(db, game_code, name="T2")
+    round_id = await _start_round_and_buzz(db, game_code, t1)
+
+    # T1 title -> flag on. T2 wrong -> free, flag off.
+    await db.execute("SELECT award_attempt($1, $2, 10, 0, 0)", game_code, round_id)
+    await _force_buzz(db, game_code, round_id, t2)
+    await db.execute("SELECT award_attempt($1, $2, 0, 0, 3)", game_code, round_id)
+
+    # T2 artist correct -> flag re-activates.
+    await _force_buzz(db, game_code, round_id, t2)
+    await db.execute("SELECT award_attempt($1, $2, 0, 5, 0)", game_code, round_id)
+
+    # T1 wrong on the (now exhausted) round? Both tokens claimed, so wrong is the only valid call.
+    await _force_buzz(db, game_code, round_id, t1)
+    rows = await db.fetch(
+        "SELECT points_delta FROM award_attempt($1, $2, 0, 0, 3)",
+        game_code,
+        round_id,
+    )
+    assert rows[0]["points_delta"] == 0  # free again, the just-correct attempt re-armed it
+
+
 @pytest.mark.asyncio
 async def test_start_round_closes_prior_open_round(db: asyncpg.Connection) -> None:
     game_code = await create_test_game(db, status="playing")
