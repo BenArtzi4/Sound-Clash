@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import styles from "./PointChange.module.css";
 
 interface Props {
-  teamName: string;
+  teamName?: string;
   delta: number;
   onDone: () => void;
   durationMs?: number;
@@ -23,7 +23,7 @@ export function PointChange({ teamName, delta, onDone, durationMs = 2500 }: Prop
       aria-live="polite"
       data-testid="point-change"
     >
-      <span className={styles.team}>{teamName}</span>
+      {teamName ? <span className={styles.team}>{teamName}</span> : null}
       <span className={styles.delta}>
         {sign}
         {delta}

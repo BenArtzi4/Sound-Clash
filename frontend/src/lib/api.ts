@@ -138,6 +138,13 @@ export function endRound(
   });
 }
 
+export function continueRound(gameCode: string, managerToken: string): Promise<void> {
+  return request("POST", `/games/${gameCode}/continue`, {
+    managerToken,
+    body: {},
+  });
+}
+
 export function awardBonus(
   gameCode: string,
   managerToken: string,

@@ -9,8 +9,11 @@
 }
 
 .qrFrame {
-  width: 132px;
-  height: 132px;
+  /* Caller drives size via the --qr-frame-size custom property; the
+     mobile media query below caps it for small viewports so a desktop
+     callsite passing 420px doesn't blow the phone layout. */
+  width: var(--qr-frame-size, 132px);
+  height: var(--qr-frame-size, 132px);
   border-radius: var(--radius-sm);
   background: #ffffff;
   border: 1px solid var(--color-border);

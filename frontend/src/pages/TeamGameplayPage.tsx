@@ -130,7 +130,6 @@ export function TeamGameplayPage() {
         {pointEvents.map((ev) => (
           <PointChange
             key={ev.id}
-            teamName={stored.name}
             delta={ev.delta}
             onDone={() =>
               setPointEvents((current) => current.filter((existing) => existing.id !== ev.id))

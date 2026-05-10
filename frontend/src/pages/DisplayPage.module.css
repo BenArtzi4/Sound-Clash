@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   gap: 2rem;
-  max-width: 1300px;
+  max-width: 1600px;
   margin: 0 auto;
 }
 
@@ -282,19 +282,19 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 
 .bigRow {
   display: grid;
-  grid-template-columns: 80px 1fr auto;
+  grid-template-columns: 100px 1fr auto;
   align-items: center;
-  gap: 1.25rem;
-  padding: 1.5rem 2rem;
+  gap: 1.5rem;
+  padding: 2rem 2.5rem;
   background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  font-size: 1.6rem;
+  font-size: 2rem;
   box-shadow: var(--shadow-sm);
   transition:
     background 250ms ease,
@@ -314,7 +314,7 @@
   font-weight: 800;
   color: var(--color-text-mute);
   font-variant-numeric: tabular-nums;
-  font-size: 2rem;
+  font-size: 2.4rem;
 }
 
 .bigRowBuzzed .bigRank {
@@ -328,7 +328,7 @@
 
 .bigScore {
   font-weight: 800;
-  font-size: 2.4rem;
+  font-size: 3rem;
   font-variant-numeric: tabular-nums;
   color: var(--color-primary-strong);
 }
@@ -338,8 +338,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 3rem 2rem;
+  gap: 1.5rem;
+  padding: 4.5rem 3rem;
   background: linear-gradient(180deg, rgba(59, 130, 246, 0.04) 0%, transparent 100%);
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-md);
@@ -347,12 +347,12 @@
 }
 
 .emptyBoardQR {
-  margin-top: 1rem;
+  margin-top: 1.25rem;
 }
 
 .emptyBoardTitle {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--color-text);
   letter-spacing: -0.01em;
@@ -361,7 +361,7 @@
 .emptyBoardHint {
   margin: 0;
   color: var(--color-text-dim);
-  font-size: 1.1rem;
+  font-size: 1.35rem;
 }
 
 .emptyBoardCode {

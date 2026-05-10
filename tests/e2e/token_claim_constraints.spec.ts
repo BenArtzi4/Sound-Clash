@@ -24,8 +24,11 @@ test("scenario 10: title toggle disables once title is claimed", async ({ browse
   await expect(manager.page.getByTestId("score-artist")).toBeEnabled();
   await expect(manager.page.getByTestId("score-wrong")).toBeEnabled();
 
-  // The token chip on the manager + display reflects the claim.
-  await expect(manager.page.getByTestId("token-chip-title")).toContainText("Alpha");
+  // The token chip on the manager reflects the claim. The manager view
+  // intentionally hides which team claimed each token; the chip just shows
+  // a checkmark. The display screen still surfaces the team name for the
+  // audience.
+  await expect(manager.page.getByTestId("token-chip-title")).toContainText("✓");
 });
 
 test("scenario 16: continue button disables once both tokens are claimed", async ({
@@ -37,12 +40,10 @@ test("scenario 16: continue button disables once both tokens are claimed", async
   await manager.page.getByTestId("start-round").click();
   await buzzAndExpectWinner(team);
 
-  // Toggle both correct, then continue. After award_attempt with both
-  // tokens, the round still has buzzed_team_id cleared and both tokens
-  // claimed, so Continue Round is disabled (nothing left to win).
-  await manager.page.getByTestId("score-title").click();
-  await manager.page.getByTestId("score-artist").click();
-  await manager.page.getByTestId("continue-round").click();
+  // Click both correct buttons (each fires award_attempt immediately and
+  // disables itself). After both are claimed, press Continue to release
+  // the lock; Continue then disables because no buzz is held.
+  await awardAndContinue(manager.page, { title: true, artist: true });
 
   await expect(manager.page.getByTestId("continue-round")).toBeDisabled();
   await expect(manager.page.getByTestId("start-round")).toBeEnabled();
