@@ -4,7 +4,7 @@
 
 Pre-cutover sequencing for moving `soundclash.org` from the legacy AWS stack to the new Supabase + Render + Cloudflare Pages system. Walk top-to-bottom; do not skip ahead. Each step has a verification gate that must pass before moving to the next.
 
-For day-2 ops after cutover, see [`runbook.md`](runbook.md). For AWS teardown, see [`aws-teardown-checklist.md`](aws-teardown-checklist.md). For the official Definition of Done, see [`roadmap.md`](roadmap.md) §7 lines 217–227.
+For day-2 ops after cutover, see [`runbook.md`](runbook.md). For the official Definition of Done, see [`roadmap.md`](roadmap.md) §7 lines 217–227.
 
 ---
 
@@ -169,7 +169,7 @@ Thresholds and tools are spelled out in [`free-tier-budget.md`](free-tier-budget
 Wait at least 24 hours after step 7 before starting. The whole window is your rollback budget.
 
 - [ ] Confirm prod has been stable for 24h: zero SEV1/SEV2 in Sentry, no unexpected 5xx in Render logs, traffic patterns look normal.
-- [ ] Walk [`aws-teardown-checklist.md`](aws-teardown-checklist.md) in order. Do not skip the verification commands at each step; they catch the case where something is still depending on the resource you are about to delete.
+- [ ] Walk the AWS teardown steps recorded in `roadmap.md` §7 (Deliverables) in order. Do not skip the verification commands at each step; they catch the case where something is still depending on the resource you are about to delete.
 - [ ] Once CloudFront distribution `E2NIDUY011R5N4` is deleted, the rollback path in [`runbook.md`](runbook.md) §2.4 is gone. There is no going back from this step without re-provisioning AWS from scratch.
 
 **Verify:** AWS Cost Explorer → Forecast for next month → $0 (excluding Route 53 hosted-zone fees if you keep DNS at AWS, which we do not; DNS is at Cloudflare).
