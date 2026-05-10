@@ -53,13 +53,8 @@ frontend/package-lock.json
 .DS_Store
 Thumbs.db
 
-# Claude Code local-only settings (project rules in CLAUDE.md are committed; local settings are not)
-.claude/settings.local.json
-.claude/rules/
-.claude/*.local
-.claude/*.local.*
-# Personal scratch notes Claude creates during a session (e.g. "screenshots issues" punch lists)
-.claude/screenshots*
+# Claude Code local-only directory (project rules referenced from CLAUDE.md are committed via @-imports; the directory itself is not)
+.claude/
 
 # Supabase local
 supabase/.branches/

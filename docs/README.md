@@ -18,9 +18,8 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 12. **[runbook.md](runbook.md)**: day-2+ operations: deploy, rollback, secrets, incidents.
 13. **[roadmap.md](roadmap.md)**: eight-phase migration plan with exit criteria.
 14. **[tasks.md](tasks.md)**: granular checkboxed task list grouped by area.
-15. **[aws-teardown-checklist.md](aws-teardown-checklist.md)**: step-by-step Phase 7 cutover script for tearing down the legacy AWS stack.
-16. **[tooling.md](tooling.md)**: every tool that touches the repo: GitHub Actions workflows, CodeQL, Dependabot, Codecov, pre-commit, deploy automation, monitoring.
-17. **[diagrams/](diagrams/)**: visual architecture diagrams (Mermaid in Markdown + standalone HTML mirrors). [`internal.md`](diagrams/internal.md) for what's inside the game; [`external.md`](diagrams/external.md) for the third-party services around it.
+15. **[tooling.md](tooling.md)**: every tool that touches the repo: GitHub Actions workflows, CodeQL, Dependabot, Codecov, pre-commit, deploy automation, monitoring.
+16. **[diagrams/](diagrams/)**: visual architecture diagrams (Mermaid in Markdown + standalone HTML mirrors). [`internal.md`](diagrams/internal.md) for what's inside the game; [`external.md`](diagrams/external.md) for the third-party services around it.
 
 ## Suggested reading paths
 
@@ -44,10 +43,6 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 1. `runbook.md`
 2. `free-tier-budget.md` (alert thresholds)
 3. `security-rls.md` §3 (secret inventory) and §10 (auth failures)
-
-### "I'm doing the AWS cutover"
-1. `aws-teardown-checklist.md` (top to bottom)
-2. `runbook.md` §2.4 (DNS rollback if needed)
 
 ### "I want to know what's NOT in scope"
 - `architecture.md` §10; pointer index of what each doc doesn't cover
@@ -96,6 +91,5 @@ Out-of-date docs are worse than missing ones.
 | `runbook.md` | Operational procedures |
 | `roadmap.md` | 8-phase migration plan |
 | `tasks.md` | Granular task checklist |
-| `aws-teardown-checklist.md` | Phase 7 step-by-step cutover script |
 | `tooling.md` | Dev/CI tooling reference; workflows, bots, deploy automation |
 | `diagrams/` | Architecture diagrams (Mermaid `.md` + standalone `.html`) |

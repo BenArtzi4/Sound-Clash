@@ -84,4 +84,4 @@ This project does not currently cut versioned releases; every change lands direc
 ### Removed
 
 - Manager login screen. The whole `/manager/login` route + `RequireAuth` gate are gone. (`2a71aaa`)
-- The legacy AWS-based stack (CloudFront, ECR repos, S3 buckets, ACM cert, CloudWatch logs). Replaced by the free-tier stack. See `docs/aws-teardown-checklist.md`.
+- The legacy AWS-based stack (CloudFront, ECR repos, S3 buckets, ACM cert, CloudWatch logs). Replaced by the free-tier stack.
