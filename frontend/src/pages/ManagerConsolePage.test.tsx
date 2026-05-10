@@ -597,6 +597,73 @@ describe("ManagerConsolePage", () => {
     );
   });
 
+  it("mobile Continue button calls awardAttempt with the toggled flags", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttempt).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 5,
+      team_total_score: 5,
+      title_claimed_by: null,
+      artist_claimed_by: "t1",
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-artist"));
+    fireEvent.click(screen.getByTestId("continue-round-mobile"));
+    await waitFor(() =>
+      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: false,
+        artist_correct: true,
+        wrong_buzz: false,
+      }),
+    );
+  });
+
+  it("mobile Next button advances the round (player ready)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        round_number: 1,
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [],
+    });
+    vi.mocked(selectSong).mockResolvedValueOnce({
+      song: {
+        id: "song-2",
+        title: "Lollipop",
+        artist: "Mika",
+        youtube_id: "asdfghjklmn",
+        start_time: 0,
+        is_soundtrack: false,
+        source: null,
+      },
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    const nextMobile = screen.getByTestId("start-round-mobile");
+    await waitFor(() => expect(nextMobile).toBeEnabled());
+    fireEvent.click(nextMobile);
+    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
+  });
+
   it("shows a clear toast when the song pool is exhausted", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing", round_number: 1 }),
