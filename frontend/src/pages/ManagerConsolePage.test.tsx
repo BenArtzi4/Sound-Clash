@@ -290,6 +290,47 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(lastHandle?.play).toHaveBeenCalled());
   });
 
+  it("Continue surfaces an error toast when continueRound fails", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(continueRound).mockRejectedValueOnce(new Error("network down"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const continueBtn = screen.getByTestId("continue-round");
+    await waitFor(() => expect(continueBtn).toBeEnabled());
+    fireEvent.click(continueBtn);
+    await waitFor(() => expect(screen.getByText(/network down/i)).toBeInTheDocument());
+    expect(lastHandle?.play).not.toHaveBeenCalled();
+  });
+
+  it("Correct Song surfaces an error toast when awardAttempt fails", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttempt).mockRejectedValueOnce(new Error("rpc exploded"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-title"));
+    await waitFor(() => expect(screen.getByText(/rpc exploded/i)).toBeInTheDocument());
+  });
+
   it("Wrong button auto-fires awardAttempt with wrong_buzz=true (no Continue press)", async () => {
     setHydrate({
       game: makeActiveGame({
