@@ -6,6 +6,7 @@ import { test, expect } from "@playwright/test";
 import {
   awardAndAdvance,
   awardAndContinue,
+  markWrong,
   openManagerAndCreateGame,
 } from "./fixtures/manager-context";
 import { buzzAndExpectWinner, expectBuzzGreen, joinAsTeam } from "./fixtures/team-context";
@@ -82,7 +83,7 @@ test("scenario 5: same team recovers after wrong, then claims both", async ({ br
   await startNextRound(manager);
 
   await buzzAndExpectWinner(team);
-  await awardAndContinue(manager.page, { wrong: true });
+  await markWrong(manager.page);
 
   await expectBuzzGreen(team);
   await buzzAndExpectWinner(team);
@@ -92,7 +93,7 @@ test("scenario 5: same team recovers after wrong, then claims both", async ({ br
   await buzzAndExpectWinner(team);
   await awardAndAdvance(manager.page, { artist: true });
 
-  // -3 + 10 + 5 = 12.
+  // -3 + 10 + 5 = 12. (Wrong was BEFORE any correct, so the -3 stands.)
   const display = await browser.newPage();
   await display.goto(`/display/${manager.gameCode}`);
   await expect(

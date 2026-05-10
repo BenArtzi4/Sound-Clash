@@ -212,10 +212,11 @@ SET search_path = public;
 ```
 
 Behavior:
-- Reads the current `buzzed_team_id` off `game_rounds`. If null → raises `P0001 no_buzz_to_score`.
+- Reads the current `buzzed_team_id` off `active_games`. If null → raises `P0001 no_buzz_to_score`.
 - `p_wrong_buzz > 0 AND (p_title > 0 OR p_artist > 0)` → raises `P0001 wrong_buzz_with_correct`.
 - `p_title > 0` while `title_claimed_by` is already set → raises `P0001 title_already_claimed`. Same shape for `artist_already_claimed`.
 - On success: applies score delta to the buzzed team, marks `title_claimed_by` / `artist_claimed_by` if applicable, inserts a `game_round_attempts` row, and clears `active_games.buzzed_team_id` and `locked_at` so other teams can buzz on the same song.
+- **Free-guess flag** (`game_rounds.free_guess_active`, migration 017): if `p_wrong_buzz > 0` AND `free_guess_active = true`, the penalty is waived (`points_delta = 0`); the attempt is still recorded with `outcome = 'wrong'`. After processing, the function sets `free_guess_active = true` if the outcome was correct (`title` / `artist` / `title_artist`) and `false` otherwise. So the flag is consumed by every attempt and re-armed by every correct one.
 
 ### Error semantics
 

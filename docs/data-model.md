@@ -172,6 +172,8 @@ Integer. Can go negative; wrong-buzz deducts 3 (`award_attempt`). Updated by `aw
 
 Each round records `title_claimed_by`, `artist_claimed_by` (uuid refs to the team that claimed the corresponding token, NULL if unclaimed), plus `title_points` / `artist_points` / `wrong_buzz_penalty` for the most recent matching write (legacy denorm; the canonical per-buzz history is `game_round_attempts`). The `game_teams.score` field is the running cumulative across all rounds plus any `award_bonus` calls.
 
+`free_guess_active boolean` (migration 017) is a per-round flag managed by `award_attempt`. It is `true` after a correct attempt and `false` after a wrong attempt; while true, the next wrong attempt waives the −3 penalty. See `rpc-functions.md §3` for the state-transition rules and `game-rules.md §4` for the user-facing scoring story.
+
 ### `game_round_attempts`
 
 One row per `award_attempt` call: `(round_id, game_code, team_id, outcome, points_delta, created_at)`. `outcome` is one of `'title' | 'artist' | 'title_artist' | 'wrong'`. Insert-only; cascade-deletes with the round. Used to reconstruct per-buzz round detail (e.g. for a future "round breakdown" UI).
@@ -221,7 +223,8 @@ db/migrations/
 ├── 013_seed_extra_genres.sql
 ├── 014_scoring_revamp.sql    -- wrong-buzz penalty, +4 bonus, drop source/timeout
 ├── 015_drop_total_rounds.sql
-└── 016_multi_buzz_rounds.sql -- multi-buzz model: token claims, award_attempt, end_round
+├── 016_multi_buzz_rounds.sql -- multi-buzz model: token claims, award_attempt, end_round
+└── 017_free_guess_flag.sql   -- per-round free-guess flag; waives -3 after first correct
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.

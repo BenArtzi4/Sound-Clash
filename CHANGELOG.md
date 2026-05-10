@@ -8,11 +8,15 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-05-10: Team's own phone now shows a "+10 / −3" pill the instant their score changes — same look as the projector toast — so a player gets immediate feedback on the device they're already looking at.
+- 2026-05-10: Display screen now reveals the song title and artist name in a dedicated panel once the manager confirms the corresponding correct answer. Unrevealed halves show "???" so the audience can see what's still secret. Token chips below still show which team claimed each.
 - 2026-05-10: Display screen now pops a small floating pill ("Alpha +10", "Bravo -3") whenever a team's score changes, so the audience watching the projector can see *who* just got points and how many without having to re-read the scoreboard.
 
 ### Changed
 
-- 2026-05-10: Rounds now allow multiple buzzes on the same song. The +10 Title token and +5 Artist token are claimed independently — Team A can take Title, Team B can take Artist, all on the same song. A wrong buzz still costs −3 but no longer locks the team out: the same team can buzz again. The manager has a new "Continue round" button (re-arm buzzers, same song) alongside "Next round" (advance song). Display screens show small chips for each token's claim state.
+- 2026-05-10: Manager Wrong button is now a one-click verdict: pressing Wrong fires the score immediately and re-arms the buzzers (no separate Continue Round press). On mobile the sticky bottom bar gains a third Wrong shortcut so the host can score a wrong call without scrolling.
+- 2026-05-10: Wrong buzz waives the −3 penalty when the round already has a correct answer recorded ("free guess" sweetener). Round-wide and one-shot: the next attempt after a correct is free, then normal scoring resumes. Rewards teams who got one half of the song right.
+- 2026-05-10: Rounds now allow multiple buzzes on the same song. The +10 Title token and +5 Artist token are claimed independently — Team A can take Title, Team B can take Artist, all on the same song. A wrong buzz still costs −3 (unless the free-guess rule above applies) but no longer locks the team out: the same team can buzz again. The manager has a new "Continue round" button (re-arm buzzers, same song) alongside "Next round" (advance song). Display screens show small chips for each token's claim state.
 - 2026-05-10: Team buzzer page is now a single-purpose surface: just team name, round pill, and the buzz button. Status banner ("Waiting for the host…", "Buzz when you know it!", "{team} locked it.", "You buzzed in!"), the "Connected" pill, the game code, and the secondary scoreboard are all removed - the buzz button's own colour and label communicate the round state.
 - 2026-05-10: The "You buzzed" buzz button is now blue (was amber) so the colour no longer reads as a yellow "warning / waiting" cue.
 - 2026-05-10: BUZZ button copy slimmed down: idle reads just "BUZZ" (no subtitle), waiting reads "WAITING / for the game to start", you-buzzed reads just "YOU BUZZED".
