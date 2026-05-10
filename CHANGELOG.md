@@ -23,6 +23,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-05-10: Quieter YouTube embed; switched to youtube-nocookie host to stop ad-tracking CORS errors (and reduce the IFrame API's postMessage warm-up warning) in the browser console while a game runs.
 - 2026-05-09: When a team buzzes, the manager's YouTube player no longer flashes the paused-state "more videos" tiles (which can include other songs in the same artist's channel and spoil future rounds). The black "Ready" overlay now stays on top of the iframe whenever a buzz is being scored.
 - 2026-05-09: Manager scoring buttons no longer act as a footgun after a round was already scored. `End round` and `Restart song` are now disabled once the current round has an `ended_at`, so a second click can't fire a `round_already_ended` error toast - the host's only enabled action is `Next round`.
 - 2026-05-09: YouTube embed chrome (player labels, captions) is forced to English regardless of the host's browser/IP locale, so a host on a Hebrew-locale browser no longer sees Hebrew controls bleeding through the iframe overlay.
