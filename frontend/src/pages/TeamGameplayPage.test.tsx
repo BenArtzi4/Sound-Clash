@@ -10,7 +10,9 @@ vi.mock("../lib/supabase", async () => {
 import { _resetServerTime } from "../hooks/useServerTime";
 import {
   fireSubscribed,
+  fireTeam,
   makeActiveGame,
+  makePayload,
   makeRound,
   makeTeam,
   resetSupabaseMock,
@@ -257,6 +259,53 @@ describe("TeamGameplayPage", () => {
       const liveRegion = timer.querySelector('[aria-live="polite"]');
       expect(liveRegion?.textContent).toBe("3 seconds left");
     });
+  });
+
+  it("pops a +N pill on this team's phone when our own score goes up", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    const me = makeTeam({ id: "team-1", name: "Alice", score: 0 });
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [me],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.queryByTestId("point-change")).not.toBeInTheDocument();
+
+    act(() => {
+      fireTeam(makePayload("game_teams", "UPDATE", { new: { ...me, score: 10 } }));
+    });
+    const pill = await screen.findByTestId("point-change");
+    expect(pill).toHaveTextContent("Alice");
+    expect(pill).toHaveTextContent("+10");
+  });
+
+  it("pops a -N pill on this team's phone when our own score goes down (wrong buzz)", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    const me = makeTeam({ id: "team-1", name: "Alice", score: 5 });
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [me],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      fireTeam(makePayload("game_teams", "UPDATE", { new: { ...me, score: 2 } }));
+    });
+    const pill = await screen.findByTestId("point-change");
+    expect(pill).toHaveTextContent("-3");
   });
 
   it("renders the rpc-mock click without error", async () => {
