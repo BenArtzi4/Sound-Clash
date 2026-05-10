@@ -61,7 +61,10 @@ async def test_award_attempt_title_only(db: asyncpg.Connection) -> None:
     assert rows[0]["title_claimed_by"] == team_id
     assert rows[0]["artist_claimed_by"] is None
 
-    # Round stays open after a single attempt; lock is cleared.
+    # Round stays open after a single attempt. Per migration 018 the buzz
+    # lock is NOT cleared on the title-correct path -- the answering team
+    # retains the floor for the artist token until the manager presses
+    # Continue (release_buzz_lock) or Wrong.
     round_row = await db.fetchrow(
         "SELECT title_claimed_by, ended_at FROM game_rounds WHERE id = $1", round_id
     )
@@ -70,7 +73,7 @@ async def test_award_attempt_title_only(db: asyncpg.Connection) -> None:
     game = await db.fetchrow(
         "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", game_code
     )
-    assert game["buzzed_team_id"] is None
+    assert game["buzzed_team_id"] == team_id
 
 
 @pytest.mark.asyncio
@@ -370,6 +373,81 @@ async def test_award_attempt_free_guess_reactivates_on_subsequent_correct(
         round_id,
     )
     assert rows[0]["points_delta"] == 0  # free again, the just-correct attempt re-armed it
+
+
+# ----- migration 018: split scoring from buzz-lock release ------------------
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_artist_correct_keeps_lock(db: asyncpg.Connection) -> None:
+    """Per migration 018, an artist-correct attempt also keeps the lock held."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    await db.execute("SELECT award_attempt($1, $2, 0, 5, 0)", game_code, round_id)
+
+    locked = await db.fetchval(
+        "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", game_code
+    )
+    assert locked == team_id
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_wrong_clears_lock(db: asyncpg.Connection) -> None:
+    """Wrong is still the re-arm path: it clears active_games.buzzed_team_id."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    await db.execute("SELECT award_attempt($1, $2, 0, 0, 3)", game_code, round_id)
+
+    locked = await db.fetchval(
+        "SELECT buzzed_team_id, locked_at FROM active_games WHERE game_code = $1",
+        game_code,
+    )
+    assert locked is None
+
+
+@pytest.mark.asyncio
+async def test_release_buzz_lock_clears_held_buzz(db: asyncpg.Connection) -> None:
+    """release_buzz_lock is the explicit unlock path used by POST /continue."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    # Sanity: lock is held after buzz_in.
+    assert (
+        await db.fetchval(
+            "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", game_code
+        )
+        == team_id
+    )
+
+    await db.execute("SELECT release_buzz_lock($1)", game_code)
+
+    row = await db.fetchrow(
+        "SELECT buzzed_team_id, locked_at FROM active_games WHERE game_code = $1",
+        game_code,
+    )
+    assert row["buzzed_team_id"] is None
+    assert row["locked_at"] is None
+    # Round is untouched.
+    round_row = await db.fetchrow(
+        "SELECT ended_at FROM game_rounds WHERE id = $1", round_id
+    )
+    assert round_row["ended_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_release_buzz_lock_idempotent(db: asyncpg.Connection) -> None:
+    """release_buzz_lock is a no-op when no buzz is held; safe to call repeatedly."""
+    game_code = await create_test_game(db, status="playing")
+    await create_test_team(db, game_code)
+
+    # Called with no buzz held: no-op, no exception.
+    await db.execute("SELECT release_buzz_lock($1)", game_code)
+    await db.execute("SELECT release_buzz_lock($1)", game_code)
 
 
 @pytest.mark.asyncio

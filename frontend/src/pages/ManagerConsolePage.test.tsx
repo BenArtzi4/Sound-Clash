@@ -56,14 +56,7 @@ vi.mock("../components/YouTubePlayer", () => ({
   }),
 }));
 
-import {
-  awardAttempt,
-  awardBonus,
-  continueRound,
-  endGame,
-  endRound,
-  selectSong,
-} from "../lib/api";
+import { awardAttempt, awardBonus, continueRound, endGame, endRound, selectSong } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
