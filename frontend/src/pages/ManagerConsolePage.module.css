@@ -525,7 +525,6 @@
   border-color: var(--color-success);
 }
 
-
 .skeletonStack {
   display: flex;
   flex-direction: column;

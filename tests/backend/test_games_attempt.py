@@ -1,9 +1,12 @@
-"""POST /games/{code}/attempt and /end-round (replaces award-points).
+"""POST /games/{code}/attempt, /continue, and /end-round.
 
 Multi-buzz round model: a single round can accept many ``award_attempt``
-calls. Each one scores the buzzed team and clears the lock; the round
-stays open until ``end_round`` is called (or until the next
-``start_round`` defensively closes it).
+calls. As of migration 018 only the wrong-buzz path clears the buzz lock;
+title- and artist-correct attempts keep the answering team on the floor
+for the other token. The explicit unlock path is ``/continue`` (which
+calls the ``release_buzz_lock`` RPC). The round stays open until
+``end_round`` is called (or until the next ``start_round`` defensively
+closes it).
 """
 
 from __future__ import annotations
@@ -139,10 +142,9 @@ async def test_attempt_wrong_deducts_three(client, db) -> None:
     assert body["artist_claimed_by"] is None
 
 
-async def test_attempt_clears_buzz_lock(client, db) -> None:
-    """After award_attempt, active_games.buzzed_team_id is cleared so another
-    team can buzz again on the same song."""
-    code, round_id, team_id, token = await _start_round(client, db)
+async def test_attempt_wrong_clears_buzz_lock(client, db) -> None:
+    """A wrong-buzz attempt re-arms the room (clears active_games.buzzed_team_id)."""
+    code, round_id, _team_id, token = await _start_round(client, db)
     resp = await client.post(
         f"/games/{code}/attempt",
         json={"round_id": round_id, "wrong_buzz": True},
@@ -153,6 +155,23 @@ async def test_attempt_clears_buzz_lock(client, db) -> None:
         "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", code
     )
     assert locked is None
+
+
+async def test_attempt_correct_keeps_buzz_lock(client, db) -> None:
+    """Per migration 018, title- or artist-correct attempts keep the lock held
+    on the answering team. Continue is the explicit re-arm."""
+    code, round_id, team_id, token = await _start_round(client, db)
+    resp = await client.post(
+        f"/games/{code}/attempt",
+        json={"round_id": round_id, "title_correct": True},
+        headers=manager_headers(token),
+    )
+    assert resp.status_code == 200
+    locked = await db.fetchval(
+        "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", code
+    )
+    assert locked is not None
+    assert str(locked) == team_id
 
 
 async def test_attempt_round_stays_open_after_score(client, db) -> None:
@@ -430,6 +449,55 @@ async def test_attempt_free_guess_consumed_after_one_attempt(client, db) -> None
     )
     assert r3.status_code == 200
     assert r3.json()["points_awarded"] == -3
+
+
+# ----- POST /games/{code}/continue (migration 018) ---------------------------
+
+
+async def test_continue_releases_held_buzz_lock(client, db) -> None:
+    """POST /continue calls release_buzz_lock and returns 204."""
+    code, _round_id, _team_id, token = await _start_round(client, db)
+    # Sanity: the lock is held after _start_round/_force_buzz.
+    assert (
+        await db.fetchval(
+            "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", code
+        )
+        is not None
+    )
+
+    resp = await client.post(
+        f"/games/{code}/continue", json={}, headers=manager_headers(token)
+    )
+    assert resp.status_code == 204
+    row = await db.fetchrow(
+        "SELECT buzzed_team_id, locked_at FROM active_games WHERE game_code = $1",
+        code,
+    )
+    assert row["buzzed_team_id"] is None
+    assert row["locked_at"] is None
+
+
+async def test_continue_idempotent_when_no_buzz_held(client, db) -> None:
+    """POST /continue is safe to call when the lock is already released."""
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    code, token = await insert_game(db, status="playing", selected_genres=rock)
+
+    # No buzz held; continue should still 204.
+    r1 = await client.post(
+        f"/games/{code}/continue", json={}, headers=manager_headers(token)
+    )
+    assert r1.status_code == 204
+    r2 = await client.post(
+        f"/games/{code}/continue", json={}, headers=manager_headers(token)
+    )
+    assert r2.status_code == 204
+
+
+async def test_continue_manager_token_required(client, db) -> None:
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    code, _ = await insert_game(db, status="playing", selected_genres=rock)
+    resp = await client.post(f"/games/{code}/continue", json={})
+    assert resp.status_code == 401
 
 
 async def test_start_round_closes_prior_open_round(client, db) -> None:
