@@ -168,12 +168,12 @@ Frontend served by Cloudflare Pages. Configure via `_headers` file:
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.soundclash.org https://o*.ingest.sentry.io
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.soundclash.org https://o*.ingest.sentry.io
 ```
 
 Notes:
 - `'unsafe-inline'` for scripts is needed by Vite's runtime + YouTube IFrame Player. Tighten in a future hardening pass with hashes.
-- `frame-src https://www.youtube.com` is required for the IFrame Player.
+- `frame-src` lists both `https://www.youtube.com` and `https://www.youtube-nocookie.com`. The IFrame Player runs in privacy-enhanced mode (`host: "https://www.youtube-nocookie.com"`) to suppress the doubleclick conversion-tracking pixels; the `youtube.com` entry remains because the IFrame API JS itself still loads from there.
 - `connect-src` allows Supabase (REST + Realtime), backend API, and Sentry ingest only.
 
 Backend (FastAPI) sets:

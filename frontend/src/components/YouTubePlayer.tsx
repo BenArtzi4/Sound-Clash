@@ -45,6 +45,7 @@ interface YTNamespace {
     config: {
       width?: string | number;
       height?: string | number;
+      host?: string;
       playerVars?: Record<string, number | string>;
       events?: {
         onReady?: () => void;
@@ -114,6 +115,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       playerRef.current = new YT.Player(containerRef.current, {
         width: "100%",
         height: "100%",
+        // Privacy-enhanced mode: iframe is created at youtube-nocookie.com
+        // instead of youtube.com, which suppresses the doubleclick conversion
+        // pixels that otherwise CORS-spam the console once the video plays.
+        host: "https://www.youtube-nocookie.com",
         playerVars: {
           modestbranding: 1,
           rel: 0,
@@ -124,6 +129,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
           // browser is set to e.g. Hebrew doesn't see "הפעלת הסרטון" /
           // "סרטונים נוספים" in the player overlay.
           hl: "en",
+          // Pre-declare the parent origin so the IFrame API can validate
+          // postMessage targets up-front, which mitigates the warm-up
+          // "target origin does not match" warning fired by www-widgetapi.js
+          // before the iframe finishes navigating.
+          origin: window.location.origin,
         },
         events: {
           onReady: () => {
