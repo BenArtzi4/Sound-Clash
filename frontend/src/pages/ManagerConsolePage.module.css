@@ -492,6 +492,31 @@
   box-shadow: 0 4px 14px rgba(6, 182, 212, 0.4);
 }
 
+/* Wrong is a one-click commit action (not a toggle). Solid red fill so it
+   reads as a final verdict, not a checkbox. Used in both the score-row
+   and the mobile sticky bar. */
+.wrongBtn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.28);
+}
+
+.wrongBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.42);
+}
+
+.wrongBtn .scorePoints {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.wrongBtn .scoreLabel {
+  color: #ffffff;
+}
+
 .tokenChips {
   display: flex;
   flex-wrap: wrap;
@@ -524,7 +549,7 @@
 @media (max-width: 768px) {
   .mobileBar {
     display: grid;
-    grid-template-columns: 1fr 1.2fr;
+    grid-template-columns: 1fr 1fr 1.2fr;
     gap: 0.5rem;
     position: fixed;
     bottom: 0;

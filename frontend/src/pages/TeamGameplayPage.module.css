@@ -8,6 +8,20 @@
   margin: 0 auto;
 }
 
+.pointStack {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  pointer-events: none;
+  max-width: min(92vw, 360px);
+}
+
 .header {
   display: flex;
   justify-content: space-between;
