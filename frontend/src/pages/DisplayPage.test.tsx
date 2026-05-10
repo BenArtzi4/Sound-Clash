@@ -12,9 +12,11 @@ import {
   fireTeam,
   makeActiveGame,
   makePayload,
+  makeRound,
   makeTeam,
   resetSupabaseMock,
   setHydrate,
+  setSongFetch,
 } from "../test/supabaseMock";
 import { DisplayPage } from "./DisplayPage";
 
@@ -217,6 +219,64 @@ describe("DisplayPage board", () => {
     const pill = await screen.findByTestId("point-change");
     expect(pill).toHaveTextContent("Bravo");
     expect(pill).toHaveTextContent("-3");
+  });
+
+  it("hides song title and artist behind ??? while no token is claimed", async () => {
+    setSongFetch({
+      id: "song-1",
+      title: "Careless Whisper",
+      artist: "George Michael",
+      youtube_id: "izGwDsrQ1eQ",
+    });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", current_round_id: "round-1" }),
+      teams: [makeTeam({ id: "t1", name: "Alpha" })],
+      rounds: [
+        makeRound({
+          id: "round-1",
+          song_id: "song-1",
+          title_claimed_by: null,
+          artist_claimed_by: null,
+        }),
+      ],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const titleRow = await screen.findByTestId("display-reveal-title");
+    const artistRow = await screen.findByTestId("display-reveal-artist");
+    expect(titleRow).toHaveTextContent("???");
+    expect(artistRow).toHaveTextContent("???");
+  });
+
+  it("reveals the song title once the title token is claimed", async () => {
+    setSongFetch({
+      id: "song-1",
+      title: "Careless Whisper",
+      artist: "George Michael",
+      youtube_id: "izGwDsrQ1eQ",
+    });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", current_round_id: "round-1" }),
+      teams: [makeTeam({ id: "t1", name: "Alpha" })],
+      rounds: [
+        makeRound({
+          id: "round-1",
+          song_id: "song-1",
+          title_claimed_by: "t1",
+          artist_claimed_by: null,
+        }),
+      ],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("display-reveal-title")).toHaveTextContent("Careless Whisper"),
+    );
+    expect(screen.getByTestId("display-reveal-artist")).toHaveTextContent("???");
   });
 
   it("toggles the sound button between off and on states", async () => {
