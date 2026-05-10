@@ -561,6 +561,42 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(lastHandle?.loadVideoById).toHaveBeenCalledWith("abcdefghijk", 12));
   });
 
+  it("mobile sticky bar mirrors the inline buttons (Wrong / Continue / Start-Next)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttempt).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: -3,
+      team_total_score: 0,
+      title_claimed_by: null,
+      artist_claimed_by: null,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByTestId("score-wrong-mobile")).toBeEnabled();
+    expect(screen.getByTestId("continue-round-mobile")).toBeDisabled();
+    expect(screen.getByTestId("start-round-mobile")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("score-wrong-mobile"));
+    await waitFor(() =>
+      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: false,
+        artist_correct: false,
+        wrong_buzz: true,
+      }),
+    );
+  });
+
   it("shows a clear toast when the song pool is exhausted", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing", round_number: 1 }),
