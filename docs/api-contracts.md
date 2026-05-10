@@ -171,9 +171,25 @@ At least one flag must be true; an attempt with all flags false is a `validation
 
 `points_awarded` may be negative (wrong-buzz). `title_claimed_by` / `artist_claimed_by` reflect the round's claim state after the call (a token claimed earlier in the round by another team is reported here).
 
-Server-side: calls Postgres `award_attempt` RPC. The buzz lock is cleared after the call so any team can buzz again on the same song until the manager hits "Next round".
+Server-side: calls Postgres `award_attempt` RPC. As of migration 018 the buzz lock is **only** cleared on the wrong-buzz path. A correct `title` or `artist` attempt scores the points but leaves `active_games.buzzed_team_id` and `locked_at` in place — the answering team retains the floor for the other token until the manager presses Continue (`POST /games/{code}/continue`) or Next round.
 
 **Errors**: `unauthorized` (401), `not_found` (404; round doesn't exist), `conflict` (409; round already ended, no buzz held, or token already claimed), `validation_error` (400; mutually-exclusive flags or no flag set).
+
+---
+
+### 2.5a `POST /games/{game_code}/continue`
+
+Manager: release a held buzz lock without scoring. Used after a correct attempt when the manager wants to resume the song and let any team buzz again. Idempotent. **Manager-token auth required.**
+
+**Headers**: `X-Manager-Token: <token>`
+
+**Request body**: empty (`{}`).
+
+**Response 204**: no body.
+
+Server-side: calls Postgres `release_buzz_lock` RPC, which clears `active_games.buzzed_team_id` and `locked_at`. Safe to call when no buzz is held (no-op).
+
+**Errors**: `unauthorized` (401).
 
 ---
 

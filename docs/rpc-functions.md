@@ -1,8 +1,8 @@
 # Sound Clash: Postgres RPC Functions
 
-The seven PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
+The eight PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), and `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), and `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path).
 
 ## 0. Conventions
 
@@ -215,7 +215,8 @@ Behavior:
 - Reads the current `buzzed_team_id` off `active_games`. If null → raises `P0001 no_buzz_to_score`.
 - `p_wrong_buzz > 0 AND (p_title > 0 OR p_artist > 0)` → raises `P0001 wrong_buzz_with_correct`.
 - `p_title > 0` while `title_claimed_by` is already set → raises `P0001 title_already_claimed`. Same shape for `artist_already_claimed`.
-- On success: applies score delta to the buzzed team, marks `title_claimed_by` / `artist_claimed_by` if applicable, inserts a `game_round_attempts` row, and clears `active_games.buzzed_team_id` and `locked_at` so other teams can buzz on the same song.
+- On success: applies score delta to the buzzed team, marks `title_claimed_by` / `artist_claimed_by` if applicable, and inserts a `game_round_attempts` row.
+- **Buzz-lock handling** (migration 018): only the wrong-buzz path clears `active_games.buzzed_team_id` and `locked_at`. A correct `title` or `artist` attempt leaves the lock in place — the answering team retains the floor for the other token until the manager presses Continue (`release_buzz_lock`) or Wrong, or until `start_round` defensively clears the lock for the next song. Before 018 the lock was always cleared regardless of outcome.
 - **Free-guess flag** (`game_rounds.free_guess_active`, migration 017): if `p_wrong_buzz > 0` AND `free_guess_active = true`, the penalty is waived (`points_delta = 0`); the attempt is still recorded with `outcome = 'wrong'`. After processing, the function sets `free_guess_active = true` if the outcome was correct (`title` / `artist` / `title_artist`) and `false` otherwise. So the flag is consumed by every attempt and re-armed by every correct one.
 
 ### Error semantics
@@ -236,6 +237,31 @@ Not idempotent. Each successful call records one attempt and may shift token cla
 ### Callers
 
 - FastAPI `POST /games/{code}/attempt`.
+
+## 3aa. `release_buzz_lock`: manager re-arms the buzzers without scoring
+
+Added in migration 018. Called by FastAPI (`POST /games/{code}/continue`). Not exposed to anon. Used after a correct `award_attempt` (which now leaves the lock in place) when the manager wants to resume the song and re-open buzzes.
+
+```sql
+CREATE OR REPLACE FUNCTION release_buzz_lock(
+  p_game_code text
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- `UPDATE active_games SET buzzed_team_id = NULL, locked_at = NULL WHERE game_code = p_game_code`. That's the entire body.
+- No-op if no buzz is held; never raises.
+
+### Idempotency
+
+Idempotent. Safe to call any number of times.
+
+### Callers
+
+- FastAPI `POST /games/{code}/continue`.
 
 ## 3b. `end_round`: manager closes the round
 
@@ -436,6 +462,7 @@ async def test_cleanup_deletes_expired(db):
 | `buzz_in` | ✅ | ✅ | Browser (team page) |
 | `start_round` | ❌ | ✅ | FastAPI POST /games/.../select-song |
 | `award_attempt` | ❌ | ✅ | FastAPI POST /games/.../attempt |
+| `release_buzz_lock` | ❌ | ✅ | FastAPI POST /games/.../continue |
 | `end_round` | ❌ | ✅ | FastAPI POST /games/.../end-round |
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |

@@ -319,7 +319,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
               <QRPanel
                 gameCode={gameCode}
                 joinUrl={`${window.location.origin}/join/${gameCode}`}
-                size={280}
+                size={420}
               />
             </div>
           </div>

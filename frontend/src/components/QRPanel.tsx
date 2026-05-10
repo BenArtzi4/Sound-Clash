@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import styles from "./QRPanel.module.css";
 
@@ -35,7 +35,11 @@ export function QRPanel({ joinUrl, gameCode, size = 220 }: Props) {
 
   return (
     <div className={styles.panel}>
-      <div className={styles.qrFrame} aria-hidden="true">
+      <div
+        className={styles.qrFrame}
+        aria-hidden="true"
+        style={{ "--qr-frame-size": `${size}px` } as CSSProperties}
+      >
         {svg ? (
           <div className={styles.qrSvg} dangerouslySetInnerHTML={{ __html: svg }} />
         ) : error ? (

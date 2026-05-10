@@ -8,17 +8,6 @@
   gap: 1.5rem;
 }
 
-.shellWithFooter {
-  /* Reserve space for the mobile sticky bar so it never hides content. */
-  padding-bottom: 1.75rem;
-}
-
-@media (max-width: 768px) {
-  .shellWithFooter {
-    padding-bottom: 96px;
-  }
-}
-
 .header {
   display: flex;
   justify-content: space-between;
@@ -379,34 +368,24 @@
   color: var(--color-danger);
 }
 
+.scoreBonus {
+  /* Bonus is always actionable while teams exist (no buzz required), so
+     give it a permanent amber tint instead of the neutral white the other
+     three judgement buttons use when disabled. Keeps it readable as the
+     "always on" action even when its row-mates sit greyed-out. */
+  border-color: var(--color-warning);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0.04) 100%);
+  color: #92400e;
+}
+
+.scoreBonus:not(:disabled):hover {
+  border-color: var(--color-warning);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.26) 0%, rgba(245, 158, 11, 0.08) 100%);
+  color: #92400e;
+}
+
 .scoreBonus .scorePoints {
   color: var(--color-warning);
-}
-
-.scoreActive {
-  border-color: var(--color-success);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0.04) 100%);
-  color: #065f46;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
-}
-
-.scoreActive:not(:disabled):hover {
-  border-color: var(--color-success);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.26) 0%, rgba(16, 185, 129, 0.08) 100%);
-  color: #065f46;
-}
-
-.scoreActiveNeg {
-  border-color: var(--color-danger);
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(239, 68, 68, 0.04) 100%);
-  color: #991b1b;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.22);
-}
-
-.scoreActiveNeg:not(:disabled):hover {
-  border-color: var(--color-danger);
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.26) 0%, rgba(239, 68, 68, 0.08) 100%);
-  color: #991b1b;
 }
 
 .scoreActiveBonus {
@@ -459,10 +438,14 @@
   justify-content: flex-end;
 }
 
-@media (max-width: 768px) {
-  /* Inline action row hides on mobile; the sticky mobileBar takes over. */
+/* On narrow screens stack the two big-action buttons so each gets full
+   width and is comfortably tappable. The sticky bottom bar that used to
+   take over on mobile was removed; these inline buttons are the only
+   round-control surface now. */
+@media (max-width: 480px) {
   .actionsInline {
-    display: none;
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
@@ -542,30 +525,6 @@
   border-color: var(--color-success);
 }
 
-.mobileBar {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .mobileBar {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1.2fr;
-    gap: 0.5rem;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 80;
-    padding: 0.75rem 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0));
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    border-top: 1px solid var(--color-border);
-    box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.08);
-  }
-  .mobileBar .btn {
-    padding: 14px 12px;
-  }
-}
 
 .skeletonStack {
   display: flex;

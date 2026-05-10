@@ -154,6 +154,11 @@ def _end_round_blocking(
     return {"round_id": round_id, "ended_at": rpc_resp.data}
 
 
+def _continue_blocking(client: SupabaseClientLike, code: str) -> None:
+    with mapped_postgrest_errors():
+        client.rpc("release_buzz_lock", {"p_game_code": code}).execute()
+
+
 def _bonus_blocking(
     client: SupabaseClientLike,
     code: str,
@@ -309,6 +314,18 @@ async def end_round(request: Request, game_code: str, body: EndRoundRequest) -> 
         _end_round_blocking, client, game_code, str(body.round_id)
     )
     return EndRoundResponse.model_validate(result)
+
+
+@router.post(
+    "/games/{game_code}/continue",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_manager_token)],
+)
+@limiter.limit("100/minute")
+async def continue_round(request: Request, game_code: str) -> None:
+    """Release the buzz lock without scoring. Idempotent."""
+    client = get_supabase_client()
+    await anyio.to_thread.run_sync(_continue_blocking, client, game_code)
 
 
 @router.post(

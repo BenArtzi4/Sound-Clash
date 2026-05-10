@@ -71,20 +71,25 @@ export async function openManagerAndCreateGame(
 }
 
 // ---------------------------------------------------------------------------
-// Manager action helpers (multi-buzz round model)
+// Manager action helpers (multi-buzz round model, immediate-apply flow)
 //
-// `awardAndContinue` toggles title/artist and presses "Continue round":
-// the buzz is scored, the lock is cleared, and the same song keeps playing.
-// `awardAndAdvance` does the same but presses "Next round" so the round
-// closes and the next song loads.
+// Each judgement button fires the score the moment it's clicked:
+//   - score-title    -> +10 to the buzzed team, lock STAYS held
+//   - score-artist   -> +5 to the buzzed team, lock STAYS held
+//   - score-wrong    -> -3 (or 0 with free-guess), lock RELEASED
 //
-// Wrong is its own one-click action (auto-fires `award_attempt`, no Continue
-// press needed). Use `markWrong` for the wrong-buzz path.
+// `awardAndContinue` clicks the requested correct buttons and then presses
+// "Continue round" to release the lock and resume song playback. Use it
+// when the round should keep going on the same song.
+//
+// `awardAndAdvance` clicks the requested correct buttons and then presses
+// "Next round" to close the round and load the next song.
+//
+// `markWrong` is the wrong-buzz one-click path; the lock is released by
+// the RPC, so no Continue press is needed.
 //
 // `skipRound` is the no-buzz timeout/skip path: presses "Next round"
-// without any toggles set, advancing straight to the next song.
-//
-// `awardBonus` opens the bonus team picker and clicks the named team.
+// without scoring anything, advancing straight to the next song.
 // ---------------------------------------------------------------------------
 
 export interface AttemptToggles {
@@ -92,35 +97,28 @@ export interface AttemptToggles {
   artist?: boolean;
 }
 
-async function setToggles(page: Page, toggles: AttemptToggles): Promise<void> {
-  const setIf = async (testId: string, want: boolean | undefined) => {
-    if (want !== true) return;
-    const btn = page.getByTestId(testId);
-    if ((await btn.getAttribute("aria-pressed")) === "true") return;
-    await btn.click();
-  };
-  await setIf("score-title", toggles.title);
-  await setIf("score-artist", toggles.artist);
+async function applyCorrect(page: Page, toggles: AttemptToggles): Promise<void> {
+  if (toggles.title === true) {
+    await page.getByTestId("score-title").click();
+    await expect(page.getByTestId("score-title")).toBeDisabled({ timeout: 10_000 });
+  }
+  if (toggles.artist === true) {
+    await page.getByTestId("score-artist").click();
+    await expect(page.getByTestId("score-artist")).toBeDisabled({ timeout: 10_000 });
+  }
 }
 
 export async function awardAndContinue(
   page: Page,
   toggles: AttemptToggles,
 ): Promise<void> {
-  await setToggles(page, toggles);
+  await applyCorrect(page, toggles);
   await page.getByTestId("continue-round").click();
-  // Toggles reset on success; wait for the buttons to drop their pressed
-  // state so the caller can chain another action without racing.
-  await expect(page.getByTestId("score-title")).toHaveAttribute("aria-pressed", "false", {
-    timeout: 10_000,
-  });
+  // Continue releases the buzz lock; once released, Continue itself
+  // disables again. Wait for that so the caller can chain.
+  await expect(page.getByTestId("continue-round")).toBeDisabled({ timeout: 10_000 });
 }
 
-// markWrong fires the Wrong verdict in one click. It does NOT need a
-// follow-up Continue press: award_attempt runs immediately, the lock
-// clears, and the buzzers re-arm. The -3 penalty is automatically waived
-// by the SQL function if a correct answer was already scored this round
-// (free-guess sweetener; see migration 017).
 export async function markWrong(page: Page): Promise<void> {
   await page.getByTestId("score-wrong").click();
 }
@@ -129,7 +127,7 @@ export async function awardAndAdvance(
   page: Page,
   toggles: AttemptToggles,
 ): Promise<void> {
-  await setToggles(page, toggles);
+  await applyCorrect(page, toggles);
   await page.getByTestId("start-round").click();
 }
 

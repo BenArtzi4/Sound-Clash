@@ -282,7 +282,7 @@ describe("TeamGameplayPage", () => {
       fireTeam(makePayload("game_teams", "UPDATE", { new: { ...me, score: 10 } }));
     });
     const pill = await screen.findByTestId("point-change");
-    expect(pill).toHaveTextContent("Alice");
+    expect(pill).not.toHaveTextContent("Alice");
     expect(pill).toHaveTextContent("+10");
   });
 

@@ -182,6 +182,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   );
 
   const overlayHidden = hideOverlay && loaded && errorCode === null && !ended && !coverWhilePaused;
+  // When the video is loaded but the parent is covering it during a buzz
+  // pause, show no copy at all -- "Ready" was leftover from the pre-load
+  // state and reads as a YouTube splash. The cover still hides the iframe.
+  const showLabel = errorCode !== null || ended || !loaded;
   return (
     <div className={styles.wrapper} data-testid="youtube-player" data-ready={loaded}>
       <div ref={containerRef} className={styles.player} />
@@ -189,13 +193,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         className={`${styles.cover} ${overlayHidden ? styles.coverHidden : ""}`}
         role={errorCode !== null ? "alert" : undefined}
       >
-        {errorCode !== null ? (
-          <span className={styles.error}>Video unavailable; manager can pick a new song.</span>
-        ) : ended ? (
-          <span className={styles.loading}>Song ended</span>
-        ) : (
-          <span className={styles.loading}>{loaded ? "Ready" : "Loading player..."}</span>
-        )}
+        {showLabel ? (
+          errorCode !== null ? (
+            <span className={styles.error}>Video unavailable; manager can pick a new song.</span>
+          ) : ended ? (
+            <span className={styles.loading}>Song ended</span>
+          ) : (
+            <span className={styles.loading}>Loading player...</span>
+          )
+        ) : null}
       </div>
     </div>
   );

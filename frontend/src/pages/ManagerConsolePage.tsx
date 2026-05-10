@@ -7,7 +7,15 @@ import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePl
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
-import { ApiError, awardAttempt, awardBonus, endGame, endRound, selectSong } from "../lib/api";
+import {
+  ApiError,
+  awardAttempt,
+  awardBonus,
+  continueRound,
+  endGame,
+  endRound,
+  selectSong,
+} from "../lib/api";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
@@ -22,8 +30,6 @@ export function ManagerConsolePage() {
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
 
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  const [titleCorrect, setTitleCorrect] = useState(false);
-  const [artistCorrect, setArtistCorrect] = useState(false);
   const [busy, setBusy] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
@@ -92,21 +98,11 @@ export function ManagerConsolePage() {
     }
   }
 
-  function resetAwardChecks() {
-    setTitleCorrect(false);
-    setArtistCorrect(false);
-  }
-
-  function toggleTitle() {
-    setTitleCorrect((v) => !v);
-  }
-
-  function toggleArtist() {
-    setArtistCorrect((v) => !v);
-  }
-
-  // Apply an attempt with explicit flag values; the caller decides what to send
-  // (Continue Round uses the toggle state; the Wrong button hard-codes wrong=true).
+  // Apply an attempt with explicit flag values. Each judgement button calls
+  // this directly; the score is committed to the DB the moment the manager
+  // clicks. With migration 018 the lock is only released on the wrong_buzz
+  // path, so Correct Song / Correct Artist keep the answering team on the
+  // floor for the other token. Continue is the explicit unlock + resume.
   async function applyAttempt(
     roundId: string,
     flags: { title_correct: boolean; artist_correct: boolean; wrong_buzz: boolean },
@@ -124,24 +120,16 @@ export function ManagerConsolePage() {
     return true;
   }
 
-  async function handleContinueRound() {
+  async function handleCorrectTitle() {
     if (!state?.currentRound || busy || !managerToken) return;
-    const lockedTeamId = state.game.buzzed_team_id;
-    if (!lockedTeamId) return;
-    if (!titleCorrect && !artistCorrect) {
-      toast("Pick a result first (Correct Song or Correct Artist), or press Wrong", {
-        variant: "info",
-      });
-      return;
-    }
+    if (!state.game.buzzed_team_id) return;
     setBusy(true);
     try {
       await applyAttempt(state.currentRound.id, {
-        title_correct: titleCorrect,
-        artist_correct: artistCorrect,
+        title_correct: true,
+        artist_correct: false,
         wrong_buzz: false,
       });
-      resetAwardChecks();
     } catch (err) {
       reportError(err);
     } finally {
@@ -149,10 +137,39 @@ export function ManagerConsolePage() {
     }
   }
 
-  // Wrong is a one-click verdict: it ignores any toggled state, fires
-  // award_attempt with wrong_buzz=true, and re-arms the buzzers. Per
-  // game-rules.md §4, if a correct answer was already scored this round,
-  // the SQL function waives the -3 penalty.
+  async function handleCorrectArtist() {
+    if (!state?.currentRound || busy || !managerToken) return;
+    if (!state.game.buzzed_team_id) return;
+    setBusy(true);
+    try {
+      await applyAttempt(state.currentRound.id, {
+        title_correct: false,
+        artist_correct: true,
+        wrong_buzz: false,
+      });
+    } catch (err) {
+      reportError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleContinueRound() {
+    if (busy || !managerToken) return;
+    setBusy(true);
+    try {
+      await continueRound(gameCode, managerToken);
+      playerRef.current?.play();
+    } catch (err) {
+      reportError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Wrong is a one-click verdict: it fires award_attempt with wrong_buzz=true
+  // and re-arms the buzzers. Per game-rules.md §4, if a correct answer was
+  // already scored this round, the SQL function waives the -3 penalty.
   async function handleWrong() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
@@ -163,7 +180,6 @@ export function ManagerConsolePage() {
         artist_correct: false,
         wrong_buzz: true,
       });
-      resetAwardChecks();
     } catch (err) {
       reportError(err);
     } finally {
@@ -176,20 +192,6 @@ export function ManagerConsolePage() {
     setBusy(true);
     try {
       const round = state?.currentRound;
-      const lockedTeamId = state?.game.buzzed_team_id ?? null;
-      // If a buzz is held with a verdict toggled, score it before advancing.
-      if (round && lockedTeamId && (titleCorrect || artistCorrect)) {
-        try {
-          await applyAttempt(round.id, {
-            title_correct: titleCorrect,
-            artist_correct: artistCorrect,
-            wrong_buzz: false,
-          });
-        } catch (err) {
-          reportError(err);
-          return;
-        }
-      }
       // Close the prior round (idempotent; safe even if start_round will close it).
       if (round && state?.game.status === "playing") {
         try {
@@ -204,7 +206,6 @@ export function ManagerConsolePage() {
       }
       const result = await selectSong(gameCode, managerToken);
       setCurrentSong(result.song);
-      resetAwardChecks();
       await loadSongIntoPlayer(result.song);
     } catch (err) {
       reportError(err);
@@ -308,23 +309,20 @@ export function ManagerConsolePage() {
   const round = state.currentRound;
   const titleClaimedById = round?.title_claimed_by ?? null;
   const artistClaimedById = round?.artist_claimed_by ?? null;
-  const titleClaimedByName = titleClaimedById ? state.teams.get(titleClaimedById)?.name : null;
-  const artistClaimedByName = artistClaimedById ? state.teams.get(artistClaimedById)?.name : null;
-  const bothClaimed = titleClaimedById != null && artistClaimedById != null;
 
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
-  const titleToggleDisabled = busy || !lockedTeam || titleClaimedById != null;
-  const artistToggleDisabled = busy || !lockedTeam || artistClaimedById != null;
+  const titleActionDisabled = busy || !lockedTeam || titleClaimedById != null;
+  const artistActionDisabled = busy || !lockedTeam || artistClaimedById != null;
   const wrongActionDisabled = busy || !lockedTeam;
   const scoringDisabled = busy || !lockedTeam;
-  const continueDisabled = busy || !lockedTeam || bothClaimed || !(titleCorrect || artistCorrect);
+  const continueDisabled = busy || !lockedTeam;
   const nextRoundDisabled = busy || !player.ready;
-  const bonusDisabled = busy || teams.length === 0;
+  const bonusDisabled = busy;
   const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
 
   return (
-    <main className={`${styles.shell} ${styles.shellWithFooter}`}>
+    <main className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.codeBlock}>
           <span className={styles.codeLabel}>Game code</span>
@@ -378,7 +376,7 @@ export function ManagerConsolePage() {
                   }`}
                   data-testid="token-chip-title"
                 >
-                  Song {titleClaimedById ? `✓ ${titleClaimedByName ?? "?"}` : "open"}
+                  Song {titleClaimedById ? "✓" : "open"}
                 </span>
                 <span
                   className={`${styles.tokenChip} ${
@@ -386,7 +384,7 @@ export function ManagerConsolePage() {
                   }`}
                   data-testid="token-chip-artist"
                 >
-                  Artist {artistClaimedById ? `✓ ${artistClaimedByName ?? "?"}` : "open"}
+                  Artist {artistClaimedById ? "✓" : "open"}
                 </span>
               </div>
             ) : null}
@@ -402,10 +400,9 @@ export function ManagerConsolePage() {
           <div className={styles.scoreRow} aria-disabled={scoringDisabled}>
             <button
               type="button"
-              className={`${styles.scoreBtn} ${styles.scorePositive} ${titleCorrect ? styles.scoreActive : ""}`}
-              onClick={toggleTitle}
-              disabled={titleToggleDisabled}
-              aria-pressed={titleCorrect}
+              className={`${styles.scoreBtn} ${styles.scorePositive}`}
+              onClick={() => void handleCorrectTitle()}
+              disabled={titleActionDisabled}
               data-testid="score-title"
             >
               <span className={styles.scoreLabel}>Correct Song</span>
@@ -413,10 +410,9 @@ export function ManagerConsolePage() {
             </button>
             <button
               type="button"
-              className={`${styles.scoreBtn} ${styles.scorePositive} ${artistCorrect ? styles.scoreActive : ""}`}
-              onClick={toggleArtist}
-              disabled={artistToggleDisabled}
-              aria-pressed={artistCorrect}
+              className={`${styles.scoreBtn} ${styles.scorePositive}`}
+              onClick={() => void handleCorrectArtist()}
+              disabled={artistActionDisabled}
               data-testid="score-artist"
             >
               <span className={styles.scoreLabel}>Correct Artist</span>
@@ -490,33 +486,6 @@ export function ManagerConsolePage() {
             </button>
           </div>
         </section>
-      </div>
-
-      <div className={styles.mobileBar} role="toolbar" aria-label="Round actions">
-        <button
-          className={`btn ${styles.wrongBtn}`}
-          onClick={() => void handleWrong()}
-          disabled={wrongActionDisabled}
-          data-testid="score-wrong-mobile"
-        >
-          Wrong
-        </button>
-        <button
-          className={`btn ${styles.continueBtn}`}
-          onClick={() => void handleContinueRound()}
-          disabled={continueDisabled}
-          data-testid="continue-round-mobile"
-        >
-          Continue
-        </button>
-        <button
-          className={`btn btn-primary ${styles.awardBtn}`}
-          onClick={() => void handleNextRound()}
-          disabled={nextRoundDisabled}
-          data-testid="start-round-mobile"
-        >
-          {game.status === "waiting" ? "Start" : "Next"}
-        </button>
       </div>
 
       <ConfirmDialog
