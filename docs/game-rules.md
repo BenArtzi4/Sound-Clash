@@ -94,10 +94,19 @@ Per-round point components (locked at MVP, configurable later):
 |---|---|---|
 | Correct Song | **+10** | Manager toggles "Correct Song" on a buzz; claims TITLE token |
 | Correct Artist | **+5** | Manager toggles "Correct Artist" on a buzz; claims ARTIST token |
-| Wrong | **−3** | Team buzzed but got neither title nor artist right; no token claimed |
+| Wrong | **−3** or **0** | Team buzzed but got neither title nor artist right; see free-guess rule below |
 | Skip / abandoned token | **0** | Manager advances with one or both tokens unclaimed; no team's score moves |
 
-Maximum per **buzz** from `award_attempt`: **+15** (title + artist together). Minimum per buzz: **−3** (wrong buzz). A round can accumulate multiple buzz outcomes — e.g. T1 wrong → -3, T2 title → +10, T3 artist → +5. The host can also grant a discretionary **+4 Bonus** to any team at any time; see §4a.
+Maximum per **buzz** from `award_attempt`: **+15** (title + artist together). Minimum per buzz: **−3** (wrong buzz with no prior correct in the round). A round can accumulate multiple buzz outcomes — e.g. T1 wrong → -3, T2 title → +10, T3 artist → +5. The host can also grant a discretionary **+4 Bonus** to any team at any time; see §4a.
+
+### Free-guess rule
+
+After any team scores a correct token in a round, a "free-guess" flag activates for that round. The very next `award_attempt` in that round, if Wrong, costs **0** instead of −3. The flag is consumed by that next attempt regardless of outcome (and re-activates the moment another correct attempt happens). This rewards a team that got one half of the song right — they (or anyone) can risk the other half without paying for being wrong.
+
+- Scope: round-wide. Whichever team buzzes the next attempt benefits, not just the team that scored the prior correct.
+- The flag persists only across one attempt. If that attempt is wrong → flag clears. If it's correct → flag stays armed for the attempt after that.
+- `start_round` resets the flag for each new song.
+- Bonus does **not** activate or consume the flag.
 
 Scores are integers; ties are allowed. The team with the highest score at game end is the winner; tied teams share the win (no tiebreaker round in MVP; see §11).
 
@@ -105,7 +114,8 @@ Scores are integers; ties are allowed. The team with the highest score at game e
 
 - `Correct Song` and `Correct Artist` are **accumulating toggles** within a single buzz: the host may select either, both, or neither (which is treated as a no-score; the API rejects an attempt with no flags set).
 - `Wrong` is **mutually exclusive** with the two correct toggles, both in the UI and in the SQL function (`P0001 wrong_buzz_with_correct`).
-- `Continue Round` calls `award_attempt`: scores the current buzz, clears the lock, leaves the round open. Disabled when no buzz is held, both tokens are claimed, or no toggle is selected.
+- `Continue Round` calls `award_attempt`: scores the current buzz (Title and/or Artist toggles), clears the lock, leaves the round open. Disabled when no buzz is held, both tokens are claimed, or no toggle is selected.
+- `Wrong` is its own one-click action: it fires `award_attempt` immediately with `wrong_buzz=true` (no Continue Round press needed), re-arms the buzzers, and may waive the −3 per the free-guess rule above.
 - `Next Round` advances to the next song. If a buzz is held with toggles set, it scores first via `award_attempt`. Then `end_round` closes the current round and `start_round` advances.
 - Negative team scores are allowed.
 - The manager cannot retroactively change a previous round's score in MVP. (Future: an "edit last round" undo flow.)

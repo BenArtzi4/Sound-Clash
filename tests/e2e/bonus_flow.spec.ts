@@ -6,6 +6,7 @@ import {
   awardAndAdvance,
   awardAndContinue,
   awardBonusToTeam,
+  markWrong,
   openManagerAndCreateGame,
 } from "./fixtures/manager-context";
 import { buzzAndExpectWinner, expectBuzzGreen, joinAsTeam } from "./fixtures/team-context";
@@ -88,19 +89,19 @@ test("scenario 19: four teams, two wrongs + two splits + bonus to a wrong-guesse
 
   await manager.page.getByTestId("start-round").click();
 
-  // T1 wrong → -3
+  // T1 wrong → -3 (no prior correct, full penalty applies)
   await buzzAndExpectWinner(t1);
-  await awardAndContinue(manager.page, { wrong: true });
+  await markWrong(manager.page);
 
-  // T2 artist correct → +5
+  // T2 artist correct → +5  (free-guess flag now active for next attempt)
   await expectBuzzGreen(t2);
   await buzzAndExpectWinner(t2);
   await awardAndContinue(manager.page, { artist: true });
 
-  // T3 wrong → -3
+  // T3 wrong → 0 (free-guess waives the -3; flag is then consumed)
   await expectBuzzGreen(t3);
   await buzzAndExpectWinner(t3);
-  await awardAndContinue(manager.page, { wrong: true });
+  await markWrong(manager.page);
 
   // T4 title correct → +10
   await expectBuzzGreen(t4);
@@ -111,11 +112,11 @@ test("scenario 19: four teams, two wrongs + two splits + bonus to a wrong-guesse
   await awardBonusToTeam(manager.page, "Alpha");
   await manager.page.getByTestId("start-round").click();
 
-  // Alpha: -3 + 4 = 1, Bravo: 5, Charlie: -3, Delta: 10.
+  // Alpha: -3 + 4 = 1, Bravo: 5, Charlie: 0 (free-guess), Delta: 10.
   const display = await browser.newPage();
   await display.goto(`/display/${manager.gameCode}`);
   await expectScore(display, "Alpha", 1);
   await expectScore(display, "Bravo", 5);
-  await expectScore(display, "Charlie", -3);
+  await expectScore(display, "Charlie", 0);
   await expectScore(display, "Delta", 10);
 });

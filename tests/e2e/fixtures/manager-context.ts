@@ -73,10 +73,13 @@ export async function openManagerAndCreateGame(
 // ---------------------------------------------------------------------------
 // Manager action helpers (multi-buzz round model)
 //
-// `awardAndContinue` toggles the requested score bits and presses
-// "Continue round": the buzz is scored, the lock is cleared, and the same
-// song keeps playing. `awardAndAdvance` does the same but presses
-// "Next round" so the round closes and the next song loads.
+// `awardAndContinue` toggles title/artist and presses "Continue round":
+// the buzz is scored, the lock is cleared, and the same song keeps playing.
+// `awardAndAdvance` does the same but presses "Next round" so the round
+// closes and the next song loads.
+//
+// Wrong is its own one-click action (auto-fires `award_attempt`, no Continue
+// press needed). Use `markWrong` for the wrong-buzz path.
 //
 // `skipRound` is the no-buzz timeout/skip path: presses "Next round"
 // without any toggles set, advancing straight to the next song.
@@ -87,7 +90,6 @@ export async function openManagerAndCreateGame(
 export interface AttemptToggles {
   title?: boolean;
   artist?: boolean;
-  wrong?: boolean;
 }
 
 async function setToggles(page: Page, toggles: AttemptToggles): Promise<void> {
@@ -97,13 +99,6 @@ async function setToggles(page: Page, toggles: AttemptToggles): Promise<void> {
     if ((await btn.getAttribute("aria-pressed")) === "true") return;
     await btn.click();
   };
-  // Wrong is mutually exclusive with title/artist. The UI clears the
-  // others when wrong is toggled, but we set them in a deterministic
-  // order so the final state matches caller intent.
-  if (toggles.wrong) {
-    await setIf("score-wrong", true);
-    return;
-  }
   await setIf("score-title", toggles.title);
   await setIf("score-artist", toggles.artist);
 }
@@ -119,6 +114,15 @@ export async function awardAndContinue(
   await expect(page.getByTestId("score-title")).toHaveAttribute("aria-pressed", "false", {
     timeout: 10_000,
   });
+}
+
+// markWrong fires the Wrong verdict in one click. It does NOT need a
+// follow-up Continue press: award_attempt runs immediately, the lock
+// clears, and the buzzers re-arm. The -3 penalty is automatically waived
+// by the SQL function if a correct answer was already scored this round
+// (free-guess sweetener; see migration 017).
+export async function markWrong(page: Page): Promise<void> {
+  await page.getByTestId("score-wrong").click();
 }
 
 export async function awardAndAdvance(

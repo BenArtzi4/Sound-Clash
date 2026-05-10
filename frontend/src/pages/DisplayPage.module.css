@@ -385,6 +385,44 @@
   color: #b45309;
 }
 
+.revealPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.revealRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text-dim);
+  letter-spacing: -0.01em;
+}
+
+.revealRowOpen {
+  color: #0f172a;
+}
+
+.revealIcon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.revealText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80vw;
+}
+
 .tokenChips {
   display: flex;
   flex-wrap: wrap;

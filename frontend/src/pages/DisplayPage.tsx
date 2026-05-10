@@ -7,6 +7,8 @@ import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useGameSounds } from "../hooks/useGameSounds";
 import { serverTimeNow } from "../hooks/useServerTime";
+import { supabase } from "../lib/supabase";
+import type { Song } from "../lib/types";
 import styles from "./DisplayPage.module.css";
 
 interface PointEvent {
@@ -74,6 +76,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const [soundOn, setSoundOn] = useState(false);
   const [now, setNow] = useState(() => serverTimeNow().getTime());
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
+  const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const prevBuzzedRef = useRef<string | null | undefined>(undefined);
   const prevScoresRef = useRef<Record<string, number>>({});
   const prevRoundRef = useRef<number | undefined>(undefined);
@@ -84,6 +87,35 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     const id = window.setInterval(() => setNow(serverTimeNow().getTime()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  // Fetch the current round's song so the reveal panel can display the
+  // actual title / artist text once the manager confirms a correct answer.
+  // Mirrors the lookup in ManagerConsolePage.tsx so all three roles can
+  // surface the same metadata after a token is claimed.
+  const currentRoundSongId = state?.currentRound?.song_id ?? null;
+  useEffect(() => {
+    if (!currentRoundSongId) {
+      setCurrentSong(null);
+      return;
+    }
+    if (currentSong && currentSong.id === currentRoundSongId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("songs")
+        .select("id,title,artist,youtube_id,start_time,is_soundtrack,source")
+        .eq("id", currentRoundSongId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      setCurrentSong(data as Song);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // currentSong is included via the .id chain; full-object dep would
+    // re-run on every render and re-fetch the same song.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoundSongId, currentSong?.id]);
 
   useEffect(() => {
     if (!state) return;
@@ -219,6 +251,33 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         <span className={styles.bannerText}>{bannerText}</span>
         {showRoundSubhead ? <span className={styles.bannerSubhead}>{roundLabel}</span> : null}
       </div>
+
+      {round && game.status === "playing" ? (
+        <div className={styles.revealPanel} aria-label="Song reveal">
+          <div
+            className={`${styles.revealRow} ${titleClaimedById ? styles.revealRowOpen : ""}`}
+            data-testid="display-reveal-title"
+          >
+            <span className={styles.revealIcon} aria-hidden="true">
+              🎵
+            </span>
+            <span className={styles.revealText}>
+              {titleClaimedById && currentSong ? currentSong.title : "???"}
+            </span>
+          </div>
+          <div
+            className={`${styles.revealRow} ${artistClaimedById ? styles.revealRowOpen : ""}`}
+            data-testid="display-reveal-artist"
+          >
+            <span className={styles.revealIcon} aria-hidden="true">
+              🎤
+            </span>
+            <span className={styles.revealText}>
+              {artistClaimedById && currentSong ? currentSong.artist : "???"}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {round && game.status === "playing" ? (
         <div className={styles.tokenChips} aria-label="Round token state">

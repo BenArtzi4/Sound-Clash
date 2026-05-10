@@ -234,7 +234,7 @@ describe("ManagerConsolePage", () => {
     );
   });
 
-  it("Wrong button sends wrong_buzz=true and clears positives", async () => {
+  it("Wrong button auto-fires awardAttempt with wrong_buzz=true (no Continue press)", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -256,9 +256,42 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
+    fireEvent.click(screen.getByTestId("score-wrong"));
+    await waitFor(() =>
+      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
+        round_id: "r1",
+        title_correct: false,
+        artist_correct: false,
+        wrong_buzz: true,
+      }),
+    );
+  });
+
+  it("Wrong button ignores any toggled title/artist state (Wrong is a final verdict)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttempt).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: -3,
+      team_total_score: 0,
+      title_claimed_by: null,
+      artist_claimed_by: null,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Toggle Title first; clicking Wrong should still send wrong=true with title=false.
     fireEvent.click(screen.getByTestId("score-title"));
     fireEvent.click(screen.getByTestId("score-wrong"));
-    fireEvent.click(screen.getByTestId("continue-round"));
     await waitFor(() =>
       expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
         round_id: "r1",

@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
+import { PointChange } from "../components/PointChange";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { serverTimeNow } from "../hooks/useServerTime";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
 import styles from "./TeamGameplayPage.module.css";
+
+interface PointEvent {
+  id: string;
+  delta: number;
+}
 
 const ANSWER_DURATION_SEC = 10;
 
@@ -25,10 +31,28 @@ export function TeamGameplayPage() {
 
   const { state, status } = useGameChannel(gameCode);
   const buzzer = useBuzzer(gameCode, stored?.id ?? "", state);
+  const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
+  const prevScoreRef = useRef<number | null>(null);
+  const eventSeqRef = useRef(0);
 
   useEffect(() => {
     if (state) setHydratedOnce(true);
   }, [state]);
+
+  // Diff our team's score across renders. First hydrate just snapshots the
+  // baseline; subsequent changes emit a single "+N / -N" pill.
+  useEffect(() => {
+    if (!state || !stored) return;
+    const me = state.teams.get(stored.id);
+    if (!me) return;
+    const prev = prevScoreRef.current;
+    if (prev !== null && me.score !== prev) {
+      eventSeqRef.current += 1;
+      const id = `${stored.id}-${eventSeqRef.current}`;
+      setPointEvents((current) => [...current, { id, delta: me.score - prev }]);
+    }
+    prevScoreRef.current = me.score;
+  }, [state, stored]);
 
   // Tick every second so the round timer re-renders.
   useEffect(() => {
@@ -102,6 +126,18 @@ export function TeamGameplayPage() {
 
   return (
     <main className={styles.shell}>
+      <div className={styles.pointStack} aria-live="polite">
+        {pointEvents.map((ev) => (
+          <PointChange
+            key={ev.id}
+            teamName={stored.name}
+            delta={ev.delta}
+            onDone={() =>
+              setPointEvents((current) => current.filter((existing) => existing.id !== ev.id))
+            }
+          />
+        ))}
+      </div>
       <header className={styles.header}>
         <div className={styles.identity}>
           <span className={styles.teamName}>{stored.name}</span>
