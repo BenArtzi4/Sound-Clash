@@ -32,6 +32,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
       - name: Install backend deps
         working-directory: backend
         run: pip install -e ".[dev]"
@@ -53,20 +57,38 @@ jobs:
           npm install
           npx playwright install --with-deps chromium
 
+      # The e2e runs against a throw-away local Supabase stack (db + PostgREST +
+      # Realtime + Auth), spun up fresh per run -- no shared hosted "preview"
+      # project, no secrets. config.toml disables the services we don't use
+      # (Studio, Storage, Edge Runtime, Analytics, Inbucket) to keep startup
+      # fast and avoid flaky containers.
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Apply migrations + song seed
+        run: |
+          set -euo pipefail
+          DB_URL="$(supabase status -o env | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
+          ./db/migrate.sh "$DB_URL"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f db/seed/songs.sql
+
+      - name: Export Supabase env for the e2e
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "VITE_SUPABASE_URL=$API_URL"
+            echo "VITE_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "VITE_API_URL=http://localhost:8000"
+            echo "API_URL=http://localhost:8000"
+            echo "ADMIN_PASSWORD=ci-e2e-admin"
+          } >> "$GITHUB_ENV"
+
       - name: Run E2E (chromium)
         working-directory: tests/e2e
-        env:
-          # Backend reads these to talk to the preview Supabase project.
-          SUPABASE_URL: ${{ secrets.SUPABASE_PREVIEW_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_PREVIEW_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_PREVIEW_SERVICE_ROLE_KEY }}
-          ADMIN_PASSWORD: ${{ secrets.PREVIEW_ADMIN_PASSWORD }}
-          # Frontend (Vite) reads these.
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_PREVIEW_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_PREVIEW_ANON_KEY }}
-          VITE_API_URL: http://localhost:8000
-          # Spec helpers reuse the backend URL.
-          API_URL: http://localhost:8000
         run: npx playwright test --project=chromium
 
       - name: Upload report
@@ -76,6 +98,10 @@ jobs:
           name: playwright-report
           path: tests/e2e/playwright-report/
           retention-days: 14
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup || true
 
   buzz_race_stress:
     # Heavy stress test (race test 100 consecutive runs).
