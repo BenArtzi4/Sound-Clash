@@ -5,8 +5,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  width: min(80vw, 360px);
-  height: min(80vw, 360px);
+  width: min(86vw, 400px);
+  height: min(86vw, 400px);
   border-radius: 50%;
   border: none;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -145,21 +145,21 @@
 
 @media (max-width: 768px) {
   .button {
-    width: min(85vw, 320px);
-    height: min(85vw, 320px);
+    width: min(94vw, 420px);
+    height: min(94vw, 420px);
   }
 }
 
 @media (max-width: 480px) {
   .button {
-    width: min(90vw, 280px);
-    height: min(90vw, 280px);
+    width: min(94vw, 380px);
+    height: min(94vw, 380px);
   }
 }
 
 @media (min-width: 1200px) {
   .button {
-    width: 420px;
-    height: 420px;
+    width: 460px;
+    height: 460px;
   }
 }

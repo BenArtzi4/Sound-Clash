@@ -167,9 +167,10 @@ export function ManagerConsolePage() {
     }
   }
 
-  // Wrong is a one-click verdict: it fires award_attempt with wrong_buzz=true
-  // and re-arms the buzzers. Per game-rules.md §4, if a correct answer was
-  // already scored this round, the SQL function waives the -3 penalty.
+  // Wrong is a one-click verdict: it fires award_attempt with wrong_buzz=true,
+  // re-arms the buzzers, and resumes the song immediately (no separate
+  // "Continue round" press needed). Per game-rules.md §4, if a correct answer
+  // was already scored this round, the SQL function waives the -3 penalty.
   async function handleWrong() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
@@ -180,6 +181,7 @@ export function ManagerConsolePage() {
         artist_correct: false,
         wrong_buzz: true,
       });
+      playerRef.current?.play();
     } catch (err) {
       reportError(err);
     } finally {

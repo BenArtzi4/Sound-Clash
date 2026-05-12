@@ -2,15 +2,17 @@
 
 User requirement: when a manager selects two or more genres, the round-by-round
 sequence should mix them throughout the game; not play "all rock, then all
-pop." The picker uses ``secrets.randbelow`` over the union of candidate songs,
-so genre-blind uniform sampling is the implementation. This test guards against
-a future refactor that re-introduces per-genre batching (e.g., grouping by
-genre_id and walking groups round-robin or sequentially).
+pop." The picker (``app.services.song_picker``) draws a random *eligible* genre
+first and then a random unplayed song within it — equal genre weighting, so a
+large genre can't drown out a small one and the sequence interleaves. This test
+guards against a future refactor that re-introduces per-genre batching (e.g.,
+grouping by genre_id and walking groups round-robin or sequentially).
 
-Statistical reasoning: with 50 rock + 50 pop songs, a uniform random shuffle
-produces ~50 expected genre transitions. A perfectly batched sequence has
-exactly 1. Any reasonable threshold > a handful catches batching with
-overwhelming probability while staying robust against actual randomness.
+Statistical reasoning: with 50 rock + 50 pop songs and a 50/50 genre draw, the
+sequence behaves like a uniform random shuffle (~50 expected genre transitions).
+A perfectly batched sequence has exactly 1. Any reasonable threshold > a handful
+catches batching with overwhelming probability while staying robust against
+actual randomness.
 """
 
 from __future__ import annotations
@@ -65,25 +67,29 @@ async def test_two_genres_are_interleaved_across_picks(client, db) -> None:
     assert sequence.count("pop") == SONGS_PER_GENRE
 
     # 1) Both genres must appear in the first quarter: the game shouldn't open
-    #    with a single-genre run. Probability of all-one-genre across 25 picks
-    #    from 50/50 pool is C(50,25)/C(100,25) ≈ 5e-15, effectively zero.
+    #    with a single-genre run. With a 50/50 genre draw the first 25 picks
+    #    are 25 fair coin flips, so P(monogenre) = 2 * 2^-25 ≈ 6e-8.
     first_quarter = set(sequence[: TOTAL // 4])
     assert first_quarter == {"rock", "pop"}, (
         f"first 25 picks were single-genre: {sequence[: TOTAL // 4]}"
     )
 
-    # 2) Both genres must appear in the LAST quarter: guards against the
-    #    inverse failure (last block monogenre).
-    last_quarter = set(sequence[-(TOTAL // 4) :])
-    assert last_quarter == {"rock", "pop"}, (
-        f"last 25 picks were single-genre: {sequence[-(TOTAL // 4) :]}"
+    # 2) Both genres must appear in the LAST HALF: guards against the inverse
+    #    failure (a long tail block). A genuine monogenre tail only happens
+    #    once one bucket is exhausted; with 50 songs each that can't happen
+    #    before pick 51 unless the first 50 picks were all one genre
+    #    (P ≈ 2^-49). We use the half rather than the quarter because, unlike a
+    #    uniform shuffle of the whole catalog, an equal-genre draw legitimately
+    #    leaves a short monogenre tail (~10-20 picks) when one genre runs out.
+    last_half = set(sequence[TOTAL // 2 :])
+    assert last_half == {"rock", "pop"}, (
+        f"last {TOTAL - TOTAL // 2} picks were single-genre: {sequence[TOTAL // 2 :]}"
     )
 
     # 3) Genre transitions must exceed a low bound. A monotone batched sequence
-    #    has exactly 1 transition; the expected value for a uniform random
-    #    shuffle of 50/50 is ~50. The bound here is loose enough that random
-    #    sampling never trips it but any per-genre batching does.
-    # zip without strict: the two iterables differ in length by 1 by design.
+    #    has exactly 1 transition; an equal-genre draw averages ~50 (one per
+    #    fair coin flip). The bound here is loose enough that random sampling
+    #    never trips it but any per-genre batching does.
     transitions = sum(1 for a, b in zip(sequence[:-1], sequence[1:], strict=True) if a != b)
     assert transitions >= 15, (
         f"only {transitions} genre transitions across {TOTAL} picks; "
