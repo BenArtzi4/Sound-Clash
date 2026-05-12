@@ -15,6 +15,9 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-12: When the host marks a Correct Song / Correct Artist, the buzzed team keeps control of the round for the other token (as before) **and** its 10-second answer countdown restarts — so the team that got one half right gets a fresh window to also guess the missing half.
+- 2026-05-12: The manager's Wrong button now also resumes the song immediately (in addition to re-arming the buzzers) — no separate Continue round press needed to un-pause playback.
+- 2026-05-12: The BUZZ button on the team (player) screen is bigger — it now fills most of a phone screen.
 - 2026-05-10: Manager Correct Song / Correct Artist buttons now apply their score the moment they're clicked — no second Continue press needed. The buzz lock stays held on the answering team until the manager presses Continue (which also resumes the song) or Wrong (which immediately re-arms the buzzers).
 - 2026-05-10: Team-page score pill no longer prefixes the team name. A player on their own phone now sees just `+10` / `-3` instead of `<team-name> +10`. The shared display screen still shows the team name in its score pill since multiple deltas can stack there.
 - 2026-05-10: Display screen waiting view (QR code + team list) is bigger on desktop — larger QR, taller team rows, larger scores — so a TV-mounted display is readable from across the room.
@@ -36,6 +39,8 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-05-12: Song selection now mixes the selected genres evenly. Each round picks a random genre among those chosen, then a random unplayed song within it, so a game with several genres no longer front-loads whichever genre happens to have the most songs in the catalog.
+- 2026-05-12: The host's Correct Song / Correct Artist buttons no longer go inactive a moment after a click — the answering team keeps control of the round for the other token until the host presses Continue round or Wrong.
 - 2026-05-10: Manager YouTube player no longer overlays a black "Ready" splash when a team buzzes. The cover that hides the iframe still appears (so YouTube's pause-state "more videos" tiles can't leak song titles), but it stays empty rather than re-using the pre-load loading text.
 - 2026-05-10: Quieter YouTube embed; switched to youtube-nocookie host to stop ad-tracking CORS errors (and reduce the IFrame API's postMessage warm-up warning) in the browser console while a game runs.
 - 2026-05-09: When a team buzzes, the manager's YouTube player no longer flashes the paused-state "more videos" tiles (which can include other songs in the same artist's channel and spoil future rounds). A blank cover stays on top of the iframe whenever a buzz is being scored.

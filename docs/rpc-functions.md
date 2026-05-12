@@ -2,7 +2,7 @@
 
 The eight PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), and `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), and `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token).
 
 ## 0. Conventions
 
@@ -216,7 +216,7 @@ Behavior:
 - `p_wrong_buzz > 0 AND (p_title > 0 OR p_artist > 0)` → raises `P0001 wrong_buzz_with_correct`.
 - `p_title > 0` while `title_claimed_by` is already set → raises `P0001 title_already_claimed`. Same shape for `artist_already_claimed`.
 - On success: applies score delta to the buzzed team, marks `title_claimed_by` / `artist_claimed_by` if applicable, and inserts a `game_round_attempts` row.
-- **Buzz-lock handling** (migration 018): only the wrong-buzz path clears `active_games.buzzed_team_id` and `locked_at`. A correct `title` or `artist` attempt leaves the lock in place — the answering team retains the floor for the other token until the manager presses Continue (`release_buzz_lock`) or Wrong, or until `start_round` defensively clears the lock for the next song. Before 018 the lock was always cleared regardless of outcome.
+- **Buzz-lock handling** (migration 018, refined by migration 019): only the wrong-buzz path clears `active_games.buzzed_team_id` and `locked_at`. A correct `title` / `artist` / `title_artist` attempt leaves `buzzed_team_id` in place — the answering team retains the floor for the other token until the manager presses Continue (`release_buzz_lock`) or Wrong, or until `start_round` defensively clears the lock for the next song — but it **refreshes `locked_at = now()`** so the clients' answer countdown restarts for the remaining token (migration 019). The no-op continue case (no toggles, no `wrong_buzz`) leaves the lock untouched. Before 018 the lock was always cleared regardless of outcome.
 - **Free-guess flag** (`game_rounds.free_guess_active`, migration 017): if `p_wrong_buzz > 0` AND `free_guess_active = true`, the penalty is waived (`points_delta = 0`); the attempt is still recorded with `outcome = 'wrong'`. After processing, the function sets `free_guess_active = true` if the outcome was correct (`title` / `artist` / `title_artist`) and `false` otherwise. So the flag is consumed by every attempt and re-armed by every correct one.
 
 ### Error semantics

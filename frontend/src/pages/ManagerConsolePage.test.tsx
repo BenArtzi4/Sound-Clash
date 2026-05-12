@@ -331,7 +331,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText(/rpc exploded/i)).toBeInTheDocument());
   });
 
-  it("Wrong button auto-fires awardAttempt with wrong_buzz=true (no Continue press)", async () => {
+  it("Wrong button auto-fires awardAttempt with wrong_buzz=true and resumes the player", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -362,6 +362,28 @@ describe("ManagerConsolePage", () => {
         wrong_buzz: true,
       }),
     );
+    // Wrong re-arms the buzzers AND resumes the song -- no separate Continue press.
+    await waitFor(() => expect(lastHandle?.play).toHaveBeenCalled());
+  });
+
+  it("Wrong does not resume the player when awardAttempt fails", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttempt).mockRejectedValueOnce(new Error("rpc down"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-wrong"));
+    await waitFor(() => expect(screen.getByText(/rpc down/i)).toBeInTheDocument());
+    expect(lastHandle?.play).not.toHaveBeenCalled();
   });
 
   it("Next round with a held buzz ends the round and selects a new song (no auto-score)", async () => {

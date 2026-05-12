@@ -76,9 +76,9 @@ Each round is one song. The song carries **two independent claim tokens — TITL
 1. **Round starts**: manager picks (or system random-picks) a song; `start_round` RPC defensively closes any prior open round, then clears buzz state and assigns `current_song_id`.
 2. **Song plays**: manager controls YouTube IFrame Player.
 3. **Buzz**: a team calls `buzz_in` RPC; the first one to satisfy `buzzed_team_id IS NULL` wins. `locked_at` is the server timestamp.
-4. **Evaluation**: manager judges the verbal answer and toggles `Correct Song` / `Correct Artist` / `Wrong` in the console.
-5. **Continue Round**: manager presses "Continue round". `award_attempt` RPC scores the buzz (claiming a token if correct, deducting if wrong), clears the buzz lock, and **leaves the round open**. Other teams (or the same team) can buzz again immediately.
-6. **Next Round**: manager presses "Next round". If a buzz is held with toggles set, `award_attempt` runs first. Then `end_round` closes the current round and `start_round` advances to the next song. Any unclaimed tokens are abandoned (no penalty).
+4. **Evaluation**: manager judges the verbal answer. Each verdict button — `Correct Song` (+10), `Correct Artist` (+5), `Wrong` (−3) — fires `award_attempt` **immediately on click**; the score commits the moment the manager clicks. A correct verdict keeps the buzzing team on the floor for the other token and refreshes its 10-second answer countdown (migration 019); a Wrong verdict re-arms the buzzers and resumes the song.
+5. **Continue Round**: manager presses "Continue round" to re-open buzzes after a correct verdict — `release_buzz_lock` clears the buzz lock and the song resumes, **leaving the round open**. Other teams (or the same team) can buzz again immediately. No scoring happens here.
+6. **Next Round**: manager presses "Next round". (Any held buzz should be scored first via the verdict buttons; Next Round does not auto-score.) `end_round` closes the current round and `start_round` advances to the next song. Any unclaimed tokens are abandoned (no penalty).
 
 ### Token claim rules
 
@@ -114,9 +114,10 @@ Scores are integers; ties are allowed. The team with the highest score at game e
 
 - `Correct Song` and `Correct Artist` are **accumulating toggles** within a single buzz: the host may select either, both, or neither (which is treated as a no-score; the API rejects an attempt with no flags set).
 - `Wrong` is **mutually exclusive** with the two correct toggles, both in the UI and in the SQL function (`P0001 wrong_buzz_with_correct`).
-- `Continue Round` calls `award_attempt`: scores the current buzz (Title and/or Artist toggles), clears the lock, leaves the round open. Disabled when no buzz is held, both tokens are claimed, or no toggle is selected.
-- `Wrong` is its own one-click action: it fires `award_attempt` immediately with `wrong_buzz=true` (no Continue Round press needed), re-arms the buzzers, and may waive the −3 per the free-guess rule above.
-- `Next Round` advances to the next song. If a buzz is held with toggles set, it scores first via `award_attempt`. Then `end_round` closes the current round and `start_round` advances.
+- `Correct Song` / `Correct Artist` each fire `award_attempt` immediately on click. The buzzing team keeps the floor for the other token (its answer countdown restarts) until the manager presses `Continue Round` or `Wrong`. Disabled when no buzz is held; the matching toggle also greys out once that token is claimed.
+- `Continue Round` calls `release_buzz_lock` (no scoring): it clears the buzz lock and resumes the song, leaving the round open. Disabled when no buzz is held.
+- `Wrong` is its own one-click action: it fires `award_attempt` immediately with `wrong_buzz=true` (no Continue Round press needed), re-arms the buzzers, resumes the song, and may waive the −3 per the free-guess rule above.
+- `Next Round` advances to the next song: `end_round` closes the current round and `start_round` advances. It does not auto-score a held buzz — the manager should use the verdict buttons first.
 - Negative team scores are allowed.
 - The manager cannot retroactively change a previous round's score in MVP. (Future: an "edit last round" undo flow.)
 
@@ -142,7 +143,7 @@ A separate manager action, independent of round and buzz state.
 
 - Only one team can hold the lock at a time. The atomic guarantee is in the `buzz_in` PL/pgSQL function (see `rpc-functions.md`).
 - The buzz button is enabled only while `active_games.status = 'playing'` AND `buzzed_team_id IS NULL`.
-- After lock, the button is disabled for ALL teams until the manager presses "Continue round" or "Next round" (which clears the lock via `award_attempt` / `end_round`).
+- After lock, the button is disabled for ALL teams until the manager presses "Wrong" (`award_attempt` with `wrong_buzz`), "Continue round" (`release_buzz_lock`), or "Next round" (`end_round` / `start_round`) — any of which clears `buzzed_team_id`. A Correct Song / Correct Artist verdict keeps the lock on the buzzing team (so they get the other token) and only refreshes `locked_at`.
 - A team that buzzed wrong (or correct) on the current song is **not** locked out for the remainder of the round; the buzzer re-arms for everyone, including them. The only constraint is that an already-claimed token cannot be re-claimed by anyone.
 - The `locked_at` timestamp is server-authoritative. Clients display "X locked it" with no client-side ordering logic.
 - Rejected buzz attempts (lock already held) get a quiet UI signal; no error toast, just disabled state.
@@ -172,8 +173,8 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 ### Answer-evaluation window
 
-- After buzz lock, the manager has unbounded time to listen and evaluate. No server timeout.
-- (Future: optional 10-second answer countdown for tournament mode; out of MVP.)
+- After buzz lock, the team + display pages show a **10-second answer countdown** derived purely from `active_games.locked_at` (`ANSWER_DURATION_SEC` in the frontend). It is informational/cosmetic — the **server never auto-timeouts**; the manager has unbounded time to listen and evaluate, and nothing happens when the countdown hits zero.
+- The countdown **restarts** when the manager marks a Correct Song / Correct Artist: `award_attempt` keeps the same team on the floor for the other token but sets `locked_at = now()` (migration 019), so the floor-holding team gets a fresh 10 seconds for the remaining half. A Wrong clears the lock (countdown disappears until the next buzz); Continue Round clears the lock too.
 
 ## 10. Game Expiration & TTL
 

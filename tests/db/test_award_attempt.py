@@ -409,6 +409,76 @@ async def test_award_attempt_wrong_clears_lock(db: asyncpg.Connection) -> None:
     assert locked is None
 
 
+# ----- migration 019: refresh locked_at on a correct attempt -----------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "title_pts, artist_pts",
+    [(10, 0), (0, 5), (10, 5)],
+    ids=["title", "artist", "both"],
+)
+async def test_award_attempt_correct_refreshes_locked_at(
+    db: asyncpg.Connection, title_pts: int, artist_pts: int
+) -> None:
+    """A correct attempt keeps the buzzing team on the floor but bumps
+    locked_at so the clients' answer countdown restarts for the other token."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    # Make locked_at stale so the refresh is observable.
+    await db.execute(
+        "UPDATE active_games SET locked_at = now() - interval '30 seconds' "
+        "WHERE game_code = $1",
+        game_code,
+    )
+
+    await db.execute(
+        "SELECT award_attempt($1, $2, $3, $4, 0)",
+        game_code,
+        round_id,
+        title_pts,
+        artist_pts,
+    )
+
+    row = await db.fetchrow(
+        "SELECT buzzed_team_id, locked_at, "
+        "locked_at >= now() - interval '5 seconds' AS fresh "
+        "FROM active_games WHERE game_code = $1",
+        game_code,
+    )
+    assert row["buzzed_team_id"] == team_id  # same team keeps the floor
+    assert row["locked_at"] is not None
+    assert row["fresh"] is True              # locked_at was refreshed to ~now()
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_noop_continue_leaves_lock_untouched(
+    db: asyncpg.Connection,
+) -> None:
+    """A no-toggle, no-wrong call neither clears nor refreshes the lock."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    await db.execute(
+        "UPDATE active_games SET locked_at = now() - interval '30 seconds' "
+        "WHERE game_code = $1",
+        game_code,
+    )
+    await db.execute("SELECT award_attempt($1, $2, 0, 0, 0)", game_code, round_id)
+
+    row = await db.fetchrow(
+        "SELECT buzzed_team_id, "
+        "locked_at < now() - interval '20 seconds' AS still_stale "
+        "FROM active_games WHERE game_code = $1",
+        game_code,
+    )
+    assert row["buzzed_team_id"] == team_id
+    assert row["still_stale"] is True
+
+
 @pytest.mark.asyncio
 async def test_release_buzz_lock_clears_held_buzz(db: asyncpg.Connection) -> None:
     """release_buzz_lock is the explicit unlock path used by POST /continue."""
