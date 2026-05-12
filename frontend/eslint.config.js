@@ -57,6 +57,13 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      // react-hooks v7 ships a new `set-state-in-effect` rule in its
+      // recommended preset. It flags a handful of intentional
+      // setState-inside-useEffect spots (hydration flags, audio cues,
+      // server-clock ticks) that aren't bugs. Off for now; revisit as a
+      // dedicated cleanup if we want to chase the React "you might not need
+      // an effect" guidance.
+      "react-hooks/set-state-in-effect": "off",
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
