@@ -401,11 +401,6 @@
   color: #92400e;
 }
 
-.scoreRow[aria-disabled="true"] .scoreBtn {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .bonusPicker {
   display: flex;
   flex-direction: column;

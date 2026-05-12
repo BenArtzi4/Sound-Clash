@@ -12,6 +12,16 @@ import { observeServerTime } from "./useServerTime";
 
 export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting" | "gone";
 
+// Backstop re-fetch interval. Supabase Realtime over WebSocket occasionally
+// drops a postgres_changes event (flaky networks, a missed heartbeat that
+// silently re-joins, the free tier under load) — and a missed "a team buzzed"
+// event would strand the manager with greyed-out scoring buttons until the
+// next state change. So every few seconds we re-hydrate from the tables; the
+// reducer's HYDRATE fully replaces state, so this is a cheap, idempotent
+// catch-up. Short enough that any miss self-heals well inside a user (or test)
+// wait, infrequent enough to be negligible load.
+const RESYNC_INTERVAL_MS = 7_000;
+
 export function gameReducer(state: GameState | null, action: GameAction): GameState | null {
   switch (action.type) {
     case "HYDRATE": {
@@ -151,6 +161,12 @@ export function useGameChannel(gameCode: string): {
         }
       });
 
+    // Periodic catch-up in case a Realtime event was dropped (see comment on
+    // RESYNC_INTERVAL_MS). Idempotent — HYDRATE replaces state wholesale.
+    const resyncId = window.setInterval(() => {
+      if (!cancelled) void hydrate();
+    }, RESYNC_INTERVAL_MS);
+
     async function hydrate() {
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
@@ -188,6 +204,7 @@ export function useGameChannel(gameCode: string): {
 
     return () => {
       cancelled = true;
+      window.clearInterval(resyncId);
       void supabase.removeChannel(
         channel as unknown as Parameters<typeof supabase.removeChannel>[0],
       );
