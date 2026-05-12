@@ -70,6 +70,10 @@ This project does not currently cut versioned releases; every change lands direc
 - 2026-05-09: Removed the per-team "Kick" button from the manager console. To get rid of a team, the host can end the game and start a fresh one.
 - 2026-05-07: Removed the "Rounds" picker from the Create-Game form. Games now run for as many rounds as the host wants and end only when the host clicks "End game"; round counters across the team page, display, and manager console show "Round N" without a denominator.
 
+### Security
+
+- 2026-05-12: Hardened the database so the host-only round actions (scoring a buzz, awarding a bonus, starting/ending a round, ending the game) can only be performed through the backend's manager-token gate — they can no longer be invoked directly with the public anon key. (`buzz_in`, the team buzzer, is unchanged.)
+
 ## 2026-05-07: Phase 7 cutover
 
 `https://soundclash.org` cut over from the legacy AWS stack to the new free-tier Supabase + Render + Cloudflare Pages stack. AWS resources torn down; bill drops to $0/month. See `docs/roadmap.md` §7.
