@@ -13,7 +13,7 @@ Every interaction with Postgres happens as one of two principals:
 | **anon** | Supabase anon key (public) | Whatever RLS allows | Browser |
 | **service_role** | Supabase service-role key (secret) | Bypass RLS; everything | FastAPI on Render |
 
-There are no other roles in MVP. No `authenticated`, no per-user scoping, no JWTs from Supabase Auth. This is by design (matches today's behavior: anonymous teams + per-game manager tokens for hosts + a single admin password for the durable song catalog).
+There are no other application principals in MVP. No per-user scoping, no JWTs from Supabase Auth. This is by design (matches today's behavior: anonymous teams + per-game manager tokens for hosts + a single admin password for the durable song catalog). The `authenticated` role exists on hosted Supabase but nothing connects as it; migration 020 still revokes EXECUTE from it on the backend-only RPCs purely defensively.
 
 The anon key ships in the frontend bundle; it's not a secret. RLS policies prevent it from being abused.
 
@@ -47,10 +47,14 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 |---|---|---|
 | `buzz_in`               | ✅ | ✅ |
 | `start_round`           | ❌ | ✅ |
-| `award_points`          | ❌ | ✅ |
+| `award_attempt`         | ❌ | ✅ |
+| `end_round`             | ❌ | ✅ |
 | `award_bonus`           | ❌ | ✅ |
+| `release_buzz_lock`     | ❌ | ✅ |
 | `end_game`              | ❌ | ✅ |
-| `cleanup_expired_games` | ❌ | ✅ |
+| `cleanup_expired_games` | ❌ | ✅ (called by `pg_cron`, not FastAPI) |
+
+Only `buzz_in` is reachable from the browser. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working.
 
 ### Why anon can SELECT any game
 
@@ -79,10 +83,18 @@ No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all write
 ### Function grants
 
 ```sql
+-- buzz_in: the only browser-callable RPC.
 REVOKE ALL ON FUNCTION buzz_in(char, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
 
--- All other functions: no GRANT to anon. Only service_role can call.
+-- Backend-only RPCs: the creating migrations REVOKE FROM PUBLIC; migration 020
+-- additionally revokes the direct anon/authenticated grants that hosted
+-- Supabase adds, and re-asserts the grant for service_role.
+--   start_round, end_round, award_attempt, award_bonus, release_buzz_lock,
+--   end_game, cleanup_expired_games  (+ award_points if still present)
+-- e.g.:
+REVOKE EXECUTE ON FUNCTION award_attempt(text, uuid, integer, integer, integer) FROM anon, authenticated;
+GRANT  EXECUTE ON FUNCTION award_attempt(text, uuid, integer, integer, integer) TO service_role;
 ```
 
 ## 3. Realtime Subscriptions
