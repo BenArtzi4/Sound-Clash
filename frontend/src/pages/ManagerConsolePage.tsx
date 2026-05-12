@@ -317,9 +317,12 @@ export function ManagerConsolePage() {
   const titleActionDisabled = busy || !lockedTeam || titleClaimedById != null;
   const artistActionDisabled = busy || !lockedTeam || artistClaimedById != null;
   const wrongActionDisabled = busy || !lockedTeam;
-  const scoringDisabled = busy || !lockedTeam;
   const continueDisabled = busy || !lockedTeam;
   const nextRoundDisabled = busy || !player.ready;
+  // Bonus is independent of buzz state — it stays actionable as long as the
+  // page isn't mid-request. (It must NOT be wrapped in an aria-disabled
+  // group, or screen readers + Playwright's toBeEnabled() treat it as
+  // disabled whenever no team has buzzed.)
   const bonusDisabled = busy;
   const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
 
@@ -399,7 +402,7 @@ export function ManagerConsolePage() {
             </div>
           ) : null}
 
-          <div className={styles.scoreRow} aria-disabled={scoringDisabled}>
+          <div className={styles.scoreRow}>
             <button
               type="button"
               className={`${styles.scoreBtn} ${styles.scorePositive}`}
