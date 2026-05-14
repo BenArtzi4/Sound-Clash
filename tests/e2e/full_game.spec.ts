@@ -30,12 +30,17 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
 
   let runningTotal = 0;
 
+  // Bootstrap: kick off round 1. Subsequent rounds are advanced by the
+  // previous iteration's `awardAndAdvance` (which also clicks start-round),
+  // so the loop body must NOT click start-round again -- doing so would
+  // race the busy-flag and either be silently dropped or over-advance the
+  // round (eventually exhausting the song pool with a 409 on select-song).
+  await expect(manager.page.getByTestId("start-round")).toBeEnabled();
+  await manager.page.getByTestId("start-round").click();
+
   for (let i = 0; i < rounds.length; i++) {
     const r = rounds[i]!;
     const roundNum = i + 1;
-
-    await expect(manager.page.getByTestId("start-round")).toBeEnabled();
-    await manager.page.getByTestId("start-round").click();
 
     await expect(
       manager.page.getByText(new RegExp(`Round ${roundNum}$`, "i")),
@@ -43,8 +48,8 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
 
     await buzzAndExpectWinner(team);
 
-    // Toggle the scoring bits and press Next round (which scores + closes
-    // + advances in one action).
+    // Toggle the scoring bits and press Next round (which scores the buzz
+    // and advances to the next song in one action).
     await awardAndAdvance(manager.page, { title: r.title, artist: r.artist });
 
     runningTotal += r.expected;
