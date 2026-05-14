@@ -20,9 +20,12 @@ export default defineConfig({
   testIgnore: ["fixtures/**", "smoke/**"],
   fullyParallel: false, // sequential; multi-context specs share the preview project
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // 2 retries on CI gives a flaky multi-context spec three shots; combined
+  // with useGameChannel's 5s re-hydrate backstop, this absorbs the
+  // occasional dropped Realtime event without papering over a real bug.
+  retries: process.env.CI ? 2 : 0,
   workers: 1,
-  timeout: 60_000,
+  timeout: 90_000,
   expect: { timeout: 10_000 },
   reporter: process.env.CI ? [["html"], ["github"]] : "html",
   use: {

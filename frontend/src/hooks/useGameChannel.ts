@@ -20,7 +20,7 @@ export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting
 // reducer's HYDRATE fully replaces state, so this is a cheap, idempotent
 // catch-up. Short enough that any miss self-heals well inside a user (or test)
 // wait, infrequent enough to be negligible load.
-const RESYNC_INTERVAL_MS = 7_000;
+const RESYNC_INTERVAL_MS = 5_000;
 
 export function gameReducer(state: GameState | null, action: GameAction): GameState | null {
   switch (action.type) {
