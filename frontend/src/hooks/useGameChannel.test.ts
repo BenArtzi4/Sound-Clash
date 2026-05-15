@@ -524,6 +524,28 @@ describe("useGameChannel - subscription", () => {
     });
   });
 
+  it("re-runs hydrate every RESYNC_INTERVAL_MS as a Realtime backstop", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const game = makeActiveGame();
+      setHydrate({ game, teams: [], rounds: [] });
+      renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const callsAfterInit = supabaseMock.from.mock.calls.length;
+      // Tick past one resync interval (20s); the inner setInterval callback
+      // should fire and run hydrate() once.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_500);
+      });
+      // Each hydrate hits the three ephemeral tables.
+      expect(supabaseMock.from.mock.calls.length).toBe(callsAfterInit + 3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("triggers an immediate hydrate when the tab becomes visible again", async () => {
     const game = makeActiveGame();
     setHydrate({ game, teams: [], rounds: [] });
