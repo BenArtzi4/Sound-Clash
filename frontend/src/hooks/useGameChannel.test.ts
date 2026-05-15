@@ -192,10 +192,7 @@ describe("gameReducer", () => {
       type: "HYDRATE",
       game,
       teams: [],
-      rounds: [
-        makeRound({ id: "r1", round_number: 1 }),
-        makeRound({ id: "r2", round_number: 2 }),
-      ],
+      rounds: [makeRound({ id: "r1", round_number: 1 }), makeRound({ id: "r2", round_number: 2 })],
     });
     expect(next).not.toBe(start);
   });
