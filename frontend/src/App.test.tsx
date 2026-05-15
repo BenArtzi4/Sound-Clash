@@ -28,9 +28,7 @@ describe("App router", () => {
     render(<App />);
     // ManagerCreateGamePage is lazy-loaded; findByRole waits for the chunk
     // to settle before asserting.
-    expect(
-      await screen.findByRole("heading", { name: /host a game/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /host a game/i })).toBeInTheDocument();
   });
 
   it("redirects unknown paths home", () => {
