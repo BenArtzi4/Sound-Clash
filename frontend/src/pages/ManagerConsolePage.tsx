@@ -43,9 +43,12 @@ export function ManagerConsolePage() {
 
   // After a manager-tab refresh mid-round, currentSong is null but the round
   // row still has a song_id. Resolve it and push it into the player so the
-  // host doesn't have to abandon the round and click Next round. We cue (not
-  // load) so the song doesn't blast at full volume the moment the page
-  // reloads; the host resumes with "Continue round", which calls play().
+  // host doesn't have to abandon the round and click Next round. Must stay
+  // loadVideoById (not cueVideoById): on the happy path the Realtime INSERT
+  // for the new round arrives before selectSong's HTTP response, so this
+  // effect races with handleNextRound's loadVideoById. Calling cue while load
+  // is in flight (or vice-versa) puts YT.Player into an inconsistent state and
+  // surfaces as the "Video unavailable" onError overlay.
   const currentRoundSongId = state?.currentRound?.song_id ?? null;
   const playerReady = player.ready;
   useEffect(() => {
@@ -62,7 +65,7 @@ export function ManagerConsolePage() {
       const song = data as Song;
       setCurrentSong(song);
       if (playerReady) {
-        playerRef.current?.cueVideoById(song.youtube_id, song.start_time);
+        playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
       } else {
         player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
       }
