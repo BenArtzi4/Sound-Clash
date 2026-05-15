@@ -52,7 +52,7 @@ export function HomePage() {
                   <TeamIcon />
                 </span>
                 <span className={styles.roleContent}>
-                  <span className={styles.roleTitle}>Join as Team</span>
+                  <span className={styles.roleTitle}>Join a game</span>
                   <span className={styles.roleSubtitle}>Play on your phone</span>
                 </span>
               </Link>
@@ -62,7 +62,7 @@ export function HomePage() {
                   <DisplayIcon />
                 </span>
                 <span className={styles.roleContent}>
-                  <span className={styles.roleTitle}>Display Screen</span>
+                  <span className={styles.roleTitle}>Display screen</span>
                   <span className={styles.roleSubtitle}>Show scoreboard</span>
                 </span>
               </Link>
