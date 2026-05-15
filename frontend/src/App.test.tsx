@@ -23,10 +23,14 @@ describe("App router", () => {
     expect(screen.getByRole("heading", { name: /welcome to sound clash/i })).toBeInTheDocument();
   });
 
-  it("renders /manager/create publicly (no password prompt)", () => {
+  it("renders /manager/create publicly (no password prompt)", async () => {
     window.history.pushState({}, "", "/manager/create");
     render(<App />);
-    expect(screen.getByRole("heading", { name: /host a game/i })).toBeInTheDocument();
+    // ManagerCreateGamePage is lazy-loaded; findByRole waits for the chunk
+    // to settle before asserting.
+    expect(
+      await screen.findByRole("heading", { name: /host a game/i }),
+    ).toBeInTheDocument();
   });
 
   it("redirects unknown paths home", () => {

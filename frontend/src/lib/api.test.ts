@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  __resetListGenresCacheForTests,
   ApiError,
   awardAttempt,
   awardBonus,
@@ -25,6 +26,7 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
+  __resetListGenresCacheForTests();
 });
 
 afterEach(() => {
@@ -57,6 +59,30 @@ describe("api - public routes", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
     const res = await listGenres();
     expect(res).toHaveLength(1);
+  });
+
+  it("listGenres memoizes the result so a second call does not hit the network", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
+    const first = await listGenres();
+    const second = await listGenres();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+  });
+
+  it("listGenres dedupes concurrent calls (single in-flight request)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
+    const [a, b] = await Promise.all([listGenres(), listGenres()]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(a).toEqual(b);
+  });
+
+  it("listGenres retries after a failed fetch (cache stays empty on error)", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("network down"));
+    await expect(listGenres()).rejects.toThrow(/network down/);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
+    const res = await listGenres();
+    expect(res).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("joinTeam POSTs name to the right URL", async () => {

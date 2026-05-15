@@ -1,9 +1,25 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { DisplayIcon, ManagerIcon, TeamIcon } from "../components/RoleIcons";
+import { getHealth, listGenres } from "../lib/api";
 import styles from "./HomePage.module.css";
 
 export function HomePage() {
+  useEffect(() => {
+    // Pre-warm the Render-hosted backend. Its free-tier container spins down
+    // after ~15 min idle, so the next request (Create / Join / Display)
+    // would otherwise stall the user for 2-30s on cold start. We fire two
+    // throwaway requests in the background:
+    //   1. /health wakes the container.
+    //   2. /genres warms it AND seeds the listGenres cache so the manager's
+    //      "Host a game" form has its options ready when they click through.
+    // Errors are ignored — if pre-warm fails, the user just hits the same
+    // cold start they would have hit before. No worse, often much better.
+    void getHealth().catch(() => undefined);
+    void listGenres().catch(() => undefined);
+  }, []);
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
