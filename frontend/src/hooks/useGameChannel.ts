@@ -16,11 +16,14 @@ export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting
 // drops a postgres_changes event (flaky networks, a missed heartbeat that
 // silently re-joins, the free tier under load) — and a missed "a team buzzed"
 // event would strand the manager with greyed-out scoring buttons until the
-// next state change. So every few seconds we re-hydrate from the tables; the
+// next state change. So every 20 seconds we re-hydrate from the tables; the
 // reducer's HYDRATE fully replaces state, so this is a cheap, idempotent
-// catch-up. Short enough that any miss self-heals well inside a user (or test)
-// wait, infrequent enough to be negligible load.
-const RESYNC_INTERVAL_MS = 5_000;
+// catch-up. 20s is well inside a "huh, the page is stuck" wait while keeping
+// the per-client REST load to ~3 queries / 20s instead of /5s — a 4x reduction
+// in request count for a 10-minute game. Migrations 009/010 fixed the original
+// Realtime-event-loss bugs, so the resync is now a true safety net, not the
+// primary sync path.
+const RESYNC_INTERVAL_MS = 20_000;
 
 export function gameReducer(state: GameState | null, action: GameAction): GameState | null {
   switch (action.type) {
