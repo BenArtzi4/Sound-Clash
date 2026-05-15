@@ -294,14 +294,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         {teams.length === 0 ? (
           <div className={styles.emptyBoard}>
             <p className={styles.emptyBoardTitle}>Waiting for teams</p>
-            <p className={styles.emptyBoardHint}>Scan to join, or enter the code on your phone.</p>
-            <div className={styles.emptyBoardQR}>
-              <QRPanel
-                gameCode={gameCode}
-                joinUrl={`${window.location.origin}/join/${gameCode}`}
-                size={420}
-              />
-            </div>
+            <p className={styles.emptyBoardHint}>Scan the code below or enter it on your phone.</p>
           </div>
         ) : (
           <ol className={styles.bigList}>
@@ -321,6 +314,17 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           </ol>
         )}
       </div>
+
+      {/* Always-visible join footer so a late player can scan after the round
+          has started. (Hidden on the end-game podium via the early-return
+          above when game.status === "ended".) */}
+      <footer className={styles.joinFooter}>
+        <QRPanel
+          gameCode={gameCode}
+          joinUrl={`${window.location.origin}/join/${gameCode}`}
+          size={200}
+        />
+      </footer>
     </main>
   );
 }
