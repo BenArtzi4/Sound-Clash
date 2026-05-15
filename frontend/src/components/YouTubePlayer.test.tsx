@@ -208,6 +208,65 @@ describe("YouTubePlayer", () => {
     expect(lastPlayer?.stopVideo).not.toHaveBeenCalled();
   });
 
+  it("loadVideoById clears a previous onError so the next song doesn't inherit 'Video unavailable'", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container, findByRole, queryByRole } = render(<YouTubePlayer ref={ref} hideOverlay />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    // First song fails: YT fires onError -> cover shows the error.
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 150 });
+    });
+    expect((await findByRole("alert")).textContent).toContain("Video unavailable");
+    // Manager clicks Next round: loadVideoById must reset errorCode so the
+    // next song's load doesn't keep the old error overlay on screen.
+    act(() => {
+      ref.current?.loadVideoById("xxxxxxxxxxx", 0);
+    });
+    expect(queryByRole("alert")).toBeNull();
+  });
+
+  it("noCover prop renders only the iframe with no overlay element", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container, queryByRole, queryByText } = render(<YouTubePlayer ref={ref} noCover />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    // Even after all the events that would normally surface a cover, none
+    // of the cover labels should render in noCover mode.
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 150 });
+    });
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data: 0 });
+    });
+    expect(queryByRole("alert")).toBeNull();
+    expect(queryByText(/video unavailable/i)).toBeNull();
+    expect(queryByText(/song ended/i)).toBeNull();
+    expect(queryByText(/loading player/i)).toBeNull();
+    // The iframe itself is still mounted and the imperative handle still works.
+    expect(container.querySelector("iframe")).not.toBeNull();
+  });
+
+  it("noCover still invokes the onError callback so parents can react", async () => {
+    installFakeYT();
+    const onError = vi.fn();
+    const { container } = render(<YouTubePlayer noCover onError={onError} />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 150 });
+    });
+    expect(onError).toHaveBeenCalledWith(150);
+  });
+
   it("loads the iframe API script when YT is not yet on window", async () => {
     const { container } = render(<YouTubePlayer />);
     await waitFor(() =>

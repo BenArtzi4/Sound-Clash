@@ -350,6 +350,15 @@
   margin-top: 1.25rem;
 }
 
+.joinFooter {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
 .emptyBoardTitle {
   margin: 0;
   font-size: 2rem;

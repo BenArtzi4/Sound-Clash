@@ -222,16 +222,17 @@ export function ManagerConsolePage() {
   }
 
   async function handleBonus(teamId: string, teamName: string) {
-    if (busy || !managerToken) return;
-    setBusy(true);
+    if (!managerToken) return;
+    // Close the picker and toast immediately so the manager's UI feels
+    // instant. The team's new score arrives via Realtime once the backend
+    // commits; we don't gate the picker or other action buttons on the
+    // round-trip. If the API rejects (rare), surface an error toast then.
+    setBonusOpen(false);
+    toast(`+4 bonus to ${teamName}`, { variant: "success" });
     try {
       await awardBonus(gameCode, managerToken, { team_id: teamId });
-      toast(`+4 bonus to ${teamName}`, { variant: "success" });
-      setBonusOpen(false);
     } catch (err) {
       reportError(err);
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -342,24 +343,18 @@ export function ManagerConsolePage() {
         <div className={styles.headerMeta}>
           <span className="muted">Round {game.round_number}</span>
         </div>
-        <div className={styles.headerActions}>
-          <button
-            className="btn btn-danger"
-            onClick={() => setEndConfirmOpen(true)}
-            disabled={busy}
-            data-testid="end-game"
-          >
-            End game
-          </button>
-        </div>
       </header>
 
       <div className={styles.column}>
         <YouTubePlayer
           ref={playerRef}
-          hideOverlay
-          coverWhilePaused={lockedTeam != null}
+          noCover
           onReady={onPlayerReady}
+          onError={() =>
+            toast("Video unavailable — click Next round to pick a different song.", {
+              variant: "error",
+            })
+          }
         />
 
         <section className={styles.card}>
@@ -497,6 +492,17 @@ export function ManagerConsolePage() {
           </div>
         </section>
       </div>
+
+      <footer className={styles.endGameFooter}>
+        <button
+          className="btn btn-danger"
+          onClick={() => setEndConfirmOpen(true)}
+          disabled={busy}
+          data-testid="end-game"
+        >
+          End game
+        </button>
+      </footer>
 
       <ConfirmDialog
         open={endConfirmOpen}

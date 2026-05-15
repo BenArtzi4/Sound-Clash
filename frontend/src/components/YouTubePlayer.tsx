@@ -9,10 +9,17 @@ export interface YouTubePlayerHandle {
 }
 
 interface Props {
+  // When true, render only the iframe — no cover element, no loading / ended /
+  // error / buzz-pause overlay. The host loses the anti-spoiler protection of
+  // the cover (YouTube's own "more videos" UI may briefly show between songs)
+  // in exchange for an always-visible video. Errors surface via `onError` so
+  // the parent can react inline (e.g. toast).
+  noCover?: boolean;
   hideOverlay?: boolean;
   // When true, keep the cover visible even while the video is loaded (used by
   // the manager view during a buzz / scoring pause so YouTube's pause-state
-  // "more videos" tiles can't leak song titles to the room).
+  // "more videos" tiles can't leak song titles to the room). Ignored when
+  // `noCover` is true.
   coverWhilePaused?: boolean;
   onReady?: () => void;
   onError?: (code: number) => void;
@@ -99,7 +106,7 @@ const EMBED_SRC =
   }).toString();
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
-  { hideOverlay, coverWhilePaused, onReady, onError },
+  { noCover, hideOverlay, coverWhilePaused, onReady, onError },
   ref,
 ) {
   const containerRef = useRef<HTMLIFrameElement | null>(null);
@@ -182,6 +189,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     () => ({
       loadVideoById: (videoId, startSeconds) => {
         setEnded(false);
+        // Clear any error from a previous song so the cover (when in
+        // covered mode) doesn't keep showing "Video unavailable" for what
+        // is now a different, valid video.
+        setErrorCode(null);
         playerRef.current?.loadVideoById({
           videoId,
           startSeconds: startSeconds ?? 0,
@@ -196,6 +207,24 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     }),
     [],
   );
+
+  if (noCover) {
+    // No-cover mode: just the iframe. Parents handle error UX themselves via
+    // the onError callback (e.g. surface a toast). data-testid + data-ready
+    // are preserved because E2E specs assert on them.
+    return (
+      <div className={styles.wrapper} data-testid="youtube-player" data-ready={loaded}>
+        <iframe
+          ref={containerRef}
+          className={styles.player}
+          src={EMBED_SRC}
+          title="YouTube player"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
 
   const overlayHidden = hideOverlay && loaded && errorCode === null && !ended && !coverWhilePaused;
   // When the video is loaded but the parent is covering it during a buzz

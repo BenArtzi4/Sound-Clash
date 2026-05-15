@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-05-15: Display screen now keeps the join QR (and game code) visible at the bottom of the page for the whole game — late players can scan and join mid-round instead of being locked out the moment the first team appears.
 - 2026-05-10: Team's own phone now shows a "+10 / −3" pill the instant their score changes — same look as the projector toast — so a player gets immediate feedback on the device they're already looking at.
 - 2026-05-10: Display screen now reveals the song title and artist name in a dedicated panel once the manager confirms the corresponding correct answer. Unrevealed halves show "???" so the audience can see what's still secret. Token chips below still show which team claimed each.
 - 2026-05-10: Display screen now pops a small floating pill ("Alpha +10", "Bravo -3") whenever a team's score changes, so the audience watching the projector can see *who* just got points and how many without having to re-read the scoreboard.
@@ -15,6 +16,9 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-15: Manager Bonus button now feels instant: the team picker closes and the "+4 bonus to <team>" toast appears the moment a team is clicked. The score still arrives on the display via Realtime as before; the manager just isn't waiting on the round-trip anymore.
+- 2026-05-15: Manager YouTube player no longer overlays loading / "Song ended" / "Video unavailable" covers on the iframe — the raw YouTube player is visible the whole game. Errors are surfaced as a toast instead so the host knows to pick a different song.
+- 2026-05-15: Manager End-Game button moved from the top header to a footer at the bottom of the page. It's a once-per-game action; no need for it to compete with round controls.
 - 2026-05-15: Cut per-client REST traffic during a game by ~4x. The Realtime backstop that re-fetches game / teams / rounds rows now runs every 20s instead of every 5s; a 10-round game drops from ~360 backstop requests to ~90. A missed Realtime event still self-heals well inside any "huh, the page is stuck" wait.
 - 2026-05-12: When the host marks a Correct Song / Correct Artist, the buzzed team keeps control of the round for the other token (as before) **and** its 10-second answer countdown restarts — so the team that got one half right gets a fresh window to also guess the missing half.
 - 2026-05-12: The manager's Wrong button now also resumes the song immediately (in addition to re-arming the buzzers) — no separate Continue round press needed to un-pause playback.
@@ -40,6 +44,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-05-15: Manager YouTube player no longer gets stuck showing "Video unavailable" on every subsequent song after a single failed video. The error state now clears whenever a new song is loaded, so a transient YouTube hiccup on round 1 no longer breaks rounds 2-N.
 - 2026-05-15: Reduced per-second re-rendering on the team and display screens during a buzz. The round countdown now ticks in its own small component so the surrounding scoreboard, buzz button, and YouTube player don't re-render every second — smoother gameplay on lower-end phones and TVs.
 - 2026-05-12: Song selection now mixes the selected genres evenly. Each round picks a random genre among those chosen, then a random unplayed song within it, so a game with several genres no longer front-loads whichever genre happens to have the most songs in the catalog.
 - 2026-05-12: The host's Correct Song / Correct Artist buttons no longer go inactive a moment after a click — the answering team keeps control of the round for the other token until the host presses Continue round or Wrong.
