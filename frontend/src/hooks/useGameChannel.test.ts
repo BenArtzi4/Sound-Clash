@@ -87,6 +87,7 @@ describe("gameReducer", () => {
   });
 
   it.each([
+    ["game_code", { game_code: "DIFFERENT" }],
     ["status", { status: "playing" as const }],
     ["round_number", { round_number: 5 }],
     ["current_round_id", { current_round_id: "different-round" }],
@@ -94,6 +95,8 @@ describe("gameReducer", () => {
     ["locked_at", { locked_at: "2026-05-15T12:00:00Z" }],
     ["ended_at", { ended_at: "2026-05-15T13:00:00Z" }],
     ["current_song_id", { current_song_id: "different-song" }],
+    ["started_at", { started_at: "2099-01-01T00:00:00Z" }],
+    ["expires_at", { expires_at: "2099-01-01T04:00:00Z" }],
   ])("HYDRATE re-dispatches when ActiveGame.%s changes", (_field, override) => {
     const game = makeActiveGame({ current_round_id: "r1" });
     const round = makeRound({ id: "r1", round_number: 1 });
@@ -163,6 +166,27 @@ describe("gameReducer", () => {
     expect(next).not.toBe(start);
   });
 
+  it.each([
+    ["name", { name: "Renamed" }],
+    ["joined_at", { joined_at: "2099-01-01T00:00:00Z" }],
+  ])("HYDRATE re-dispatches when team.%s changes", (_field, override) => {
+    const game = makeActiveGame();
+    const team = makeTeam({ id: "t1" });
+    const start = gameReducer(null, {
+      type: "HYDRATE",
+      game,
+      teams: [team],
+      rounds: [],
+    });
+    const next = gameReducer(start, {
+      type: "HYDRATE",
+      game,
+      teams: [{ ...team, ...override }],
+      rounds: [],
+    });
+    expect(next).not.toBe(start);
+  });
+
   it("HYDRATE re-dispatches when a team id is replaced (same count, different members)", () => {
     const game = makeActiveGame();
     const start = gameReducer(null, {
@@ -204,6 +228,10 @@ describe("gameReducer", () => {
     ["buzzed_team_id", { buzzed_team_id: "team-x" }],
     ["song_id", { song_id: "song-x" }],
     ["free_guess_active", { free_guess_active: true }],
+    ["started_at", { started_at: "2099-01-01T00:00:00Z" }],
+    ["title_points", { title_points: 99 }],
+    ["artist_points", { artist_points: 99 }],
+    ["wrong_buzz_penalty", { wrong_buzz_penalty: -99 }],
   ])("HYDRATE re-dispatches when round.%s changes", (_field, override) => {
     const game = makeActiveGame({ current_round_id: "r1" });
     const round = makeRound({ id: "r1", round_number: 1 });
