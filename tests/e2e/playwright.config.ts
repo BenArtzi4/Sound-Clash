@@ -21,7 +21,7 @@ export default defineConfig({
   fullyParallel: false, // sequential; multi-context specs share the preview project
   forbidOnly: !!process.env.CI,
   // 2 retries on CI gives a flaky multi-context spec three shots; combined
-  // with useGameChannel's 5s re-hydrate backstop, this absorbs the
+  // with useGameChannel's 20s re-hydrate backstop, this absorbs the
   // occasional dropped Realtime event without papering over a real bug.
   retries: process.env.CI ? 2 : 0,
   workers: 1,
