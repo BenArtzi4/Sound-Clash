@@ -46,9 +46,7 @@ function activeGameEqual(a: ActiveGame, b: ActiveGame): boolean {
 }
 
 function teamEqual(a: Team, b: Team): boolean {
-  return (
-    a.id === b.id && a.name === b.name && a.score === b.score && a.joined_at === b.joined_at
-  );
+  return a.id === b.id && a.name === b.name && a.score === b.score && a.joined_at === b.joined_at;
 }
 
 function roundEqual(a: GameRound, b: GameRound): boolean {
