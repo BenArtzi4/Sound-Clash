@@ -3,6 +3,11 @@ import styles from "./YouTubePlayer.module.css";
 
 export interface YouTubePlayerHandle {
   loadVideoById: (videoId: string, startSeconds?: number) => void;
+  // Same as loadVideoById but does not start playback. YouTube only downloads
+  // metadata + thumbnail; chunk download starts when play() is called. Use
+  // this when restoring a song after a page refresh — auto-playing on mount
+  // would surprise the host.
+  cueVideoById: (videoId: string, startSeconds?: number) => void;
   pause: () => void;
   play: () => void;
   stop: () => void;
@@ -20,6 +25,7 @@ interface Props {
 
 interface YTPlayer {
   loadVideoById: (opts: { videoId: string; startSeconds?: number }) => void;
+  cueVideoById: (opts: { videoId: string; startSeconds?: number }) => void;
   pauseVideo: () => void;
   playVideo: () => void;
   stopVideo: () => void;
@@ -183,6 +189,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       loadVideoById: (videoId, startSeconds) => {
         setEnded(false);
         playerRef.current?.loadVideoById({
+          videoId,
+          startSeconds: startSeconds ?? 0,
+        });
+      },
+      cueVideoById: (videoId, startSeconds) => {
+        setEnded(false);
+        playerRef.current?.cueVideoById({
           videoId,
           startSeconds: startSeconds ?? 0,
         });

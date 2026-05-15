@@ -15,6 +15,8 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-15: Refreshing the manager tab mid-round no longer auto-plays the song at full volume the moment the page reloads. The current song is now cued (paused at its start) instead — the host clicks Continue round to resume playback. Cuts the burst of audio when reconnecting.
+- 2026-05-15: Cut per-client REST traffic during a game by ~4x. The Realtime backstop that re-fetches game / teams / rounds rows now runs every 20s instead of every 5s; a 10-round game drops from ~360 backstop requests to ~90. A missed Realtime event still self-heals well inside any "huh, the page is stuck" wait.
 - 2026-05-12: When the host marks a Correct Song / Correct Artist, the buzzed team keeps control of the round for the other token (as before) **and** its 10-second answer countdown restarts — so the team that got one half right gets a fresh window to also guess the missing half.
 - 2026-05-12: The manager's Wrong button now also resumes the song immediately (in addition to re-arming the buzzers) — no separate Continue round press needed to un-pause playback.
 - 2026-05-12: The BUZZ button on the team (player) screen is bigger — it now fills most of a phone screen.
@@ -39,6 +41,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-05-15: Reduced per-second re-rendering on the team and display screens during a buzz. The round countdown now ticks in its own small component so the surrounding scoreboard, buzz button, and YouTube player don't re-render every second — smoother gameplay on lower-end phones and TVs.
 - 2026-05-12: Song selection now mixes the selected genres evenly. Each round picks a random genre among those chosen, then a random unplayed song within it, so a game with several genres no longer front-loads whichever genre happens to have the most songs in the catalog.
 - 2026-05-12: The host's Correct Song / Correct Artist buttons no longer go inactive a moment after a click — the answering team keeps control of the round for the other token until the host presses Continue round or Wrong.
 - 2026-05-10: Manager YouTube player no longer overlays a black "Ready" splash when a team buzzes. The cover that hides the iframe still appears (so YouTube's pause-state "more videos" tiles can't leak song titles), but it stays empty rather than re-using the pre-load loading text.

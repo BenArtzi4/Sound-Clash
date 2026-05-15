@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
+import { RoundCountdown } from "../components/RoundCountdown";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
-import { serverTimeNow } from "../hooks/useServerTime";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
 import styles from "./TeamGameplayPage.module.css";
 
@@ -21,7 +21,6 @@ export function TeamGameplayPage() {
   const navigate = useNavigate();
   const stored = useMemo(() => getStoredTeam(gameCode), [gameCode]);
   const [hydratedOnce, setHydratedOnce] = useState(false);
-  const [now, setNow] = useState(() => serverTimeNow().getTime());
 
   useEffect(() => {
     if (!stored) {
@@ -53,12 +52,6 @@ export function TeamGameplayPage() {
     }
     prevScoreRef.current = me.score;
   }, [state, stored]);
-
-  // Tick every second so the round timer re-renders.
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(serverTimeNow().getTime()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // After hydrate, if our team isn't in the room, we've been kicked or the
   // game is gone. Clean up storage and bounce home.
@@ -102,10 +95,7 @@ export function TeamGameplayPage() {
     game?.buzzed_team_id != null ? (state?.teams.get(game.buzzed_team_id) ?? null) : null;
 
   const lockedAt = game?.locked_at ?? null;
-  const elapsedSec = lockedAt ? Math.max(0, Math.floor((now - Date.parse(lockedAt)) / 1000)) : 0;
-  const remainingSec = Math.max(0, ANSWER_DURATION_SEC - elapsedSec);
   const timerActive = game?.status === "playing" && lockedTeam != null && lockedAt != null;
-  const timerPct = Math.max(0, Math.min(100, (remainingSec / ANSWER_DURATION_SEC) * 100));
 
   const buzzDisabled =
     !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
@@ -148,21 +138,13 @@ export function TeamGameplayPage() {
         </div>
       </header>
 
-      {timerActive ? (
-        <div
-          className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}
-          style={{ "--timer-pct": `${timerPct}%` } as CSSProperties}
-          role="timer"
-          aria-label="Time remaining"
-        >
-          <div className={styles.timerBar}>
-            <div className={styles.timerFill} />
-          </div>
-          <span className={styles.timerValue}>{remainingSec}s</span>
-          <span className="visually-hidden" aria-live="polite" role="status">
-            {remainingSec <= 5 && remainingSec > 0 ? `${remainingSec} seconds left` : ""}
-          </span>
-        </div>
+      {timerActive && lockedAt ? (
+        <RoundCountdown
+          lockedAt={lockedAt}
+          durationSec={ANSWER_DURATION_SEC}
+          styles={styles}
+          withSrAnnouncer
+        />
       ) : null}
 
       <div className={styles.buzzZone}>

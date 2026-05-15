@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
 import { QRPanel } from "../components/QRPanel";
+import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useGameSounds } from "../hooks/useGameSounds";
-import { serverTimeNow } from "../hooks/useServerTime";
 import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
 import styles from "./DisplayPage.module.css";
@@ -74,19 +74,12 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const { state, status } = useGameChannel(gameCode);
   const sounds = useGameSounds();
   const [soundOn, setSoundOn] = useState(false);
-  const [now, setNow] = useState(() => serverTimeNow().getTime());
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const prevBuzzedRef = useRef<string | null | undefined>(undefined);
   const prevScoresRef = useRef<Record<string, number>>({});
   const prevRoundRef = useRef<number | undefined>(undefined);
   const eventSeqRef = useRef(0);
-
-  // Tick once a second so the post-buzz countdown re-renders.
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(serverTimeNow().getTime()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // Fetch the current round's song so the reveal panel can display the
   // actual title / artist text once the manager confirms a correct answer.
@@ -212,10 +205,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const showRoundSubhead = lockedTeam != null && roundLabel != null;
 
   const lockedAt = game.locked_at;
-  const elapsedSec = lockedAt ? Math.max(0, Math.floor((now - Date.parse(lockedAt)) / 1000)) : 0;
-  const remainingSec = Math.max(0, ANSWER_DURATION_SEC - elapsedSec);
   const timerActive = game.status === "playing" && lockedTeam != null && lockedAt != null;
-  const timerPct = Math.max(0, Math.min(100, (remainingSec / ANSWER_DURATION_SEC) * 100));
 
   return (
     <main className={styles.shell}>
@@ -296,18 +286,8 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         </div>
       ) : null}
 
-      {timerActive ? (
-        <div
-          className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}
-          style={{ "--timer-pct": `${timerPct}%` } as CSSProperties}
-          role="timer"
-          aria-label="Time remaining"
-        >
-          <div className={styles.timerBar}>
-            <div className={styles.timerFill} />
-          </div>
-          <span className={styles.timerValue}>{remainingSec}s</span>
-        </div>
+      {timerActive && lockedAt ? (
+        <RoundCountdown lockedAt={lockedAt} durationSec={ANSWER_DURATION_SEC} styles={styles} />
       ) : null}
 
       <div className={styles.scores}>

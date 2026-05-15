@@ -43,7 +43,9 @@ export function ManagerConsolePage() {
 
   // After a manager-tab refresh mid-round, currentSong is null but the round
   // row still has a song_id. Resolve it and push it into the player so the
-  // host doesn't have to abandon the round and click Next round.
+  // host doesn't have to abandon the round and click Next round. We cue (not
+  // load) so the song doesn't blast at full volume the moment the page
+  // reloads; the host resumes with "Continue round", which calls play().
   const currentRoundSongId = state?.currentRound?.song_id ?? null;
   const playerReady = player.ready;
   useEffect(() => {
@@ -60,7 +62,7 @@ export function ManagerConsolePage() {
       const song = data as Song;
       setCurrentSong(song);
       if (playerReady) {
-        playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
+        playerRef.current?.cueVideoById(song.youtube_id, song.start_time);
       } else {
         player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
       }
