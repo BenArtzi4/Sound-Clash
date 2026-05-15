@@ -82,11 +82,27 @@ function loadApi(): Promise<YTNamespace> {
   });
 }
 
+// Force English UI strings (hl=en) on the iframe chrome so a host whose
+// browser is set to e.g. Hebrew doesn't see "הפעלת הסרטון" / "סרטונים נוספים"
+// in the player overlay. `origin` lets the iframe validate inbound messages.
+const EMBED_SRC =
+  "https://www.youtube-nocookie.com/embed/?" +
+  new URLSearchParams({
+    enablejsapi: "1",
+    origin: window.location.origin,
+    modestbranding: "1",
+    rel: "0",
+    controls: "0",
+    disablekb: "1",
+    playsinline: "1",
+    hl: "en",
+  }).toString();
+
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
   { hideOverlay, coverWhilePaused, onReady, onError },
   ref,
 ) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [errorCode, setErrorCode] = useState<number | null>(null);
@@ -107,34 +123,34 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     onErrorRef.current = onError;
   });
 
+  // We render the iframe ourselves (rather than letting YT.Player replace a
+  // div) and wait for its `load` event before attaching the API. Otherwise
+  // www-widgetapi.js starts a postMessage poll targeted at youtube-nocookie.com
+  // while the iframe is still at about:blank, and every ping logs a
+  // "target origin does not match" warning until the iframe finishes
+  // navigating. Privacy-enhanced mode (youtube-nocookie) also suppresses the
+  // doubleclick conversion-pixel CORS errors that the regular youtube.com
+  // host emits once a video plays.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const YT = await loadApi();
       if (cancelled || !containerRef.current) return;
-      playerRef.current = new YT.Player(containerRef.current, {
-        width: "100%",
-        height: "100%",
-        // Privacy-enhanced mode: iframe is created at youtube-nocookie.com
-        // instead of youtube.com, which suppresses the doubleclick conversion
-        // pixels that otherwise CORS-spam the console once the video plays.
-        host: "https://www.youtube-nocookie.com",
-        playerVars: {
-          modestbranding: 1,
-          rel: 0,
-          controls: 0,
-          disablekb: 1,
-          playsinline: 1,
-          // Force English UI strings on the iframe chrome so a host whose
-          // browser is set to e.g. Hebrew doesn't see "הפעלת הסרטון" /
-          // "סרטונים נוספים" in the player overlay.
-          hl: "en",
-          // Pre-declare the parent origin so the IFrame API can validate
-          // postMessage targets up-front, which mitigates the warm-up
-          // "target origin does not match" warning fired by www-widgetapi.js
-          // before the iframe finishes navigating.
-          origin: window.location.origin,
-        },
+      const iframe = containerRef.current;
+      await new Promise<void>((resolve) => {
+        if (iframe.dataset.ytLoaded === "1") {
+          resolve();
+          return;
+        }
+        const onLoad = (): void => {
+          iframe.removeEventListener("load", onLoad);
+          iframe.dataset.ytLoaded = "1";
+          resolve();
+        };
+        iframe.addEventListener("load", onLoad);
+      });
+      if (cancelled) return;
+      playerRef.current = new YT.Player(iframe, {
         events: {
           onReady: () => {
             setErrorCode(null);
@@ -188,7 +204,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   const showLabel = errorCode !== null || ended || !loaded;
   return (
     <div className={styles.wrapper} data-testid="youtube-player" data-ready={loaded}>
-      <div ref={containerRef} className={styles.player} />
+      <iframe
+        ref={containerRef}
+        className={styles.player}
+        src={EMBED_SRC}
+        title="YouTube player"
+        allow="autoplay; encrypted-media"
+        allowFullScreen
+      />
       <div
         className={`${styles.cover} ${overlayHidden ? styles.coverHidden : ""}`}
         role={errorCode !== null ? "alert" : undefined}
