@@ -93,8 +93,33 @@ export function getHealth(): Promise<{
   return request("GET", "/health");
 }
 
+// Genres are static for the duration of a session, so we memoize the first
+// successful fetch. HomePage prefetches in the background while the user is
+// reading the landing copy, so by the time they click Host and reach
+// ManagerCreateGamePage the list is already in memory and the form renders
+// without waiting on the Render-hosted backend.
+let cachedGenres: Genre[] | null = null;
+let inflightGenres: Promise<Genre[]> | null = null;
+
 export function listGenres(): Promise<Genre[]> {
-  return request("GET", "/genres");
+  if (cachedGenres) return Promise.resolve(cachedGenres);
+  if (inflightGenres) return inflightGenres;
+  inflightGenres = (async () => {
+    try {
+      const result = await request<Genre[]>("GET", "/genres");
+      cachedGenres = result;
+      return result;
+    } finally {
+      inflightGenres = null;
+    }
+  })();
+  return inflightGenres;
+}
+
+// Test-only: reset the genre memoization so each test gets a clean cache.
+export function __resetListGenresCacheForTests(): void {
+  cachedGenres = null;
+  inflightGenres = null;
 }
 
 export function joinTeam(gameCode: string, name: string): Promise<Team> {
