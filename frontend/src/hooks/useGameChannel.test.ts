@@ -45,6 +45,47 @@ describe("gameReducer", () => {
     expect(next?.currentRound?.id).toBe("r1");
   });
 
+  it("HYDRATE returns the same state reference when nothing changed (skips re-render cascade)", () => {
+    const game = makeActiveGame({ current_round_id: "r1" });
+    const team = makeTeam({ id: "t1", score: 10 });
+    const round = makeRound({ id: "r1", round_number: 1 });
+    const start = gameReducer(null, {
+      type: "HYDRATE",
+      game,
+      teams: [team],
+      rounds: [round],
+    });
+    // Same wire data, fresh object identities (mirrors what PostgREST returns
+    // on a backstop poll when no events have happened in the last 20s).
+    const repeat = gameReducer(start, {
+      type: "HYDRATE",
+      game: { ...game },
+      teams: [{ ...team }],
+      rounds: [{ ...round }],
+    });
+    expect(repeat).toBe(start);
+  });
+
+  it("HYDRATE returns a new state reference when a team's score changed", () => {
+    const game = makeActiveGame({ current_round_id: "r1" });
+    const team = makeTeam({ id: "t1", score: 10 });
+    const round = makeRound({ id: "r1", round_number: 1 });
+    const start = gameReducer(null, {
+      type: "HYDRATE",
+      game,
+      teams: [team],
+      rounds: [round],
+    });
+    const next = gameReducer(start, {
+      type: "HYDRATE",
+      game,
+      teams: [{ ...team, score: 20 }],
+      rounds: [round],
+    });
+    expect(next).not.toBe(start);
+    expect(next?.teams.get("t1")?.score).toBe(20);
+  });
+
   it("GAME_CHANGE UPDATE replaces game and recomputes currentRound", () => {
     const round = makeRound({ id: "r1" });
     const start = gameReducer(null, {
