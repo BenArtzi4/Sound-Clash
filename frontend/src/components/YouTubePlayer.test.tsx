@@ -5,7 +5,6 @@ import { YouTubePlayer, type YouTubePlayerHandle } from "./YouTubePlayer";
 
 interface FakeYTPlayer {
   loadVideoById: ReturnType<typeof vi.fn>;
-  cueVideoById: ReturnType<typeof vi.fn>;
   pauseVideo: ReturnType<typeof vi.fn>;
   playVideo: ReturnType<typeof vi.fn>;
   stopVideo: ReturnType<typeof vi.fn>;
@@ -34,7 +33,6 @@ function installFakeYT() {
   ): FakeYTPlayer {
     const instance: FakeYTPlayer = {
       loadVideoById: vi.fn(),
-      cueVideoById: vi.fn(),
       pauseVideo: vi.fn(),
       playVideo: vi.fn(),
       stopVideo: vi.fn(),
@@ -105,21 +103,6 @@ describe("YouTubePlayer", () => {
     expect(lastPlayer?.playVideo).toHaveBeenCalled();
     expect(lastPlayer?.pauseVideo).toHaveBeenCalled();
     expect(lastPlayer?.stopVideo).toHaveBeenCalled();
-  });
-
-  it("forwards cueVideoById without starting playback", async () => {
-    installFakeYT();
-    const ref = createRef<YouTubePlayerHandle>();
-    const { container } = render(<YouTubePlayer ref={ref} />);
-    await flushIframeLoad(container);
-    await waitFor(() => expect(lastPlayer).not.toBeNull());
-    ref.current?.cueVideoById("abcdefghijk", 12);
-    expect(lastPlayer?.cueVideoById).toHaveBeenCalledWith({
-      videoId: "abcdefghijk",
-      startSeconds: 12,
-    });
-    expect(lastPlayer?.playVideo).not.toHaveBeenCalled();
-    expect(lastPlayer?.loadVideoById).not.toHaveBeenCalled();
   });
 
   it("calls onReady when the YT player fires onReady", async () => {

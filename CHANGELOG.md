@@ -15,7 +15,6 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
-- 2026-05-15: Refreshing the manager tab mid-round no longer auto-plays the song at full volume the moment the page reloads. The current song is now cued (paused at its start) instead — the host clicks Continue round to resume playback. Cuts the burst of audio when reconnecting.
 - 2026-05-15: Cut per-client REST traffic during a game by ~4x. The Realtime backstop that re-fetches game / teams / rounds rows now runs every 20s instead of every 5s; a 10-round game drops from ~360 backstop requests to ~90. A missed Realtime event still self-heals well inside any "huh, the page is stuck" wait.
 - 2026-05-12: When the host marks a Correct Song / Correct Artist, the buzzed team keeps control of the round for the other token (as before) **and** its 10-second answer countdown restarts — so the team that got one half right gets a fresh window to also guess the missing half.
 - 2026-05-12: The manager's Wrong button now also resumes the song immediately (in addition to re-arming the buzzers) — no separate Continue round press needed to un-pause playback.
