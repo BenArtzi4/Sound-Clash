@@ -57,6 +57,23 @@ beforeEach(() => {
     .forEach((el) => el.remove());
 });
 
+// In jsdom the iframe never actually navigates, so the `load` event the
+// production mount effect awaits before constructing the YT.Player has to
+// be dispatched manually. In real browsers the iframe genuinely loads once
+// at youtube-nocookie.com and emits `load` itself.
+async function flushIframeLoad(container: HTMLElement): Promise<void> {
+  // Yield to the microtask queue so the effect's `await loadApi()` resolves
+  // and the `addEventListener('load', ...)` call has run before we dispatch.
+  await act(async () => {
+    await Promise.resolve();
+  });
+  const iframe = container.querySelector("iframe");
+  if (!iframe) return;
+  await act(async () => {
+    iframe.dispatchEvent(new Event("load"));
+  });
+}
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -64,14 +81,16 @@ afterEach(() => {
 describe("YouTubePlayer", () => {
   it("constructs a player when YT API is already available", async () => {
     installFakeYT();
-    render(<YouTubePlayer />);
+    const { container } = render(<YouTubePlayer />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastPlayer).not.toBeNull());
   });
 
   it("forwards loadVideoById, play, pause, stop on the imperative handle", async () => {
     installFakeYT();
     const ref = createRef<YouTubePlayerHandle>();
-    render(<YouTubePlayer ref={ref} />);
+    const { container } = render(<YouTubePlayer ref={ref} />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastPlayer).not.toBeNull());
     ref.current?.loadVideoById("abcdefghijk", 12);
     ref.current?.play();
@@ -89,7 +108,8 @@ describe("YouTubePlayer", () => {
   it("calls onReady when the YT player fires onReady", async () => {
     installFakeYT();
     const onReady = vi.fn();
-    render(<YouTubePlayer onReady={onReady} />);
+    const { container } = render(<YouTubePlayer onReady={onReady} />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
     act(() => {
       lastConfig?.events?.onReady?.();
@@ -100,7 +120,8 @@ describe("YouTubePlayer", () => {
   it("renders an error message and invokes onError when YT fires onError", async () => {
     installFakeYT();
     const onError = vi.fn();
-    const { findByRole } = render(<YouTubePlayer onError={onError} />);
+    const { findByRole, container } = render(<YouTubePlayer onError={onError} />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
     act(() => {
       lastConfig?.events?.onError?.({ data: 150 });
@@ -112,7 +133,8 @@ describe("YouTubePlayer", () => {
 
   it("keeps the overlay visible on error even when hideOverlay is true", async () => {
     installFakeYT();
-    const { findByRole } = render(<YouTubePlayer hideOverlay />);
+    const { findByRole, container } = render(<YouTubePlayer hideOverlay />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
     act(() => {
       lastConfig?.events?.onReady?.();
@@ -128,6 +150,7 @@ describe("YouTubePlayer", () => {
     installFakeYT();
     const ref = createRef<YouTubePlayerHandle>();
     const { container } = render(<YouTubePlayer ref={ref} hideOverlay />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
     // After ready the cover is hidden so the video is visible.
     act(() => {
@@ -151,6 +174,7 @@ describe("YouTubePlayer", () => {
     installFakeYT();
     const ref = createRef<YouTubePlayerHandle>();
     const { container } = render(<YouTubePlayer ref={ref} hideOverlay />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
     act(() => {
       lastConfig?.events?.onReady?.();
@@ -169,6 +193,7 @@ describe("YouTubePlayer", () => {
   it("non-ENDED state changes do not bring the cover back", async () => {
     installFakeYT();
     const { container } = render(<YouTubePlayer hideOverlay />);
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
     act(() => {
       lastConfig?.events?.onReady?.();
@@ -184,7 +209,7 @@ describe("YouTubePlayer", () => {
   });
 
   it("loads the iframe API script when YT is not yet on window", async () => {
-    render(<YouTubePlayer />);
+    const { container } = render(<YouTubePlayer />);
     await waitFor(() =>
       expect(
         document.querySelector('script[src="https://www.youtube.com/iframe_api"]'),
@@ -197,6 +222,7 @@ describe("YouTubePlayer", () => {
         .onYouTubeIframeAPIReady;
       cb?.();
     });
+    await flushIframeLoad(container);
     await waitFor(() => expect(lastPlayer).not.toBeNull());
   });
 });
