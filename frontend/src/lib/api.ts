@@ -6,9 +6,7 @@ import type {
   BulkImportSummary,
   CreateGameResponse,
   EndGameResponse,
-  EndRoundResponse,
   Genre,
-  SelectSongResponse,
   Song,
   SongListResponse,
   SongWritePayload,
@@ -126,28 +124,6 @@ export function joinTeam(gameCode: string, name: string): Promise<Team> {
 
 export function createGame(body: { selected_genres: string[] }): Promise<CreateGameResponse> {
   return request("POST", "/games", { body });
-}
-
-export function selectSong(
-  gameCode: string,
-  managerToken: string,
-  songId?: string,
-): Promise<SelectSongResponse> {
-  return request("POST", `/games/${gameCode}/select-song`, {
-    managerToken,
-    body: songId ? { song_id: songId } : {},
-  });
-}
-
-export function endRound(
-  gameCode: string,
-  managerToken: string,
-  roundId: string,
-): Promise<EndRoundResponse> {
-  return request("POST", `/games/${gameCode}/end-round`, {
-    managerToken,
-    body: { round_id: roundId },
-  });
 }
 
 export function awardBonus(

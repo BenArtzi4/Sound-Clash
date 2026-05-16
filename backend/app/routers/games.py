@@ -1,11 +1,22 @@
 """Game lifecycle endpoints; see ``docs/api-contracts.md §2``.
 
-The router never calls ``buzz_in``, ``award_attempt`` or ``release_buzz_lock``;
-those stay browser-direct via PostgREST to keep Python out of the host's
-hot path. Migration 021 moved their manager-token check into the PL/pgSQL
-function bodies; the browser passes the token as an RPC argument. The
-service-role-only RPCs dispatched here are ``start_round``, ``end_round``,
-``end_game``, and ``award_bonus``.
+The router never calls ``buzz_in``, ``award_attempt``, ``release_buzz_lock``,
+or ``select_next_song``; those stay browser-direct via PostgREST to keep
+Python out of the host's hot path. Migrations 021 and 022 moved each
+function's manager-token check into the PL/pgSQL body; the browser passes
+the token as an RPC argument.
+
+``POST /games/{code}/select-song`` and ``POST /games/{code}/end-round``
+stay in place as transitional plumbing: the browser no longer calls them
+after migration 022 (``select_next_song`` does the picker + start_round
+composition directly), but keeping the routes around makes the PR
+revertable in one step if the new path misbehaves on prod. A follow-up
+cleanup can drop them, the ``_start_round_blocking`` / ``_end_round_blocking``
+helpers, and ``backend/app/services/song_picker.py`` once the new flow
+has soaked in.
+
+The service-role-only RPCs the router still dispatches are ``start_round``,
+``end_round``, ``end_game``, and ``award_bonus``.
 """
 
 from __future__ import annotations

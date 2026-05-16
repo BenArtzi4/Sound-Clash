@@ -2,12 +2,13 @@
 
 Spec: docs/security-rls.md §2.
 
-Three RPCs are callable by anon -- ``buzz_in`` (since migration 006), plus
-``award_attempt`` and ``release_buzz_lock`` (as of migration 021, which
-moved the manager-token check into the function bodies so the browser can
-call them directly without going through FastAPI). The remaining
-backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
-``end_game``, ``cleanup_expired_games`` -- must still reject anon.
+Four RPCs are callable by anon -- ``buzz_in`` (since migration 006),
+``award_attempt`` and ``release_buzz_lock`` (as of migration 021), and
+``select_next_song`` (as of migration 022). Each does its own in-function
+manager-token check before performing any work, so the function-level
+EXECUTE grant is safe. The remaining backend-only RPCs -- ``start_round``,
+``end_round``, ``award_bonus``, ``end_game``, ``cleanup_expired_games`` --
+must still reject anon.
 """
 
 from __future__ import annotations
@@ -77,6 +78,25 @@ async def test_anon_can_execute_release_buzz_lock_but_token_check_runs(
     with pytest.raises(asyncpg.PostgresError) as exc:
         await anon_conn.execute(
             "SELECT release_buzz_lock($1, $2)", "ABCDEF", uuid.uuid4()
+        )
+    assert not isinstance(exc.value, asyncpg.InsufficientPrivilegeError)
+    assert exc.value.sqlstate in ("P0002", "28000")
+
+
+@pytest.mark.asyncio
+async def test_anon_can_execute_select_next_song_but_token_check_runs(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 022: anon CAN call select_next_song, but the in-function
+    manager_token check rejects forged calls. The error must be
+    ``manager_token_required`` (sqlstate 28000) or, if the game-code lookup
+    fires first, ``game_not_found`` (P0002). Either way the function ran --
+    it wasn't blocked at the grant gate."""
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await anon_conn.execute(
+            "SELECT select_next_song($1, $2, NULL::uuid)",
+            "ABCDEF",
+            uuid.uuid4(),
         )
     assert not isinstance(exc.value, asyncpg.InsufficientPrivilegeError)
     assert exc.value.sqlstate in ("P0002", "28000")
@@ -224,6 +244,14 @@ async def test_legacy_overloads_remain_locked(
             "p_artist integer, p_wrong_buzz integer, p_manager_token uuid",
         ),
         ("release_buzz_lock", "p_game_code text, p_manager_token uuid"),
+        # select_next_song: single tokenised signature added in migration 022.
+        # Migration 020's REVOKE loop pre-dates this function and doesn't
+        # touch it; the explicit GRANT in migration 022 is what makes anon
+        # EXECUTE land. The in-function token check provides the actual gate.
+        (
+            "select_next_song",
+            "p_game_code text, p_manager_token uuid, p_song_id uuid",
+        ),
     ],
 )
 async def test_anon_executable_rpc_grant_matrix(

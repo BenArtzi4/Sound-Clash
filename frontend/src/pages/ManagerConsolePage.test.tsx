@@ -20,9 +20,7 @@ vi.mock("../lib/api", () => ({
       this.details = undefined;
     }
   },
-  selectSong: vi.fn(),
   awardBonus: vi.fn(),
-  endRound: vi.fn(),
   endGame: vi.fn(),
 }));
 
@@ -36,6 +34,10 @@ vi.mock("../hooks/useManagerActions", () => ({
   },
   awardAttemptDirect: vi.fn(),
   releaseBuzzLockDirect: vi.fn(),
+}));
+
+vi.mock("../hooks/useSelectNextSong", () => ({
+  selectNextSongDirect: vi.fn(),
 }));
 
 interface MockHandle {
@@ -66,8 +68,9 @@ vi.mock("../components/YouTubePlayer", () => ({
   }),
 }));
 
-import { awardBonus, endGame, endRound, selectSong } from "../lib/api";
+import { awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect } from "../hooks/useManagerActions";
+import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
@@ -89,10 +92,9 @@ beforeEach(() => {
   setManagerToken("ABCDEF", TOKEN);
   onReadyHandler = null;
   lastHandle = null;
-  vi.mocked(selectSong).mockReset();
+  vi.mocked(selectNextSongDirect).mockReset();
   vi.mocked(awardAttemptDirect).mockReset();
   vi.mocked(releaseBuzzLockDirect).mockReset();
-  vi.mocked(endRound).mockReset();
   vi.mocked(awardBonus).mockReset();
   vi.mocked(endGame).mockReset();
 });
@@ -160,13 +162,13 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(startBtn).toBeEnabled());
   });
 
-  it("calls selectSong with the manager token when Start is pressed", async () => {
+  it("calls selectNextSongDirect with the manager token when Start is pressed", async () => {
     setHydrate({
       game: makeActiveGame({ status: "waiting" }),
       teams: [],
       rounds: [],
     });
-    vi.mocked(selectSong).mockResolvedValueOnce({
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r1",
       round_number: 1,
       song: {
@@ -188,7 +190,9 @@ describe("ManagerConsolePage", () => {
     });
     await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: /start game/i }));
-    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    // Optimistic toast fires before the RPC settles.
+    expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
+    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
     // The source string (e.g. soundtrack origin) renders alongside the artist name.
     expect(screen.getByText(/queen.*wayne's world/i)).toBeInTheDocument();
@@ -487,7 +491,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText(/manager_token_required/i)).toBeInTheDocument());
   });
 
-  it("Next round with a held buzz ends the round and selects a new song (no auto-score)", async () => {
+  it("Next round with a held buzz selects a new song via the direct RPC (no auto-score)", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -497,11 +501,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(endRound).mockResolvedValueOnce({
-      round_id: "r1",
-      ended_at: "2026-05-10T12:00:00Z",
-    });
-    vi.mocked(selectSong).mockResolvedValueOnce({
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r2",
       round_number: 2,
       song: {
@@ -522,10 +522,12 @@ describe("ManagerConsolePage", () => {
       onReadyHandler?.();
     });
     fireEvent.click(screen.getByTestId("start-round"));
-    // Optimistic toast fires before the network chain resolves.
+    // Optimistic toast fires before the network resolves.
     expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
-    await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
-    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    // select_next_song (mig 022) closes the prior round inside the function
+    // via start_round, so we only call ONE RPC from the browser. The held
+    // buzz is cleared as a side effect.
+    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
     // Score buttons no longer pre-fire award_attempt on Next; that responsibility
     // belongs to the per-button click. Manager must explicitly score before
     // advancing or accept the no-points outcome.
@@ -542,11 +544,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(endRound).mockResolvedValueOnce({
-      round_id: "r1",
-      ended_at: "2026-05-10T12:00:00Z",
-    });
-    vi.mocked(selectSong).mockResolvedValueOnce({
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r2",
       round_number: 2,
       song: {
@@ -568,8 +566,7 @@ describe("ManagerConsolePage", () => {
     });
     fireEvent.click(screen.getByTestId("start-round"));
     expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
-    await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
-    await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
     expect(awardAttemptDirect).not.toHaveBeenCalled();
   });
 
@@ -753,16 +750,17 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(lastHandle?.loadVideoById).toHaveBeenCalledWith("abcdefghijk", 12));
   });
 
-  it("shows a clear toast when the song pool is exhausted", async () => {
+  it("shows a clear toast when the song pool is exhausted (RpcError no_more_songs)", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing", round_number: 1 }),
       teams: [],
       rounds: [],
     });
-    const { ApiError } = await import("../lib/api");
-    const exhausted = new ApiError("conflict", "no songs left", 409);
-    Object.assign(exhausted, { details: { reason: "no_more_songs" } });
-    vi.mocked(selectSong).mockRejectedValueOnce(exhausted);
+    // select_next_song (mig 022) raises 'no_more_songs' (sqlstate 22023) when
+    // the selected-genres pool is exhausted; the PL/pgSQL message bubbles
+    // up as RpcError.message in the browser.
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("no_more_songs", "22023"));
     renderConsole();
     await act(async () => {
       await fireSubscribed();
