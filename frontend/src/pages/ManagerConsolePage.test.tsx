@@ -71,10 +71,11 @@ vi.mock("../components/YouTubePlayer", () => ({
 import { awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
-import type { GameRound } from "../lib/types";
+import type { ActiveGame, GameRound } from "../lib/types";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
+  fireGame,
   fireRound,
   fireSubscribed,
   makeActiveGame,
@@ -598,6 +599,73 @@ describe("ManagerConsolePage", () => {
       );
     });
     expect(btn).toBeDisabled();
+  });
+
+  it("Wrong re-enables for the next buzz in the same round (multi-buzz)", async () => {
+    // Regression for the e2e failures in wrong_buzz_recovery scenarios 8/9
+    // and bonus_flow scenario 19: the pendingWrong flag was only cleared on
+    // round change, so a second wrong-buzz in the same round left the
+    // button permanently disabled.
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" }), makeTeam({ id: "t2", name: "Bravo" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: -3,
+      team_total_score: -3,
+      title_claimed_by: null,
+      artist_claimed_by: null,
+    } as never);
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByTestId("score-wrong");
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    // Wrong RPC commits, lock releases via Realtime (buzzed_team_id -> null).
+    await act(async () => {
+      fireGame(
+        makePayload<ActiveGame>("active_games", "UPDATE", {
+          new: makeActiveGame({
+            status: "playing",
+            buzzed_team_id: null,
+            current_round_id: "r1",
+          }),
+          old: makeActiveGame({
+            status: "playing",
+            buzzed_team_id: "t1",
+            current_round_id: "r1",
+          }),
+        }),
+      );
+    });
+    // T2 now buzzes -- new lock, same round.
+    await act(async () => {
+      fireGame(
+        makePayload<ActiveGame>("active_games", "UPDATE", {
+          new: makeActiveGame({
+            status: "playing",
+            buzzed_team_id: "t2",
+            current_round_id: "r1",
+          }),
+          old: makeActiveGame({
+            status: "playing",
+            buzzed_team_id: null,
+            current_round_id: "r1",
+          }),
+        }),
+      );
+    });
+    expect(btn).toBeEnabled();
   });
 
   it("Correct Song re-enables after a failed RPC so the host can retry", async () => {

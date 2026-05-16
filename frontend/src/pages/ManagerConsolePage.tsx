@@ -76,6 +76,17 @@ export function ManagerConsolePage() {
     setPendingWrong(null);
   }, [currentRoundId]);
 
+  // Wrong releases the buzz lock, so a follow-up buzz in the same round
+  // must re-enable the Wrong button. `pendingWrong` only bridges the gap
+  // between the RPC returning and the Realtime UPDATE on buzzed_team_id;
+  // once that UPDATE has landed (lock cleared) the flag has done its job
+  // and has to drop or the next buzz's Wrong click stays blocked.
+  useEffect(() => {
+    if (state?.game.buzzed_team_id == null) {
+      setPendingWrong(null);
+    }
+  }, [state?.game.buzzed_team_id]);
+
   // After a manager-tab refresh mid-round, currentSong is null but the round
   // row still has a song_id. Resolve it and push it into the player so the
   // host doesn't have to abandon the round and click Next round. Must stay
