@@ -175,6 +175,10 @@ export function ManagerConsolePage() {
 
   async function handleContinueRound() {
     if (busy || !managerToken) return;
+    // Optimistic toast fires before the RPC so the click feels instant; the
+    // Realtime UPDATE on active_games.buzzed_team_id is still the source of
+    // truth for re-arming the buzzers.
+    toast("Round continued", { variant: "info" });
     setBusy(true);
     try {
       await releaseBuzzLockDirect(gameCode, managerToken);
@@ -217,6 +221,10 @@ export function ManagerConsolePage() {
 
   async function handleNextRound() {
     if (busy || !managerToken) return;
+    // Optimistic toast confirms the click immediately. The two-hop network
+    // chain (endRound + selectSong) still costs ~500ms today; PR-B collapses
+    // it into a single direct RPC, but the toast helps regardless.
+    toast("Loading next round...", { variant: "info" });
     setBusy(true);
     try {
       const round = state?.currentRound;
@@ -259,12 +267,15 @@ export function ManagerConsolePage() {
 
   async function performEnd() {
     if (busy || !managerToken) return;
+    // Toast fires before the network call so the manager gets immediate
+    // feedback the click registered; if endGame() fails reportError() will
+    // surface the failure on top.
+    toast("Ending game...", { variant: "info" });
     setBusy(true);
     try {
       await endGame(gameCode, managerToken);
       playerRef.current?.stop();
       clearManagerToken(gameCode);
-      toast("Game ended", { variant: "info" });
     } catch (err) {
       reportError(err);
     } finally {

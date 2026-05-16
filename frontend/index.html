@@ -10,6 +10,15 @@
     <meta name="theme-color" content="#06b6d4" />
     <meta name="color-scheme" content="light" />
 
+    <!-- Warm DNS/TLS to YouTube before the IFrame Player mounts on the first
+         round. The script itself is still injected by YouTubePlayer.tsx; we
+         just shave the connection setup off the user-perceived song-start
+         latency. -->
+    <link rel="preconnect" href="https://www.youtube.com" crossorigin />
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+    <link rel="dns-prefetch" href="https://www.youtube.com" />
+    <link rel="dns-prefetch" href="https://i.ytimg.com" />
+
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Sound Clash" />
     <meta
