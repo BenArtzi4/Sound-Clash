@@ -34,7 +34,7 @@ See [`docs/local-development.md`](docs/local-development.md). TL;DR: `supabase s
 1. Open against `main`.
 2. Fill in the PR template (auto-loaded from `.github/pull_request_template.md`).
 3. CI must be green: `backend.yml`, `frontend.yml`, and `e2e.yml` (if labeled `run-e2e`).
-4. At least one approval. Solo maintainer admin override is acceptable for trivial changes.
+4. While the project has a single maintainer, PRs don't require an approving review, but `main` is branch-protected: every change must go through a PR (direct pushes are blocked, including for the maintainer), conversations must be resolved, and force-pushes / deletions are denied.
 5. Squash-merge by default. Merge commits only for substantial multi-commit features where individual commits matter.
 
 ## Code style

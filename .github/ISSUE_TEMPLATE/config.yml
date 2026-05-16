@@ -1,11 +1,7 @@
-# This file goes in the new repo at: .github/ISSUE_TEMPLATE/config.yml
-# Disables blank issues; forces use of templates above.
+# Disables blank issues; forces use of the bug_report / feature_request templates.
 
 blank_issues_enabled: false
 contact_links:
   - name: Security issue
     url: mailto:benartzi4@gmail.com?subject=%5BSECURITY%5D%20Sound%20Clash
     about: Please email security issues privately rather than opening a public issue.
-  - name: Question / discussion
-    url: https://github.com/BenArtzi4/Sound-Clash/discussions
-    about: For open-ended questions, use Discussions instead of Issues.

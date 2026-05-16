@@ -6,7 +6,9 @@ Real-time multiplayer music-trivia buzzer game. Host a room, share the code, rac
 
 [![Backend CI](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/backend.yml/badge.svg)](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/frontend.yml/badge.svg)](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/frontend.yml)
+[![E2E](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/e2e.yml/badge.svg)](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/e2e.yml)
 [![codecov](https://codecov.io/gh/BenArtzi4/Sound-Clash/branch/main/graph/badge.svg)](https://codecov.io/gh/BenArtzi4/Sound-Clash)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Sound Clash home page](.github/assets/hero.png)
 
