@@ -118,27 +118,8 @@
   opacity: 0.85;
 }
 
-.cardTitle {
-  display: block;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-  font-weight: 700;
-  margin-bottom: 0.6rem;
-}
-
-.roundHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-.roundHeaderInfo {
-  flex: 1;
-  min-width: 0;
+.songBlock {
+  margin-bottom: 0.85rem;
 }
 
 .songLine {
@@ -518,6 +499,7 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
+  margin-bottom: 1rem;
 }
 
 .tokenChip {
