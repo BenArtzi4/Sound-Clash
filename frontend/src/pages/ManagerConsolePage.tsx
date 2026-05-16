@@ -358,42 +358,38 @@ export function ManagerConsolePage() {
         />
 
         <section className={styles.card}>
-          <div className={styles.roundHeader}>
-            <div className={styles.roundHeaderInfo}>
-              <span className={styles.cardTitle}>Round controls</span>
-              {currentSong ? (
-                <>
-                  <p className={styles.songLine}>{currentSong.title}</p>
-                  <p className={styles.songMeta}>
-                    {currentSong.artist}
-                    {currentSong.source ? ` - ${currentSong.source}` : ""}
-                  </p>
-                </>
-              ) : (
-                <p className={styles.songMeta}>No round started yet.</p>
-              )}
+          {currentSong ? (
+            <div className={styles.songBlock}>
+              <p className={styles.songLine}>{currentSong.title}</p>
+              <p className={styles.songMeta}>
+                {currentSong.artist}
+                {currentSong.source ? ` - ${currentSong.source}` : ""}
+              </p>
             </div>
-            {round && game.status === "playing" ? (
-              <div className={styles.tokenChips} aria-label="Round token state">
-                <span
-                  className={`${styles.tokenChip} ${
-                    titleClaimedById ? styles.tokenChipClaimed : ""
-                  }`}
-                  data-testid="token-chip-title"
-                >
-                  Song {titleClaimedById ? "✓" : "open"}
-                </span>
-                <span
-                  className={`${styles.tokenChip} ${
-                    artistClaimedById ? styles.tokenChipClaimed : ""
-                  }`}
-                  data-testid="token-chip-artist"
-                >
-                  Artist {artistClaimedById ? "✓" : "open"}
-                </span>
-              </div>
-            ) : null}
-          </div>
+          ) : (
+            <p className={styles.songMeta}>No round started yet.</p>
+          )}
+
+          {round && game.status === "playing" ? (
+            <div className={styles.tokenChips} aria-label="Round token state">
+              <span
+                className={`${styles.tokenChip} ${
+                  titleClaimedById ? styles.tokenChipClaimed : ""
+                }`}
+                data-testid="token-chip-title"
+              >
+                Song {titleClaimedById ? "✓" : "open"}
+              </span>
+              <span
+                className={`${styles.tokenChip} ${
+                  artistClaimedById ? styles.tokenChipClaimed : ""
+                }`}
+                data-testid="token-chip-artist"
+              >
+                Artist {artistClaimedById ? "✓" : "open"}
+              </span>
+            </div>
+          ) : null}
 
           {lockedTeam ? (
             <div className={styles.lockedBanner} role="status" aria-live="polite">

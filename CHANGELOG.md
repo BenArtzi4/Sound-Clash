@@ -17,6 +17,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-16: Manager console: song title and artist now sit above the token-state chips on their own line, and the "Round controls" heading was removed. Easier to read on phones.
 - 2026-05-15: Manager Continue / Next-round buttons now match the size and grid of the four scoring buttons above them — equal-width 2-column row instead of right-aligned text buttons — so the round-controls block reads as one coherent surface.
 - 2026-05-15: Home page button copy: "Join as Team" → "Join a game" (mirrors "Host a game"), and "Display Screen" → "Display screen" so all three role buttons share the same sentence case.
 - 2026-05-15: Manager Bonus button now feels instant: the team picker closes and the "+4 bonus to <team>" toast appears the moment a team is clicked. The score still arrives on the display via Realtime as before; the manager just isn't waiting on the round-trip anymore.

@@ -23,10 +23,11 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     const team = await joinAsTeam(browser, manager.gameCode, "Solo");
 
     // Wait for the manager page to be fully hydrated before negative
-    // assertions. The Round controls card is always present once the
-    // game row has loaded; the manager page no longer shows a Scoreboard
-    // or Teams list, so we can't wait on the team name to appear.
-    await expect(manager.page.getByText(/round controls/i)).toBeVisible({ timeout: 10_000 });
+    // assertions. The "Start game" / "Next round" button is always
+    // present once the round-controls card has mounted; the manager page
+    // no longer shows a Scoreboard or Teams list, so we can't wait on
+    // the team name to appear.
+    await expect(manager.page.getByTestId("start-round")).toBeVisible({ timeout: 10_000 });
 
     // #1: no "Invite Players" heading anywhere.
     await expect(
@@ -135,7 +136,7 @@ test.describe("manager-cleanup-yt-csp branch", () => {
       manager.page.getByText(/video unavailable/i),
     ).toHaveCount(0);
 
-    // The song title also has to appear in the Round controls card -
+    // The song title also has to appear in the round-controls card -
     // proves selectSong returned a Song and the manager UI rendered it.
     await expect(
       manager.page.locator("[class*='songLine']").first(),
