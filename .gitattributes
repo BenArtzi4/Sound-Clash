@@ -11,7 +11,7 @@
 *.json   text eol=lf
 *.md     text eol=lf
 *.sql    text eol=lf
-*.sh     text eol=lf eol=lf
+*.sh     text eol=lf
 *.yml    text eol=lf
 *.yaml   text eol=lf
 *.toml   text eol=lf
@@ -23,9 +23,6 @@ Dockerfile text eol=lf
 .gitattributes text eol=lf
 .editorconfig text eol=lf
 .env.example text eol=lf
-
-# Shell scripts must be LF or they break on Linux.
-*.sh text eol=lf
 
 # Binary file types: explicitly mark to avoid mangling.
 *.png    binary
