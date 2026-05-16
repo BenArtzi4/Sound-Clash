@@ -5,11 +5,7 @@ vi.mock("../lib/supabase", async () => {
   return { supabase: mod.supabaseMock };
 });
 
-import {
-  awardAttemptDirect,
-  releaseBuzzLockDirect,
-  RpcError,
-} from "./useManagerActions";
+import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "./useManagerActions";
 import { resetSupabaseMock, setRpcResponse, supabaseMock } from "../test/supabaseMock";
 
 const TOKEN = "11111111-1111-1111-1111-111111111111";

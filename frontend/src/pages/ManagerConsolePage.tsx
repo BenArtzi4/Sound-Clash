@@ -8,11 +8,7 @@ import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { ApiError, awardBonus, endGame, endRound, selectSong } from "../lib/api";
-import {
-  awardAttemptDirect,
-  releaseBuzzLockDirect,
-  RpcError,
-} from "../hooks/useManagerActions";
+import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/useManagerActions";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
@@ -202,8 +198,7 @@ export function ManagerConsolePage() {
     if (!state.game.buzzed_team_id) return;
     const teamName = buzzedTeamName();
     const freeGuess =
-      state.currentRound.title_claimed_by != null ||
-      state.currentRound.artist_claimed_by != null;
+      state.currentRound.title_claimed_by != null || state.currentRound.artist_claimed_by != null;
     if (teamName && !freeGuess) toast(`-3 to ${teamName}`, { variant: "info" });
     setBusy(true);
     try {
