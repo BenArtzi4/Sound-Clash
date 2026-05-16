@@ -71,10 +71,7 @@ export async function awardAttemptDirect(
   };
 }
 
-export async function releaseBuzzLockDirect(
-  gameCode: string,
-  managerToken: string,
-): Promise<void> {
+export async function releaseBuzzLockDirect(gameCode: string, managerToken: string): Promise<void> {
   const { error } = await supabase.rpc("release_buzz_lock", {
     p_game_code: gameCode,
     p_manager_token: managerToken,
