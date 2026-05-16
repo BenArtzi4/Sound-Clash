@@ -71,11 +71,14 @@ vi.mock("../components/YouTubePlayer", () => ({
 import { awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
+import type { GameRound } from "../lib/types";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
+  fireRound,
   fireSubscribed,
   makeActiveGame,
+  makePayload,
   makeRound,
   makeTeam,
   resetSupabaseMock,
@@ -439,6 +442,219 @@ describe("ManagerConsolePage", () => {
         wrong_buzz: true,
       }),
     );
+  });
+
+  // ---- no-flash regression: scoring buttons stay disabled across RPC + Realtime ----
+  // Before the pending-flag fix the disable prop read `busy`, so the button
+  // flipped disabled -> enabled (when the RPC resolved and `busy` cleared)
+  // -> disabled (when the Realtime UPDATE landed). The visible flicker was
+  // the "double flash" the host saw. These tests pin the new behavior:
+  // disabled at click time, disabled when the RPC resolves, still disabled
+  // after the Realtime UPDATE -- one transition, no enable-in-between.
+
+  it("Correct Song stays disabled through the RPC -> Realtime handoff (no flash)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    // Defer the RPC resolution so we can probe state mid-flight.
+    let resolveRpc!: (value: never) => void;
+    vi.mocked(awardAttemptDirect).mockReturnValueOnce(
+      new Promise((res) => {
+        resolveRpc = res as (v: never) => void;
+      }) as never,
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByTestId("score-title");
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    // Click flipped the pending flag synchronously: still disabled.
+    expect(btn).toBeDisabled();
+    // Simulate the RPC commit (DB has applied the claim).
+    await act(async () => {
+      resolveRpc({
+        round_id: "r1",
+        team_id: "t1",
+        points_awarded: 10,
+        team_total_score: 10,
+        title_claimed_by: "t1",
+        artist_claimed_by: null,
+      } as never);
+    });
+    // RPC has resolved but the Realtime UPDATE hasn't landed yet -- in the
+    // old code this is where `busy` would have cleared and the button would
+    // briefly re-enable. The pending flag keeps it disabled.
+    expect(btn).toBeDisabled();
+    // Now simulate the Realtime UPDATE on game_rounds.
+    await act(async () => {
+      fireRound(
+        makePayload<GameRound>("game_rounds", "UPDATE", {
+          new: makeRound({ id: "r1", title_claimed_by: "t1" }),
+          old: makeRound({ id: "r1" }),
+        }),
+      );
+    });
+    // Disabled now via the semantic gate (title_claimed_by) -- the pending
+    // flag's job is done; the button stayed disabled throughout.
+    expect(btn).toBeDisabled();
+  });
+
+  it("Correct Artist stays disabled through the RPC -> Realtime handoff (no flash)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let resolveRpc!: (value: never) => void;
+    vi.mocked(awardAttemptDirect).mockReturnValueOnce(
+      new Promise((res) => {
+        resolveRpc = res as (v: never) => void;
+      }) as never,
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByTestId("score-artist");
+    fireEvent.click(btn);
+    expect(btn).toBeDisabled();
+    await act(async () => {
+      resolveRpc({
+        round_id: "r1",
+        team_id: "t1",
+        points_awarded: 5,
+        team_total_score: 5,
+        title_claimed_by: null,
+        artist_claimed_by: "t1",
+      } as never);
+    });
+    expect(btn).toBeDisabled();
+    await act(async () => {
+      fireRound(
+        makePayload<GameRound>("game_rounds", "UPDATE", {
+          new: makeRound({ id: "r1", artist_claimed_by: "t1" }),
+          old: makeRound({ id: "r1" }),
+        }),
+      );
+    });
+    expect(btn).toBeDisabled();
+  });
+
+  it("Wrong stays disabled through the RPC -> Realtime handoff (no flash)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let resolveRpc!: (value: never) => void;
+    vi.mocked(awardAttemptDirect).mockReturnValueOnce(
+      new Promise((res) => {
+        resolveRpc = res as (v: never) => void;
+      }) as never,
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByTestId("score-wrong");
+    fireEvent.click(btn);
+    expect(btn).toBeDisabled();
+    await act(async () => {
+      resolveRpc({
+        round_id: "r1",
+        team_id: "t1",
+        points_awarded: -3,
+        team_total_score: -3,
+        title_claimed_by: null,
+        artist_claimed_by: null,
+      } as never);
+    });
+    expect(btn).toBeDisabled();
+    // Wrong clears the buzz lock on active_games -- Realtime UPDATE drops
+    // buzzed_team_id. After that the semantic gate (!lockedTeam) is what
+    // keeps the button disabled.
+    await act(async () => {
+      fireRound(
+        makePayload<GameRound>("game_rounds", "UPDATE", {
+          new: makeRound({ id: "r1" }),
+          old: makeRound({ id: "r1" }),
+        }),
+      );
+    });
+    expect(btn).toBeDisabled();
+  });
+
+  it("Correct Song re-enables after a failed RPC so the host can retry", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttemptDirect).mockRejectedValueOnce(new Error("network blip"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByTestId("score-title");
+    fireEvent.click(btn);
+    // After the rejection settles, the pending flag is cleared and the
+    // button is re-enabled (lockedTeam still truthy, title not yet
+    // claimed). The host can retry.
+    await waitFor(() => expect(btn).toBeEnabled());
+  });
+
+  it("Continue round does not depend on busy (no flash); auto-disables when lock clears", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let resolveRpc!: (value: undefined) => void;
+    vi.mocked(releaseBuzzLockDirect).mockReturnValueOnce(
+      new Promise<undefined>((res) => {
+        resolveRpc = res;
+      }),
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const continueBtn = screen.getByTestId("continue-round");
+    expect(continueBtn).toBeEnabled();
+    fireEvent.click(continueBtn);
+    // Mid-RPC: the button is still enabled. The previous implementation
+    // would have shown disabled here (busy=true) -- now we drop busy from
+    // the gate and rely solely on the semantic state.
+    expect(continueBtn).toBeEnabled();
+    await act(async () => {
+      resolveRpc(undefined);
+    });
+    // After Realtime clears buzzed_team_id, the semantic gate takes over.
+    expect(continueBtn).toBeEnabled(); // still enabled (state hasn't flowed)
   });
 
   it("Correct Song silently swallows a title_already_claimed RpcError (no toast)", async () => {

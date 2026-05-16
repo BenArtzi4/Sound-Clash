@@ -28,12 +28,38 @@ export function ManagerConsolePage() {
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
 
+  // Optimistic "we just clicked this" markers for the three scoring buttons,
+  // each holding the round id the click happened on. They bridge the ~50-
+  // 100ms gap between the award_attempt RPC returning and the Realtime
+  // UPDATE on game_rounds (title_claimed_by / artist_claimed_by) or
+  // active_games (buzzed_team_id) arriving -- without them the disabled
+  // prop momentarily flips back to false (since `busy` cleared but the
+  // semantic gate hadn't tightened yet), which the user sees as a "double
+  // flash" on the button. The flag is naturally self-clearing on round
+  // change (stale id won't equal the new round.id) and gets reset by the
+  // effect below for tidiness. Cleared in each handler's catch on failure
+  // so a transient RPC error doesn't leave the button permanently disabled.
+  const [pendingTitle, setPendingTitle] = useState<string | null>(null);
+  const [pendingArtist, setPendingArtist] = useState<string | null>(null);
+  const [pendingWrong, setPendingWrong] = useState<string | null>(null);
+
   // When we get the buzz lock signal, pause playback.
   useEffect(() => {
     if (state?.game.buzzed_team_id != null) {
       playerRef.current?.pause();
     }
   }, [state?.game.buzzed_team_id]);
+
+  // Reset the per-click pending flags whenever the round changes. The
+  // disabled checks already compare against `round?.id` so stale flags
+  // are inert, but clearing them keeps state tidy and avoids confusion
+  // when debugging.
+  const currentRoundId = state?.currentRound?.id ?? null;
+  useEffect(() => {
+    setPendingTitle(null);
+    setPendingArtist(null);
+    setPendingWrong(null);
+  }, [currentRoundId]);
 
   // After a manager-tab refresh mid-round, currentSong is null but the round
   // row still has a song_id. Resolve it and push it into the player so the
@@ -150,16 +176,23 @@ export function ManagerConsolePage() {
   async function handleCorrectTitle() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     if (teamName) toast(`+10 to ${teamName}`, { variant: "success" });
+    // Pending flag flips the disabled prop synchronously on click and stays
+    // set until the Realtime UPDATE on game_rounds.title_claimed_by lands
+    // (after which the semantic gate takes over) -- no enable/disable
+    // flicker in the gap.
+    setPendingTitle(roundId);
     setBusy(true);
     try {
-      await applyAttempt(state.currentRound.id, {
+      await applyAttempt(roundId, {
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
       });
     } catch (err) {
+      setPendingTitle(null);
       reportError(err);
     } finally {
       setBusy(false);
@@ -169,16 +202,19 @@ export function ManagerConsolePage() {
   async function handleCorrectArtist() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     if (teamName) toast(`+5 to ${teamName}`, { variant: "success" });
+    setPendingArtist(roundId);
     setBusy(true);
     try {
-      await applyAttempt(state.currentRound.id, {
+      await applyAttempt(roundId, {
         title_correct: false,
         artist_correct: true,
         wrong_buzz: false,
       });
     } catch (err) {
+      setPendingArtist(null);
       reportError(err);
     } finally {
       setBusy(false);
@@ -212,19 +248,22 @@ export function ManagerConsolePage() {
   async function handleWrong() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     const freeGuess =
       state.currentRound.title_claimed_by != null || state.currentRound.artist_claimed_by != null;
     if (teamName && !freeGuess) toast(`-3 to ${teamName}`, { variant: "info" });
+    setPendingWrong(roundId);
     setBusy(true);
     try {
-      await applyAttempt(state.currentRound.id, {
+      await applyAttempt(roundId, {
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
       });
       playerRef.current?.play();
     } catch (err) {
+      setPendingWrong(null);
       reportError(err);
     } finally {
       setBusy(false);
@@ -354,11 +393,22 @@ export function ManagerConsolePage() {
 
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
-  const titleActionDisabled = busy || !lockedTeam || titleClaimedById != null;
-  const artistActionDisabled = busy || !lockedTeam || artistClaimedById != null;
-  const wrongActionDisabled = busy || !lockedTeam;
-  const continueDisabled = busy || !lockedTeam;
-  const nextRoundDisabled = busy || !player.ready;
+  // Disabled props deliberately do NOT read `busy`: a click-driven busy
+  // toggle creates a visible disable->enable->disable flash between the
+  // RPC returning (~150ms) and the Realtime UPDATE landing (~200-300ms).
+  // The scoring buttons use a pending-flag handoff (set on click, cleared
+  // automatically when the round changes) so they stay disabled across
+  // that gap. Continue / Next round just trust their semantic gate
+  // (lockedTeam / player.ready) and rely on the handler-side `busy`
+  // early-return to no-op rapid double-clicks. End game and Bonus still
+  // gate on busy because they fire less often and the flash is
+  // imperceptible there.
+  const titleActionDisabled = !lockedTeam || titleClaimedById != null || pendingTitle === round?.id;
+  const artistActionDisabled =
+    !lockedTeam || artistClaimedById != null || pendingArtist === round?.id;
+  const wrongActionDisabled = !lockedTeam || pendingWrong === round?.id;
+  const continueDisabled = !lockedTeam;
+  const nextRoundDisabled = !player.ready;
   // Bonus is independent of buzz state — it stays actionable as long as the
   // page isn't mid-request. (It must NOT be wrapped in an aria-disabled
   // group, or screen readers + Playwright's toBeEnabled() treat it as
