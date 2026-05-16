@@ -96,24 +96,8 @@ const FAQ: ReadonlyArray<{ term: string; def: React.ReactNode }> = [
     ),
   },
   {
-    term: "No song repeats",
-    def: "Each song plays at most once per game.",
-  },
-  {
-    term: "Negative scores are allowed",
-    def: "A team can dip below zero. Keep buzzing — there's always another round.",
-  },
-  {
-    term: "Tied score, shared win",
-    def: "No tiebreaker. Equal final scores share the top spot.",
-  },
-  {
     term: "One phone per team",
     def: "Disconnected? Just reload. Your team's seat is saved on the device.",
-  },
-  {
-    term: "Games auto-expire after 4 hours",
-    def: "All data wipes automatically. No accounts, no history — start fresh whenever you like.",
   },
 ];
 

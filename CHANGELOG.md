@@ -8,7 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
-- 2026-05-16: How-to-play page reworked into a numbered seven-step walkthrough (Host a game → genres → Display screen → teams join with QR → start → buzz/judge → optional Bonus) plus a new "Rules & FAQ" section covering the free-guess sweetener, two-tokens-per-song, no-repeats, 4-hour expiry, tied wins, and other rules new players ask about most.
+- 2026-05-16: How-to-play page reworked into a numbered seven-step walkthrough (Host a game → genres → Display screen → teams join with QR → start → buzz/judge → optional Bonus) plus a short "Rules & FAQ" section covering the free-guess sweetener, two tokens per song, wrong-buzz-doesn't-lock-you-out, +4 Bonus anytime, and one-phone-per-team reconnect.
 - 2026-05-15: Display screen now keeps the join QR (and game code) visible at the bottom of the page for the whole game — late players can scan and join mid-round instead of being locked out the moment the first team appears.
 - 2026-05-10: Team's own phone now shows a "+10 / −3" pill the instant their score changes — same look as the projector toast — so a player gets immediate feedback on the device they're already looking at.
 - 2026-05-10: Display screen now reveals the song title and artist name in a dedicated panel once the manager confirms the corresponding correct answer. Unrevealed halves show "???" so the audience can see what's still secret. Token chips below still show which team claimed each.
