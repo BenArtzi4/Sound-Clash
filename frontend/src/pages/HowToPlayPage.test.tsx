@@ -49,9 +49,9 @@ describe("HowToPlayPage", () => {
     );
     expect(screen.getByText(/free guess after a correct answer/i)).toBeInTheDocument();
     expect(screen.getByText(/two answers per song/i)).toBeInTheDocument();
+    expect(screen.getByText(/wrong buzz doesn't lock you out/i)).toBeInTheDocument();
     expect(screen.getByText(/bonus anytime/i)).toBeInTheDocument();
-    expect(screen.getByText(/no song repeats/i)).toBeInTheDocument();
-    expect(screen.getByText(/games auto-expire after 4 hours/i)).toBeInTheDocument();
+    expect(screen.getByText(/one phone per team/i)).toBeInTheDocument();
   });
 
   it("links back to the home page", () => {
