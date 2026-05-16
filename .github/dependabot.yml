@@ -36,26 +36,10 @@ updates:
           - "patch"
         applies-to: version-updates
 
-  # npm (frontend)
-  - package-ecosystem: "npm"
-    directory: "/frontend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "frontend"
-    commit-message:
-      prefix: "deps"
-      prefix-development: "deps-dev"
-      include: "scope"
-    groups:
-      frontend-minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-        applies-to: version-updates
+  # npm (frontend) -- intentionally omitted: frontend/package-lock.json is
+  # gitignored (see frontend.yml comment + commit 888a5ab on the npm 10
+  # esbuild optional-deps bug). Dependabot for npm requires a tracked lockfile,
+  # so this ecosystem is a no-op until the lockfile lands.
 
   # npm (e2e tests)
   - package-ecosystem: "npm"

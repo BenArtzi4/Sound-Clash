@@ -1,0 +1,5 @@
+# CODEOWNERS — auto-requests @BenArtzi4 as a reviewer on every PR.
+# Solo maintainer for now; this file scales if collaborators are ever added.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+*       @BenArtzi4
