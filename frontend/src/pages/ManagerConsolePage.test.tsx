@@ -300,6 +300,8 @@ describe("ManagerConsolePage", () => {
     const continueBtn = screen.getByTestId("continue-round");
     await waitFor(() => expect(continueBtn).toBeEnabled());
     fireEvent.click(continueBtn);
+    // Optimistic toast fires before the RPC settles.
+    expect(screen.getByText(/round continued/i)).toBeInTheDocument();
     await waitFor(() => expect(releaseBuzzLockDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(lastHandle?.play).toHaveBeenCalled());
   });
@@ -520,6 +522,8 @@ describe("ManagerConsolePage", () => {
       onReadyHandler?.();
     });
     fireEvent.click(screen.getByTestId("start-round"));
+    // Optimistic toast fires before the network chain resolves.
+    expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
     await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
     await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
     // Score buttons no longer pre-fire award_attempt on Next; that responsibility
@@ -563,6 +567,7 @@ describe("ManagerConsolePage", () => {
       onReadyHandler?.();
     });
     fireEvent.click(screen.getByTestId("start-round"));
+    expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
     await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
     await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
     expect(awardAttemptDirect).not.toHaveBeenCalled();
@@ -698,6 +703,8 @@ describe("ManagerConsolePage", () => {
     const endDialog = await waitFor(() => screen.getByRole("dialog"));
     expect(endGame).not.toHaveBeenCalled();
     fireEvent.click(within(endDialog).getByRole("button", { name: /^end game$/i }));
+    // Optimistic toast fires before the RPC settles.
+    expect(screen.getByText(/ending game/i)).toBeInTheDocument();
     await waitFor(() => expect(endGame).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(getManagerToken("ABCDEF")).toBeNull());
   });
