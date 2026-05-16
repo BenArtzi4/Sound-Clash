@@ -3,7 +3,8 @@
 Spec: docs/security-rls.md §2.
 
 Four RPCs are callable by anon -- ``buzz_in`` (since migration 006),
-``award_attempt`` and ``release_buzz_lock`` (as of migration 021), and
+``award_attempt`` and ``release_buzz_lock`` (as of migration 021, with the
+legacy un-tokenised overloads retired by migration 023), and
 ``select_next_song`` (as of migration 022). Each does its own in-function
 manager-token check before performing any work, so the function-level
 EXECUTE grant is safe. The remaining backend-only RPCs -- ``start_round``,
@@ -188,10 +189,10 @@ async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) ->
 @pytest.mark.parametrize(
     "proname, args",
     [
-        # Legacy un-tokenised overloads of award_attempt + release_buzz_lock.
-        # They coexist with the new tokenised overloads (migration 021) as
-        # backwards-compatibility plumbing for the still-deployed FastAPI;
-        # they must remain locked to service_role.
+        # Legacy un-tokenised overloads of award_attempt + release_buzz_lock,
+        # retired by migration 023 once the new direct-RPC path had soaked on
+        # prod. They must no longer exist; if they reappear it means a stale
+        # migration replayed and left orphan plumbing behind.
         (
             "award_attempt",
             "p_game_code text, p_round_id uuid, p_title integer, "
@@ -200,16 +201,17 @@ async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) ->
         ("release_buzz_lock", "p_game_code text"),
     ],
 )
-async def test_legacy_overloads_remain_locked(
+async def test_legacy_overloads_were_dropped(
     db: asyncpg.Connection, proname: str, args: str
 ) -> None:
-    """The pre-021 5-arg / 1-arg overloads must NOT have anon EXECUTE; only
-    service_role can call them. Otherwise migration 020's defense-in-depth
-    against the hosted-Supabase auto-grant is undone."""
+    """Migration 023 dropped the pre-021 5-arg / 1-arg overloads of
+    ``award_attempt`` and ``release_buzz_lock``. If they exist, it means
+    something resurrected them -- a partial migration replay, a manual
+    CREATE, or a hand-applied SQL fix -- and PostgREST overload resolution
+    is back to the ambiguous state migration 021 was careful to avoid."""
     row = await db.fetchrow(
         """
-        SELECT has_function_privilege('anon', p.oid, 'execute')          AS anon_exec,
-               has_function_privilege('service_role', p.oid, 'execute')  AS svc_exec
+        SELECT 1
           FROM pg_proc p
           JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public'
@@ -219,9 +221,9 @@ async def test_legacy_overloads_remain_locked(
         proname,
         args,
     )
-    assert row is not None, f"legacy overload {proname}({args}) missing"
-    assert row["anon_exec"] is False
-    assert row["svc_exec"] is True
+    assert row is None, (
+        f"legacy overload {proname}({args}) is back -- migration 023 should have dropped it"
+    )
 
 
 @pytest.mark.asyncio
@@ -233,11 +235,9 @@ async def test_legacy_overloads_remain_locked(
         # spelling ("character" for char(N), "integer" for int, etc.).
         # buzz_in: single signature; entire function is anon-callable.
         ("buzz_in", "p_game_code character, p_team_id uuid"),
-        # award_attempt and release_buzz_lock: only the tokenised overloads
-        # (added in migration 021) are anon-callable. The legacy un-tokenised
-        # overloads still exist as transitional plumbing for the currently-
-        # deployed FastAPI; they remain locked to service_role by migration
-        # 020 and are covered by test_legacy_overloads_remain_locked below.
+        # award_attempt and release_buzz_lock: the tokenised overloads added in
+        # migration 021 are now the only overloads (migration 023 dropped the
+        # legacy un-tokenised ones once the new direct-RPC path was stable).
         (
             "award_attempt",
             "p_game_code text, p_round_id uuid, p_title integer, "

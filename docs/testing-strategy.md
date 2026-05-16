@@ -64,16 +64,18 @@ Numbers are targets at end of Phase 6. Don't game them; let the test count emerg
 
 Spin up Postgres via `testcontainers-postgres`. Apply all migrations from `db/migrations/`. Run tests against the fresh DB.
 
-| File | What it tests | Phase 3 priority |
+| File | What it tests | Priority |
 |---|---|---|
 | `test_buzz_in_race.py` | 10 concurrent buzz_in calls → exactly 1 winner. **Loops 100×** in stress mode. | P0 |
 | `test_buzz_in_edge_cases.py` | buzz when game waiting/ended/missing; bad UUID; lock-already-held | P0 |
 | `test_start_round.py` | happy path; on ended game raises `game_already_ended`; advances round_number atomically | P0 |
-| `test_award_points.py` | happy path; idempotency (second call → `round_already_ended`); timeout case skips score update; team score accumulates | P0 |
+| `test_award_attempt.py` | award_attempt + release_buzz_lock under the multi-buzz model: title-only, artist-only, both, wrong-buzz, token validation (right/wrong/null), all error branches | P0 |
+| `test_select_next_song.py` | happy paths (random + manual pick); token validation; no_more_songs; song_not_found; closes prior open round via start_round | P0 |
+| `test_award_bonus.py` | happy path; non-positive points rejected; game-not-found; game-already-ended | P1 |
 | `test_end_game.py` | happy path; on already-ended raises | P1 |
 | `test_cleanup_expired_games.py` | manually set `expires_at` to past; invoke `cleanup_expired_games()`; verify cascade to teams + rounds | P0 |
 | `test_rls_anon.py` | as `anon` role: SELECT works, INSERT/UPDATE/DELETE rejected on every table | P0 |
-| `test_rls_function_grants.py` | as `anon`: EXECUTE buzz_in works; EXECUTE start_round/award_points/end_game/cleanup rejected | P0 |
+| `test_rls_function_grants.py` | as `anon`: EXECUTE on the four browser-callable RPCs works (buzz_in + the three token-gated ones); EXECUTE on backend-only RPCs rejected | P0 |
 | `test_migrations_idempotent.py` | run all migrations twice; second run is no-op | P1 |
 | `test_schema_constraints.py` | duplicate game_code rejected; duplicate (game_code,name) rejected; FK cascades | P1 |
 | `test_pg_cron_registered.py` | `SELECT * FROM cron.job WHERE jobname = 'cleanup-expired-games'` returns 1 row | P1 |
@@ -88,12 +90,11 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 |---|---|
 | `test_health.py` | `/health` returns 200 with version |
 | `test_admin_auth.py` | 401 without header; 200 with correct; 401 with wrong; constant-time compare |
-| `test_games_create.py` | happy path; admin auth required; collision-retry on duplicate code; validation (genres required) |
+| `test_games_create.py` | happy path; collision-retry on duplicate code; validation (genres required) |
 | `test_games_join.py` | happy path; rejected if name duplicate; rejected if game expired; rejected if game ended |
-| `test_games_select_song.py` | happy path; respects `selected_genres`; excludes already-played songs; 409 when exhausted |
-| `test_games_award_points.py` | happy path; auth required; idempotency surfaces 409 |
-| `test_games_end.py` | happy path; auth required; 409 if already ended |
-| `test_games_kick_team.py` | happy path; auth required |
+| `test_games_bonus.py` | happy path; token required; team-not-in-game; game-ended |
+| `test_games_end.py` | happy path; token required; 409 if already ended |
+| `test_games_kick_team.py` | happy path; token required |
 | `test_admin_songs_crud.py` | full CRUD; YouTube ID validation; 401 without auth |
 | `test_admin_songs_bulk_import.py` | new rows inserted; existing youtube_id updated; malformed CSV rejected with row numbers |
 | `test_genres.py` | public; returns all genres |

@@ -31,7 +31,7 @@ flowchart TB
             direction TB
             Tephem[("Ephemeral<br/>active_games /<br/>game_teams /<br/>game_rounds<br/>(4h TTL)")]
             Tdurable[("Durable<br/>songs /<br/>genres /<br/>song_genres")]
-            RPC{{"PL/pgSQL<br/>buzz_in / start_round /<br/>award_points / award_bonus /<br/>end_game / cleanup_expired_games"}}
+            RPC{{"PL/pgSQL<br/>buzz_in / award_attempt /<br/>release_buzz_lock / select_next_song /<br/>start_round / end_round / award_bonus /<br/>end_game / cleanup_expired_games"}}
             Cron[/"pg_cron<br/>cleanup every hour"/]
             RLS[/"RLS policies<br/>anon SELECT only"/]
         end
