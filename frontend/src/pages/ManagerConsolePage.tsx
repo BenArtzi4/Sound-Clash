@@ -43,6 +43,21 @@ export function ManagerConsolePage() {
   const [pendingArtist, setPendingArtist] = useState<string | null>(null);
   const [pendingWrong, setPendingWrong] = useState<string | null>(null);
 
+  // Synchronous in-flight locks per action. useState (`busy`) is captured in
+  // the handler closure at render time, so two clicks fired in the same
+  // React tick both read `busy=false` and both proceed -- React's batching
+  // hides the first setBusy(true) from the second handler. useRef.current
+  // mutates synchronously, so the second click sees `true` and bails. Cheap
+  // belt-and-suspenders alongside the existing `busy` early-return; matters
+  // most for handleNextRound, where a duplicate fire would insert an orphan
+  // game_rounds row (the other actions are idempotent via the SQL function's
+  // already-claimed / no-buzz-to-score branches).
+  const titleInFlightRef = useRef(false);
+  const artistInFlightRef = useRef(false);
+  const wrongInFlightRef = useRef(false);
+  const continueInFlightRef = useRef(false);
+  const nextRoundInFlightRef = useRef(false);
+
   // When we get the buzz lock signal, pause playback.
   useEffect(() => {
     if (state?.game.buzzed_team_id != null) {
@@ -174,8 +189,10 @@ export function ManagerConsolePage() {
   }
 
   async function handleCorrectTitle() {
+    if (titleInFlightRef.current) return;
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    titleInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     if (teamName) toast(`+10 to ${teamName}`, { variant: "success" });
@@ -196,12 +213,15 @@ export function ManagerConsolePage() {
       reportError(err);
     } finally {
       setBusy(false);
+      titleInFlightRef.current = false;
     }
   }
 
   async function handleCorrectArtist() {
+    if (artistInFlightRef.current) return;
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    artistInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     if (teamName) toast(`+5 to ${teamName}`, { variant: "success" });
@@ -218,11 +238,14 @@ export function ManagerConsolePage() {
       reportError(err);
     } finally {
       setBusy(false);
+      artistInFlightRef.current = false;
     }
   }
 
   async function handleContinueRound() {
+    if (continueInFlightRef.current) return;
     if (busy || !managerToken) return;
+    continueInFlightRef.current = true;
     // Optimistic toast fires before the RPC so the click feels instant; the
     // Realtime UPDATE on active_games.buzzed_team_id is still the source of
     // truth for re-arming the buzzers.
@@ -235,6 +258,7 @@ export function ManagerConsolePage() {
       reportError(err);
     } finally {
       setBusy(false);
+      continueInFlightRef.current = false;
     }
   }
 
@@ -246,8 +270,10 @@ export function ManagerConsolePage() {
   // held until the RPC commits so a failed Wrong leaves the song paused with
   // the lock still held -- the manager can simply retry.
   async function handleWrong() {
+    if (wrongInFlightRef.current) return;
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    wrongInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     const freeGuess =
@@ -267,11 +293,14 @@ export function ManagerConsolePage() {
       reportError(err);
     } finally {
       setBusy(false);
+      wrongInFlightRef.current = false;
     }
   }
 
   async function handleNextRound() {
+    if (nextRoundInFlightRef.current) return;
     if (busy || !managerToken) return;
+    nextRoundInFlightRef.current = true;
     // Optimistic toast confirms the click immediately. The single direct RPC
     // (migration 022 -> select_next_song) replaces what used to be two
     // chained Render hops (POST /end-round + POST /select-song), so the
@@ -288,6 +317,7 @@ export function ManagerConsolePage() {
       reportError(err);
     } finally {
       setBusy(false);
+      nextRoundInFlightRef.current = false;
     }
   }
 
