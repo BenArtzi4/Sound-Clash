@@ -8,7 +8,7 @@ interface State {
   listeners: Record<TableName, ChangeListener<unknown>[]>;
   subscribeCallbacks: Array<(status: string) => void | Promise<void>>;
   hydrate: { game: ActiveGame | null; teams: Team[]; rounds: GameRound[] };
-  rpcResponse: { data: unknown; error: { message: string } | null };
+  rpcResponse: { data: unknown; error: { message: string; code?: string } | null };
   // Map of song id -> row used by from("songs").maybeSingle() lookups so the
   // manager-refresh code path (re-resolves currentRound.song_id back to a
   // song record) can be exercised in unit tests.
@@ -132,7 +132,7 @@ export function setHydrate(data: {
 
 export function setRpcResponse(response: {
   data: unknown;
-  error: { message: string } | null;
+  error: { message: string; code?: string } | null;
 }): void {
   state.rpcResponse = response;
 }

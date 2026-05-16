@@ -1,8 +1,6 @@
 import { env } from "./env";
 import type {
   ApiErrorBody,
-  AttemptRequest,
-  AttemptResponse,
   AwardBonusRequest,
   AwardBonusResponse,
   BulkImportSummary,
@@ -141,17 +139,6 @@ export function selectSong(
   });
 }
 
-export function awardAttempt(
-  gameCode: string,
-  managerToken: string,
-  body: AttemptRequest,
-): Promise<AttemptResponse> {
-  return request("POST", `/games/${gameCode}/attempt`, {
-    managerToken,
-    body,
-  });
-}
-
 export function endRound(
   gameCode: string,
   managerToken: string,
@@ -160,13 +147,6 @@ export function endRound(
   return request("POST", `/games/${gameCode}/end-round`, {
     managerToken,
     body: { round_id: roundId },
-  });
-}
-
-export function continueRound(gameCode: string, managerToken: string): Promise<void> {
-  return request("POST", `/games/${gameCode}/continue`, {
-    managerToken,
-    body: {},
   });
 }
 

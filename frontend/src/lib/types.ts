@@ -114,13 +114,6 @@ export interface SelectSongResponse {
   song: Song;
 }
 
-export interface AttemptRequest {
-  round_id: string;
-  title_correct: boolean;
-  artist_correct: boolean;
-  wrong_buzz: boolean;
-}
-
 export interface AttemptResponse {
   round_id: string;
   team_id: string | null;

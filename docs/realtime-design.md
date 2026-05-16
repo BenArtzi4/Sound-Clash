@@ -244,8 +244,8 @@ The manager UI also disables the "Start round" button until the player reports r
 | `buzz_in` returns network error | Same | Same |
 | Postgres slow query (rare) | RPC RTT > 500ms | Logged client-side via Sentry; investigate; not user-recoverable |
 | Realtime quota exhausted | Channel subscribe fails with quota error | Fail-loud at game-creation time (not mid-game); manager sees "service at capacity" |
-| Render is cold | First request to FastAPI takes ~30s | UI shows "creating game…" spinner; only happens on game creation, not during play |
-| FastAPI is down | API call returns 5xx | Game creation impossible; existing games keep working (Realtime + RPC are independent of FastAPI) |
+| Render is cold | First request to FastAPI takes ~30s | UI shows "creating game…" spinner; only happens on game creation, not during play (manager scoring went direct to Postgres in migration 021) |
+| FastAPI is down | API call returns 5xx | Game creation impossible; existing games keep working — Realtime + the browser-direct RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`) are independent of FastAPI, so an entire game including scoring can run with the dyno cold or unreachable, as long as the host's tab already loaded |
 | Supabase project is down | Everything fails | Game-day DR: nothing; this is the single point of failure. Free tier accepts this. |
 
 ## 11. Single-Manager Invariant

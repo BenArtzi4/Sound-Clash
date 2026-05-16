@@ -133,63 +133,62 @@ Server-side: calls Postgres `start_round(p_game_code, p_song_id)` RPC. Returns t
 
 ---
 
-### 2.5 `POST /games/{game_code}/attempt`
+### 2.5 Scoring an attempt — direct Postgres RPC (no FastAPI hop)
 
-Manager: score one buzz on the current round. The round stays open after this call so other teams can buzz on the same song. **Manager-token auth required.**
+Migration 021 moved scoring off FastAPI: the manager browser calls the
+``award_attempt`` PL/pgSQL function directly via Supabase PostgREST, the
+same way the buzzer calls ``buzz_in``. Removing the Render round-trip drops
+manager-action latency from ~400-600ms to ~150ms.
 
-**Headers**: `X-Manager-Token: <token>`
+The function takes the per-game `manager_token` as its last argument and
+validates it (constant comparison on a fixed-width uuid) before performing
+any side effect. See `docs/rpc-functions.md §3` for the full signature and
+`docs/security-rls.md §2` for the auth model.
 
-**Request body**:
-```json
-{
-  "round_id": "<round_uuid>",
-  "title_correct": true,
-  "artist_correct": false,
-  "wrong_buzz": false
-}
+```ts
+const { data, error } = await supabase.rpc("award_attempt", {
+  p_game_code: gameCode,
+  p_round_id: roundId,
+  p_title: titleCorrect ? 10 : 0,
+  p_artist: artistCorrect ? 5 : 0,
+  p_wrong_buzz: wrongBuzz ? 3 : 0,
+  p_manager_token: managerToken,
+});
 ```
 
-Server translates to point values:
-- `title_correct: true` → +10 to the buzzed team; claims the TITLE token.
-- `artist_correct: true` → +5 to the buzzed team; claims the ARTIST token.
-- Both true → +15 in one shot (claims both tokens).
-- `wrong_buzz: true` → −3 to the buzzed team. Mutually exclusive with the two flags above.
+Frontend wrapper: `frontend/src/hooks/useManagerActions.ts::awardAttemptDirect`
+(boolean → integer translation + shape normalisation).
 
-At least one flag must be true; an attempt with all flags false is a `validation_error` (400).
+**Behavior**:
+- `p_title = 10` → +10 to the buzzed team; claims the TITLE token.
+- `p_artist = 5` → +5 to the buzzed team; claims the ARTIST token.
+- Both → +15 in one shot (claims both tokens).
+- `p_wrong_buzz = 3` → −3 to the buzzed team. Mutually exclusive with the two above; if a token was already claimed earlier in the round the SQL function waives the penalty (free-guess rule, migration 017).
+- The buzz lock is **only** cleared on the wrong-buzz path. A correct attempt leaves `active_games.buzzed_team_id` and `locked_at` in place — the answering team retains the floor for the other token until the manager presses Continue or Next round.
 
-**Response 200**:
-```json
-{
-  "round_id": "<round_uuid>",
-  "team_id": "<team_uuid>",
-  "points_awarded": 10,
-  "team_total_score": 35,
-  "title_claimed_by": "<team_uuid_or_null>",
-  "artist_claimed_by": "<team_uuid_or_null>"
-}
-```
-
-`points_awarded` may be negative (wrong-buzz). `title_claimed_by` / `artist_claimed_by` reflect the round's claim state after the call (a token claimed earlier in the round by another team is reported here).
-
-Server-side: calls Postgres `award_attempt` RPC. As of migration 018 the buzz lock is **only** cleared on the wrong-buzz path. A correct `title` or `artist` attempt scores the points but leaves `active_games.buzzed_team_id` and `locked_at` in place — the answering team retains the floor for the other token until the manager presses Continue (`POST /games/{code}/continue`) or Next round.
-
-**Errors**: `unauthorized` (401), `not_found` (404; round doesn't exist), `conflict` (409; round already ended, no buzz held, or token already claimed), `validation_error` (400; mutually-exclusive flags or no flag set).
+**Errors** (raised as PostgrestError with the named code in `message`):
+- `manager_token_required` (sqlstate `28000`) — bad/missing token.
+- `game_not_found` (sqlstate `P0002`) — game code unknown.
+- `game_ended` (sqlstate `P0001`) — game already ended.
+- `round_not_found` (sqlstate `P0002`), `round_already_ended` (P0001), `no_buzz_to_score` (P0001), `title_already_claimed` / `artist_already_claimed` (P0001), `wrong_buzz_with_correct` (P0001).
 
 ---
 
-### 2.5a `POST /games/{game_code}/continue`
+### 2.5a Releasing the buzz lock — direct Postgres RPC
 
-Manager: release a held buzz lock without scoring. Used after a correct attempt when the manager wants to resume the song and let any team buzz again. Idempotent. **Manager-token auth required.**
+Manager presses Continue (resume the song without scoring). Same direct-RPC
+pattern as 2.5; the function checks the manager token internally.
 
-**Headers**: `X-Manager-Token: <token>`
+```ts
+const { error } = await supabase.rpc("release_buzz_lock", {
+  p_game_code: gameCode,
+  p_manager_token: managerToken,
+});
+```
 
-**Request body**: empty (`{}`).
+Frontend wrapper: `frontend/src/hooks/useManagerActions.ts::releaseBuzzLockDirect`.
 
-**Response 204**: no body.
-
-Server-side: calls Postgres `release_buzz_lock` RPC, which clears `active_games.buzzed_team_id` and `locked_at`. Safe to call when no buzz is held (no-op).
-
-**Errors**: `unauthorized` (401).
+Idempotent: safe to call when no buzz is held. Errors mirror 2.5 (token / game lookup).
 
 ---
 
@@ -469,7 +468,7 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 - `POST /games`: not idempotent (each call creates a new game). Frontend must not retry on network error without user confirmation.
 - `POST /games/{code}/teams`: idempotent on `(game_code, name)`: UNIQUE constraint catches retries.
 - `POST /games/{code}/select-song`: not idempotent; each call advances the round number. Frontend must not retry without user confirmation.
-- `POST /games/{code}/attempt`: NOT idempotent. Each call records one attempt against the open round. Manager UI guards against double-submit with a busy flag. Calling on an ended round → 409.
+- `award_attempt` RPC (direct from manager browser): NOT idempotent. Each call records one attempt against the open round. Manager UI guards against double-submit with a busy flag; the SQL function additionally raises `title_already_claimed` / `artist_already_claimed` on retry. Calling on an ended round raises `round_already_ended`.
 - `POST /games/{code}/end-round`: idempotent. A second call on an already-ended round returns the existing `ended_at`.
 - `POST /games/{code}/end`: idempotent; calling on an already-`ended` game is a 409 (conflict), not a no-op, to surface the inconsistency to the manager UI.
 - `buzz_in` RPC: implicitly idempotent (the `IS NULL` predicate prevents double-claim).

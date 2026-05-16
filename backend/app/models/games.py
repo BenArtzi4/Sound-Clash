@@ -66,26 +66,6 @@ class SelectSongResponse(BaseModel):
     song: SongPayload
 
 
-class AttemptRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    round_id: UUID
-    title_correct: bool = False
-    artist_correct: bool = False
-    wrong_buzz: bool = False
-
-
-class AttemptResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    round_id: UUID
-    team_id: UUID | None
-    points_awarded: int
-    team_total_score: int
-    title_claimed_by: UUID | None = None
-    artist_claimed_by: UUID | None = None
-
-
 class EndRoundRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -21,11 +21,21 @@ vi.mock("../lib/api", () => ({
     }
   },
   selectSong: vi.fn(),
-  awardAttempt: vi.fn(),
   awardBonus: vi.fn(),
-  continueRound: vi.fn(),
   endRound: vi.fn(),
   endGame: vi.fn(),
+}));
+
+vi.mock("../hooks/useManagerActions", () => ({
+  RpcError: class RpcError extends Error {
+    sqlstate: string | undefined;
+    constructor(message: string, sqlstate?: string) {
+      super(message);
+      this.sqlstate = sqlstate;
+    }
+  },
+  awardAttemptDirect: vi.fn(),
+  releaseBuzzLockDirect: vi.fn(),
 }));
 
 interface MockHandle {
@@ -56,7 +66,8 @@ vi.mock("../components/YouTubePlayer", () => ({
   }),
 }));
 
-import { awardAttempt, awardBonus, continueRound, endGame, endRound, selectSong } from "../lib/api";
+import { awardBonus, endGame, endRound, selectSong } from "../lib/api";
+import { awardAttemptDirect, releaseBuzzLockDirect } from "../hooks/useManagerActions";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
@@ -79,8 +90,8 @@ beforeEach(() => {
   onReadyHandler = null;
   lastHandle = null;
   vi.mocked(selectSong).mockReset();
-  vi.mocked(awardAttempt).mockReset();
-  vi.mocked(continueRound).mockReset();
+  vi.mocked(awardAttemptDirect).mockReset();
+  vi.mocked(releaseBuzzLockDirect).mockReset();
   vi.mocked(endRound).mockReset();
   vi.mocked(awardBonus).mockReset();
   vi.mocked(endGame).mockReset();
@@ -204,17 +215,17 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByTestId("score-wrong")).toBeEnabled();
   });
 
-  it("Correct Song fires awardAttempt immediately with title_correct=true", async () => {
+  it("Correct Song fires awardAttemptDirect with title_correct=true and toasts +10 immediately", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
         buzzed_team_id: "t1",
         current_round_id: "r1",
       }),
-      teams: [makeTeam({ id: "t1" })],
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardAttempt).mockResolvedValueOnce({
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
       round_id: "r1",
       team_id: "t1",
       points_awarded: 10,
@@ -227,9 +238,10 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     fireEvent.click(screen.getByTestId("score-title"));
+    // Optimistic toast appears before the RPC settles.
+    expect(screen.getByText(/\+10 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
-        round_id: "r1",
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
@@ -237,17 +249,17 @@ describe("ManagerConsolePage", () => {
     );
   });
 
-  it("Correct Artist fires awardAttempt immediately with artist_correct=true", async () => {
+  it("Correct Artist fires awardAttemptDirect with artist_correct=true and toasts +5 immediately", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
         buzzed_team_id: "t1",
         current_round_id: "r1",
       }),
-      teams: [makeTeam({ id: "t1" })],
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardAttempt).mockResolvedValueOnce({
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
       round_id: "r1",
       team_id: "t1",
       points_awarded: 5,
@@ -260,9 +272,9 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     fireEvent.click(screen.getByTestId("score-artist"));
+    expect(screen.getByText(/\+5 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
-        round_id: "r1",
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
         title_correct: false,
         artist_correct: true,
         wrong_buzz: false,
@@ -270,7 +282,7 @@ describe("ManagerConsolePage", () => {
     );
   });
 
-  it("Continue button calls continueRound and resumes the player", async () => {
+  it("Continue button calls releaseBuzzLockDirect and resumes the player", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -280,7 +292,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(continueRound).mockResolvedValueOnce(undefined);
+    vi.mocked(releaseBuzzLockDirect).mockResolvedValueOnce(undefined);
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -288,11 +300,11 @@ describe("ManagerConsolePage", () => {
     const continueBtn = screen.getByTestId("continue-round");
     await waitFor(() => expect(continueBtn).toBeEnabled());
     fireEvent.click(continueBtn);
-    await waitFor(() => expect(continueRound).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() => expect(releaseBuzzLockDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(lastHandle?.play).toHaveBeenCalled());
   });
 
-  it("Continue surfaces an error toast when continueRound fails", async () => {
+  it("Continue surfaces an error toast when releaseBuzzLockDirect fails", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -302,7 +314,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(continueRound).mockRejectedValueOnce(new Error("network down"));
+    vi.mocked(releaseBuzzLockDirect).mockRejectedValueOnce(new Error("network down"));
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -314,7 +326,7 @@ describe("ManagerConsolePage", () => {
     expect(lastHandle?.play).not.toHaveBeenCalled();
   });
 
-  it("Correct Song surfaces an error toast when awardAttempt fails", async () => {
+  it("Correct Song surfaces an error toast when awardAttemptDirect fails", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -324,7 +336,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardAttempt).mockRejectedValueOnce(new Error("rpc exploded"));
+    vi.mocked(awardAttemptDirect).mockRejectedValueOnce(new Error("rpc exploded"));
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -333,17 +345,17 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText(/rpc exploded/i)).toBeInTheDocument());
   });
 
-  it("Wrong button auto-fires awardAttempt with wrong_buzz=true and resumes the player", async () => {
+  it("Wrong button fires awardAttemptDirect with wrong_buzz=true and resumes the player", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
         buzzed_team_id: "t1",
         current_round_id: "r1",
       }),
-      teams: [makeTeam({ id: "t1" })],
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardAttempt).mockResolvedValueOnce({
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
       round_id: "r1",
       team_id: "t1",
       points_awarded: -3,
@@ -356,19 +368,19 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     fireEvent.click(screen.getByTestId("score-wrong"));
+    expect(screen.getByText(/-3 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttempt).toHaveBeenCalledWith("ABCDEF", TOKEN, {
-        round_id: "r1",
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
       }),
     );
-    // Wrong re-arms the buzzers AND resumes the song -- no separate Continue press.
+    // Wrong re-arms the buzzers AND resumes the song after the RPC commits.
     await waitFor(() => expect(lastHandle?.play).toHaveBeenCalled());
   });
 
-  it("Wrong does not resume the player when awardAttempt fails", async () => {
+  it("Wrong does not resume the player when awardAttemptDirect fails", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -378,7 +390,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1" })],
       rounds: [makeRound({ id: "r1" })],
     });
-    vi.mocked(awardAttempt).mockRejectedValueOnce(new Error("rpc down"));
+    vi.mocked(awardAttemptDirect).mockRejectedValueOnce(new Error("rpc down"));
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -425,10 +437,10 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("start-round"));
     await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
     await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
-    // Score buttons no longer pre-fire awardAttempt on Next; that responsibility
+    // Score buttons no longer pre-fire award_attempt on Next; that responsibility
     // belongs to the per-button click. Manager must explicitly score before
     // advancing or accept the no-points outcome.
-    expect(awardAttempt).not.toHaveBeenCalled();
+    expect(awardAttemptDirect).not.toHaveBeenCalled();
   });
 
   it("Next round with no buzz skips the attempt call (timeout/skip)", async () => {
@@ -468,7 +480,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("start-round"));
     await waitFor(() => expect(endRound).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1"));
     await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
-    expect(awardAttempt).not.toHaveBeenCalled();
+    expect(awardAttemptDirect).not.toHaveBeenCalled();
   });
 
   it("Continue round is disabled until a team buzzes in", async () => {

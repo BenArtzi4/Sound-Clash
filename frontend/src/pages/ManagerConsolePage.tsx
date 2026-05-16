@@ -7,15 +7,12 @@ import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePl
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
+import { ApiError, awardBonus, endGame, endRound, selectSong } from "../lib/api";
 import {
-  ApiError,
-  awardAttempt,
-  awardBonus,
-  continueRound,
-  endGame,
-  endRound,
-  selectSong,
-} from "../lib/api";
+  awardAttemptDirect,
+  releaseBuzzLockDirect,
+  RpcError,
+} from "../hooks/useManagerActions";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
@@ -92,6 +89,21 @@ export function ManagerConsolePage() {
         return;
       }
     }
+    if (err instanceof RpcError) {
+      // PL/pgSQL RAISE EXCEPTION '<code>' lands as message = '<code>'.
+      // 'no_buzz_to_score' / 'title_already_claimed' just mean the click was
+      // a no-op (Realtime already cleared the lock or claimed the token);
+      // don't spook the host with an error toast.
+      if (
+        err.message === "no_buzz_to_score" ||
+        err.message === "title_already_claimed" ||
+        err.message === "artist_already_claimed"
+      ) {
+        return;
+      }
+      toast(err.message, { variant: "error" });
+      return;
+    }
     toast(err instanceof Error ? err.message : "Request failed", { variant: "error" });
   }
 
@@ -103,31 +115,35 @@ export function ManagerConsolePage() {
     }
   }
 
-  // Apply an attempt with explicit flag values. Each judgement button calls
-  // this directly; the score is committed to the DB the moment the manager
-  // clicks. With migration 018 the lock is only released on the wrong_buzz
-  // path, so Correct Song / Correct Artist keep the answering team on the
-  // floor for the other token. Continue is the explicit unlock + resume.
+  // Apply an attempt via the direct browser -> Supabase RPC. Migration 021
+  // moved the manager-token gate into the PL/pgSQL function, so we bypass
+  // FastAPI/Render here and cut ~300ms of cross-continent hops off the
+  // critical path. The score commit and the Realtime fan-out happen in the
+  // same DB transaction; the UI then redraws when game_teams / game_rounds
+  // UPDATE events arrive.
   async function applyAttempt(
     roundId: string,
     flags: { title_correct: boolean; artist_correct: boolean; wrong_buzz: boolean },
-  ): Promise<boolean> {
-    if (!managerToken) return false;
-    const result = await awardAttempt(gameCode, managerToken, {
-      round_id: roundId,
-      ...flags,
-    });
-    if (result.points_awarded > 0) {
-      toast(`+${result.points_awarded} pts awarded`, { variant: "success" });
-    } else if (result.points_awarded < 0) {
-      toast(`${result.points_awarded} pts (wrong buzz)`, { variant: "info" });
-    }
-    return true;
+  ): Promise<void> {
+    if (!managerToken) return;
+    await awardAttemptDirect(gameCode, managerToken, roundId, flags);
+  }
+
+  // Helper for the optimistic toast on the three scoring buttons. Fired
+  // before the RPC so the click feels instant; the Realtime UPDATE on
+  // game_teams.score is still the source of truth for the displayed score.
+  function buzzedTeamName(): string | null {
+    if (!state) return null;
+    const tid = state.game.buzzed_team_id;
+    if (!tid) return null;
+    return state.teams.get(tid)?.name ?? null;
   }
 
   async function handleCorrectTitle() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    const teamName = buzzedTeamName();
+    if (teamName) toast(`+10 to ${teamName}`, { variant: "success" });
     setBusy(true);
     try {
       await applyAttempt(state.currentRound.id, {
@@ -145,6 +161,8 @@ export function ManagerConsolePage() {
   async function handleCorrectArtist() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    const teamName = buzzedTeamName();
+    if (teamName) toast(`+5 to ${teamName}`, { variant: "success" });
     setBusy(true);
     try {
       await applyAttempt(state.currentRound.id, {
@@ -163,7 +181,7 @@ export function ManagerConsolePage() {
     if (busy || !managerToken) return;
     setBusy(true);
     try {
-      await continueRound(gameCode, managerToken);
+      await releaseBuzzLockDirect(gameCode, managerToken);
       playerRef.current?.play();
     } catch (err) {
       reportError(err);
@@ -173,12 +191,20 @@ export function ManagerConsolePage() {
   }
 
   // Wrong is a one-click verdict: it fires award_attempt with wrong_buzz=true,
-  // re-arms the buzzers, and resumes the song immediately (no separate
-  // "Continue round" press needed). Per game-rules.md §4, if a correct answer
-  // was already scored this round, the SQL function waives the -3 penalty.
+  // re-arms the buzzers, and resumes the song (no separate "Continue round"
+  // press needed). Per game-rules.md §4, if a correct answer was already
+  // scored this round, the SQL function waives the -3 penalty; we skip the
+  // toast in that case so we don't lie about the delta. Playback resume is
+  // held until the RPC commits so a failed Wrong leaves the song paused with
+  // the lock still held -- the manager can simply retry.
   async function handleWrong() {
     if (!state?.currentRound || busy || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
+    const teamName = buzzedTeamName();
+    const freeGuess =
+      state.currentRound.title_claimed_by != null ||
+      state.currentRound.artist_claimed_by != null;
+    if (teamName && !freeGuess) toast(`-3 to ${teamName}`, { variant: "info" });
     setBusy(true);
     try {
       await applyAttempt(state.currentRound.id, {
