@@ -400,6 +400,92 @@ describe("ManagerConsolePage", () => {
     expect(lastHandle?.play).not.toHaveBeenCalled();
   });
 
+  it("Wrong skips the -3 toast when a token was already claimed (free-guess rule)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      // title already claimed earlier this round -> free_guess rule waives -3
+      rounds: [makeRound({ id: "r1", title_claimed_by: "t1" })],
+    });
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 0,
+      team_total_score: 10,
+      title_claimed_by: "t1",
+      artist_claimed_by: null,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-wrong"));
+    // The -3 toast must NOT appear since the round is in free-guess state.
+    expect(screen.queryByText(/-3 to Alice/i)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+        title_correct: false,
+        artist_correct: false,
+        wrong_buzz: true,
+      }),
+    );
+  });
+
+  it("Correct Song silently swallows a title_already_claimed RpcError (no toast)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    // The RpcError silent-skip branch (reportError) — these messages mean the
+    // click was a no-op because Realtime already moved the round forward.
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(awardAttemptDirect).mockRejectedValueOnce(
+      new RpcError("title_already_claimed", "P0001"),
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-title"));
+    // Optimistic toast still fires...
+    expect(screen.getByText(/\+10 to Alice/i)).toBeInTheDocument();
+    await waitFor(() => expect(awardAttemptDirect).toHaveBeenCalled());
+    // ...but the rejection does NOT add an error toast on top.
+    expect(screen.queryByText(/title_already_claimed/i)).not.toBeInTheDocument();
+  });
+
+  it("Correct Song surfaces an unexpected RpcError as an error toast", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(awardAttemptDirect).mockRejectedValueOnce(
+      new RpcError("manager_token_required", "28000"),
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-title"));
+    await waitFor(() => expect(screen.getByText(/manager_token_required/i)).toBeInTheDocument());
+  });
+
+
   it("Next round with a held buzz ends the round and selects a new song (no auto-score)", async () => {
     setHydrate({
       game: makeActiveGame({
