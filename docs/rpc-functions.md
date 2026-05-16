@@ -294,8 +294,51 @@ Behavior:
 
 ### Callers
 
-- FastAPI `POST /games/{code}/end-round`.
+- FastAPI `POST /games/{code}/end-round` (transitional rollback path; no
+  current caller in the deployed frontend).
 - Defensive cleanup inside `start_round` (closes any open prior round before inserting the new one).
+- Called from inside `select_next_song` to close any still-open prior round before a new one is started.
+
+## 3c. `select_next_song`: manager advances to the next round, direct from the browser
+
+Added in migration 022. Called **direct from the manager browser** when the host presses "Next round" or the initial "Start game". Replaces the legacy two-hop flow that went `browser -> FastAPI POST /end-round -> Render -> Supabase` then `browser -> FastAPI POST /select-song -> Render -> Supabase`; collapses it to one direct RPC for ~400ms of latency savings on every round transition.
+
+```sql
+CREATE OR REPLACE FUNCTION select_next_song(
+  p_game_code      text,
+  p_manager_token  uuid,
+  p_song_id        uuid DEFAULT NULL   -- NULL = random pick; non-NULL = manual
+) RETURNS TABLE(
+  round_id      uuid,
+  round_number  integer,
+  song_id       uuid,
+  song_title    text,
+  song_artist   text,
+  youtube_id    text,
+  start_time    integer,
+  is_soundtrack boolean,
+  source        text
+) LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- Token + game-state gate runs first (same shape as `award_attempt`): raises `game_not_found` / `game_ended` / `manager_token_required` before any reads of song / round state.
+- Then `no_genres_selected` (`22023`) if `selected_genres` is empty.
+- Random path: picks an unplayed song from `song_genres` constrained to `selected_genres`. Equal-weight per eligible genre, mirroring `backend/app/services/song_picker.py`. Raises `no_more_songs` (`22023`) when the pool is exhausted.
+- Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow).
+- Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
+- Returns one row with the new round + the picked song's metadata.
+
+### Idempotency
+
+Not idempotent on its own — every call inserts a new round. The composition relies on `start_round`'s defensive close-prior-round step so a stuck-open prior round doesn't block the call.
+
+### Callers
+
+- Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect`). Single caller in the deployed frontend.
+- The legacy FastAPI `POST /games/{code}/select-song` endpoint stays as a transitional rollback path; no current caller from the deployed frontend.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -471,16 +514,16 @@ async def test_cleanup_deletes_expired(db):
 | `buzz_in` | ✅ | ✅ | Browser (team page) |
 | `award_attempt` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `release_buzz_lock` | ✅ (token-gated) | ✅ | Browser (manager page) |
-| `start_round` | ❌ | ✅ | FastAPI POST /games/.../select-song |
-| `end_round` | ❌ | ✅ | FastAPI POST /games/.../end-round |
+| `select_next_song` | ✅ (token-gated) | ✅ | Browser (manager page) |
+| `start_round` | ❌ | ✅ | Internal call from `select_next_song` |
+| `end_round` | ❌ | ✅ | Internal cleanup from `start_round`; FastAPI POST /games/.../end-round (transitional) |
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
 
-The three anon-callable functions all validate authentication inside the
-function body (`buzz_in` checks the game-code; `award_attempt` and
-`release_buzz_lock` check the per-game `manager_token`). This is what
-makes anon EXECUTE safe.
+The four anon-callable functions all validate authentication inside the
+function body (`buzz_in` checks the game-code; the other three check the
+per-game `manager_token`). This is what makes anon EXECUTE safe.
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
 

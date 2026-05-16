@@ -123,11 +123,6 @@ export interface AttemptResponse {
   artist_claimed_by: string | null;
 }
 
-export interface EndRoundResponse {
-  round_id: string;
-  ended_at: string;
-}
-
 export interface AwardBonusRequest {
   team_id: string;
   points?: number;

@@ -17,6 +17,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-16: Manager "Next round" / "Start game" buttons are now noticeably faster. The browser calls Postgres directly (same pattern as the buzzer and the scoring buttons) instead of going through the Render-hosted backend, and what used to be two chained transatlantic API hops collapses to a single round-trip. Perceived end-to-end latency drops from ~500-900ms (with up to a 30s spike on a cold Render dyno) to ~150ms; with the optimistic "Loading next round..." toast the click-to-feedback gap is effectively immediate.
 - 2026-05-16: Manager Continue / End game / Next round buttons now show their confirmation toast the instant the button is pressed, instead of after the network round-trip — the click feels immediate even on a slow connection. Browser also pre-warms the YouTube connection at app load so the first song's player mounts faster.
 - 2026-05-16: Manager Correct Song / Correct Artist / Wrong / Continue now feel snappy. They call Postgres directly (same pattern as the buzzer) instead of going through the Render-hosted backend, so the click no longer waits on a transatlantic API hop. Perceived end-to-end latency drops from ~400-600ms (with up to a 30s spike on a cold Render dyno) to ~150ms; the optimistic "+10 to <team>" toast appears the moment the button is pressed.
 - 2026-05-16: Manager console: song title and artist now sit above the token-state chips on their own line, and the "Round controls" heading was removed. Easier to read on phones.

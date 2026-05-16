@@ -7,8 +7,9 @@ import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePl
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { usePlayerReady } from "../hooks/usePlayerReady";
-import { ApiError, awardBonus, endGame, endRound, selectSong } from "../lib/api";
+import { ApiError, awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/useManagerActions";
+import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
@@ -95,6 +96,17 @@ export function ManagerConsolePage() {
         err.message === "title_already_claimed" ||
         err.message === "artist_already_claimed"
       ) {
+        return;
+      }
+      // 'no_more_songs' is the friendly user-facing error from select_next_song
+      // when the selected-genres pool is exhausted. Mirror the ApiError text
+      // above so the manager sees the same wording regardless of which path
+      // surfaced it.
+      if (err.message === "no_more_songs") {
+        toast(
+          "All songs in your selected genres have been played. End the game or start a new one with more genres.",
+          { variant: "error" },
+        );
         return;
       }
       toast(err.message, { variant: "error" });
@@ -221,26 +233,16 @@ export function ManagerConsolePage() {
 
   async function handleNextRound() {
     if (busy || !managerToken) return;
-    // Optimistic toast confirms the click immediately. The two-hop network
-    // chain (endRound + selectSong) still costs ~500ms today; PR-B collapses
-    // it into a single direct RPC, but the toast helps regardless.
+    // Optimistic toast confirms the click immediately. The single direct RPC
+    // (migration 022 -> select_next_song) replaces what used to be two
+    // chained Render hops (POST /end-round + POST /select-song), so the
+    // perceived latency is ~150ms instead of ~500-900ms. start_round, called
+    // inside the function, already closes any still-open prior round, so we
+    // don't need a separate end_round call.
     toast("Loading next round...", { variant: "info" });
     setBusy(true);
     try {
-      const round = state?.currentRound;
-      // Close the prior round (idempotent; safe even if start_round will close it).
-      if (round && state?.game.status === "playing") {
-        try {
-          await endRound(gameCode, managerToken, round.id);
-        } catch (err) {
-          // round_already_ended is fine; surface anything else.
-          if (!(err instanceof ApiError && err.status === 409)) {
-            reportError(err);
-            return;
-          }
-        }
-      }
-      const result = await selectSong(gameCode, managerToken);
+      const result = await selectNextSongDirect(gameCode, managerToken);
       setCurrentSong(result.song);
       await loadSongIntoPlayer(result.song);
     } catch (err) {

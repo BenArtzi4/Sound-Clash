@@ -8,14 +8,12 @@ import {
   createSong,
   deleteSong,
   endGame,
-  endRound,
   getHealth,
   getSong,
   joinTeam,
   kickTeam,
   listGenres,
   listSongs,
-  selectSong,
   updateSong,
 } from "./api";
 import type { SongWritePayload } from "./types";
@@ -125,43 +123,9 @@ describe("api - public routes", () => {
 describe("api - manager-token routes", () => {
   const TOKEN = "22222222-2222-2222-2222-222222222222";
 
-  it("selectSong sends X-Manager-Token", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, {
-        round_id: "r1",
-        round_number: 1,
-        song: {
-          id: "s1",
-          title: "T",
-          artist: "A",
-          youtube_id: "abcdefghijk",
-          start_time: 0,
-          is_soundtrack: false,
-          source: null,
-        },
-      }),
-    );
-    const res = await selectSong("ABCDEF", TOKEN);
-    expect(res.round_id).toBe("r1");
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://localhost:8000/games/ABCDEF/select-song");
-    const headers = init.headers as Record<string, string>;
-    expect(headers["X-Manager-Token"]).toBe(TOKEN);
-  });
-
-  it("endRound POSTs to /end-round with the round id + token", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { round_id: "r1", ended_at: "2026-05-10T12:00:00Z" }),
-    );
-    const res = await endRound("ABCDEF", TOKEN, "r1");
-    expect(res.ended_at).toBe("2026-05-10T12:00:00Z");
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://localhost:8000/games/ABCDEF/end-round");
-    expect(init.method).toBe("POST");
-    const headers = init.headers as Record<string, string>;
-    expect(headers["X-Manager-Token"]).toBe(TOKEN);
-    expect(JSON.parse(init.body as string)).toEqual({ round_id: "r1" });
-  });
+  // selectSong + endRound REST wrappers were removed when migration 022
+  // moved the "Next round" flow to direct browser->Postgres RPC; see
+  // frontend/src/hooks/useSelectNextSong.ts for the replacement.
 
   it("awardBonus posts to /bonus with the chosen team", async () => {
     fetchMock.mockResolvedValueOnce(
