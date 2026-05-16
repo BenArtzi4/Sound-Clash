@@ -8,8 +8,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from app.models.songs import SongPayload
-
 TeamName = Annotated[
     str,
     StringConstraints(min_length=1, max_length=30, strip_whitespace=True),
@@ -47,36 +45,6 @@ class JoinTeamResponse(BaseModel):
     name: str
     score: int
     joined_at: datetime
-
-
-class SelectSongRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    # Optional manual pick. When set, the picker is bypassed and the round
-    # starts with this exact song. Used by the manager's "Restart song"
-    # action: see docs/game-rules.md §11.
-    song_id: UUID | None = None
-
-
-class SelectSongResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    round_id: UUID
-    round_number: int
-    song: SongPayload
-
-
-class EndRoundRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    round_id: UUID
-
-
-class EndRoundResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    round_id: UUID
-    ended_at: datetime
 
 
 class AwardBonusRequest(BaseModel):

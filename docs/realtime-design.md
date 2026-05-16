@@ -108,7 +108,7 @@ This test is required to pass 100 consecutive runs before merging Phase 3.
 
 ### Why the rest of the system trusts MVCC
 
-`start_round`, `award_points`, `end_game` all use single-row UPDATEs on `active_games`. They serialize on the same row lock as `buzz_in`. The consequence: if a manager calls `start_round` at the same nanosecond a team calls `buzz_in`, one wins and the other sees the post-commit state. Either ordering is valid because both operations are intent-level commands the manager would resolve manually.
+`start_round`, `award_attempt`, `release_buzz_lock`, `select_next_song`, and `end_game` all use single-row UPDATEs on `active_games`. They serialize on the same row lock as `buzz_in`. The consequence: if a manager calls `select_next_song` at the same nanosecond a team calls `buzz_in`, one wins and the other sees the post-commit state. Either ordering is valid because both operations are intent-level commands the manager would resolve manually.
 
 ## 5. Subscribing to Game State
 

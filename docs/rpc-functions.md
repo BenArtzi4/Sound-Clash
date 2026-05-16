@@ -118,7 +118,11 @@ Phase 3 exit criterion: the race test passes 100 consecutive runs without a sing
 
 ## 2. `start_round`: manager advances to next song
 
-Called by FastAPI (`POST /games/{code}/select-song`). Not exposed to anon.
+Called only from inside `select_next_song` (§3c) — there is no longer a
+direct caller. The function stays service-role-only and is not exposed to
+anon; `select_next_song` invokes it under SECURITY DEFINER privileges.
+Historically called by FastAPI's `POST /games/{code}/select-song`, which
+was retired in the dead-code cleanup once the direct-RPC path stabilised.
 
 ```sql
 CREATE OR REPLACE FUNCTION start_round(
@@ -185,7 +189,7 @@ Not idempotent. Each call increments `round_number` and creates a new row. Calle
 
 ### Callers
 
-- FastAPI `POST /games/{code}/select-song` after picking a random song.
+- `select_next_song` (§3c) invokes `start_round` internally; that's the only caller in the running system.
 
 ## 3. `award_attempt`: manager scores one buzz (multi-buzz model)
 
@@ -272,9 +276,12 @@ Idempotent on the unlock side: safe to call any number of times once authorized.
 
 - Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useManagerActions.ts::releaseBuzzLockDirect`).
 
-## 3b. `end_round`: manager closes the round
+## 3b. `end_round`: closes a round (internal-only)
 
-Called by FastAPI (`POST /games/{code}/end-round`). Not exposed to anon. Sets `game_rounds.ended_at` and clears any lingering buzz lock. Idempotent; safe to call repeatedly.
+Called only from inside `start_round`'s defensive prior-round close, which
+in turn is invoked by `select_next_song` (§3c). Not exposed to anon and no
+longer reachable from any HTTP endpoint. Sets `game_rounds.ended_at` and
+clears any lingering buzz lock. Idempotent; safe to call repeatedly.
 
 ```sql
 CREATE OR REPLACE FUNCTION end_round(
@@ -294,14 +301,12 @@ Behavior:
 
 ### Callers
 
-- FastAPI `POST /games/{code}/end-round` (transitional rollback path; no
-  current caller in the deployed frontend).
 - Defensive cleanup inside `start_round` (closes any open prior round before inserting the new one).
-- Called from inside `select_next_song` to close any still-open prior round before a new one is started.
+- Indirectly via `select_next_song`, which calls `start_round`.
 
 ## 3c. `select_next_song`: manager advances to the next round, direct from the browser
 
-Added in migration 022. Called **direct from the manager browser** when the host presses "Next round" or the initial "Start game". Replaces the legacy two-hop flow that went `browser -> FastAPI POST /end-round -> Render -> Supabase` then `browser -> FastAPI POST /select-song -> Render -> Supabase`; collapses it to one direct RPC for ~400ms of latency savings on every round transition.
+Added in migration 022. Called **direct from the manager browser** when the host presses "Next round" or the initial "Start game". Replaces the legacy two-hop flow that went `browser -> FastAPI POST /end-round -> Render -> Supabase` then `browser -> FastAPI POST /select-song -> Render -> Supabase`; collapses it to one direct RPC for ~400ms of latency savings on every round transition. The two REST endpoints it replaced were removed in the post-stabilisation dead-code cleanup.
 
 ```sql
 CREATE OR REPLACE FUNCTION select_next_song(
@@ -326,7 +331,7 @@ SET search_path = public;
 Behavior:
 - Token + game-state gate runs first (same shape as `award_attempt`): raises `game_not_found` / `game_ended` / `manager_token_required` before any reads of song / round state.
 - Then `no_genres_selected` (`22023`) if `selected_genres` is empty.
-- Random path: picks an unplayed song from `song_genres` constrained to `selected_genres`. Equal-weight per eligible genre, mirroring `backend/app/services/song_picker.py`. Raises `no_more_songs` (`22023`) when the pool is exhausted.
+- Random path: picks an unplayed song from `song_genres` constrained to `selected_genres`. Equal-weight per eligible genre, picked via Postgres `random()` in a CTE. Raises `no_more_songs` (`22023`) when the pool is exhausted. (Historically this logic lived in `backend/app/services/song_picker.py`, removed in the dead-code cleanup.)
 - Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow).
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
 - Returns one row with the new round + the picked song's metadata.
@@ -337,8 +342,7 @@ Not idempotent on its own — every call inserts a new round. The composition re
 
 ### Callers
 
-- Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect`). Single caller in the deployed frontend.
-- The legacy FastAPI `POST /games/{code}/select-song` endpoint stays as a transitional rollback path; no current caller from the deployed frontend.
+- Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect`). Single caller in the deployed system.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -515,8 +519,8 @@ async def test_cleanup_deletes_expired(db):
 | `award_attempt` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `release_buzz_lock` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `select_next_song` | ✅ (token-gated) | ✅ | Browser (manager page) |
-| `start_round` | ❌ | ✅ | Internal call from `select_next_song` |
-| `end_round` | ❌ | ✅ | Internal cleanup from `start_round`; FastAPI POST /games/.../end-round (transitional) |
+| `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
+| `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |

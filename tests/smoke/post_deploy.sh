@@ -9,9 +9,15 @@
 #   1. /health is 200 and reports supabase reachable
 #   2. POST /games (open hosting) returns a game_code + manager_token
 #   3. Two teams can join
-#   4. select-song works with X-Manager-Token (host-only path)
-#   5. end-round closes the round (the host-only manager-token path)
-#   6. end-game flips status to "ended"
+#   4. end-game flips status to "ended"
+#
+# Scope note: the smoke only exercises FastAPI-routed endpoints. The hot-path
+# RPCs the browser calls direct via Supabase PostgREST -- buzz_in (mig 006),
+# award_attempt / release_buzz_lock (mig 021), select_next_song (mig 022) --
+# are validated by the Playwright e2e suite (tests/e2e/), not here. As a
+# result there is no /select-song or /end-round step: those routes were
+# removed in the dead-code cleanup once the new direct-RPC flow had soaked
+# on prod.
 #
 # Prerequisites: bash, curl, jq. No secrets needed (game hosting is open
 # as of 2026-05-06; see migration 012 + CLAUDE.md).
@@ -68,7 +74,7 @@ http() {
 # 1. health
 # ---------------------------------------------------------------------------
 
-log "1/6 GET /health"
+log "1/4 GET /health"
 HEALTH=$(http GET /health)
 HEALTH_STATUS=$(jq -r '.status // empty' <<<"$HEALTH")
 HEALTH_VERSION=$(jq -r '.version // empty' <<<"$HEALTH")
@@ -94,7 +100,7 @@ POP_ID=$(jq -r '.[] | select(.slug == "pop") | .id' <<<"$GENRES")
 # 3. create game
 # ---------------------------------------------------------------------------
 
-log "2/6 POST /games (genres=rock+pop)"
+log "2/4 POST /games (genres=rock+pop)"
 CREATE_BODY=$(jq -n \
   --arg rock "$ROCK_ID" \
   --arg pop "$POP_ID" \
@@ -124,7 +130,7 @@ trap cleanup EXIT
 # 4. join two teams
 # ---------------------------------------------------------------------------
 
-log "3/6 POST /games/$GAME_CODE/teams (Alpha, Bravo)"
+log "3/4 POST /games/$GAME_CODE/teams (Alpha, Bravo)"
 TEAM_A=$(http POST "/games/$GAME_CODE/teams" --data '{"name":"smoke-alpha"}')
 TEAM_B=$(http POST "/games/$GAME_CODE/teams" --data '{"name":"smoke-bravo"}')
 TEAM_A_ID=$(jq -r '.id // empty' <<<"$TEAM_A")
@@ -133,41 +139,10 @@ TEAM_B_ID=$(jq -r '.id // empty' <<<"$TEAM_B")
 [[ -n "$TEAM_B_ID" ]] || fail "team B insert returned no id: $TEAM_B"
 
 # ---------------------------------------------------------------------------
-# 5. select-song (manager-token gated)
+# 5. end-game
 # ---------------------------------------------------------------------------
 
-log "4/6 POST /games/$GAME_CODE/select-song (with X-Manager-Token)"
-SELECT=$(http POST "/games/$GAME_CODE/select-song" \
-  -H "X-Manager-Token: $TOKEN" \
-  --data '{}')
-ROUND_ID=$(jq -r '.round_id // empty' <<<"$SELECT")
-SONG_TITLE=$(jq -r '.song.title // empty' <<<"$SELECT")
-[[ -n "$ROUND_ID" ]] || fail "select-song returned no round_id: $SELECT"
-log "      round_id=$ROUND_ID song=\"$SONG_TITLE\""
-
-# ---------------------------------------------------------------------------
-# 6. end-round
-#
-# Multi-buzz model: scoring runs through award_attempt, which the browser
-# now calls direct via Supabase RPC (migration 021). The HTTP smoke check
-# only covers FastAPI-routed endpoints, so we exercise /end-round here --
-# the host-only path the manager hits to advance without scoring.
-# ---------------------------------------------------------------------------
-
-log "5/6 POST /games/$GAME_CODE/end-round"
-END_ROUND_BODY=$(jq -n --arg rid "$ROUND_ID" '{round_id: $rid}')
-END_ROUND=$(http POST "/games/$GAME_CODE/end-round" \
-  -H "X-Manager-Token: $TOKEN" \
-  --data "$END_ROUND_BODY")
-END_ROUND_TS=$(jq -r '.ended_at // empty' <<<"$END_ROUND")
-[[ -n "$END_ROUND_TS" ]] || fail "end-round missing ended_at: $END_ROUND"
-log "      ended_at=$END_ROUND_TS"
-
-# ---------------------------------------------------------------------------
-# 7. end-game
-# ---------------------------------------------------------------------------
-
-log "6/6 POST /games/$GAME_CODE/end"
+log "4/4 POST /games/$GAME_CODE/end"
 END=$(http POST "/games/$GAME_CODE/end" -H "X-Manager-Token: $TOKEN")
 END_STATUS=$(jq -r '.status // empty' <<<"$END")
 END_TS=$(jq -r '.ended_at // empty' <<<"$END")

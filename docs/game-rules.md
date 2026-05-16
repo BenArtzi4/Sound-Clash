@@ -134,16 +134,16 @@ A separate manager action, independent of round and buzz state.
 
 - Songs come from the `songs` catalog. Manager picks `selected_genres` at game-creation time.
 - For each round, the manager either:
-  - **(a)** clicks "Random song" → backend `POST /games/{code}/select-song` returns a random song from `songs` filtered by `selected_genres`, **excluding songs already played in this game**, OR
+  - **(a)** clicks "Random song" → browser calls the `select_next_song` PL/pgSQL function direct via Supabase PostgREST RPC; it returns a random song from `songs` filtered by `selected_genres`, **excluding songs already played in this game**, OR
   - **(b)** picks manually from a search/browse UI (out of MVP scope; reserved).
-- "No repeats per game" is enforced at the API layer by joining against `game_rounds` for the current `game_code`.
-- If all matching songs are exhausted: backend returns 409 with a clear error; manager must add more genres or end the game.
+- "No repeats per game" is enforced inside the PL/pgSQL function by joining against `game_rounds` for the current `game_code`.
+- If all matching songs are exhausted: the function raises `no_more_songs` (sqlstate `22023`); the manager UI surfaces a friendly "All songs in your selected genres have been played" toast.
 
 ## 6. Buzzer Rules
 
 - Only one team can hold the lock at a time. The atomic guarantee is in the `buzz_in` PL/pgSQL function (see `rpc-functions.md`).
 - The buzz button is enabled only while `active_games.status = 'playing'` AND `buzzed_team_id IS NULL`.
-- After lock, the button is disabled for ALL teams until the manager presses "Wrong" (`award_attempt` with `wrong_buzz`), "Continue round" (`release_buzz_lock`), or "Next round" (`end_round` / `start_round`) — any of which clears `buzzed_team_id`. A Correct Song / Correct Artist verdict keeps the lock on the buzzing team (so they get the other token) and only refreshes `locked_at`.
+- After lock, the button is disabled for ALL teams until the manager presses "Wrong" (`award_attempt` with `wrong_buzz`), "Continue round" (`release_buzz_lock`), or "Next round" (`select_next_song`) — any of which clears `buzzed_team_id`. A Correct Song / Correct Artist verdict keeps the lock on the buzzing team (so they get the other token) and only refreshes `locked_at`.
 - A team that buzzed wrong (or correct) on the current song is **not** locked out for the remainder of the round; the buzzer re-arms for everyone, including them. The only constraint is that an already-claimed token cannot be re-claimed by anyone.
 - The `locked_at` timestamp is server-authoritative. Clients display "X locked it" with no client-side ordering logic.
 - Rejected buzz attempts (lock already held) get a quiet UI signal; no error toast, just disabled state.
@@ -162,7 +162,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 - Manager identity is "whoever holds the per-game manager token in their browser's localStorage" (`game:<code>:manager-token`). The token is generated at game creation and returned by `POST /games`. Game state is recoverable from the `active_games` row.
 - If the manager closes the tab mid-game, the game stays in its current state (`playing`, `buzzed_team_id` still set if mid-buzz). The manager can reload `/manager/game/{code}` in the same browser and resume; the token survives a hard refresh.
 - A second device cannot resume management without the token. Losing the host browser ends practical management (the game still runs to its 4-hour TTL; players can keep playing what's already started but no new rounds can be selected without the token).
-- **Two manager tabs problem**: opening the same game in two tabs of the same browser shares the token (same localStorage), so both tabs can issue `start_round` / `award_points` RPCs. Practical impact is low (typical use is one host on one device). Mitigation deferred; see §11.
+- **Two manager tabs problem**: opening the same game in two tabs of the same browser shares the token (same localStorage), so both tabs can issue `select_next_song` / `award_attempt` RPCs. Practical impact is low (typical use is one host on one device). Mitigation deferred; see §11.
 
 ## 9. Timeouts
 
@@ -194,11 +194,12 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 | Same team name joined twice | Rejected by `UNIQUE (game_code, name)`. UI shows clear error. | Defined |
 | Empty team name / 100-char team name | Rejected at API layer; min 1 char, max 30 chars. | Defined |
 | Game created with no genres | Rejected at API layer; min 1 genre required. | Defined |
-| Manager restarts the same song | "Restart song" button calls `start_round` RPC again with the same `song_id`. Buzz state cleared. Old round row remains as a no-points-awarded artifact. | Defined |
+| Manager restarts the same song | "Restart song" button calls `select_next_song` with a manual `p_song_id`. Buzz state cleared. Old round row remains as a no-points-awarded artifact. | Defined |
 | Two manager tabs open | Both work. Last write wins. | Accepted limitation; future presence-based detection |
 | Network partition splits some teams from Supabase | Affected teams freeze. They reconnect and re-subscribe. Game state is server-authoritative; UI reconciles on reconnect. | Defined |
 | User opens browser DevTools and calls `buzz_in` directly | Allowed by RLS. Functionally equivalent to pressing the button. Not a security issue. | Accepted |
-| User tries to call `award_points` from the browser | Blocked: only `service_role` can execute it. The browser only has the anon key. | Enforced via RLS |
+| User tries to call `award_attempt` / `release_buzz_lock` / `select_next_song` from the browser with the wrong `p_manager_token` | Blocked: the function raises `manager_token_required` (sqlstate `28000`) before any side effect. The token is a 128-bit uuid and effectively unguessable. | Enforced inside the SECURITY DEFINER function body |
+| User tries to call `start_round` / `end_round` / `end_game` / `award_bonus` directly | Blocked: only `service_role` can execute them. The browser only has the anon key. | Enforced via RLS / explicit REVOKE (migration 020) |
 | Tiebreaker round | Out of MVP. Manager declares tied result manually. | Future |
 | Song play_count / popularity | Out of MVP. Game data is ephemeral; cannot accumulate stats without a separate durable counter. | Future |
 | Bonus rounds, lightning round, double-or-nothing | Out of MVP. | Future |

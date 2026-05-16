@@ -1,22 +1,17 @@
 """Game lifecycle endpoints; see ``docs/api-contracts.md §2``.
 
 The router never calls ``buzz_in``, ``award_attempt``, ``release_buzz_lock``,
-or ``select_next_song``; those stay browser-direct via PostgREST to keep
-Python out of the host's hot path. Migrations 021 and 022 moved each
-function's manager-token check into the PL/pgSQL body; the browser passes
-the token as an RPC argument.
+``select_next_song``, ``start_round``, or ``end_round``; those stay browser-
+direct via PostgREST to keep Python out of the host's hot path. Migrations
+021 and 022 moved each function's manager-token check into the PL/pgSQL
+body so the browser can pass the token as an RPC argument; migration 022
+also collapsed the picker + start_round composition into a single
+``select_next_song`` call.
 
-``POST /games/{code}/select-song`` and ``POST /games/{code}/end-round``
-stay in place as transitional plumbing: the browser no longer calls them
-after migration 022 (``select_next_song`` does the picker + start_round
-composition directly), but keeping the routes around makes the PR
-revertable in one step if the new path misbehaves on prod. A follow-up
-cleanup can drop them, the ``_start_round_blocking`` / ``_end_round_blocking``
-helpers, and ``backend/app/services/song_picker.py`` once the new flow
-has soaked in.
-
-The service-role-only RPCs the router still dispatches are ``start_round``,
-``end_round``, ``end_game``, and ``award_bonus``.
+The remaining FastAPI endpoints here are cold-start-tolerant operations
+that happen at most once or twice per game: create-game, join-team,
+award-bonus, end-game, kick-team. They dispatch the service-role-only
+RPCs ``end_game`` and ``award_bonus``.
 """
 
 from __future__ import annotations
@@ -28,7 +23,6 @@ import anyio
 from fastapi import APIRouter, Depends, Request, status
 
 from app.db.errors import (
-    ConflictError,
     GoneError,
     NotFoundError,
     mapped_postgrest_errors,
@@ -42,16 +36,10 @@ from app.models.games import (
     CreateGameRequest,
     CreateGameResponse,
     EndGameResponse,
-    EndRoundRequest,
-    EndRoundResponse,
     JoinTeamRequest,
     JoinTeamResponse,
-    SelectSongRequest,
-    SelectSongResponse,
 )
-from app.models.songs import SongPayload
 from app.services.codes import generate_unique_code
-from app.services.song_picker import pick_random_song
 
 router = APIRouter(tags=["games"])
 
@@ -101,37 +89,6 @@ def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dic
     if not rows:
         raise NotFoundError("team insert returned no row")
     return dict(rows[0])
-
-
-def _start_round_blocking(
-    client: SupabaseClientLike, code: str, song: dict[str, Any]
-) -> tuple[str, int]:
-    with mapped_postgrest_errors():
-        rpc_resp = client.rpc(
-            "start_round", {"p_game_code": code, "p_song_id": song["id"]}
-        ).execute()
-    round_id = rpc_resp.data
-    if isinstance(round_id, list) and round_id:
-        round_id = round_id[0]
-
-    game_resp = client.table("active_games").select("round_number").eq("game_code", code).execute()
-    rows = game_resp.data or []
-    if not rows:
-        raise NotFoundError(f"game {code} not found")
-    return str(round_id), int(rows[0]["round_number"])
-
-
-def _end_round_blocking(
-    client: SupabaseClientLike,
-    code: str,
-    round_id: str,
-) -> dict[str, Any]:
-    with mapped_postgrest_errors():
-        rpc_resp = client.rpc(
-            "end_round",
-            {"p_game_code": code, "p_round_id": round_id},
-        ).execute()
-    return {"round_id": round_id, "ended_at": rpc_resp.data}
 
 
 def _bonus_blocking(
@@ -206,70 +163,6 @@ async def join_team(request: Request, game_code: str, body: JoinTeamRequest) -> 
     return JoinTeamResponse.model_validate(row)
 
 
-def _fetch_song_blocking(client: SupabaseClientLike, song_id: str) -> dict[str, Any]:
-    resp = (
-        client.table("songs")
-        .select("id,title,artist,youtube_id,start_time,is_soundtrack,source")
-        .eq("id", song_id)
-        .execute()
-    )
-    rows = resp.data or []
-    if not rows:
-        raise NotFoundError(f"song {song_id} not found")
-    return dict(rows[0])
-
-
-@router.post(
-    "/games/{game_code}/select-song",
-    response_model=SelectSongResponse,
-    dependencies=[Depends(require_manager_token)],
-)
-@limiter.limit("100/minute")
-async def select_song(
-    request: Request, game_code: str, body: SelectSongRequest | None = None
-) -> SelectSongResponse:
-    client = get_supabase_client()
-    game = await anyio.to_thread.run_sync(_fetch_game_blocking, client, game_code)
-    if game["status"] == "ended" or game.get("ended_at"):
-        raise GoneError(f"game {game_code} has ended")
-
-    genre_ids = list(game.get("selected_genres") or [])
-    if not genre_ids:
-        raise ConflictError("game has no selected genres")
-
-    if body is not None and body.song_id is not None:
-        # Manual pick: bypass the picker and start the round with this exact
-        # song. The "no repeats" check is intentionally skipped: the docs spec
-        # the Restart-song flow as "old round row remains as a no-points
-        # artifact." See docs/game-rules.md §11.
-        song = await anyio.to_thread.run_sync(_fetch_song_blocking, client, str(body.song_id))
-    else:
-        song = await pick_random_song(client, game_code, genre_ids)
-
-    round_id, round_number = await anyio.to_thread.run_sync(
-        _start_round_blocking, client, game_code, song
-    )
-    return SelectSongResponse(
-        round_id=UUID(str(round_id)),
-        round_number=round_number,
-        song=SongPayload.model_validate(song),
-    )
-
-
-@router.post(
-    "/games/{game_code}/end-round",
-    response_model=EndRoundResponse,
-    dependencies=[Depends(require_manager_token)],
-)
-@limiter.limit("100/minute")
-async def end_round(request: Request, game_code: str, body: EndRoundRequest) -> EndRoundResponse:
-    client = get_supabase_client()
-    result = await anyio.to_thread.run_sync(
-        _end_round_blocking, client, game_code, str(body.round_id)
-    )
-    return EndRoundResponse.model_validate(result)
-
-
 @router.post(
     "/games/{game_code}/bonus",
     response_model=AwardBonusResponse,
@@ -280,8 +173,6 @@ async def award_bonus(
     request: Request, game_code: str, body: AwardBonusRequest
 ) -> AwardBonusResponse:
     client = get_supabase_client()
-    # _bonus_blocking already maps every Postgres/RPC exception via
-    # map_postgrest_error, so any error reaching here is already a DomainError.
     result = await anyio.to_thread.run_sync(_bonus_blocking, client, game_code, body)
     return AwardBonusResponse.model_validate(result)
 

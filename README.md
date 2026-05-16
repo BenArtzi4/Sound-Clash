@@ -24,7 +24,7 @@ Game state auto-expires four hours after start.
 
 ## Architecture
 
-The buzzer is a Postgres `PL/pgSQL` function called directly from the browser via Supabase PostgREST RPC; row-change events fan out to every client over Supabase Realtime. Python is deliberately *not* in the buzzer hot path: that's what keeps end-to-end buzz latency under 200 ms on free hosting. Design notes in [`docs/realtime-design.md`](docs/realtime-design.md).
+Every per-round click — buzz, judge, advance — talks to Postgres directly via Supabase PostgREST RPC; row-change events fan out to every client over Supabase Realtime. Python is deliberately *not* in any user-perceived hot path: that's what keeps end-to-end click-to-feedback latency under 200 ms on free hosting, regardless of Render's cold-start risk. Design notes in [`docs/realtime-design.md`](docs/realtime-design.md).
 
 ```mermaid
 flowchart LR
@@ -40,7 +40,8 @@ flowchart LR
     end
 
     T == "buzz_in() RPC<br/>&lt; 200 ms" ==> DB
-    M -->|"select-song,<br/>award_attempt,<br/>continue, end"| F
+    M == "award_attempt,<br/>release_buzz_lock,<br/>select_next_song<br/>(token-gated, &lt; 200 ms)" ==> DB
+    M -->|"create game,<br/>bonus, end, kick"| F
     F -->|"service-role RPC"| DB
     DB --> RT
     RT -. "WebSocket" .-> T
@@ -49,11 +50,11 @@ flowchart LR
 
     classDef hot stroke:#10b981,stroke-width:3px,fill:#ecfdf5,color:#064e3b
     classDef cold stroke:#94a3b8,stroke-width:1px,fill:#ffffff,color:#0f172a
-    class T,DB hot
-    class D,M,F,RT cold
+    class T,M,DB hot
+    class D,F,RT cold
 ```
 
-The thick green path is the buzzer's hot loop, browser straight to Postgres. Everything else can tolerate FastAPI's Render cold-start.
+The thick green paths are the hot loops, browser straight to Postgres. The cold lane through FastAPI only carries once-per-game actions (create, bonus, end, kick) that can tolerate Render's cold-start.
 
 ## Stack
 

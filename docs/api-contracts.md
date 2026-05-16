@@ -102,34 +102,50 @@ The frontend stores `id` in `localStorage` keyed by `game_code` for reconnection
 
 ---
 
-### 2.4 `POST /games/{game_code}/select-song`
+### 2.4 Advancing the round — direct Postgres RPC (no FastAPI hop)
 
-Manager: pick the next song (random within `selected_genres`, excluding songs already played in this game) and start the round. **Manager-token auth required.**
+Manager presses "Next round" / "Start game". The browser calls the
+``select_next_song`` PL/pgSQL function directly via Supabase PostgREST.
+Migration 022 added the function; what used to be two chained Render
+round-trips (`POST /end-round` + `POST /select-song`) is now one direct
+call that picks a song, closes any still-open prior round (via the
+existing `start_round` defensive close), and inserts the new `game_rounds`
+row. The legacy REST endpoints `/select-song` and `/end-round` were
+removed once the direct-RPC path had stabilised on prod (migration 023 /
+the dead-code cleanup PR).
 
-**Headers**: `X-Manager-Token: <token>` (the value returned by `POST /games`)
-
-**Request body**: `{}` (reserved; future may include `song_id` for manual pick)
-
-**Response 200**:
-```json
-{
-  "round_id": "<round_uuid>",
-  "round_number": 3,
-  "song": {
-    "id": "<song_uuid>",
-    "title": "Song Title",
-    "artist": "Artist Name",
-    "youtube_id": "dQw4w9WgXcQ",
-    "start_time": 30,
-    "is_soundtrack": false,
-    "source": null
-  }
-}
+```ts
+const { data, error } = await supabase.rpc("select_next_song", {
+  p_game_code: gameCode,
+  p_manager_token: managerToken,
+  p_song_id: null,   // null = random pick; uuid = manual pick
+});
 ```
 
-Server-side: calls Postgres `start_round(p_game_code, p_song_id)` RPC. Returns the new round id.
+Frontend wrapper: `frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect`.
 
-**Errors**: `unauthorized` (401), `not_found` (404), `gone` (410), `conflict` (409; game not in `playing` state, or all songs in selected genres exhausted).
+**Response** (single row from a RETURNS TABLE; PostgREST surfaces it as an array):
+```json
+[{
+  "round_id": "<round_uuid>",
+  "round_number": 3,
+  "song_id": "<song_uuid>",
+  "song_title": "Song Title",
+  "song_artist": "Artist Name",
+  "youtube_id": "dQw4w9WgXcQ",
+  "start_time": 30,
+  "is_soundtrack": false,
+  "source": null
+}]
+```
+
+**Errors** (raised as PostgrestError with the named code in `message`):
+- `manager_token_required` (sqlstate `28000`) — bad/missing token.
+- `game_not_found` (`P0002`) — game code unknown.
+- `game_ended` (`P0001`) — game already ended.
+- `no_genres_selected` (`22023`) — game has no `selected_genres`.
+- `no_more_songs` (`22023`) — pool exhausted on the random path.
+- `song_not_found` (`P0002`) — manual pick referenced a missing song id.
 
 ---
 
@@ -192,28 +208,20 @@ Idempotent: safe to call when no buzz is held. Errors mirror 2.5 (token / game l
 
 ---
 
-### 2.5b `POST /games/{game_code}/end-round`
+### 2.5b End-round (folded into `select_next_song`)
 
-Manager: close the current round (advance to "Next round"). Idempotent. **Manager-token auth required.**
+There is no longer a separate `POST /games/{game_code}/end-round` REST
+endpoint or `end_round` direct-RPC call from the browser. Closing the
+previous round is handled inside `select_next_song` (which delegates to
+the existing PL/pgSQL `start_round` function — that one defensively
+closes any open prior round before inserting the new one). The host
+never explicitly "ends a round"; they advance to the next song and the
+prior round is closed as a side effect, identical to the pre-cleanup
+behaviour.
 
-**Headers**: `X-Manager-Token: <token>`
-
-**Request body**:
-```json
-{ "round_id": "<round_uuid>" }
-```
-
-**Response 200**:
-```json
-{
-  "round_id": "<round_uuid>",
-  "ended_at": "<timestamptz>"
-}
-```
-
-Server-side: calls Postgres `end_round` RPC. Stamps `game_rounds.ended_at` and clears any held buzz lock. Calling on an already-ended round is a no-op (returns the existing `ended_at`).
-
-**Errors**: `unauthorized` (401), `not_found` (404; round doesn't exist).
+The service-role-only `end_round` PL/pgSQL function still exists in the
+DB and is callable from within `select_next_song` and `start_round`; it
+just has no FastAPI route or browser caller anymore.
 
 ---
 
@@ -467,9 +475,9 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 
 - `POST /games`: not idempotent (each call creates a new game). Frontend must not retry on network error without user confirmation.
 - `POST /games/{code}/teams`: idempotent on `(game_code, name)`: UNIQUE constraint catches retries.
-- `POST /games/{code}/select-song`: not idempotent; each call advances the round number. Frontend must not retry without user confirmation.
+- `select_next_song` RPC (direct from manager browser): NOT idempotent; each call advances the round number and inserts a new `game_rounds` row. The prior round is closed defensively inside the function; calling on an already-ended game raises `game_ended`.
 - `award_attempt` RPC (direct from manager browser): NOT idempotent. Each call records one attempt against the open round. Manager UI guards against double-submit with a busy flag; the SQL function additionally raises `title_already_claimed` / `artist_already_claimed` on retry. Calling on an ended round raises `round_already_ended`.
-- `POST /games/{code}/end-round`: idempotent. A second call on an already-ended round returns the existing `ended_at`.
+- `release_buzz_lock` RPC (direct from manager browser): idempotent on the unlock side; safe to call when no buzz is held.
 - `POST /games/{code}/end`: idempotent; calling on an already-`ended` game is a 409 (conflict), not a no-op, to surface the inconsistency to the manager UI.
 - `buzz_in` RPC: implicitly idempotent (the `IS NULL` predicate prevents double-claim).
 
