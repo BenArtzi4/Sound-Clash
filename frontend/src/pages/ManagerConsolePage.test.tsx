@@ -657,6 +657,122 @@ describe("ManagerConsolePage", () => {
     expect(continueBtn).toBeEnabled(); // still enabled (state hasn't flowed)
   });
 
+  // ---- synchronous double-click guard: useRef in-flight locks ----
+  // Two clicks fired in the same React tick both read `busy=false` from the
+  // stale closure -- only a useRef-tracked in-flight flag can block the
+  // second one synchronously. These tests pin that behavior: deferred RPC,
+  // two rapid clicks, exactly one RPC fires.
+
+  it("Next round double-click fires select_next_song exactly once (useRef guard)", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", current_round_id: "r1" }),
+      teams: [],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let resolveRpc!: (value: never) => void;
+    vi.mocked(selectNextSongDirect).mockReturnValueOnce(
+      new Promise((res) => {
+        resolveRpc = res as (v: never) => void;
+      }) as never,
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    const btn = screen.getByTestId("start-round");
+    await waitFor(() => expect(btn).toBeEnabled());
+    // Two clicks in the same synchronous tick. The button stays visually
+    // enabled (busy isn't in the disabled prop) so React's render wouldn't
+    // intercept; only the useRef guard does.
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    // Resolve the deferred RPC so the await chain unblocks for cleanup.
+    await act(async () => {
+      resolveRpc({
+        round_id: "r2",
+        round_number: 2,
+        song: {
+          id: "s2",
+          title: "T",
+          artist: "A",
+          youtube_id: "abcdefghijk",
+          start_time: 0,
+          is_soundtrack: false,
+          source: null,
+        },
+      } as never);
+    });
+    expect(vi.mocked(selectNextSongDirect)).toHaveBeenCalledTimes(1);
+  });
+
+  it("Correct Song double-click fires award_attempt exactly once (useRef guard)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let resolveRpc!: (value: never) => void;
+    vi.mocked(awardAttemptDirect).mockReturnValueOnce(
+      new Promise((res) => {
+        resolveRpc = res as (v: never) => void;
+      }) as never,
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByTestId("score-title");
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await act(async () => {
+      resolveRpc({
+        round_id: "r1",
+        team_id: "t1",
+        points_awarded: 10,
+        team_total_score: 10,
+        title_claimed_by: "t1",
+        artist_claimed_by: null,
+      } as never);
+    });
+    expect(vi.mocked(awardAttemptDirect)).toHaveBeenCalledTimes(1);
+  });
+
+  it("Continue round double-click fires release_buzz_lock exactly once (useRef guard)", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let resolveRpc!: (value: undefined) => void;
+    vi.mocked(releaseBuzzLockDirect).mockReturnValueOnce(
+      new Promise<undefined>((res) => {
+        resolveRpc = res;
+      }),
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const btn = screen.getByTestId("continue-round");
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await act(async () => {
+      resolveRpc(undefined);
+    });
+    expect(vi.mocked(releaseBuzzLockDirect)).toHaveBeenCalledTimes(1);
+  });
+
   it("Correct Song silently swallows a title_already_claimed RpcError (no toast)", async () => {
     setHydrate({
       game: makeActiveGame({
