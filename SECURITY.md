@@ -8,7 +8,7 @@ Email **benartzi4@gmail.com** with `[SECURITY] Sound Clash` in the subject. Incl
 
 - A description of the issue
 - Steps to reproduce
-- The version (commit SHA or tag) where you observed it
+- The commit SHA on `main` where you observed it (this repo ships from `main` directly and does not cut tagged releases)
 - Your assessment of the impact
 
 I'll acknowledge within 7 days and provide a target fix timeline within 14 days. Researchers acting in good faith will be credited (or kept anonymous on request) once the issue is fixed.

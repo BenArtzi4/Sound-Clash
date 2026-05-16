@@ -24,7 +24,7 @@ Game state auto-expires four hours after start.
 
 ## Architecture
 
-Every per-round click — buzz, judge, advance — talks to Postgres directly via Supabase PostgREST RPC; row-change events fan out to every client over Supabase Realtime. Python is deliberately *not* in any user-perceived hot path: that's what keeps end-to-end click-to-feedback latency under 200 ms on free hosting, regardless of Render's cold-start risk. Design notes in [`docs/realtime-design.md`](docs/realtime-design.md).
+Every per-round click: buzz, judge, advance - talks to Postgres directly via Supabase PostgREST RPC; row-change events fan out to every client over Supabase Realtime. Python is deliberately *not* in any user-perceived hot path: that's what keeps end-to-end click-to-feedback latency under 200 ms on free hosting, regardless of Render's cold-start risk. Design notes in [`docs/realtime-design.md`](docs/realtime-design.md).
 
 ```mermaid
 flowchart LR
