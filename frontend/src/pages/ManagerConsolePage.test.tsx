@@ -164,8 +164,8 @@ describe("ManagerConsolePage", () => {
         artist: "Queen",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        is_soundtrack: false,
-        source: null,
+        is_soundtrack: true,
+        source: "Wayne's World",
       },
     });
     renderConsole();
@@ -179,6 +179,8 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /start game/i }));
     await waitFor(() => expect(selectSong).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
+    // The source string (e.g. soundtrack origin) renders alongside the artist name.
+    expect(screen.getByText(/queen.*wayne's world/i)).toBeInTheDocument();
   });
 
   it("score buttons enable only when a team is buzzed", async () => {
@@ -503,6 +505,24 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByTestId("score-title")).toBeDisabled();
     expect(screen.getByTestId("score-artist")).toBeEnabled();
     expect(screen.getByTestId("score-wrong")).toBeEnabled();
+  });
+
+  it("artist chip flips to the claimed state when artist_claimed_by is set", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t2",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alpha" }), makeTeam({ id: "t2", name: "Bravo" })],
+      rounds: [makeRound({ id: "r1", artist_claimed_by: "t1" })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByTestId("token-chip-artist")).toHaveTextContent(/artist\s+✓/i);
+    expect(screen.getByTestId("score-artist")).toBeDisabled();
   });
 
   it("Bonus opens a team picker and posts to awardBonus", async () => {
