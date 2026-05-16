@@ -52,6 +52,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-05-17: Manager scoring buttons (Correct Song / Correct Artist / Wrong) no longer "double flash" after a click — they used to go disabled → enabled → disabled in the gap between the RPC returning and the Realtime update landing. They now stay disabled cleanly from the moment of the click until the round changes. Continue round and Next round buttons also no longer go disabled when pressed; they keep their natural press effect and only disable when the underlying state actually changes (buzz lock cleared / player loading).
 - 2026-05-15: Manager YouTube player no longer gets stuck showing "Video unavailable" on every subsequent song after a single failed video. The error state now clears whenever a new song is loaded, so a transient YouTube hiccup on round 1 no longer breaks rounds 2-N.
 - 2026-05-15: Reduced per-second re-rendering on the team and display screens during a buzz. The round countdown now ticks in its own small component so the surrounding scoreboard, buzz button, and YouTube player don't re-render every second — smoother gameplay on lower-end phones and TVs.
 - 2026-05-12: Song selection now mixes the selected genres evenly. Each round picks a random genre among those chosen, then a random unplayed song within it, so a game with several genres no longer front-loads whichever genre happens to have the most songs in the catalog.
