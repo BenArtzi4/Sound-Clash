@@ -148,9 +148,10 @@ log "      round_id=$ROUND_ID song=\"$SONG_TITLE\""
 # ---------------------------------------------------------------------------
 # 6. end-round
 #
-# Multi-buzz model: /attempt requires a held buzz, which the smoke test
-# does not simulate. We exercise /end-round instead (the host-only path
-# the manager hits to advance without scoring).
+# Multi-buzz model: scoring runs through award_attempt, which the browser
+# now calls direct via Supabase RPC (migration 021). The HTTP smoke check
+# only covers FastAPI-routed endpoints, so we exercise /end-round here --
+# the host-only path the manager hits to advance without scoring.
 # ---------------------------------------------------------------------------
 
 log "5/6 POST /games/$GAME_CODE/end-round"

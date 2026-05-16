@@ -189,15 +189,16 @@ Not idempotent. Each call increments `round_number` and creates a new row. Calle
 
 ## 3. `award_attempt`: manager scores one buzz (multi-buzz model)
 
-Called by FastAPI (`POST /games/{code}/attempt`). Not exposed to anon. Replaces the old `award_points` (migration 016). The crucial behavioural change: `award_attempt` does **not** close the round. A round can accept many `award_attempt` calls — one per buzz — until the manager calls `end_round` (or `start_round` for the next song defensively closes it).
+Called **direct from the manager browser** via Supabase PostgREST RPC (as of migration 021). Replaces the old FastAPI `POST /games/{code}/attempt` endpoint; removing the Render hop drops manager-action latency from ~400-600ms to ~150ms. The function takes the per-game `manager_token` as its last argument and validates it before any side effect, so anon EXECUTE is safe here the same way it is for `buzz_in`. Replaces the older `award_points` (migration 016). `award_attempt` does **not** close the round — a round can accept many `award_attempt` calls (one per buzz) until the manager calls `end_round` (or `start_round` for the next song defensively closes it).
 
 ```sql
 CREATE OR REPLACE FUNCTION award_attempt(
-  p_game_code  text,
-  p_round_id   uuid,
-  p_title      integer DEFAULT 0,   -- 0 or 10
-  p_artist     integer DEFAULT 0,   -- 0 or 5
-  p_wrong_buzz integer DEFAULT 0    -- 0 or 3 (deducted)
+  p_game_code     text,
+  p_round_id      uuid,
+  p_title         integer DEFAULT 0,   -- 0 or 10
+  p_artist        integer DEFAULT 0,   -- 0 or 5
+  p_wrong_buzz    integer DEFAULT 0,   -- 0 or 3 (deducted)
+  p_manager_token uuid    DEFAULT NULL -- required; validated in the body
 )
 RETURNS TABLE(
   team_id            uuid,
@@ -211,6 +212,9 @@ SECURITY DEFINER
 SET search_path = public;
 ```
 
+Token check (run before any other read/write):
+- Fetch `manager_token, ended_at` from `active_games` for the code. Missing row → `P0002 game_not_found`. Ended → `P0001 game_ended`. Mismatched or NULL token → `28000 manager_token_required`.
+
 Behavior:
 - Reads the current `buzzed_team_id` off `active_games`. If null → raises `P0001 no_buzz_to_score`.
 - `p_wrong_buzz > 0 AND (p_title > 0 OR p_artist > 0)` → raises `P0001 wrong_buzz_with_correct`.
@@ -223,6 +227,9 @@ Behavior:
 
 | Failure | Exception |
 |---|---|
+| Game code unknown | `P0002 game_not_found` |
+| Game already ended | `P0001 game_ended` |
+| Bad / missing / NULL manager token | `28000 manager_token_required` |
 | Round doesn't exist | `P0002 round_not_found` |
 | Round already ended | `P0001 round_already_ended` |
 | No buzz currently held | `P0001 no_buzz_to_score` |
@@ -232,19 +239,20 @@ Behavior:
 
 ### Idempotency
 
-Not idempotent. Each successful call records one attempt and may shift token claims. The caller (FastAPI) must guard against double-submit (the React UI does this with a `busy` flag).
+Not idempotent. Each successful call records one attempt and may shift token claims. The frontend guards against double-submit with a `busy` flag; the function additionally raises `title_already_claimed` / `artist_already_claimed` so a leaked double-click cannot double-award.
 
 ### Callers
 
-- FastAPI `POST /games/{code}/attempt`.
+- Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useManagerActions.ts::awardAttemptDirect`).
 
 ## 3aa. `release_buzz_lock`: manager re-arms the buzzers without scoring
 
-Added in migration 018. Called by FastAPI (`POST /games/{code}/continue`). Not exposed to anon. Used after a correct `award_attempt` (which now leaves the lock in place) when the manager wants to resume the song and re-open buzzes.
+Added in migration 018, opened to anon callers with the manager_token check in migration 021. Called **direct from the manager browser** when the host presses Continue after a correct `award_attempt` (which leaves the lock in place).
 
 ```sql
 CREATE OR REPLACE FUNCTION release_buzz_lock(
-  p_game_code text
+  p_game_code     text,
+  p_manager_token uuid
 ) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -252,16 +260,17 @@ SET search_path = public;
 ```
 
 Behavior:
-- `UPDATE active_games SET buzzed_team_id = NULL, locked_at = NULL WHERE game_code = p_game_code`. That's the entire body.
-- No-op if no buzz is held; never raises.
+- Validates `p_manager_token` against `active_games.manager_token` (same error matrix as `award_attempt`: `game_not_found` / `game_ended` / `manager_token_required`).
+- Then: `UPDATE active_games SET buzzed_team_id = NULL, locked_at = NULL WHERE game_code = p_game_code`. That's the entire post-check body.
+- No-op (post-check) if no buzz is held; never raises a "nothing to release" error.
 
 ### Idempotency
 
-Idempotent. Safe to call any number of times.
+Idempotent on the unlock side: safe to call any number of times once authorized.
 
 ### Callers
 
-- FastAPI `POST /games/{code}/continue`.
+- Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useManagerActions.ts::releaseBuzzLockDirect`).
 
 ## 3b. `end_round`: manager closes the round
 
@@ -460,13 +469,18 @@ async def test_cleanup_deletes_expired(db):
 | Function | Anon callable? | Service role callable? | Called by |
 |---|---|---|---|
 | `buzz_in` | ✅ | ✅ | Browser (team page) |
+| `award_attempt` | ✅ (token-gated) | ✅ | Browser (manager page) |
+| `release_buzz_lock` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `start_round` | ❌ | ✅ | FastAPI POST /games/.../select-song |
-| `award_attempt` | ❌ | ✅ | FastAPI POST /games/.../attempt |
-| `release_buzz_lock` | ❌ | ✅ | FastAPI POST /games/.../continue |
 | `end_round` | ❌ | ✅ | FastAPI POST /games/.../end-round |
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
+
+The three anon-callable functions all validate authentication inside the
+function body (`buzz_in` checks the game-code; `award_attempt` and
+`release_buzz_lock` check the per-game `manager_token`). This is what
+makes anon EXECUTE safe.
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
 

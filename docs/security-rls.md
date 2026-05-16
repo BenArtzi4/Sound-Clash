@@ -45,16 +45,16 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 | RPC function | anon EXECUTE | service_role EXECUTE |
 |---|---|---|
-| `buzz_in`               | ✅ | ✅ |
+| `buzz_in`               | ✅ (no extra auth: knowing the game-code is the auth) | ✅ |
+| `award_attempt`         | ✅ (token-gated: validates `p_manager_token` in-body) | ✅ |
+| `release_buzz_lock`     | ✅ (token-gated: same as above) | ✅ |
 | `start_round`           | ❌ | ✅ |
-| `award_attempt`         | ❌ | ✅ |
 | `end_round`             | ❌ | ✅ |
 | `award_bonus`           | ❌ | ✅ |
-| `release_buzz_lock`     | ❌ | ✅ |
 | `end_game`              | ❌ | ✅ |
 | `cleanup_expired_games` | ❌ | ✅ (called by `pg_cron`, not FastAPI) |
 
-Only `buzz_in` is reachable from the browser. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working.
+Three RPCs are reachable from the browser: `buzz_in` (the buzzer hot path), and `award_attempt` / `release_buzz_lock` (the manager hot path, since migration 021). All three perform their auth check inside the SECURITY DEFINER function body. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
 
 ### Why anon can SELECT any game
 
@@ -83,18 +83,23 @@ No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all write
 ### Function grants
 
 ```sql
--- buzz_in: the only browser-callable RPC.
-REVOKE ALL ON FUNCTION buzz_in(char, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
+-- buzz_in: browser-callable; the game_code itself is the auth.
+REVOKE ALL ON FUNCTION buzz_in(text, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION buzz_in(text, uuid) TO anon;
+
+-- award_attempt / release_buzz_lock: browser-callable via Supabase RPC,
+-- gated by the per-game manager_token (validated in the function body,
+-- not by GRANT). Migration 021 added the p_manager_token argument and
+-- granted EXECUTE to anon on the new signatures.
+GRANT EXECUTE ON FUNCTION award_attempt(text, uuid, integer, integer, integer, uuid)
+  TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION release_buzz_lock(text, uuid)
+  TO anon, authenticated, service_role;
 
 -- Backend-only RPCs: the creating migrations REVOKE FROM PUBLIC; migration 020
 -- additionally revokes the direct anon/authenticated grants that hosted
 -- Supabase adds, and re-asserts the grant for service_role.
---   start_round, end_round, award_attempt, award_bonus, release_buzz_lock,
---   end_game, cleanup_expired_games  (+ award_points if still present)
--- e.g.:
-REVOKE EXECUTE ON FUNCTION award_attempt(text, uuid, integer, integer, integer) FROM anon, authenticated;
-GRANT  EXECUTE ON FUNCTION award_attempt(text, uuid, integer, integer, integer) TO service_role;
+--   start_round, end_round, award_bonus, end_game, cleanup_expired_games
 ```
 
 ## 3. Realtime Subscriptions
