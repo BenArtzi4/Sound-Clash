@@ -485,7 +485,6 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText(/manager_token_required/i)).toBeInTheDocument());
   });
 
-
   it("Next round with a held buzz ends the round and selects a new song (no auto-score)", async () => {
     setHydrate({
       game: makeActiveGame({
