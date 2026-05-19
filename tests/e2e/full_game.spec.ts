@@ -19,7 +19,10 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
   const displayCtx = await browser.newContext();
   const display = await displayCtx.newPage();
   await display.goto(`/display/${code}`);
-  await expect(display.getByText("Solo")).toBeVisible();
+  // The team appears in the live scoreboard row on the display screen during
+  // play. After the game ends, the same name shows on the podium card AND in
+  // the new full-scoreboard list, so scope by data-team-id to stay unique.
+  await expect(display.locator(`[data-team-id]:has-text("Solo")`).first()).toBeVisible();
 
   type RoundPoints = { title: boolean; artist: boolean; expected: number };
   const rounds: RoundPoints[] = [
@@ -69,7 +72,12 @@ test("3-round game: award accumulates and podium renders on display", async ({ b
 
   await expect(endScreenHeading).toBeVisible({ timeout: 15_000 });
   await expect(display.getByText("WINNER")).toBeVisible();
-  await expect(display.getByText("Solo")).toBeVisible();
+  // "Solo" appears twice on the EndScreen: on the gold podium card and in
+  // the always-on full-scoreboard list. Either one being visible proves the
+  // team rendered; scope to the scoreboard row for an unambiguous match.
+  await expect(
+    display.getByTestId("final-scoreboard").locator(`[data-team-id]:has-text("Solo")`),
+  ).toBeVisible();
 
   await expect(display.getByText(`${runningTotal}pts`).first()).toBeVisible({
     timeout: 5_000,
