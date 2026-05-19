@@ -1117,7 +1117,8 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    // Alice shows on the podium and in the always-on full scoreboard.
+    expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("continue-round")).not.toBeInTheDocument();
   });
 

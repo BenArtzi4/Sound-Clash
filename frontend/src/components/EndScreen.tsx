@@ -149,6 +149,26 @@ function groupByScore(teams: Team[]): Team[][] {
   return groups;
 }
 
+interface ScoreboardRow {
+  team: Team;
+  rank: number;
+}
+
+// Flatten groups into per-team rows with a dense rank (tied teams share a
+// rank, next rank is +1 — matches the podium's group indexing). Used by the
+// always-on full scoreboard so every team is individually visible regardless
+// of how ties collapse the podium.
+function flattenWithRanks(groups: Team[][]): ScoreboardRow[] {
+  const rows: ScoreboardRow[] = [];
+  groups.forEach((group, i) => {
+    const rank = i + 1;
+    for (const team of group) {
+      rows.push({ team, rank });
+    }
+  });
+  return rows;
+}
+
 function PodiumCard({
   teams,
   place,
@@ -189,12 +209,12 @@ function PodiumCard({
 
 export function EndScreen({ teams, gameCode }: Props) {
   const groups = useMemo(() => groupByScore(teams), [teams]);
+  const scoreboard = useMemo(() => flattenWithRanks(groups), [groups]);
   const confetti = useMemo(() => generateConfetti(), []);
 
   const goldGroup = groups[0];
   const silverGroup = groups[1];
   const bronzeGroup = groups[2];
-  const restTeams = groups.slice(3).flat();
   const teamCount = teams.length;
 
   return (
@@ -261,19 +281,28 @@ export function EndScreen({ teams, gameCode }: Props) {
             )}
           </div>
 
-          {restTeams.length > 0 ? (
-            <div className={styles.rest}>
-              <h2 className={styles.restTitle}>Other teams</h2>
-              <ol className={styles.restList} start={4}>
-                {restTeams.map((t) => (
-                  <li key={t.id} className={styles.restRow}>
-                    <span className={styles.restName}>{t.name}</span>
-                    <span className={styles.restScore}>{t.score}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ) : null}
+          {/* Per-team scoreboard. Always rendered so every team is
+              individually visible — the podium collapses tied teams onto a
+              single card (and renders an invisible placeholder for any
+              missing rank), which made it look like teams were dropped
+              when scores tied. */}
+          <div className={styles.scoreboard} data-testid="final-scoreboard">
+            <h2 className={styles.scoreboardTitle}>Full scoreboard</h2>
+            <ol className={styles.scoreboardList}>
+              {scoreboard.map(({ team, rank }) => (
+                <li
+                  key={team.id}
+                  className={styles.scoreboardRow}
+                  data-rank={rank}
+                  data-team-id={team.id}
+                >
+                  <span className={styles.scoreboardRank}>{rank}</span>
+                  <span className={styles.scoreboardName}>{team.name}</span>
+                  <span className={styles.scoreboardScore}>{team.score}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
         </>
       )}
 
