@@ -164,7 +164,8 @@ describe("DisplayPage board", () => {
     });
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
     expect(screen.getByText(/winner/i)).toBeInTheDocument();
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    // Alice appears on the podium and in the full scoreboard row.
+    expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
   });
 
   it("renders an empty-board hint when no teams have joined", async () => {
