@@ -13,6 +13,14 @@ SongArtist = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 SongSource = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 
 
+class GenreRef(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    name: str
+    slug: str
+
+
 class SongPayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -23,6 +31,7 @@ class SongPayload(BaseModel):
     start_time: int
     is_soundtrack: bool
     source: str | None = None
+    genres: list[GenreRef] = Field(default_factory=list)
 
 
 class SongCreate(BaseModel):

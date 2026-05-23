@@ -92,6 +92,28 @@
   color: var(--color-text-dim);
 }
 
+.startTime {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+
+.genreList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.genreTag {
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-elev);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+
 .rowActions {
   display: flex;
   gap: var(--space-xs);

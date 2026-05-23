@@ -113,6 +113,46 @@ async def test_list_genre_filter_unknown_returns_empty(admin_client) -> None:
     assert resp.json()["total"] == 0
 
 
+async def test_list_response_includes_genres_per_song(admin_client, db) -> None:
+    await insert_song(db, title="GenresPing", genre_slugs=["rock", "pop"])
+    resp = await admin_client.get("/admin/songs?search=GenresPing")
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) >= 1
+    row = next(s for s in items if s["title"] == "GenresPing")
+    slugs = sorted(g["slug"] for g in row["genres"])
+    assert slugs == ["pop", "rock"]
+    # Each embedded genre has the full id/name/slug shape the admin UI needs.
+    assert all({"id", "name", "slug"} <= g.keys() for g in row["genres"])
+
+
+async def test_get_song_includes_genres(admin_client, db) -> None:
+    song_id = await insert_song(db, genre_slugs=["rock"])
+    resp = await admin_client.get(f"/admin/songs/{song_id}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [g["slug"] for g in body["genres"]] == ["rock"]
+
+
+async def test_create_response_includes_attached_genres(admin_client, db) -> None:
+    rock, pop = await fetch_genre_ids(db, slugs=["rock", "pop"])
+    resp = await admin_client.post(
+        "/admin/songs",
+        json={
+            "title": "WithGenresCreate",
+            "artist": "X",
+            "youtube_id": "qqqqqqqqqqq",
+            "start_time": 0,
+            "is_soundtrack": False,
+            "source": None,
+            "genre_ids": [str(rock), str(pop)],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert sorted(g["slug"] for g in body["genres"]) == ["pop", "rock"]
+
+
 async def test_get_unknown_id_404(admin_client) -> None:
     resp = await admin_client.get(
         "/admin/songs/00000000-0000-0000-0000-000000000000"
