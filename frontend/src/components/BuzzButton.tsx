@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import styles from "./BuzzButton.module.css";
 
 export type BuzzTone = "idle" | "locked-other" | "winner" | "waiting";
@@ -21,6 +21,9 @@ export function BuzzButton({
   onBuzz,
 }: Props) {
   const [pressed, setPressed] = useState(false);
+  // pointerdown fires onBuzz; the synthetic click that follows the same
+  // gesture must not double-fire. The ref is cleared on the next click.
+  const firedFromPointerRef = useRef(false);
 
   useEffect(() => {
     if (!isBuzzing) {
@@ -30,16 +33,31 @@ export function BuzzButton({
     return undefined;
   }, [isBuzzing]);
 
-  const handleClick = () => {
+  const fire = () => {
     if (disabled) return;
     setPressed(true);
     onBuzz();
   };
 
+  const handlePointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    firedFromPointerRef.current = true;
+    fire();
+  };
+
+  const handleClick = () => {
+    if (firedFromPointerRef.current) {
+      firedFromPointerRef.current = false;
+      return;
+    }
+    fire();
+  };
+
   const handleKey = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
-      handleClick();
+      fire();
     }
   };
 
@@ -62,6 +80,7 @@ export function BuzzButton({
       data-testid="buzz"
       data-tone={tone}
       disabled={disabled}
+      onPointerDown={handlePointerDown}
       onClick={handleClick}
       onKeyDown={handleKey}
       className={className}
