@@ -30,6 +30,36 @@ router = APIRouter(
 SONG_COLUMNS = "id,title,artist,youtube_id,start_time,is_soundtrack,source"
 
 
+def _attach_genres(client: SupabaseClientLike, songs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Mutate each song dict in place to add a `genres: list[dict]` field.
+
+    Two extra round-trips instead of a PostgREST embed: keeps the admin list
+    sane against the fake-supabase test harness (which lowers the select
+    string straight into raw SQL and would choke on embed syntax). For an
+    admin-only page that serves at most 50 rows per request, the extra
+    latency is in the noise.
+    """
+    if not songs:
+        return songs
+    ids = [s["id"] for s in songs]
+    sg_resp = client.table("song_genres").select("song_id,genre_id").in_("song_id", ids).execute()
+    sg_rows = sg_resp.data or []
+    gids = sorted({r["genre_id"] for r in sg_rows}, key=str)
+    if gids:
+        g_resp = client.table("genres").select("id,name,slug").in_("id", gids).execute()
+        gmap = {row["id"]: row for row in (g_resp.data or [])}
+    else:
+        gmap = {}
+    by_song: dict[Any, list[dict[str, Any]]] = {}
+    for r in sg_rows:
+        meta = gmap.get(r["genre_id"])
+        if meta:
+            by_song.setdefault(r["song_id"], []).append(meta)
+    for s in songs:
+        s["genres"] = by_song.get(s["id"], [])
+    return songs
+
+
 def _list_blocking(
     client: SupabaseClientLike,
     *,
@@ -56,12 +86,14 @@ def _list_blocking(
         query = query.ilike("title", f"%{search}%")
 
     resp = query.order("title").execute()
-    rows = list(resp.data or [])
+    rows = [dict(r) for r in (resp.data or [])]
     total = len(rows)
     start = max(0, (page - 1) * per_page)
     end = start + per_page
+    page_rows = rows[start:end]
+    _attach_genres(client, page_rows)
     return {
-        "items": rows[start:end],
+        "items": page_rows,
         "page": page,
         "per_page": per_page,
         "total": total,
@@ -73,7 +105,9 @@ def _fetch_song_blocking(client: SupabaseClientLike, song_id: str) -> dict[str, 
     rows = resp.data or []
     if not rows:
         raise NotFoundError(f"song {song_id} not found")
-    return dict(rows[0])
+    row = dict(rows[0])
+    _attach_genres(client, [row])
+    return row
 
 
 def _create_song_blocking(client: SupabaseClientLike, body: SongCreate) -> dict[str, Any]:
@@ -90,13 +124,14 @@ def _create_song_blocking(client: SupabaseClientLike, body: SongCreate) -> dict[
     rows = resp.data or []
     if not rows:
         raise NotFoundError("song insert returned no row")
-    song: dict[str, Any] = dict(rows[0])
+    song_id = str(rows[0]["id"])
 
-    joins = [{"song_id": song["id"], "genre_id": str(g)} for g in body.genre_ids]
+    joins = [{"song_id": song_id, "genre_id": str(g)} for g in body.genre_ids]
     if joins:
         with mapped_postgrest_errors():
             client.table("song_genres").insert(joins).execute()
-    return song
+    # Re-fetch via the embed so the response includes the genres just attached.
+    return _fetch_song_blocking(client, song_id)
 
 
 def _update_song_blocking(
@@ -112,16 +147,15 @@ def _update_song_blocking(
         "source": body.source,
     }
     with mapped_postgrest_errors():
-        resp = client.table("songs").update(payload).eq("id", song_id).execute()
-    rows = resp.data or []
-    song = rows[0] if rows else _fetch_song_blocking(client, song_id)
+        client.table("songs").update(payload).eq("id", song_id).execute()
 
     client.table("song_genres").delete().eq("song_id", song_id).execute()
     joins = [{"song_id": song_id, "genre_id": str(g)} for g in body.genre_ids]
     if joins:
         with mapped_postgrest_errors():
             client.table("song_genres").insert(joins).execute()
-    return song
+    # Re-fetch via the embed so the response reflects the new genres.
+    return _fetch_song_blocking(client, song_id)
 
 
 def _delete_song_blocking(client: SupabaseClientLike, song_id: str) -> None:

@@ -26,6 +26,18 @@ import styles from "./AdminSongsPage.module.css";
 const PER_PAGE = 50;
 const YT_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const SEARCH_DEBOUNCE_MS = 250;
+const SOUNDTRACK_LABEL = "Soundtrack";
+
+// Build the display list of genre names for a row. If `is_soundtrack` is on,
+// prepend "Soundtrack" so the column reflects the flag even when the song
+// isn't tagged with the soundtrack genre (e.g. a Rock soundtrack pick).
+function displayGenres(song: Song): string[] {
+  const names = (song.genres ?? []).map((g) => g.name);
+  if (song.is_soundtrack && !names.includes(SOUNDTRACK_LABEL)) {
+    names.unshift(SOUNDTRACK_LABEL);
+  }
+  return names;
+}
 
 type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; song: Song };
 
@@ -239,8 +251,6 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   const songToFilterEdit = useCallback((song: Song) => {
-    // Backend doesn't return genre links on the song row; preselect nothing.
-    // Operator can re-pick. (A future enhancement could add ?include=genres.)
     setMode({ kind: "edit", song });
   }, []);
 
@@ -356,7 +366,14 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
         <SongForm
           key={mode.kind === "edit" ? mode.song.id : "create"}
           genres={genres}
-          initial={mode.kind === "edit" ? songToForm(mode.song, []) : EMPTY_FORM}
+          initial={
+            mode.kind === "edit"
+              ? songToForm(
+                  mode.song,
+                  (mode.song.genres ?? []).map((g) => g.id),
+                )
+              : EMPTY_FORM
+          }
           submitLabel={mode.kind === "edit" ? "Save changes" : "Create song"}
           busy={busy}
           onCancel={() => setMode({ kind: "list" })}
@@ -371,6 +388,8 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
               <th>Title</th>
               <th>Artist</th>
               <th>YouTube ID</th>
+              <th>Start</th>
+              <th>Genres</th>
               <th aria-label="Actions" />
             </tr>
           </thead>
@@ -387,43 +406,68 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
                   <td>
                     <Skeleton width="100px" height={16} />
                   </td>
+                  <td>
+                    <Skeleton width="40px" height={16} />
+                  </td>
+                  <td>
+                    <Skeleton width="120px" height={16} />
+                  </td>
                   <td />
                 </tr>
               ))
             ) : songs.length === 0 ? (
               <tr>
-                <td colSpan={4} className={styles.empty}>
+                <td colSpan={6} className={styles.empty}>
                   No songs found.
                 </td>
               </tr>
             ) : (
-              songs.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.title}</td>
-                  <td>{s.artist}</td>
-                  <td className={styles.ytId}>{s.youtube_id}</td>
-                  <td>
-                    <div className={styles.rowActions}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => songToFilterEdit(s)}
-                        disabled={busy}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-danger"
-                        onClick={() => setDeleteId(s.id)}
-                        disabled={busy}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              songs.map((s) => {
+                const genreNames = displayGenres(s);
+                return (
+                  <tr key={s.id}>
+                    <td>{s.title}</td>
+                    <td>{s.artist}</td>
+                    <td className={styles.ytId}>{s.youtube_id}</td>
+                    <td className={styles.startTime}>
+                      {s.start_time > 0 ? `${s.start_time}s` : "—"}
+                    </td>
+                    <td>
+                      <div className={styles.genreList}>
+                        {genreNames.length === 0 ? (
+                          <span className={styles.startTime}>—</span>
+                        ) : (
+                          genreNames.map((name) => (
+                            <span key={name} className={styles.genreTag}>
+                              {name}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className={styles.rowActions}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => songToFilterEdit(s)}
+                          disabled={busy}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => setDeleteId(s.id)}
+                          disabled={busy}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

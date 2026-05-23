@@ -50,6 +50,7 @@ const SONG_A: Song = {
   start_time: 0,
   is_soundtrack: false,
   source: null,
+  genres: [{ id: "g1", name: "Rock", slug: "rock" }],
 };
 
 const SONG_B: Song = {
@@ -60,6 +61,7 @@ const SONG_B: Song = {
   start_time: 12,
   is_soundtrack: true,
   source: "Some film",
+  genres: [{ id: "g2", name: "Pop", slug: "pop" }],
 };
 
 beforeEach(() => {
@@ -145,6 +147,22 @@ describe("AdminSongsPage: list", () => {
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("Bravo")).toBeInTheDocument();
     expect(screen.getByText("aaaaaaaaaaa")).toBeInTheDocument();
+  });
+
+  it("renders start_time and genre columns; soundtrack flag adds 'Soundtrack' tag", async () => {
+    renderPage();
+    await signIn();
+    // Alpha: start_time=0 renders as em-dash; one genre tag (Rock).
+    const alphaRow = screen.getByText("Alpha").closest("tr") as HTMLElement;
+    expect(within(alphaRow).getByText("—")).toBeInTheDocument();
+    expect(within(alphaRow).getByText("Rock")).toBeInTheDocument();
+    expect(within(alphaRow).queryByText("Soundtrack")).not.toBeInTheDocument();
+    // Bravo: start_time=12 renders as "12s"; is_soundtrack=true prepends "Soundtrack"
+    // to the Pop tag.
+    const bravoRow = screen.getByText("Bravo").closest("tr") as HTMLElement;
+    expect(within(bravoRow).getByText("12s")).toBeInTheDocument();
+    expect(within(bravoRow).getByText("Pop")).toBeInTheDocument();
+    expect(within(bravoRow).getByText("Soundtrack")).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no songs", async () => {
@@ -276,6 +294,7 @@ describe("AdminSongsPage: create + edit + delete", () => {
 
     expect(screen.getByDisplayValue("Alpha")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "Alpha v2" } });
+    // Rock is already pre-checked (from SONG_A.genres); clicking Pop adds it.
     fireEvent.click(screen.getByLabelText(/^pop$/i));
 
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
@@ -285,7 +304,7 @@ describe("AdminSongsPage: create + edit + delete", () => {
     expect(id).toBe(SONG_A.id);
     expect(payload.title).toBe("Alpha v2");
     expect(payload.youtube_id).toBe(SONG_A.youtube_id);
-    expect(payload.genre_ids).toEqual(["g2"]);
+    expect([...payload.genre_ids].sort()).toEqual(["g1", "g2"]);
     expect(pw).toBe("letmein");
   });
 

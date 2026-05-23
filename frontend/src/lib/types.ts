@@ -49,6 +49,10 @@ export interface Song {
   start_time: number;
   is_soundtrack: boolean;
   source: string | null;
+  // Optional because the `select_next_song` RPC returns Song-shaped rows
+  // without joined genres. The admin list/get/create/update endpoints
+  // populate it; in-game callers can ignore it.
+  genres?: Genre[];
 }
 
 export interface Genre {
