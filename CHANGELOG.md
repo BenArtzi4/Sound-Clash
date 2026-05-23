@@ -47,6 +47,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Removed
 
+- 2026-05-23: Dropped five unused genres from the catalog (Classical, Country, Jazz, Metal, R&B). They were seeded but never had songs attached, so the host's "Pick genres" picker and the admin filter no longer offer them. The remaining ten genres cover everything in the catalog.
 - 2026-05-16: Retired the legacy `POST /games/{code}/select-song` and `POST /games/{code}/end-round` REST endpoints, the Python song-picker service, and the un-tokenised legacy overloads of `award_attempt` / `release_buzz_lock` in the database. None of these had a caller in the running stack after the direct-RPC migrations (021, 022) stabilised. No user-visible behaviour change; the cleanup is dead-code hygiene.
 - 2026-05-10: One-buzz-per-round model is gone, along with the `/award-points` endpoint. Replaced by the multi-buzz model with `/attempt` (per-buzz scoring) + `/end-round` (close the round explicitly).
 - 2026-05-10: Removed the "Home" and "Restart song" buttons from the manager console. The header trims to just "End game"; the round-controls toolbar trims to "End round" + "Next round" / "Start game".
