@@ -1,11 +1,12 @@
 .shell {
   min-height: 100%;
-  padding: 1.5rem var(--space-lg);
+  padding: 0.75rem var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  max-width: 720px;
+  gap: 0.75rem;
+  max-width: none;
   margin: 0 auto;
+  width: 100%;
 }
 
 .pointStack {
@@ -31,8 +32,9 @@
   backdrop-filter: blur(8px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 0.85rem 1.25rem;
+  padding: 0.5rem 0.9rem;
   box-shadow: var(--shadow-sm);
+  flex: 0 0 auto;
 }
 
 .identity {
@@ -43,7 +45,7 @@
 }
 
 .teamName {
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.01em;
@@ -83,6 +85,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-sm);
+  flex: 0 0 auto;
 }
 
 .timerBar {
@@ -133,8 +136,11 @@
 
 .buzzZone {
   display: flex;
-  justify-content: center;
-  padding: 1.5rem 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  justify-content: stretch;
+  align-items: stretch;
 }
 
 .scoreCard {
@@ -154,10 +160,17 @@
   margin-bottom: 1rem;
 }
 
+@media (min-width: 900px) {
+  .shell {
+    max-width: 900px;
+    padding: 1rem var(--space-lg);
+  }
+}
+
 @media (max-width: 480px) {
   .shell {
-    padding: 1rem var(--space-md);
-    gap: 1.25rem;
+    padding: 0.5rem var(--space-sm);
+    gap: 0.5rem;
   }
   .teamName {
     font-size: 1.05rem;

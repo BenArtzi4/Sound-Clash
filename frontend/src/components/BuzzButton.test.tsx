@@ -74,6 +74,23 @@ describe("BuzzButton", () => {
     expect(screen.getByRole("button", { name: "BUZZ" })).toBeInTheDocument();
   });
 
+  it("fires onBuzz on pointerdown (before click) so a finger-slide release still counts", () => {
+    const onBuzz = vi.fn();
+    render(<BuzzButton disabled={false} isBuzzing={false} onBuzz={onBuzz} />);
+    const btn = screen.getByTestId("buzz");
+    fireEvent.pointerDown(btn, { button: 0 });
+    expect(onBuzz).toHaveBeenCalledTimes(1);
+    fireEvent.click(btn);
+    expect(onBuzz).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores non-primary pointer buttons", () => {
+    const onBuzz = vi.fn();
+    render(<BuzzButton disabled={false} isBuzzing={false} onBuzz={onBuzz} />);
+    fireEvent.pointerDown(screen.getByTestId("buzz"), { button: 2 });
+    expect(onBuzz).not.toHaveBeenCalled();
+  });
+
   it("reflects the tone prop via data-tone for styling", () => {
     const { rerender } = render(
       <BuzzButton disabled isBuzzing={false} tone="locked-other" onBuzz={() => {}} />,
