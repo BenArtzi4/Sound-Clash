@@ -40,7 +40,8 @@ import { AdminSongsPage } from "./AdminSongsPage";
 const GENRES = [
   { id: "g1", name: "Rock", slug: "rock" },
   { id: "g2", name: "Pop", slug: "pop" },
-  { id: "g3", name: "Soundtrack", slug: "soundtrack" },
+  { id: "g3", name: "Soundtracks", slug: "soundtracks" },
+  { id: "g4", name: "Israeli Soundtracks", slug: "israeli-soundtracks" },
 ];
 
 const SONG_A: Song = {
@@ -62,7 +63,7 @@ const SONG_B: Song = {
   source: "Some film",
   genres: [
     { id: "g2", name: "Pop", slug: "pop" },
-    { id: "g3", name: "Soundtrack", slug: "soundtrack" },
+    { id: "g3", name: "Soundtracks", slug: "soundtracks" },
   ],
 };
 
@@ -158,13 +159,13 @@ describe("AdminSongsPage: list", () => {
     const alphaRow = screen.getByText("Alpha").closest("tr") as HTMLElement;
     expect(within(alphaRow).getByText("—")).toBeInTheDocument();
     expect(within(alphaRow).getByText("Rock")).toBeInTheDocument();
-    expect(within(alphaRow).queryByText("Soundtrack")).not.toBeInTheDocument();
+    expect(within(alphaRow).queryByText("Soundtracks")).not.toBeInTheDocument();
     // Bravo: start_time=12 renders as "12s"; the row reflects only the
-    // genre tags actually stored on the song (Pop + Soundtrack).
+    // genre tags actually stored on the song (Pop + Soundtracks).
     const bravoRow = screen.getByText("Bravo").closest("tr") as HTMLElement;
     expect(within(bravoRow).getByText("12s")).toBeInTheDocument();
     expect(within(bravoRow).getByText("Pop")).toBeInTheDocument();
-    expect(within(bravoRow).getByText("Soundtrack")).toBeInTheDocument();
+    expect(within(bravoRow).getByText("Soundtracks")).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no songs", async () => {
@@ -266,7 +267,7 @@ describe("AdminSongsPage: create + edit + delete", () => {
     await waitFor(() => expect(screen.getByText(/song created/i)).toBeInTheDocument());
   });
 
-  it("auto-tags the Soundtrack genre when source is set on save", async () => {
+  it("auto-tags the Soundtracks genre when an English source is set on save", async () => {
     vi.mocked(createSong).mockResolvedValue(SONG_A);
     renderPage();
     await signIn();
@@ -286,6 +287,29 @@ describe("AdminSongsPage: create + edit + delete", () => {
     const [payload] = vi.mocked(createSong).mock.calls[0]!;
     expect(payload.source).toBe("Star Wars");
     expect([...payload.genre_ids].sort()).toEqual(["g1", "g3"]);
+  });
+
+  it("auto-tags Israeli Soundtracks (not generic) when source contains Hebrew", async () => {
+    vi.mocked(createSong).mockResolvedValue(SONG_A);
+    renderPage();
+    await signIn();
+
+    fireEvent.click(screen.getByRole("button", { name: /\+ new song/i }));
+    fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "גבעת חלפון" } });
+    fireEvent.change(screen.getByLabelText(/^artist$/i), { target: { value: "שיר" } });
+    fireEvent.change(screen.getByLabelText(/^youtube id$/i), {
+      target: { value: "abcdefghijk" },
+    });
+    fireEvent.change(screen.getByLabelText(/^source$/i), { target: { value: "גבעת חלפון" } });
+    fireEvent.click(screen.getByLabelText(/^rock$/i));
+
+    fireEvent.click(screen.getByRole("button", { name: /create song/i }));
+
+    await waitFor(() => expect(createSong).toHaveBeenCalled());
+    const [payload] = vi.mocked(createSong).mock.calls[0]!;
+    expect(payload.source).toBe("גבעת חלפון");
+    // g4 = Israeli Soundtracks; g3 = generic Soundtracks should NOT be added.
+    expect([...payload.genre_ids].sort()).toEqual(["g1", "g4"]);
   });
 
   it("disables submit while the form is invalid", async () => {

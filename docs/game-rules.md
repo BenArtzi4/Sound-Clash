@@ -108,7 +108,7 @@ When the current song has a `source` set (i.e. it's from a film / TV show / game
 - The single Correct button fires `award_attempt` with `p_title=10, p_artist=5` so the sum lands as +15 via the existing SQL function — no new RPC, no scoring branch in the DB.
 - On the display, the reveal panel shows "🎵 Title" and "🎬 from <source>" (instead of "🎤 Artist") once the manager confirms; both rows light up together.
 
-**Admin convention for soundtrack songs**: store the work name in the `artist` field (e.g. `artist = "Star Wars"` for the Imperial March, `artist = "Titanic"` for "My Heart Will Go On"). `source` typically matches. Setting `source` on save auto-tags the song with the Soundtrack genre so the host can filter to soundtrack-only games.
+**Admin convention for soundtrack songs**: store the work name in the `artist` field (e.g. `artist = "Star Wars"` for the Imperial March, `artist = "Titanic"` for "My Heart Will Go On"). `source` typically matches. Setting `source` on save auto-tags the song with the **Soundtracks** genre, or **Israeli Soundtracks** when `source` contains Hebrew characters, so the host can filter to a Hebrew-only or English-only soundtrack round.
 
 ### Free-guess rule
 

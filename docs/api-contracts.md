@@ -310,7 +310,7 @@ All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (
 |---|---|---|
 | `GET`    | `/admin/songs` | List songs (paginated, `?page=1&per_page=50&search=&genre=`) |
 | `GET`    | `/admin/songs/{id}` | Get one song |
-| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, source, genre_ids[]`). When `source` is set, the admin UI auto-adds the Soundtrack genre id to `genre_ids` so soundtrack-only filtering works for game creation. |
+| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, source, genre_ids[]`). When `source` is set, the admin UI auto-adds the Soundtracks genre id to `genre_ids` (or Israeli Soundtracks when `source` contains Hebrew characters) so soundtrack-only filtering works for game creation. |
 | `PUT`    | `/admin/songs/{id}` | Update a song (full replacement; partial use PATCH if needed later) |
 | `DELETE` | `/admin/songs/{id}` | Delete a song (cascades to `song_genres`) |
 | `POST`   | `/admin/songs/bulk-import` | Multipart CSV upload; columns: `title, artist, youtube_id, start_time, source, genres` (semicolon-separated genre slugs) |
