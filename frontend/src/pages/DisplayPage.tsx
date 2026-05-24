@@ -7,7 +7,6 @@ import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { useGameChannel } from "../hooks/useGameChannel";
-import { useGameSounds } from "../hooks/useGameSounds";
 import { supabase } from "../lib/supabase";
 import type { Song } from "../lib/types";
 import styles from "./DisplayPage.module.css";
@@ -73,13 +72,9 @@ function DisplayEntry() {
 
 function DisplayBoard({ gameCode }: { gameCode: string }) {
   const { state, status } = useGameChannel(gameCode);
-  const sounds = useGameSounds();
-  const [soundOn, setSoundOn] = useState(false);
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  const prevBuzzedRef = useRef<string | null | undefined>(undefined);
   const prevScoresRef = useRef<Record<string, number>>({});
-  const prevRoundRef = useRef<number | undefined>(undefined);
   const eventSeqRef = useRef(0);
 
   // Fetch the current round's song so the reveal panel can display the
@@ -113,20 +108,6 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
 
   useEffect(() => {
     if (!state) return;
-    const game = state.game;
-
-    if (soundOn && prevBuzzedRef.current !== undefined) {
-      if (game.buzzed_team_id != null && prevBuzzedRef.current !== game.buzzed_team_id) {
-        sounds.playBuzz();
-      }
-    }
-    prevBuzzedRef.current = game.buzzed_team_id ?? null;
-
-    if (soundOn && prevRoundRef.current !== undefined && game.round_number > prevRoundRef.current) {
-      sounds.playRoundStart();
-    }
-    prevRoundRef.current = game.round_number;
-
     const events: PointEvent[] = [];
     for (const t of state.teams.values()) {
       const prev = prevScoresRef.current[t.id];
@@ -141,15 +122,9 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
       prevScoresRef.current[t.id] = t.score;
     }
     if (events.length > 0) {
-      if (soundOn && events.some((e) => e.delta > 0)) sounds.playAward();
       setPointEvents((current) => [...current, ...events]);
     }
-  }, [state, sounds, soundOn]);
-
-  function toggleSound() {
-    sounds.prime();
-    setSoundOn((s) => !s);
-  }
+  }, [state]);
 
   if (status === "gone") {
     return (
@@ -226,16 +201,6 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
       <header className={styles.header}>
         <h1>Sound Clash</h1>
         <div className={styles.headerActions}>
-          <button
-            type="button"
-            className={`${styles.soundToggle} ${soundOn ? styles.soundOn : ""}`}
-            onClick={toggleSound}
-            aria-pressed={soundOn}
-            aria-label={soundOn ? "Sound on, tap to mute" : "Enable sound"}
-          >
-            <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
-            <span>{soundOn ? "Sound on" : "Enable sound"}</span>
-          </button>
           <span className={styles.code}>{gameCode}</span>
         </div>
       </header>

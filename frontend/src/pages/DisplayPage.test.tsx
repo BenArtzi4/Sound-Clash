@@ -279,23 +279,4 @@ describe("DisplayPage board", () => {
     );
     expect(screen.getByTestId("display-reveal-artist")).toHaveTextContent("???");
   });
-
-  it("toggles the sound button between off and on states", async () => {
-    setHydrate({
-      game: makeActiveGame({ status: "waiting" }),
-      teams: [],
-      rounds: [],
-    });
-    renderAt("/display/ABCDEF");
-    await act(async () => {
-      await fireSubscribed();
-    });
-    const btn = screen.getByRole("button", { name: /enable sound/i });
-    expect(btn).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(btn);
-    expect(screen.getByRole("button", { name: /sound on/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  });
 });
