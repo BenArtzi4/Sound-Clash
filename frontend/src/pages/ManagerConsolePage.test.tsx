@@ -177,11 +177,11 @@ describe("ManagerConsolePage", () => {
       round_number: 1,
       song: {
         id: "s1",
-        title: "Bohemian Rhapsody",
+        title: "Wayne's World",
         artist: "Wayne's World",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        source: "Wayne's World",
+        is_soundtrack: true,
       },
     });
     renderConsole();
@@ -196,9 +196,8 @@ describe("ManagerConsolePage", () => {
     // Optimistic toast fires before the RPC settles.
     expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
     await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
-    await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
-    // Soundtrack rounds reveal the work via "from <source>" plus a badge.
-    expect(screen.getByText(/from wayne's world/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Wayne's World")).toBeInTheDocument());
+    // Soundtrack rounds: show name is the only label; no "from X" subline.
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
   });
 
@@ -306,11 +305,11 @@ describe("ManagerConsolePage", () => {
     // collapses to a single "Correct +15" button.
     setSongFetch({
       id: "song-S",
-      title: "Imperial March",
+      title: "Star Wars",
       artist: "Star Wars",
       youtube_id: "abcdefghijk",
       start_time: 0,
-      source: "Star Wars",
+      is_soundtrack: true,
     });
     vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
       round_id: "r1",
@@ -827,7 +826,7 @@ describe("ManagerConsolePage", () => {
           artist: "A",
           youtube_id: "abcdefghijk",
           start_time: 0,
-          source: null,
+          is_soundtrack: false,
         },
       } as never);
     });
@@ -968,7 +967,7 @@ describe("ManagerConsolePage", () => {
         artist: "Up",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        source: null,
+        is_soundtrack: false,
       },
     });
     renderConsole();
@@ -1010,7 +1009,7 @@ describe("ManagerConsolePage", () => {
         artist: "Up",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        source: null,
+        is_soundtrack: false,
       },
     });
     renderConsole();

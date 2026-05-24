@@ -92,7 +92,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     void (async () => {
       const { data, error } = await supabase
         .from("songs")
-        .select("id,title,artist,youtube_id,start_time,source")
+        .select("id,title,artist,youtube_id,start_time,is_soundtrack")
         .eq("id", currentRoundSongId)
         .maybeSingle();
       if (cancelled || error || !data) return;
@@ -159,7 +159,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const artistClaimedById = round?.artist_claimed_by ?? null;
   const titleClaimedByName = titleClaimedById ? state.teams.get(titleClaimedById)?.name : null;
   const artistClaimedByName = artistClaimedById ? state.teams.get(artistClaimedById)?.name : null;
-  const isSoundtrackRound = currentSong?.source != null;
+  const isSoundtrackRound = currentSong?.is_soundtrack === true;
 
   if (game.status === "ended") {
     return (
@@ -218,32 +218,44 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
 
       {round && game.status === "playing" ? (
         <div className={styles.revealPanel} aria-label="Song reveal">
-          <div
-            className={`${styles.revealRow} ${titleClaimedById ? styles.revealRowOpen : ""}`}
-            data-testid="display-reveal-title"
-          >
-            <span className={styles.revealIcon} aria-hidden="true">
-              🎵
-            </span>
-            <span className={styles.revealText}>
-              {titleClaimedById && currentSong ? currentSong.title : "???"}
-            </span>
-          </div>
-          <div
-            className={`${styles.revealRow} ${artistClaimedById ? styles.revealRowOpen : ""}`}
-            data-testid="display-reveal-artist"
-          >
-            <span className={styles.revealIcon} aria-hidden="true">
-              {isSoundtrackRound ? "🎬" : "🎤"}
-            </span>
-            <span className={styles.revealText}>
-              {artistClaimedById && currentSong
-                ? isSoundtrackRound
-                  ? currentSong.source
-                  : currentSong.artist
-                : "???"}
-            </span>
-          </div>
+          {isSoundtrackRound ? (
+            <div
+              className={`${styles.revealRow} ${titleClaimedById ? styles.revealRowOpen : ""}`}
+              data-testid="display-reveal-title"
+            >
+              <span className={styles.revealIcon} aria-hidden="true">
+                🎬
+              </span>
+              <span className={styles.revealText}>
+                {titleClaimedById && currentSong ? currentSong.title : "???"}
+              </span>
+            </div>
+          ) : (
+            <>
+              <div
+                className={`${styles.revealRow} ${titleClaimedById ? styles.revealRowOpen : ""}`}
+                data-testid="display-reveal-title"
+              >
+                <span className={styles.revealIcon} aria-hidden="true">
+                  🎵
+                </span>
+                <span className={styles.revealText}>
+                  {titleClaimedById && currentSong ? currentSong.title : "???"}
+                </span>
+              </div>
+              <div
+                className={`${styles.revealRow} ${artistClaimedById ? styles.revealRowOpen : ""}`}
+                data-testid="display-reveal-artist"
+              >
+                <span className={styles.revealIcon} aria-hidden="true">
+                  🎤
+                </span>
+                <span className={styles.revealText}>
+                  {artistClaimedById && currentSong ? currentSong.artist : "???"}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       ) : null}
 

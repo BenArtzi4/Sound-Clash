@@ -21,7 +21,7 @@ async def test_create_and_get(admin_client, db) -> None:
         "artist": "Tester",
         "youtube_id": "abcDEF12345",
         "start_time": 30,
-        "source": None,
+        "is_soundtrack": False,
         "genre_ids": [str(rock[0])],
     }
     create_resp = await admin_client.post("/admin/songs", json=payload)
@@ -44,7 +44,7 @@ async def test_invalid_youtube_id_400(admin_client, db) -> None:
             "artist": "Bad",
             "youtube_id": "tooshort",
             "start_time": 0,
-            "source": None,
+            "is_soundtrack": False,
             "genre_ids": [str(rock[0])],
         },
     )
@@ -61,7 +61,7 @@ async def test_update(admin_client, db) -> None:
             "artist": "Updated",
             "youtube_id": "ZZZZZZZZZZZ",
             "start_time": 5,
-            "source": "Movie",
+            "is_soundtrack": False,
             "genre_ids": [str(rock[0])],
         },
     )
@@ -140,7 +140,7 @@ async def test_create_response_includes_attached_genres(admin_client, db) -> Non
             "artist": "X",
             "youtube_id": "qqqqqqqqqqq",
             "start_time": 0,
-            "source": None,
+            "is_soundtrack": False,
             "genre_ids": [str(rock), str(pop)],
         },
     )
@@ -172,7 +172,7 @@ async def test_update_unknown_id_404(admin_client, db) -> None:
             "artist": "Y",
             "youtube_id": "abcDEF12345",
             "start_time": 0,
-            "source": None,
+            "is_soundtrack": False,
             "genre_ids": [str(rock[0])],
         },
     )

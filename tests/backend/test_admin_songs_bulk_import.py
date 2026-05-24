@@ -12,7 +12,7 @@ pytestmark = pytest.mark.needs_docker
 
 
 def _csv(rows: list[list[str]]) -> bytes:
-    header = "title,artist,youtube_id,start_time,source,genres\n"
+    header = "title,artist,youtube_id,start_time,is_soundtrack,genres\n"
     body = "\n".join(",".join(r) for r in rows)
     return (header + body + "\n").encode("utf-8")
 
@@ -20,8 +20,8 @@ def _csv(rows: list[list[str]]) -> bytes:
 async def test_inserts_new_rows(admin_client) -> None:
     csv = _csv(
         [
-            ["Hello", "Adele", "YQHsXMglC9A", "0", "", "rock"],
-            ["Yesterday", "Beatles", "NrgmdOz227I", "10", "", "rock"],
+            ["Hello", "Adele", "YQHsXMglC9A", "0", "false", "rock"],
+            ["Yesterday", "Beatles", "NrgmdOz227I", "10", "false", "rock"],
         ]
     )
     resp = await admin_client.post(
@@ -39,7 +39,7 @@ async def test_updates_existing_youtube_id(admin_client, db) -> None:
         db, title="Old", artist="Old", youtube_id="DUPKEY12345", genre_slugs=["rock"]
     )
     csv = _csv(
-        [["NewTitle", "NewArtist", "DUPKEY12345", "5", "", "rock"]]
+        [["NewTitle", "NewArtist", "DUPKEY12345", "5", "false", "rock"]]
     )
     resp = await admin_client.post(
         "/admin/songs/bulk-import",
@@ -58,8 +58,8 @@ async def test_updates_existing_youtube_id(admin_client, db) -> None:
 async def test_malformed_row_rejected_with_line_number(admin_client) -> None:
     csv = _csv(
         [
-            ["Hello", "Adele", "YQHsXMglC9A", "0", "", "rock"],
-            ["Bad", "Bad", "tooshort", "0", "", "rock"],
+            ["Hello", "Adele", "YQHsXMglC9A", "0", "false", "rock"],
+            ["Bad", "Bad", "tooshort", "0", "false", "rock"],
         ]
     )
     resp = await admin_client.post(
@@ -74,7 +74,7 @@ async def test_malformed_row_rejected_with_line_number(admin_client) -> None:
 
 async def test_unknown_genre_rejected(admin_client) -> None:
     csv = _csv(
-        [["Song", "Artist", "abcDEF1234X", "0", "", "non_existent_slug"]]
+        [["Song", "Artist", "abcDEF1234X", "0", "false", "non_existent_slug"]]
     )
     resp = await admin_client.post(
         "/admin/songs/bulk-import",
@@ -85,7 +85,7 @@ async def test_unknown_genre_rejected(admin_client) -> None:
 
 
 async def test_admin_required(client) -> None:
-    csv = _csv([["X", "Y", "abcDEF1234X", "0", "", "rock"]])
+    csv = _csv([["X", "Y", "abcDEF1234X", "0", "false", "rock"]])
     resp = await client.post(
         "/admin/songs/bulk-import",
         files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},

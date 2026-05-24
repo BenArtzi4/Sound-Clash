@@ -42,7 +42,7 @@ async def test_admin_song_invalid_youtube_id(admin_client, db) -> None:
             "artist": "Y",
             "youtube_id": "WAY_TOO_LONG_FOR_YT_ID_FORMAT_!!!",
             "start_time": 0,
-            "source": None,
+            "is_soundtrack": False,
             "genre_ids": [str(genres[0])],
         },
     )

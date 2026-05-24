@@ -23,11 +23,13 @@ REQUIRED_COLUMNS = (
     "artist",
     "youtube_id",
     "start_time",
-    "source",
+    "is_soundtrack",
     "genres",
 )
 
 _YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_TRUE_VALUES = frozenset({"true", "1", "yes", "y", "t"})
+_FALSE_VALUES = frozenset({"false", "0", "no", "n", "f", ""})
 
 
 @dataclass(frozen=True)
@@ -37,7 +39,7 @@ class SongImportRow:
     artist: str
     youtube_id: str
     start_time: int
-    source: str | None
+    is_soundtrack: bool
     genre_slugs: list[str]
 
 
@@ -59,6 +61,18 @@ def _parse_int(value: str, *, line: int, field: str) -> int:
             f"row {line}: {field} must be an integer",
             details={"line": line, "field": field, "issue": "not_an_integer"},
         ) from exc
+
+
+def _parse_bool(value: str, *, line: int, field: str) -> bool:
+    stripped = value.strip().lower()
+    if stripped in _TRUE_VALUES:
+        return True
+    if stripped in _FALSE_VALUES:
+        return False
+    raise ValidationError(
+        f"row {line}: {field} must be true/false",
+        details={"line": line, "field": field, "issue": "not_a_boolean"},
+    )
 
 
 def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
@@ -87,12 +101,30 @@ def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
         title = (raw_row.get("title") or "").strip()
         artist = (raw_row.get("artist") or "").strip()
         youtube_id = (raw_row.get("youtube_id") or "").strip()
+        is_soundtrack = _parse_bool(
+            raw_row.get("is_soundtrack") or "", line=index, field="is_soundtrack"
+        )
         if not title:
             raise ValidationError(
                 f"row {index}: title is required",
                 details={"line": index, "field": "title", "issue": "empty"},
             )
-        if not artist:
+        if is_soundtrack:
+            # Soundtrack rule: title holds the show name; artist mirrors it.
+            # Blank artist is auto-filled; non-blank artist must match title
+            # so a typo doesn't slip in and split the soundtrack invariant.
+            if not artist:
+                artist = title
+            elif artist != title:
+                raise ValidationError(
+                    f"row {index}: for soundtracks, artist must be blank or equal to title",
+                    details={
+                        "line": index,
+                        "field": "artist",
+                        "issue": "soundtrack_artist_mismatch",
+                    },
+                )
+        elif not artist:
             raise ValidationError(
                 f"row {index}: artist is required",
                 details={"line": index, "field": "artist", "issue": "empty"},
@@ -114,7 +146,6 @@ def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
                 details={"line": index, "field": "start_time", "issue": "negative"},
             )
 
-        source = (raw_row.get("source") or "").strip() or None
         genres_raw = (raw_row.get("genres") or "").strip()
         genre_slugs = [s.strip() for s in genres_raw.split(";") if s.strip()]
         if not genre_slugs:
@@ -130,7 +161,7 @@ def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
                 artist=artist,
                 youtube_id=youtube_id,
                 start_time=start_time,
-                source=source,
+                is_soundtrack=is_soundtrack,
                 genre_slugs=genre_slugs,
             )
         )
@@ -180,7 +211,7 @@ def _apply_blocking(client: SupabaseClientLike, rows: list[SongImportRow]) -> Im
             "artist": row.artist,
             "youtube_id": row.youtube_id,
             "start_time": row.start_time,
-            "source": row.source,
+            "is_soundtrack": row.is_soundtrack,
         }
         if row.youtube_id in existing:
             song_id = existing[row.youtube_id]
