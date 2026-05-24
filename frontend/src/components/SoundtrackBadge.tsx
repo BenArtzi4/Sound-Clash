@@ -16,7 +16,9 @@ export function SoundtrackBadge({ size = "default" }: Props) {
       aria-label="Soundtrack round"
       data-testid="soundtrack-badge"
     >
-      <span className={styles.icon} aria-hidden="true">🎬</span>
+      <span className={styles.icon} aria-hidden="true">
+        🎬
+      </span>
       Soundtrack
     </span>
   );
