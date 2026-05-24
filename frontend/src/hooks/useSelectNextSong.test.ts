@@ -20,7 +20,7 @@ function row(overrides: Record<string, unknown> = {}) {
     song_artist: "Queen",
     youtube_id: "abcdefghijk",
     start_time: 0,
-    source: "Wayne's World",
+    is_soundtrack: false,
     ...overrides,
   };
 }
@@ -40,7 +40,7 @@ describe("selectNextSongDirect", () => {
     expect(result.song.id).toBe("s-1");
     expect(result.song.title).toBe("Bohemian Rhapsody");
     expect(result.song.artist).toBe("Queen");
-    expect(result.song.source).toBe("Wayne's World");
+    expect(result.song.is_soundtrack).toBe(false);
     expect(supabaseMock.rpc).toHaveBeenCalledWith("select_next_song", {
       p_game_code: "ABCDEF",
       p_manager_token: TOKEN,
@@ -86,9 +86,9 @@ describe("selectNextSongDirect", () => {
     await expect(selectNextSongDirect("ABCDEF", TOKEN)).rejects.toBeInstanceOf(RpcError);
   });
 
-  it("preserves null source on the returned Song shape", async () => {
-    setRpcResponse({ data: [row({ source: null })], error: null });
+  it("passes through is_soundtrack=true for soundtrack rounds", async () => {
+    setRpcResponse({ data: [row({ is_soundtrack: true })], error: null });
     const result = await selectNextSongDirect("ABCDEF", TOKEN);
-    expect(result.song.source).toBeNull();
+    expect(result.song.is_soundtrack).toBe(true);
   });
 });

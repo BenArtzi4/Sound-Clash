@@ -105,7 +105,7 @@ export function ManagerConsolePage() {
     void (async () => {
       const { data, error } = await supabase
         .from("songs")
-        .select("id,title,artist,youtube_id,start_time,source")
+        .select("id,title,artist,youtube_id,start_time,is_soundtrack")
         .eq("id", currentRoundSongId)
         .maybeSingle();
       if (cancelled || error || !data) return;
@@ -254,9 +254,9 @@ export function ManagerConsolePage() {
     }
   }
 
-  // Soundtrack rounds (current song has a `source`) use a single "Correct
-  // +15" button instead of the title/artist split. The team's job is to
-  // name the work (film / TV / game / musical), not the song title; awarding
+  // Soundtrack rounds (current song has is_soundtrack=true) use a single
+  // "Correct +15" button instead of the title/artist split. The team's job is
+  // to name the work (film / TV / game / musical), not the song title; awarding
   // both flags at once sums to 15 points via the existing award_attempt
   // function -- no SQL change needed. Both tokens claim together, so unlike
   // the regular Correct Song / Correct Artist buttons (which keep the buzz
@@ -484,7 +484,7 @@ export function ManagerConsolePage() {
   // early-return to no-op rapid double-clicks. End game and Bonus still
   // gate on busy because they fire less often and the flash is
   // imperceptible there.
-  const isSoundtrackRound = currentSong?.source != null;
+  const isSoundtrackRound = currentSong?.is_soundtrack === true;
   const titleActionDisabled = !lockedTeam || titleClaimedById != null || pendingTitle === round?.id;
   const artistActionDisabled =
     !lockedTeam || artistClaimedById != null || pendingArtist === round?.id;
@@ -534,11 +534,9 @@ export function ManagerConsolePage() {
             <div className={styles.songBlock}>
               {isSoundtrackRound ? <SoundtrackBadge /> : null}
               <p className={styles.songLine}>{currentSong.title}</p>
-              <p className={styles.songMeta}>
-                {isSoundtrackRound
-                  ? `from ${currentSong.source}`
-                  : `${currentSong.artist}${currentSong.source ? ` - ${currentSong.source}` : ""}`}
-              </p>
+              {isSoundtrackRound ? null : (
+                <p className={styles.songMeta}>{currentSong.artist}</p>
+              )}
             </div>
           ) : (
             <p className={styles.songMeta}>No round started yet.</p>

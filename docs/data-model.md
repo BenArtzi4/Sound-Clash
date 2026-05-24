@@ -41,7 +41,7 @@ CREATE TABLE songs (
   artist        text NOT NULL,
   youtube_id    char(11) NOT NULL,
   start_time    integer NOT NULL DEFAULT 0,    -- seconds
-  source        text,                           -- work the song is from (movie/TV/game/musical); nullable. NON-NULL = soundtrack round: manager + display show a 🎬 badge, scoring collapses to a single "Correct (+15)" button, and admin save auto-tags the Soundtracks genre (Israeli Soundtracks when source contains Hebrew characters).
+  is_soundtrack boolean NOT NULL DEFAULT false,  -- TRUE = soundtrack round: manager + display show a 🎬 badge, scoring collapses to a single "Correct (+15)" button, and admin save auto-tags the Soundtracks genre (Israeli Soundtracks when title contains Hebrew characters). Invariant for soundtracks: title = artist = show name (film / TV / game / musical); enforced by the admin form's auto-mirror and by the CSV importer.
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );

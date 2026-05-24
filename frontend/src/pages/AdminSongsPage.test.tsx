@@ -50,7 +50,7 @@ const SONG_A: Song = {
   artist: "Artist A",
   youtube_id: "aaaaaaaaaaa",
   start_time: 0,
-  source: null,
+  is_soundtrack: false,
   genres: [{ id: "g1", name: "Rock", slug: "rock" }],
 };
 
@@ -60,7 +60,7 @@ const SONG_B: Song = {
   artist: "Artist B",
   youtube_id: "bbbbbbbbbbb",
   start_time: 12,
-  source: "Some film",
+  is_soundtrack: false,
   genres: [
     { id: "g2", name: "Pop", slug: "pop" },
     { id: "g3", name: "Soundtracks", slug: "soundtracks" },
@@ -259,7 +259,7 @@ describe("AdminSongsPage: create + edit + delete", () => {
         artist: "Some artist",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        source: null,
+        is_soundtrack: false,
         genre_ids: ["g1"],
       },
       "letmein",
@@ -267,47 +267,49 @@ describe("AdminSongsPage: create + edit + delete", () => {
     await waitFor(() => expect(screen.getByText(/song created/i)).toBeInTheDocument());
   });
 
-  it("auto-tags the Soundtracks genre when an English source is set on save", async () => {
+  it("auto-mirrors artist from title and tags Soundtracks when the soundtrack box is checked", async () => {
     vi.mocked(createSong).mockResolvedValue(SONG_A);
     renderPage();
     await signIn();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ new song/i }));
-    fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "Imperial March" } });
-    fireEvent.change(screen.getByLabelText(/^artist$/i), { target: { value: "Star Wars" } });
+    fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "Star Wars" } });
     fireEvent.change(screen.getByLabelText(/^youtube id$/i), {
       target: { value: "abcdefghijk" },
     });
-    fireEvent.change(screen.getByLabelText(/^source$/i), { target: { value: "Star Wars" } });
+    fireEvent.click(screen.getByLabelText(/^soundtrack round$/i));
     fireEvent.click(screen.getByLabelText(/^rock$/i));
 
     fireEvent.click(screen.getByRole("button", { name: /create song/i }));
 
     await waitFor(() => expect(createSong).toHaveBeenCalled());
     const [payload] = vi.mocked(createSong).mock.calls[0]!;
-    expect(payload.source).toBe("Star Wars");
+    expect(payload.is_soundtrack).toBe(true);
+    expect(payload.title).toBe("Star Wars");
+    expect(payload.artist).toBe("Star Wars");
     expect([...payload.genre_ids].sort()).toEqual(["g1", "g3"]);
   });
 
-  it("auto-tags Israeli Soundtracks (not generic) when source contains Hebrew", async () => {
+  it("auto-tags Israeli Soundtracks (not generic) when soundtrack title is Hebrew", async () => {
     vi.mocked(createSong).mockResolvedValue(SONG_A);
     renderPage();
     await signIn();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ new song/i }));
     fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "גבעת חלפון" } });
-    fireEvent.change(screen.getByLabelText(/^artist$/i), { target: { value: "שיר" } });
     fireEvent.change(screen.getByLabelText(/^youtube id$/i), {
       target: { value: "abcdefghijk" },
     });
-    fireEvent.change(screen.getByLabelText(/^source$/i), { target: { value: "גבעת חלפון" } });
+    fireEvent.click(screen.getByLabelText(/^soundtrack round$/i));
     fireEvent.click(screen.getByLabelText(/^rock$/i));
 
     fireEvent.click(screen.getByRole("button", { name: /create song/i }));
 
     await waitFor(() => expect(createSong).toHaveBeenCalled());
     const [payload] = vi.mocked(createSong).mock.calls[0]!;
-    expect(payload.source).toBe("גבעת חלפון");
+    expect(payload.is_soundtrack).toBe(true);
+    expect(payload.title).toBe("גבעת חלפון");
+    expect(payload.artist).toBe("גבעת חלפון");
     // g4 = Israeli Soundtracks; g3 = generic Soundtracks should NOT be added.
     expect([...payload.genre_ids].sort()).toEqual(["g1", "g4"]);
   });

@@ -20,7 +20,7 @@ interface State {
       artist: string;
       youtube_id: string;
       start_time: number;
-      source: string | null;
+      is_soundtrack: boolean;
     }
   >;
 }
@@ -142,7 +142,7 @@ export function setSongFetch(song: {
   artist: string;
   youtube_id: string;
   start_time?: number;
-  source?: string | null;
+  is_soundtrack?: boolean;
 }): void {
   state.songsById[song.id] = {
     id: song.id,
@@ -150,7 +150,7 @@ export function setSongFetch(song: {
     artist: song.artist,
     youtube_id: song.youtube_id,
     start_time: song.start_time ?? 0,
-    source: song.source ?? null,
+    is_soundtrack: song.is_soundtrack ?? false,
   };
 }
 

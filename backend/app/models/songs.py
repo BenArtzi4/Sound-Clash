@@ -10,7 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 YouTubeId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{11}$")]
 SongTitle = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 SongArtist = Annotated[str, StringConstraints(min_length=1, max_length=200)]
-SongSource = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 
 
 class GenreRef(BaseModel):
@@ -29,7 +28,7 @@ class SongPayload(BaseModel):
     artist: str
     youtube_id: str
     start_time: int
-    source: str | None = None
+    is_soundtrack: bool = False
     genres: list[GenreRef] = Field(default_factory=list)
 
 
@@ -40,7 +39,7 @@ class SongCreate(BaseModel):
     artist: SongArtist
     youtube_id: YouTubeId
     start_time: int = Field(default=0, ge=0)
-    source: SongSource | None = None
+    is_soundtrack: bool = False
     genre_ids: list[UUID] = Field(default_factory=list, min_length=1)
 
 
@@ -51,7 +50,7 @@ class SongUpdate(BaseModel):
     artist: SongArtist
     youtube_id: YouTubeId
     start_time: int = Field(default=0, ge=0)
-    source: SongSource | None = None
+    is_soundtrack: bool = False
     genre_ids: list[UUID] = Field(default_factory=list, min_length=1)
 
 

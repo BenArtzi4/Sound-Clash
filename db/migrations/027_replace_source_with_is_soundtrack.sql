@@ -1,45 +1,33 @@
--- 025_drop_is_soundtrack.sql
--- Retire the songs.is_soundtrack boolean. It was a scoring modifier until
--- migration 014 (the +5 source bonus), and since then has only been read by
--- the admin list view as a "Soundtrack" genre-tag fallback. The Soundtrack
--- genre + the source text column already capture the concept, so collapse
--- to: source IS NOT NULL is the canonical "this is a soundtrack" marker,
--- and the Soundtrack genre is the game-filterable category, auto-applied
--- whenever source is set.
+-- 027_replace_source_with_is_soundtrack.sql
+-- Migration 025 collapsed the is_soundtrack/source pair down to just
+-- source IS NOT NULL as the canonical "soundtrack round" marker. With the
+-- catalog now consistently using title=artist=show_name for soundtracks
+-- (see docs/data-model.md), the source text column is redundant: every
+-- value it holds is already (or should be) duplicated into title.
 --
--- Backfills run BEFORE the column drop so we don't lose any rows that were
--- flagged is_soundtrack=true but never tagged with the Soundtrack genre.
--- Both backfills are idempotent via ON CONFLICT DO NOTHING on the
--- song_genres composite primary key.
+-- This migration finishes the simplification:
+--   1. Re-introduce songs.is_soundtrack boolean (so the marker is a single
+--      cheap column instead of "source IS NOT NULL" across every read path).
+--   2. Backfill is_soundtrack = true for every row that currently has a
+--      non-null source.
+--   3. Overwrite title and artist with the source value for those rows --
+--      the original song name / composer info is discarded (per user
+--      decision: for a soundtrack, only the show name matters, and it
+--      should appear as both title and artist so non-soundtrack code paths
+--      can read them without a NULL-check).
+--   4. Drop the source column.
+--   5. Re-issue select_next_song so RETURNS TABLE now contains
+--      is_soundtrack boolean in place of source text.
+--
+-- Idempotency: the backfill / column-drop steps are guarded on the source
+-- column still existing, so a second pass after success is a no-op. The
+-- function re-creation runs unconditionally via DROP + CREATE OR REPLACE.
 
--- Backfill 1: any row with is_soundtrack=true should also carry the
--- Soundtrack genre tag. Guarded on the column still existing so a second
--- run (after the column is dropped) is a no-op rather than a parse error.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'songs'
-      AND column_name = 'is_soundtrack'
-  ) THEN
-    EXECUTE $sql$
-      INSERT INTO song_genres (song_id, genre_id)
-      SELECT s.id, g.id
-      FROM songs s
-      CROSS JOIN genres g
-      WHERE s.is_soundtrack = true
-        AND g.slug = 'soundtrack'
-      ON CONFLICT (song_id, genre_id) DO NOTHING
-    $sql$;
-  END IF;
-END $$;
+-- Step 1: add the boolean column (idempotent via IF NOT EXISTS).
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS is_soundtrack boolean NOT NULL DEFAULT false;
 
--- Backfill 2: every row with source IS NOT NULL is a soundtrack under the
--- new model, so make sure they all carry the Soundtrack genre tag too.
--- Guarded on the source column still existing (migration 027 dropped it
--- after the source -> is_soundtrack flip) so a chain-rerun under CI is a
--- no-op rather than a "column does not exist" parse error.
+-- Step 2 + 3: backfill from source while it still exists. Guarded so a
+-- post-drop rerun is a no-op rather than a "column does not exist" error.
 DO $$
 BEGIN
   IF EXISTS (
@@ -49,24 +37,21 @@ BEGIN
       AND column_name = 'source'
   ) THEN
     EXECUTE $sql$
-      INSERT INTO song_genres (song_id, genre_id)
-      SELECT s.id, g.id
-      FROM songs s
-      CROSS JOIN genres g
-      WHERE s.source IS NOT NULL
-        AND g.slug = 'soundtrack'
-      ON CONFLICT (song_id, genre_id) DO NOTHING
+      UPDATE songs
+         SET is_soundtrack = true,
+             title         = source,
+             artist        = source
+       WHERE source IS NOT NULL
     $sql$;
   END IF;
 END $$;
 
--- Drop the partial index that targeted the column.
-DROP INDEX IF EXISTS songs_is_soundtrack_idx;
+-- Step 4: drop the source column.
+ALTER TABLE songs DROP COLUMN IF EXISTS source;
 
--- The select_next_song RPC (migration 022) declares is_soundtrack in its
--- RETURNS TABLE signature. Postgres won't let CREATE OR REPLACE change a
--- function's return signature, so DROP and re-create. The signature is
--- otherwise unchanged from 022.
+-- Step 5: re-issue select_next_song with is_soundtrack in the RETURNS list.
+-- Postgres refuses CREATE OR REPLACE when RETURNS TABLE changes shape, so
+-- DROP first. Body is identical to migration 025 except for the column swap.
 DROP FUNCTION IF EXISTS select_next_song(text, uuid, uuid);
 
 CREATE OR REPLACE FUNCTION select_next_song(
@@ -82,7 +67,7 @@ RETURNS TABLE(
   song_artist   text,
   youtube_id    text,
   start_time    integer,
-  source        text
+  is_soundtrack boolean
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -170,13 +155,10 @@ BEGIN
            s.artist,
            s.youtube_id::text,
            s.start_time,
-           s.source
+           s.is_soundtrack
       FROM songs s
      WHERE s.id = v_chosen_song;
 END $$;
 
 GRANT EXECUTE ON FUNCTION select_next_song(text, uuid, uuid)
   TO anon, authenticated, service_role;
-
--- Drop the column.
-ALTER TABLE songs DROP COLUMN IF EXISTS is_soundtrack;

@@ -16,22 +16,23 @@
 -- loads a video (guard against the "error 153 / video unavailable" regression),
 -- so the seed needs at least the chosen genre to have a real, embeddable ID.
 
-INSERT INTO songs (title, artist, youtube_id, start_time, source)
-SELECT s.title, s.artist, s.youtube_id, s.start_time, s.source
+INSERT INTO songs (title, artist, youtube_id, start_time, is_soundtrack)
+SELECT s.title, s.artist, s.youtube_id, s.start_time, s.is_soundtrack
 FROM (VALUES
-  ('E2E Test Song 1',  'E2E Test Artist A', 'dQw4w9WgXcQ', 0, NULL),
-  ('E2E Test Song 2',  'E2E Test Artist B', 'jNQXAC9IVRw', 0, NULL),
-  ('E2E Test Song 3',  'E2E Test Artist C', '9bZkp7q19f0', 0, NULL),
-  ('E2E Test Song 4',  'E2E Test Artist D', 'fJ9rUzIMcZQ', 0, NULL),
-  ('E2E Test Song 5',  'E2E Test Artist E', 'kJQP7kiw5Fk', 0, NULL),
-  ('E2E Test Song 6',  'E2E Test Artist F', 'OPf0YbXqDm0', 0, NULL),
-  ('E2E Test Song 7',  'E2E Test Artist G', 'JGwWNGJdvx8', 0, NULL),
-  ('E2E Test Song 8',  'E2E Test Artist H', 'CevxZvSJLk8', 0, NULL),
-  ('E2E Test Song 9',  'E2E Test Artist I', '09R8_2nJtjg', 0, NULL),
-  ('E2E Test Song 10', 'E2E Test Artist J', 'hT_nvWreIhg', 0, NULL),
-  ('E2E Test Song 11', 'E2E Test Artist K', 'nfWlot6h_JM', 0, 'Star Wars'),
-  ('E2E Test Song 12', 'E2E Test Artist L', 'e-ORhEE9VVg', 0, 'Inception')
-) AS s(title, artist, youtube_id, start_time, source)
+  ('E2E Test Song 1',  'E2E Test Artist A', 'dQw4w9WgXcQ', 0, false),
+  ('E2E Test Song 2',  'E2E Test Artist B', 'jNQXAC9IVRw', 0, false),
+  ('E2E Test Song 3',  'E2E Test Artist C', '9bZkp7q19f0', 0, false),
+  ('E2E Test Song 4',  'E2E Test Artist D', 'fJ9rUzIMcZQ', 0, false),
+  ('E2E Test Song 5',  'E2E Test Artist E', 'kJQP7kiw5Fk', 0, false),
+  ('E2E Test Song 6',  'E2E Test Artist F', 'OPf0YbXqDm0', 0, false),
+  ('E2E Test Song 7',  'E2E Test Artist G', 'JGwWNGJdvx8', 0, false),
+  ('E2E Test Song 8',  'E2E Test Artist H', 'CevxZvSJLk8', 0, false),
+  ('E2E Test Song 9',  'E2E Test Artist I', '09R8_2nJtjg', 0, false),
+  ('E2E Test Song 10', 'E2E Test Artist J', 'hT_nvWreIhg', 0, false),
+  -- Soundtrack rows follow the title=artist=show-name invariant.
+  ('Star Wars',        'Star Wars',         'nfWlot6h_JM', 0, true),
+  ('Inception',        'Inception',         'e-ORhEE9VVg', 0, true)
+) AS s(title, artist, youtube_id, start_time, is_soundtrack)
 WHERE NOT EXISTS (
   SELECT 1 FROM songs WHERE songs.youtube_id = s.youtube_id
 );

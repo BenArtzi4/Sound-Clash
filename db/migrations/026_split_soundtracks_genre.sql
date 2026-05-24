@@ -93,11 +93,24 @@ DELETE FROM song_genres sg
    );
 
 -- Step D: clean up 'Everything I Wanted' (Billie Eilish) — source was mis-set
--- to the artist name rather than a film/TV source.
-UPDATE songs
-   SET source = NULL
- WHERE youtube_id = 'e8psHWLGDN4'
-   AND source IS NOT NULL;
+-- to the artist name rather than a film/TV source. Guarded on source still
+-- existing (mig 027 dropped it) so a chain-rerun is a no-op.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'songs'
+      AND column_name = 'source'
+  ) THEN
+    EXECUTE $sql$
+      UPDATE songs
+         SET source = NULL
+       WHERE youtube_id = 'e8psHWLGDN4'
+         AND source IS NOT NULL
+    $sql$;
+  END IF;
+END $$;
 
 DELETE FROM song_genres sg
  USING songs s, genres g
