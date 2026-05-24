@@ -534,9 +534,7 @@ export function ManagerConsolePage() {
             <div className={styles.songBlock}>
               {isSoundtrackRound ? <SoundtrackBadge /> : null}
               <p className={styles.songLine}>{currentSong.title}</p>
-              {isSoundtrackRound ? null : (
-                <p className={styles.songMeta}>{currentSong.artist}</p>
-              )}
+              {isSoundtrackRound ? null : <p className={styles.songMeta}>{currentSong.artist}</p>}
             </div>
           ) : (
             <p className={styles.songMeta}>No round started yet.</p>

@@ -601,8 +601,8 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
             aria-label="Soundtrack round"
           />
           <span>
-            Soundtrack round — title holds the show name; artist auto-mirrors and the song
-            auto-tags Israeli Soundtracks (Hebrew title) or Soundtracks (otherwise).
+            Soundtrack round — title holds the show name; artist auto-mirrors and the song auto-tags
+            Israeli Soundtracks (Hebrew title) or Soundtracks (otherwise).
           </span>
         </label>
         <div className={`${styles.field} ${styles.fieldFull}`}>
