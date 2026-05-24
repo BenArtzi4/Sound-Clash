@@ -36,7 +36,12 @@
 -- Keeping both paths means one-revert rollback if the new path misbehaves.
 --
 -- Idempotent: CREATE OR REPLACE on the function; GRANT EXECUTE is naturally
--- idempotent.
+-- idempotent. After migration 025 narrowed the RETURNS TABLE (dropped the
+-- is_soundtrack column), Postgres refuses CREATE OR REPLACE because the
+-- function's return type would change. Drop first so the second-pass apply
+-- (CI idempotency check) succeeds; 025 will re-drop and recreate with the
+-- post-025 signature on the same pass, so the end state is identical.
+DROP FUNCTION IF EXISTS select_next_song(text, uuid, uuid);
 
 CREATE OR REPLACE FUNCTION select_next_song(
   p_game_code      text,

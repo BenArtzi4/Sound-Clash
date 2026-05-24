@@ -174,16 +174,6 @@
   grid-column: 1 / -1;
 }
 
-.checkboxField {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.checkboxField input {
-  width: auto;
-}
-
 .genres {
   display: flex;
   flex-wrap: wrap;

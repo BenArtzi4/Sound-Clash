@@ -46,21 +46,19 @@ async def insert_song(
     title: str = "Test Title",
     artist: str = "Test Artist",
     youtube_id: str | None = None,
-    is_soundtrack: bool = False,
     source: str | None = None,
     genre_slugs: list[str] | None = None,
 ) -> UUID:
     yid = youtube_id or random_youtube_id()
     row = await db.fetchrow(
         """
-        INSERT INTO songs (title, artist, youtube_id, is_soundtrack, source)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO songs (title, artist, youtube_id, source)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
         """,
         title,
         artist,
         yid,
-        is_soundtrack,
         source,
     )
     assert row is not None

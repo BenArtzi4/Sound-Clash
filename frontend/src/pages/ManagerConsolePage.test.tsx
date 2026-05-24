@@ -178,10 +178,9 @@ describe("ManagerConsolePage", () => {
       song: {
         id: "s1",
         title: "Bohemian Rhapsody",
-        artist: "Queen",
+        artist: "Wayne's World",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        is_soundtrack: true,
         source: "Wayne's World",
       },
     });
@@ -198,8 +197,9 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
     await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
     await waitFor(() => expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument());
-    // The source string (e.g. soundtrack origin) renders alongside the artist name.
-    expect(screen.getByText(/queen.*wayne's world/i)).toBeInTheDocument();
+    // Soundtrack rounds reveal the work via "from <source>" plus a badge.
+    expect(screen.getByText(/from wayne's world/i)).toBeInTheDocument();
+    expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
   });
 
   it("score buttons enable only when a team is buzzed", async () => {
@@ -288,6 +288,65 @@ describe("ManagerConsolePage", () => {
         wrong_buzz: false,
       }),
     );
+  });
+
+  it("Soundtrack rounds show a +15 button that fires both flags and auto-releases the lock", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+        current_song_id: "song-S",
+        round_number: 1,
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-S" })],
+    });
+    // Source-non-null marks the song as a soundtrack round; the manager UI
+    // collapses to a single "Correct +15" button.
+    setSongFetch({
+      id: "song-S",
+      title: "Imperial March",
+      artist: "Star Wars",
+      youtube_id: "abcdefghijk",
+      start_time: 0,
+      source: "Star Wars",
+    });
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 15,
+      team_total_score: 15,
+      title_claimed_by: "t1",
+      artist_claimed_by: "t1",
+    });
+    vi.mocked(releaseBuzzLockDirect).mockResolvedValueOnce(undefined);
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Wait for the soundtrack song to land + the score-soundtrack button to render.
+    await waitFor(() => expect(screen.getByTestId("score-soundtrack")).toBeInTheDocument());
+    // The non-soundtrack title/artist buttons should be replaced, not duplicated.
+    expect(screen.queryByTestId("score-title")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("score-artist")).not.toBeInTheDocument();
+    expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("score-soundtrack"));
+    // Optimistic toast fires before the RPC settles.
+    expect(screen.getByText(/\+15 to Alice/i)).toBeInTheDocument();
+    // award_attempt receives both flags so the function sums to +15.
+    await waitFor(() =>
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+        title_correct: true,
+        artist_correct: true,
+        wrong_buzz: false,
+      }),
+    );
+    // Both tokens claim together; no extra Continue press needed -- the
+    // handler also fires releaseBuzzLockDirect so the lock is gone and the
+    // song resumes.
+    await waitFor(() => expect(releaseBuzzLockDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
   });
 
   it("Continue button calls releaseBuzzLockDirect and resumes the player", async () => {
@@ -768,7 +827,6 @@ describe("ManagerConsolePage", () => {
           artist: "A",
           youtube_id: "abcdefghijk",
           start_time: 0,
-          is_soundtrack: false,
           source: null,
         },
       } as never);
@@ -910,7 +968,6 @@ describe("ManagerConsolePage", () => {
         artist: "Up",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        is_soundtrack: false,
         source: null,
       },
     });
@@ -953,7 +1010,6 @@ describe("ManagerConsolePage", () => {
         artist: "Up",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        is_soundtrack: false,
         source: null,
       },
     });

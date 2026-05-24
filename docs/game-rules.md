@@ -99,6 +99,17 @@ Per-round point components (locked at MVP, configurable later):
 
 Maximum per **buzz** from `award_attempt`: **+15** (title + artist together). Minimum per buzz: **−3** (wrong buzz with no prior correct in the round). A round can accumulate multiple buzz outcomes — e.g. T1 wrong → -3, T2 title → +10, T3 artist → +5. The host can also grant a discretionary **+4 Bonus** to any team at any time; see §4a.
 
+### Soundtrack rounds
+
+When the current song has a `source` set (i.e. it's from a film / TV show / game / musical), the round plays differently:
+
+- A 🎬 **Soundtrack** badge appears on both the manager and display screens above the song area, so everyone knows the round is a soundtrack round.
+- The manager's two scoring buttons collapse into a single **Correct (+15)** button. The team's job is to name the **work** (the source), not the song title — soundtrack trivia in practice means players recognise the film/show, not the track. Wrong (−3) still applies.
+- The single Correct button fires `award_attempt` with `p_title=10, p_artist=5` so the sum lands as +15 via the existing SQL function — no new RPC, no scoring branch in the DB.
+- On the display, the reveal panel shows "🎵 Title" and "🎬 from <source>" (instead of "🎤 Artist") once the manager confirms; both rows light up together.
+
+**Admin convention for soundtrack songs**: store the work name in the `artist` field (e.g. `artist = "Star Wars"` for the Imperial March, `artist = "Titanic"` for "My Heart Will Go On"). `source` typically matches. Setting `source` on save auto-tags the song with the Soundtrack genre so the host can filter to soundtrack-only games.
+
 ### Free-guess rule
 
 After any team scores a correct token in a round, a "free-guess" flag activates for that round. The very next `award_attempt` in that round, if Wrong, costs **0** instead of −3. The flag is consumed by that next attempt regardless of outcome (and re-activates the moment another correct attempt happens). This rewards a team that got one half of the song right — they (or anyone) can risk the other half without paying for being wrong.

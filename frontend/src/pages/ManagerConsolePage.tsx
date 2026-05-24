@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { Skeleton } from "../components/Skeleton";
+import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
@@ -104,7 +105,7 @@ export function ManagerConsolePage() {
     void (async () => {
       const { data, error } = await supabase
         .from("songs")
-        .select("id,title,artist,youtube_id,start_time,is_soundtrack,source")
+        .select("id,title,artist,youtube_id,start_time,source")
         .eq("id", currentRoundSongId)
         .maybeSingle();
       if (cancelled || error || !data) return;
@@ -249,6 +250,45 @@ export function ManagerConsolePage() {
       reportError(err);
     } finally {
       setBusy(false);
+      artistInFlightRef.current = false;
+    }
+  }
+
+  // Soundtrack rounds (current song has a `source`) use a single "Correct
+  // +15" button instead of the title/artist split. The team's job is to
+  // name the work (film / TV / game / musical), not the song title; awarding
+  // both flags at once sums to 15 points via the existing award_attempt
+  // function -- no SQL change needed. Both tokens claim together, so unlike
+  // the regular Correct Song / Correct Artist buttons (which keep the buzz
+  // lock held so the team can also try the other token), we immediately
+  // release the lock and resume the song -- there is nothing more to score.
+  async function handleCorrectSoundtrack() {
+    if (titleInFlightRef.current || artistInFlightRef.current) return;
+    if (!state?.currentRound || busy || !managerToken) return;
+    if (!state.game.buzzed_team_id) return;
+    titleInFlightRef.current = true;
+    artistInFlightRef.current = true;
+    const roundId = state.currentRound.id;
+    const teamName = buzzedTeamName();
+    if (teamName) toast(`+15 to ${teamName}`, { variant: "success" });
+    setPendingTitle(roundId);
+    setPendingArtist(roundId);
+    setBusy(true);
+    try {
+      await applyAttempt(roundId, {
+        title_correct: true,
+        artist_correct: true,
+        wrong_buzz: false,
+      });
+      await releaseBuzzLockDirect(gameCode, managerToken);
+      playerRef.current?.play();
+    } catch (err) {
+      setPendingTitle(null);
+      setPendingArtist(null);
+      reportError(err);
+    } finally {
+      setBusy(false);
+      titleInFlightRef.current = false;
       artistInFlightRef.current = false;
     }
   }
@@ -444,9 +484,16 @@ export function ManagerConsolePage() {
   // early-return to no-op rapid double-clicks. End game and Bonus still
   // gate on busy because they fire less often and the flash is
   // imperceptible there.
+  const isSoundtrackRound = currentSong?.source != null;
   const titleActionDisabled = !lockedTeam || titleClaimedById != null || pendingTitle === round?.id;
   const artistActionDisabled =
     !lockedTeam || artistClaimedById != null || pendingArtist === round?.id;
+  const soundtrackActionDisabled =
+    !lockedTeam ||
+    titleClaimedById != null ||
+    artistClaimedById != null ||
+    pendingTitle === round?.id ||
+    pendingArtist === round?.id;
   const wrongActionDisabled = !lockedTeam || pendingWrong === round?.id;
   const continueDisabled = !lockedTeam;
   const nextRoundDisabled = !player.ready;
@@ -485,17 +532,19 @@ export function ManagerConsolePage() {
         <section className={styles.card}>
           {currentSong ? (
             <div className={styles.songBlock}>
+              {isSoundtrackRound ? <SoundtrackBadge /> : null}
               <p className={styles.songLine}>{currentSong.title}</p>
               <p className={styles.songMeta}>
-                {currentSong.artist}
-                {currentSong.source ? ` - ${currentSong.source}` : ""}
+                {isSoundtrackRound
+                  ? `from ${currentSong.source}`
+                  : `${currentSong.artist}${currentSong.source ? ` - ${currentSong.source}` : ""}`}
               </p>
             </div>
           ) : (
             <p className={styles.songMeta}>No round started yet.</p>
           )}
 
-          {round && game.status === "playing" ? (
+          {round && game.status === "playing" && !isSoundtrackRound ? (
             <div className={styles.tokenChips} aria-label="Round token state">
               <span
                 className={`${styles.tokenChip} ${titleClaimedById ? styles.tokenChipClaimed : ""}`}
@@ -522,26 +571,41 @@ export function ManagerConsolePage() {
           ) : null}
 
           <div className={styles.scoreRow}>
-            <button
-              type="button"
-              className={`${styles.scoreBtn} ${styles.scorePositive}`}
-              onClick={() => void handleCorrectTitle()}
-              disabled={titleActionDisabled}
-              data-testid="score-title"
-            >
-              <span className={styles.scoreLabel}>Correct Song</span>
-              <span className={styles.scorePoints}>+10</span>
-            </button>
-            <button
-              type="button"
-              className={`${styles.scoreBtn} ${styles.scorePositive}`}
-              onClick={() => void handleCorrectArtist()}
-              disabled={artistActionDisabled}
-              data-testid="score-artist"
-            >
-              <span className={styles.scoreLabel}>Correct Artist</span>
-              <span className={styles.scorePoints}>+5</span>
-            </button>
+            {isSoundtrackRound ? (
+              <button
+                type="button"
+                className={`${styles.scoreBtn} ${styles.scorePositive}`}
+                onClick={() => void handleCorrectSoundtrack()}
+                disabled={soundtrackActionDisabled}
+                data-testid="score-soundtrack"
+              >
+                <span className={styles.scoreLabel}>Correct</span>
+                <span className={styles.scorePoints}>+15</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={`${styles.scoreBtn} ${styles.scorePositive}`}
+                  onClick={() => void handleCorrectTitle()}
+                  disabled={titleActionDisabled}
+                  data-testid="score-title"
+                >
+                  <span className={styles.scoreLabel}>Correct Song</span>
+                  <span className={styles.scorePoints}>+10</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.scoreBtn} ${styles.scorePositive}`}
+                  onClick={() => void handleCorrectArtist()}
+                  disabled={artistActionDisabled}
+                  data-testid="score-artist"
+                >
+                  <span className={styles.scoreLabel}>Correct Artist</span>
+                  <span className={styles.scorePoints}>+5</span>
+                </button>
+              </>
+            )}
             <button
               type="button"
               className={`${styles.scoreBtn} ${styles.scoreNegative} ${styles.wrongBtn}`}

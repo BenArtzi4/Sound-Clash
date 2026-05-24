@@ -47,7 +47,6 @@ export interface Song {
   artist: string;
   youtube_id: string;
   start_time: number;
-  is_soundtrack: boolean;
   source: string | null;
   // Optional because the `select_next_song` RPC returns Song-shaped rows
   // without joined genres. The admin list/get/create/update endpoints
@@ -150,7 +149,6 @@ export interface SongWritePayload {
   artist: string;
   youtube_id: string;
   start_time: number;
-  is_soundtrack: boolean;
   source: string | null;
   genre_ids: string[];
 }

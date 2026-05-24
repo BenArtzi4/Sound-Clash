@@ -20,7 +20,6 @@ function row(overrides: Record<string, unknown> = {}) {
     song_artist: "Queen",
     youtube_id: "abcdefghijk",
     start_time: 0,
-    is_soundtrack: true,
     source: "Wayne's World",
     ...overrides,
   };
@@ -88,9 +87,8 @@ describe("selectNextSongDirect", () => {
   });
 
   it("preserves null source on the returned Song shape", async () => {
-    setRpcResponse({ data: [row({ source: null, is_soundtrack: false })], error: null });
+    setRpcResponse({ data: [row({ source: null })], error: null });
     const result = await selectNextSongDirect("ABCDEF", TOKEN);
     expect(result.song.source).toBeNull();
-    expect(result.song.is_soundtrack).toBe(false);
   });
 });

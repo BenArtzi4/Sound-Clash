@@ -93,7 +93,7 @@ async def _call(
 ) -> list[asyncpg.Record]:
     return await conn.fetch(
         "SELECT round_id, round_number, song_id, song_title, song_artist, "
-        "youtube_id, start_time, is_soundtrack, source "
+        "youtube_id, start_time, source "
         "FROM select_next_song($1, $2, $3)",
         game_code,
         token,

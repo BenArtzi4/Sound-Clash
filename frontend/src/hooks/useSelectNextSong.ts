@@ -22,7 +22,6 @@ interface SelectNextSongRow {
   song_artist: string;
   youtube_id: string;
   start_time: number;
-  is_soundtrack: boolean;
   source: string | null;
 }
 
@@ -55,7 +54,6 @@ export async function selectNextSongDirect(
       artist: row.song_artist,
       youtube_id: row.youtube_id,
       start_time: row.start_time,
-      is_soundtrack: row.is_soundtrack,
       source: row.source,
     },
   };

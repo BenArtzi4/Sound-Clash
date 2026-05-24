@@ -192,7 +192,6 @@ describe("api - admin-songs routes", () => {
     artist: "Artist",
     youtube_id: "abcdefghijk",
     start_time: 0,
-    is_soundtrack: false,
     source: null,
   };
   const PAYLOAD: SongWritePayload = {
@@ -200,7 +199,6 @@ describe("api - admin-songs routes", () => {
     artist: "Artist",
     youtube_id: "abcdefghijk",
     start_time: 0,
-    is_soundtrack: false,
     source: null,
     genre_ids: ["g1"],
   };

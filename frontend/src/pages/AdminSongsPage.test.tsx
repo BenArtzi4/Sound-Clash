@@ -40,6 +40,7 @@ import { AdminSongsPage } from "./AdminSongsPage";
 const GENRES = [
   { id: "g1", name: "Rock", slug: "rock" },
   { id: "g2", name: "Pop", slug: "pop" },
+  { id: "g3", name: "Soundtrack", slug: "soundtrack" },
 ];
 
 const SONG_A: Song = {
@@ -48,7 +49,6 @@ const SONG_A: Song = {
   artist: "Artist A",
   youtube_id: "aaaaaaaaaaa",
   start_time: 0,
-  is_soundtrack: false,
   source: null,
   genres: [{ id: "g1", name: "Rock", slug: "rock" }],
 };
@@ -59,9 +59,11 @@ const SONG_B: Song = {
   artist: "Artist B",
   youtube_id: "bbbbbbbbbbb",
   start_time: 12,
-  is_soundtrack: true,
   source: "Some film",
-  genres: [{ id: "g2", name: "Pop", slug: "pop" }],
+  genres: [
+    { id: "g2", name: "Pop", slug: "pop" },
+    { id: "g3", name: "Soundtrack", slug: "soundtrack" },
+  ],
 };
 
 beforeEach(() => {
@@ -149,7 +151,7 @@ describe("AdminSongsPage: list", () => {
     expect(screen.getByText("aaaaaaaaaaa")).toBeInTheDocument();
   });
 
-  it("renders start_time and genre columns; soundtrack flag adds 'Soundtrack' tag", async () => {
+  it("renders start_time and the song's explicit genre tags", async () => {
     renderPage();
     await signIn();
     // Alpha: start_time=0 renders as em-dash; one genre tag (Rock).
@@ -157,8 +159,8 @@ describe("AdminSongsPage: list", () => {
     expect(within(alphaRow).getByText("—")).toBeInTheDocument();
     expect(within(alphaRow).getByText("Rock")).toBeInTheDocument();
     expect(within(alphaRow).queryByText("Soundtrack")).not.toBeInTheDocument();
-    // Bravo: start_time=12 renders as "12s"; is_soundtrack=true prepends "Soundtrack"
-    // to the Pop tag.
+    // Bravo: start_time=12 renders as "12s"; the row reflects only the
+    // genre tags actually stored on the song (Pop + Soundtrack).
     const bravoRow = screen.getByText("Bravo").closest("tr") as HTMLElement;
     expect(within(bravoRow).getByText("12s")).toBeInTheDocument();
     expect(within(bravoRow).getByText("Pop")).toBeInTheDocument();
@@ -256,13 +258,34 @@ describe("AdminSongsPage: create + edit + delete", () => {
         artist: "Some artist",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        is_soundtrack: false,
         source: null,
         genre_ids: ["g1"],
       },
       "letmein",
     );
     await waitFor(() => expect(screen.getByText(/song created/i)).toBeInTheDocument());
+  });
+
+  it("auto-tags the Soundtrack genre when source is set on save", async () => {
+    vi.mocked(createSong).mockResolvedValue(SONG_A);
+    renderPage();
+    await signIn();
+
+    fireEvent.click(screen.getByRole("button", { name: /\+ new song/i }));
+    fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "Imperial March" } });
+    fireEvent.change(screen.getByLabelText(/^artist$/i), { target: { value: "Star Wars" } });
+    fireEvent.change(screen.getByLabelText(/^youtube id$/i), {
+      target: { value: "abcdefghijk" },
+    });
+    fireEvent.change(screen.getByLabelText(/^source$/i), { target: { value: "Star Wars" } });
+    fireEvent.click(screen.getByLabelText(/^rock$/i));
+
+    fireEvent.click(screen.getByRole("button", { name: /create song/i }));
+
+    await waitFor(() => expect(createSong).toHaveBeenCalled());
+    const [payload] = vi.mocked(createSong).mock.calls[0]!;
+    expect(payload.source).toBe("Star Wars");
+    expect([...payload.genre_ids].sort()).toEqual(["g1", "g3"]);
   });
 
   it("disables submit while the form is invalid", async () => {
