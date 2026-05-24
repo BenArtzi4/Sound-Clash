@@ -119,6 +119,13 @@ export function HowToPlayPage() {
                 Roles, the seven steps to run a game, scoring, and the rules that come up most
                 often.
               </p>
+              <img
+                src="/how-to-play-hero.png"
+                alt="Three-screen setup: host's phone showing the Game Manager console, a TV displaying the scoreboard and join QR code, and team phones with the BUZZ button."
+                className={styles.heroImage}
+                width={1600}
+                height={900}
+              />
             </section>
 
             <section className={styles.section}>

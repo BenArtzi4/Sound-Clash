@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-05-24: How-to-play page now opens with a hero illustration showing the three-screen setup at a glance — host's phone with the manager console, TV/laptop running the display + scoreboard + join QR, and team phones with the BUZZ button — so first-time visitors can see how everything connects before reading the steps.
 - 2026-05-24: New **Israeli Soundtracks** genre, separated from the existing soundtrack bucket so hosts can run a Hebrew-only (or English-only) soundtrack round. Six Israeli titles (גבעת חלפון אינה עונה, גברת פלפלת, נילס הולגרסון, הדרדסים, איזה עולם, הפיג'מות) moved into the new genre.
 - 2026-05-16: How-to-play page reworked into a numbered seven-step walkthrough (Host a game → genres → Display screen → teams join with QR → start → buzz/judge → optional Bonus) plus a short "Rules & FAQ" section covering the free-guess sweetener, two tokens per song, wrong-buzz-doesn't-lock-you-out, +4 Bonus anytime, and one-phone-per-team reconnect.
 - 2026-05-15: Display screen now keeps the join QR (and game code) visible at the bottom of the page for the whole game — late players can scan and join mid-round instead of being locked out the moment the first team appears.

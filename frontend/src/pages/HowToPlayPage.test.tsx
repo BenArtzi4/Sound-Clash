@@ -54,6 +54,16 @@ describe("HowToPlayPage", () => {
     expect(screen.getByText(/one phone per team/i)).toBeInTheDocument();
   });
 
+  it("renders the hero image near the top", () => {
+    render(
+      <MemoryRouter>
+        <HowToPlayPage />
+      </MemoryRouter>,
+    );
+    const hero = screen.getByRole("img", { name: /three-screen setup/i });
+    expect(hero).toHaveAttribute("src", "/how-to-play-hero.png");
+  });
+
   it("links back to the home page", () => {
     render(
       <MemoryRouter>
