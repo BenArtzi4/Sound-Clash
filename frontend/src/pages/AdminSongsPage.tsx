@@ -26,7 +26,11 @@ import styles from "./AdminSongsPage.module.css";
 const PER_PAGE = 50;
 const YT_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const SEARCH_DEBOUNCE_MS = 250;
-const SOUNDTRACK_GENRE_SLUG = "soundtrack";
+const SOUNDTRACKS_GENRE_SLUG = "soundtracks";
+const ISRAELI_SOUNDTRACKS_GENRE_SLUG = "israeli-soundtracks";
+// Hebrew unicode block; used to route an auto-tag to the Israeli bucket
+// when the admin enters a Hebrew source.
+const HEBREW_CHAR_RE = /[֐-׿]/;
 
 type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; song: Song };
 
@@ -62,11 +66,15 @@ function songToForm(song: Song, genreIds: string[]): FormState {
 function formToPayload(form: FormState, genres: Genre[]): SongWritePayload {
   const source = form.source.trim() === "" ? null : form.source.trim();
   const genre_ids = new Set(form.genre_ids);
-  // Auto-tag: a song with a source is a soundtrack, so it should always
-  // carry the Soundtrack genre tag for game-creation filtering.
+  // Auto-tag: a song with a source is a soundtrack; route to the Israeli
+  // bucket when the source contains Hebrew chars, otherwise the generic
+  // Soundtracks bucket. Admin can still toggle chips to override.
   if (source) {
-    const soundtrack = genres.find((g) => g.slug === SOUNDTRACK_GENRE_SLUG);
-    if (soundtrack) genre_ids.add(soundtrack.id);
+    const targetSlug = HEBREW_CHAR_RE.test(source)
+      ? ISRAELI_SOUNDTRACKS_GENRE_SLUG
+      : SOUNDTRACKS_GENRE_SLUG;
+    const match = genres.find((g) => g.slug === targetSlug);
+    if (match) genre_ids.add(match.id);
   }
   return {
     title: form.title.trim(),
@@ -581,7 +589,8 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
         </label>
         <label className={`${styles.field} ${styles.fieldFull}`}>
           <span>
-            Source — film / TV / game / musical (sets soundtrack round, auto-tags Soundtrack genre)
+            Source — film / TV / game / musical (sets soundtrack round; auto-tags Israeli
+            Soundtracks for Hebrew sources, Soundtracks otherwise)
           </span>
           <input
             type="text"

@@ -1,6 +1,6 @@
 -- songs.sql
 -- Minimal song catalog for the e2e local Supabase stack. 12 songs across
--- rock / pop / electronic / soundtrack so the Playwright suite can run a
+-- rock / pop / electronic / soundtracks so the Playwright suite can run a
 -- 3-round game without exhausting pick_random_song.
 --
 -- Run once after migrations against the local stack:
@@ -50,8 +50,8 @@ JOIN (VALUES
   ('CevxZvSJLk8', 'electronic'),
   ('09R8_2nJtjg', 'electronic'),
   ('hT_nvWreIhg', 'electronic'),
-  ('nfWlot6h_JM', 'soundtrack'),
-  ('e-ORhEE9VVg', 'soundtrack')
+  ('nfWlot6h_JM', 'soundtracks'),
+  ('e-ORhEE9VVg', 'soundtracks')
 ) AS m(youtube_id, slug) ON songs.youtube_id = m.youtube_id
 JOIN genres ON genres.slug = m.slug
 ON CONFLICT (song_id, genre_id) DO NOTHING;

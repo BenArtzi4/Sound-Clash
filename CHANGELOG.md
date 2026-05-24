@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-05-24: New **Israeli Soundtracks** genre, separated from the existing soundtrack bucket so hosts can run a Hebrew-only (or English-only) soundtrack round. Six Israeli titles (גבעת חלפון אינה עונה, גברת פלפלת, נילס הולגרסון, הדרדסים, איזה עולם, הפיג'מות) moved into the new genre.
 - 2026-05-16: How-to-play page reworked into a numbered seven-step walkthrough (Host a game → genres → Display screen → teams join with QR → start → buzz/judge → optional Bonus) plus a short "Rules & FAQ" section covering the free-guess sweetener, two tokens per song, wrong-buzz-doesn't-lock-you-out, +4 Bonus anytime, and one-phone-per-team reconnect.
 - 2026-05-15: Display screen now keeps the join QR (and game code) visible at the bottom of the page for the whole game — late players can scan and join mid-round instead of being locked out the moment the first team appears.
 - 2026-05-10: Team's own phone now shows a "+10 / −3" pill the instant their score changes — same look as the projector toast — so a player gets immediate feedback on the device they're already looking at.
@@ -17,6 +18,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-24: Renamed the **Soundtrack** genre to **Soundtracks** (plural) to match the new Israeli Soundtracks sibling. The admin Songs page's auto-tag-on-save behaviour now routes Hebrew-language sources to Israeli Soundtracks and everything else to Soundtracks.
 - 2026-05-24: Soundtrack rounds now play differently. When the current song has a `source` set, the manager and display screens show a 🎬 **Soundtrack** badge, and the manager's two scoring buttons collapse to a single **Correct (+15)** button — the team only has to name the work (film / TV / game / musical), and a correct call awards 15 points instead of the usual 10/5 title-vs-artist split. Wrong (−3) still applies. Correct (+15) also releases the buzz lock and resumes playback immediately, so the host can press Next round in one tap (no separate Continue, since both tokens land together). The display screen reveals "Title" + "from <source>" once the manager confirms.
 - 2026-05-24: Admin Songs page no longer has a separate "Mark as soundtrack" checkbox. The **Source** field is now the single soundtrack marker — setting it auto-tags the song with the Soundtrack genre on save, and the gameplay 15-pt rule fires off the same field.
 - 2026-05-23: Admin Songs page now shows two extra columns at a glance — **Start time** (seconds, or `—` when 0) and **Genres** (chips, including "Soundtrack" when the song is flagged as one even if it's not tagged with the Soundtrack genre). The edit form also now preselects the song's current genres so the operator doesn't have to re-check them on every edit.
