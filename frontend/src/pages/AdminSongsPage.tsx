@@ -580,7 +580,9 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
           />
         </label>
         <label className={`${styles.field} ${styles.fieldFull}`}>
-          <span>Source — film / TV / game / musical (sets soundtrack round, auto-tags Soundtrack genre)</span>
+          <span>
+            Source — film / TV / game / musical (sets soundtrack round, auto-tags Soundtrack genre)
+          </span>
           <input
             type="text"
             value={form.source}
