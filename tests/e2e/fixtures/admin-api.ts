@@ -30,7 +30,6 @@ export interface SongPayload {
   artist: string;
   youtube_id: string;
   start_time: number;
-  is_soundtrack: boolean;
   source: string | null;
 }
 
@@ -39,7 +38,6 @@ export interface SongCreate {
   artist: string;
   youtube_id: string;
   start_time?: number;
-  is_soundtrack?: boolean;
   source?: string | null;
   genre_ids: string[];
 }

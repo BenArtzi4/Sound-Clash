@@ -51,7 +51,6 @@ test("admin songs: full CRUD round-trip + bulk-import idempotency", async () => 
       artist: "tmp",
       youtube_id: Y1,
       start_time: 0,
-      is_soundtrack: false,
       source: "manual",
       genre_ids: [first.id],
     });
@@ -67,7 +66,6 @@ test("admin songs: full CRUD round-trip + bulk-import idempotency", async () => 
       artist: "tmp",
       youtube_id: Y1,
       start_time: 0,
-      is_soundtrack: false,
     });
 
     // -- UPDATE (full replace) --------------------------------------------
@@ -76,12 +74,11 @@ test("admin songs: full CRUD round-trip + bulk-import idempotency", async () => 
       artist: "tmp2",
       youtube_id: Y1,
       start_time: 5,
-      is_soundtrack: true,
       source: "manual",
       genre_ids: [second.id],
     });
     expect(updated.title).toBe(`${TAG}-updated`);
-    expect(updated.is_soundtrack).toBe(true);
+    expect(updated.source).toBe("manual");
     expect(updated.start_time).toBe(5);
 
     // -- LIST with search filter -----------------------------------------
@@ -91,10 +88,10 @@ test("admin songs: full CRUD round-trip + bulk-import idempotency", async () => 
 
     // -- BULK IMPORT (1 update of existing yt_id + 2 fresh inserts) ------
     const csv = [
-      "title,artist,youtube_id,start_time,is_soundtrack,source,genres",
-      `${TAG}-updated-via-bulk,tmp3,${Y1},0,false,manual,${first.slug}`,
-      `${TAG}-bulk-1,tmp,${Y2},0,false,manual,${first.slug}`,
-      `${TAG}-bulk-2,tmp,${Y3},0,false,manual,${first.slug}`,
+      "title,artist,youtube_id,start_time,source,genres",
+      `${TAG}-updated-via-bulk,tmp3,${Y1},0,manual,${first.slug}`,
+      `${TAG}-bulk-1,tmp,${Y2},0,manual,${first.slug}`,
+      `${TAG}-bulk-2,tmp,${Y3},0,manual,${first.slug}`,
     ].join("\n");
     const summary = await bulkImportSongs(csv);
     expect(summary).toEqual({ inserted: 2, updated: 1, total: 3 });

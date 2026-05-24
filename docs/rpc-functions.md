@@ -321,7 +321,6 @@ CREATE OR REPLACE FUNCTION select_next_song(
   song_artist   text,
   youtube_id    text,
   start_time    integer,
-  is_soundtrack boolean,
   source        text
 ) LANGUAGE plpgsql
 SECURITY DEFINER

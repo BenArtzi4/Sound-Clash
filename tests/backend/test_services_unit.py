@@ -43,7 +43,7 @@ async def test_generate_unique_code_exhausts_after_retries() -> None:
 # ----- csv_import.parse_csv ---------------------------------------------
 
 
-HEADER = "title,artist,youtube_id,start_time,is_soundtrack,source,genres"
+HEADER = "title,artist,youtube_id,start_time,source,genres"
 
 
 def _bytes(rows: list[str]) -> bytes:
@@ -51,10 +51,10 @@ def _bytes(rows: list[str]) -> bytes:
 
 
 def test_parse_csv_happy_path() -> None:
-    rows = csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,0,false,,rock"]))
+    rows = csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,0,,rock"]))
     assert len(rows) == 1
     assert rows[0].title == "Hello"
-    assert rows[0].is_soundtrack is False
+    assert rows[0].source is None
     assert rows[0].genre_slugs == ["rock"]
 
 
@@ -73,53 +73,47 @@ def test_parse_csv_empty_body_rejected() -> None:
 
 def test_parse_csv_invalid_youtube_id() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        csv_import.parse_csv(_bytes(["Hi,There,short,0,false,,rock"]))
+        csv_import.parse_csv(_bytes(["Hi,There,short,0,,rock"]))
     assert exc_info.value.details["field"] == "youtube_id"
 
 
 def test_parse_csv_missing_title() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        csv_import.parse_csv(_bytes([",Adele,YQHsXMglC9A,0,false,,rock"]))
+        csv_import.parse_csv(_bytes([",Adele,YQHsXMglC9A,0,,rock"]))
     assert exc_info.value.details["field"] == "title"
 
 
 def test_parse_csv_missing_artist() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        csv_import.parse_csv(_bytes(["Hello,,YQHsXMglC9A,0,false,,rock"]))
+        csv_import.parse_csv(_bytes(["Hello,,YQHsXMglC9A,0,,rock"]))
     assert exc_info.value.details["field"] == "artist"
 
 
 def test_parse_csv_negative_start_time() -> None:
     with pytest.raises(ValidationError):
-        csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,-1,false,,rock"]))
+        csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,-1,,rock"]))
 
 
 def test_parse_csv_bad_int_start_time() -> None:
     with pytest.raises(ValidationError):
-        csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,abc,false,,rock"]))
-
-
-def test_parse_csv_bad_boolean() -> None:
-    with pytest.raises(ValidationError):
-        csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,0,maybe,,rock"]))
+        csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,abc,,rock"]))
 
 
 def test_parse_csv_no_genre_slugs() -> None:
     with pytest.raises(ValidationError):
-        csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,0,false,,"]))
+        csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,0,,"]))
 
 
 def test_parse_csv_accepts_stream() -> None:
     rows = csv_import.parse_csv(
-        io.BytesIO(_bytes(["Hello,Adele,YQHsXMglC9A,0,true,Movie,rock;pop"]))
+        io.BytesIO(_bytes(["Hello,Adele,YQHsXMglC9A,0,Movie,rock;pop"]))
     )
-    assert rows[0].is_soundtrack is True
     assert rows[0].source == "Movie"
     assert rows[0].genre_slugs == ["rock", "pop"]
 
 
 def test_parse_csv_strips_bom() -> None:
-    raw = b"\xef\xbb\xbf" + _bytes(["Hi,Adele,YQHsXMglC9A,0,false,,rock"])
+    raw = b"\xef\xbb\xbf" + _bytes(["Hi,Adele,YQHsXMglC9A,0,,rock"])
     rows = csv_import.parse_csv(raw)
     assert rows[0].title == "Hi"
 

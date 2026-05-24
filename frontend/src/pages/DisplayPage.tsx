@@ -5,6 +5,7 @@ import { PointChange } from "../components/PointChange";
 import { QRPanel } from "../components/QRPanel";
 import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
+import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useGameSounds } from "../hooks/useGameSounds";
 import { supabase } from "../lib/supabase";
@@ -96,7 +97,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     void (async () => {
       const { data, error } = await supabase
         .from("songs")
-        .select("id,title,artist,youtube_id,start_time,is_soundtrack,source")
+        .select("id,title,artist,youtube_id,start_time,source")
         .eq("id", currentRoundSongId)
         .maybeSingle();
       if (cancelled || error || !data) return;
@@ -183,6 +184,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const artistClaimedById = round?.artist_claimed_by ?? null;
   const titleClaimedByName = titleClaimedById ? state.teams.get(titleClaimedById)?.name : null;
   const artistClaimedByName = artistClaimedById ? state.teams.get(artistClaimedById)?.name : null;
+  const isSoundtrackRound = currentSong?.source != null;
 
   if (game.status === "ended") {
     return (
@@ -242,6 +244,12 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         {showRoundSubhead ? <span className={styles.bannerSubhead}>{roundLabel}</span> : null}
       </div>
 
+      {round && game.status === "playing" && isSoundtrackRound ? (
+        <div className={styles.soundtrackBadgeRow}>
+          <SoundtrackBadge size="large" />
+        </div>
+      ) : null}
+
       {round && game.status === "playing" ? (
         <div className={styles.revealPanel} aria-label="Song reveal">
           <div
@@ -260,16 +268,20 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
             data-testid="display-reveal-artist"
           >
             <span className={styles.revealIcon} aria-hidden="true">
-              🎤
+              {isSoundtrackRound ? "🎬" : "🎤"}
             </span>
             <span className={styles.revealText}>
-              {artistClaimedById && currentSong ? currentSong.artist : "???"}
+              {artistClaimedById && currentSong
+                ? isSoundtrackRound
+                  ? currentSong.source
+                  : currentSong.artist
+                : "???"}
             </span>
           </div>
         </div>
       ) : null}
 
-      {round && game.status === "playing" ? (
+      {round && game.status === "playing" && !isSoundtrackRound ? (
         <div className={styles.tokenChips} aria-label="Round token state">
           <span
             className={`${styles.tokenChip} ${titleClaimedById ? styles.tokenChipClaimed : ""}`}

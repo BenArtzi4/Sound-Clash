@@ -41,8 +41,7 @@ CREATE TABLE songs (
   artist        text NOT NULL,
   youtube_id    char(11) NOT NULL,
   start_time    integer NOT NULL DEFAULT 0,    -- seconds
-  is_soundtrack boolean NOT NULL DEFAULT false, -- true = movie/TV soundtrack
-  source        text,                           -- name of movie/TV show; nullable
+  source        text,                           -- work the song is from (movie/TV/game/musical); nullable. NON-NULL = soundtrack round: manager + display show a 🎬 badge, scoring collapses to a single "Correct (+15)" button, and admin save auto-tags the Soundtrack genre.
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
@@ -115,7 +114,6 @@ ALTER TABLE active_games
 CREATE INDEX active_games_expires_at_idx  ON active_games (expires_at);  -- cron sweep
 CREATE INDEX game_teams_game_code_idx     ON game_teams  (game_code);
 CREATE INDEX game_rounds_game_code_idx    ON game_rounds (game_code);
-CREATE INDEX songs_is_soundtrack_idx      ON songs (is_soundtrack) WHERE is_soundtrack = true;
 CREATE INDEX song_genres_genre_idx        ON song_genres (genre_id);
 ```
 

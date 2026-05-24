@@ -26,18 +26,7 @@ import styles from "./AdminSongsPage.module.css";
 const PER_PAGE = 50;
 const YT_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const SEARCH_DEBOUNCE_MS = 250;
-const SOUNDTRACK_LABEL = "Soundtrack";
-
-// Build the display list of genre names for a row. If `is_soundtrack` is on,
-// prepend "Soundtrack" so the column reflects the flag even when the song
-// isn't tagged with the soundtrack genre (e.g. a Rock soundtrack pick).
-function displayGenres(song: Song): string[] {
-  const names = (song.genres ?? []).map((g) => g.name);
-  if (song.is_soundtrack && !names.includes(SOUNDTRACK_LABEL)) {
-    names.unshift(SOUNDTRACK_LABEL);
-  }
-  return names;
-}
+const SOUNDTRACK_GENRE_SLUG = "soundtrack";
 
 type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; song: Song };
 
@@ -46,7 +35,6 @@ interface FormState {
   artist: string;
   youtube_id: string;
   start_time: string;
-  is_soundtrack: boolean;
   source: string;
   genre_ids: Set<string>;
 }
@@ -56,7 +44,6 @@ const EMPTY_FORM: FormState = {
   artist: "",
   youtube_id: "",
   start_time: "0",
-  is_soundtrack: false,
   source: "",
   genre_ids: new Set(),
 };
@@ -67,21 +54,27 @@ function songToForm(song: Song, genreIds: string[]): FormState {
     artist: song.artist,
     youtube_id: song.youtube_id,
     start_time: String(song.start_time),
-    is_soundtrack: song.is_soundtrack,
     source: song.source ?? "",
     genre_ids: new Set(genreIds),
   };
 }
 
-function formToPayload(form: FormState): SongWritePayload {
+function formToPayload(form: FormState, genres: Genre[]): SongWritePayload {
+  const source = form.source.trim() === "" ? null : form.source.trim();
+  const genre_ids = new Set(form.genre_ids);
+  // Auto-tag: a song with a source is a soundtrack, so it should always
+  // carry the Soundtrack genre tag for game-creation filtering.
+  if (source) {
+    const soundtrack = genres.find((g) => g.slug === SOUNDTRACK_GENRE_SLUG);
+    if (soundtrack) genre_ids.add(soundtrack.id);
+  }
   return {
     title: form.title.trim(),
     artist: form.artist.trim(),
     youtube_id: form.youtube_id.trim(),
     start_time: Number(form.start_time),
-    is_soundtrack: form.is_soundtrack,
-    source: form.source.trim() === "" ? null : form.source.trim(),
-    genre_ids: Array.from(form.genre_ids),
+    source,
+    genre_ids: Array.from(genre_ids),
   };
 }
 
@@ -423,7 +416,7 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
               </tr>
             ) : (
               songs.map((s) => {
-                const genreNames = displayGenres(s);
+                const genreNames = (s.genres ?? []).map((g) => g.name);
                 return (
                   <tr key={s.id}>
                     <td>{s.title}</td>
@@ -538,7 +531,7 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!valid || busy) return;
-    onSubmit(formToPayload(form));
+    onSubmit(formToPayload(form, genres));
   }
 
   return (
@@ -587,23 +580,15 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
           />
         </label>
         <label className={`${styles.field} ${styles.fieldFull}`}>
-          <span>Source (optional: film, game, album)</span>
+          <span>Source — film / TV / game / musical (sets soundtrack round, auto-tags Soundtrack genre)</span>
           <input
             type="text"
             value={form.source}
             onChange={(e) => setForm({ ...form, source: e.target.value })}
             maxLength={200}
             aria-label="Source"
+            placeholder="e.g. Star Wars, Titanic, Trolls"
           />
-        </label>
-        <label className={`${styles.field} ${styles.checkboxField}`}>
-          <input
-            type="checkbox"
-            checked={form.is_soundtrack}
-            onChange={(e) => setForm({ ...form, is_soundtrack: e.target.checked })}
-            aria-label="Is soundtrack"
-          />
-          <span>Mark as soundtrack</span>
         </label>
         <div className={`${styles.field} ${styles.fieldFull}`}>
           <span>Genres ({form.genre_ids.size} selected)</span>

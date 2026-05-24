@@ -86,20 +86,18 @@ async def create_test_song(
     title: str = "Test Title",
     artist: str = "Test Artist",
     youtube_id: str = "abcdefghijk",
-    is_soundtrack: bool = False,
     source: str | None = None,
 ) -> uuid.UUID:
     """Insert one row into songs and return its id."""
     row = await conn.fetchrow(
         """
-        INSERT INTO songs (title, artist, youtube_id, is_soundtrack, source)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO songs (title, artist, youtube_id, source)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
         """,
         title,
         artist,
         youtube_id,
-        is_soundtrack,
         source,
     )
     assert row is not None

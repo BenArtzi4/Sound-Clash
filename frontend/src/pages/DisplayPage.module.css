@@ -441,6 +441,12 @@
   margin-top: -0.25rem;
 }
 
+.soundtrackBadgeRow {
+  display: flex;
+  justify-content: center;
+  margin-top: -0.5rem;
+}
+
 .tokenChip {
   font-size: 1rem;
   font-weight: 700;

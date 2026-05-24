@@ -134,7 +134,6 @@ Frontend wrapper: `frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect
   "song_artist": "Artist Name",
   "youtube_id": "dQw4w9WgXcQ",
   "start_time": 30,
-  "is_soundtrack": false,
   "source": null
 }]
 ```
@@ -311,10 +310,10 @@ All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (
 |---|---|---|
 | `GET`    | `/admin/songs` | List songs (paginated, `?page=1&per_page=50&search=&genre=`) |
 | `GET`    | `/admin/songs/{id}` | Get one song |
-| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, is_soundtrack, source, genre_ids[]`) |
+| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, source, genre_ids[]`). When `source` is set, the admin UI auto-adds the Soundtrack genre id to `genre_ids` so soundtrack-only filtering works for game creation. |
 | `PUT`    | `/admin/songs/{id}` | Update a song (full replacement; partial use PATCH if needed later) |
 | `DELETE` | `/admin/songs/{id}` | Delete a song (cascades to `song_genres`) |
-| `POST`   | `/admin/songs/bulk-import` | Multipart CSV upload; columns: `title, artist, youtube_id, start_time, is_soundtrack, source, genres` (semicolon-separated genre slugs) |
+| `POST`   | `/admin/songs/bulk-import` | Multipart CSV upload; columns: `title, artist, youtube_id, start_time, source, genres` (semicolon-separated genre slugs) |
 
 Bulk import is idempotent on `youtube_id`: existing songs are updated, new ones are inserted.
 
