@@ -630,30 +630,33 @@ export function ManagerConsolePage() {
             </button>
           </div>
 
-          {bonusOpen ? (
-            <div
-              id="bonus-team-picker"
-              className={styles.bonusPicker}
-              role="group"
-              aria-label="Pick a team for the bonus"
-            >
-              <span className={styles.bonusPickerHint}>Award +4 to:</span>
-              <div className={styles.bonusPickerList}>
-                {teams.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => void handleBonus(t.id, t.name)}
-                    disabled={busy}
-                    data-testid={`bonus-team-${t.id}`}
-                  >
-                    {t.name}
-                  </button>
-                ))}
+          <div className={styles.bonusPickerSlot}>
+            {bonusOpen ? (
+              <div
+                id="bonus-team-picker"
+                className={styles.bonusPicker}
+                role="group"
+                aria-label="Pick a team for the bonus"
+              >
+                <span className={styles.bonusPickerHint}>Award +4 to:</span>
+                <div className={styles.bonusPickerList}>
+                  {teams.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => void handleBonus(t.id, t.name)}
+                      disabled={busy}
+                      aria-label={`Award +4 bonus to ${t.name}`}
+                      data-testid={`bonus-team-${t.id}`}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
           <div className={styles.actionsInline}>
             <button
