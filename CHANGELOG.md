@@ -6,6 +6,18 @@ This project does not currently cut versioned releases; every change lands direc
 
 ## [Unreleased]
 
+### Changed
+
+- 2026-05-25: Team buzzer screen is now full-bleed — the BUZZ button reaches every edge of the phone, with the team name + current round shown as a small pill overlay in the top corner. Larger tap target, no chrome competing for the screen.
+
+### Removed
+
+- 2026-05-25: The 10-second post-buzz countdown bar is gone from the team screen. Players watch the display for time; the team's own phone is now just the BUZZ button.
+
+### Fixed
+
+- 2026-05-25: Soundtrack rounds no longer auto-resume the song or re-arm the buzzers after the host taps **Correct (+15)**. The round now waits for an explicit **Next round** press, matching how regular rounds behave once both title and artist have been scored.
+
 ### Added
 
 - 2026-05-24: How-to-play page now opens with a hero illustration showing the three-screen setup at a glance — host's phone with the manager console, TV/laptop running the display + scoreboard + join QR, and team phones with the BUZZ button — so first-time visitors can see how everything connects before reading the steps.

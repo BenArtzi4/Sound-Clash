@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
-import { RoundCountdown } from "../components/RoundCountdown";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
@@ -13,8 +12,6 @@ interface PointEvent {
   id: string;
   delta: number;
 }
-
-const ANSWER_DURATION_SEC = 10;
 
 export function TeamGameplayPage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
@@ -94,9 +91,6 @@ export function TeamGameplayPage() {
   const lockedTeam =
     game?.buzzed_team_id != null ? (state?.teams.get(game.buzzed_team_id) ?? null) : null;
 
-  const lockedAt = game?.locked_at ?? null;
-  const timerActive = game?.status === "playing" && lockedTeam != null && lockedAt != null;
-
   const buzzDisabled =
     !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
 
@@ -127,25 +121,15 @@ export function TeamGameplayPage() {
           />
         ))}
       </div>
-      <header className={styles.header}>
-        <div className={styles.identity}>
-          <span className={styles.teamName}>{stored.name}</span>
-          {game && game.status !== "waiting" ? (
-            <span className={styles.roundPill} data-testid="round-indicator">
-              Round {game.round_number}
-            </span>
-          ) : null}
-        </div>
-      </header>
 
-      {timerActive && lockedAt ? (
-        <RoundCountdown
-          lockedAt={lockedAt}
-          durationSec={ANSWER_DURATION_SEC}
-          styles={styles}
-          withSrAnnouncer
-        />
-      ) : null}
+      <div className={styles.identityOverlay} aria-label="Team identity">
+        <span className={styles.teamName}>{stored.name}</span>
+        {game && game.status !== "waiting" ? (
+          <span className={styles.roundPill} data-testid="round-indicator">
+            R{game.round_number}
+          </span>
+        ) : null}
+      </div>
 
       <div className={styles.buzzZone}>
         <BuzzButton
