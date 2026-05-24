@@ -182,6 +182,8 @@ textarea:disabled {
   border-radius: var(--radius-sm);
   background: var(--color-bg-elev);
   color: var(--color-text);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     background 200ms ease,
     border-color 200ms ease,

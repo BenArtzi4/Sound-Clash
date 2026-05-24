@@ -231,6 +231,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
             className={`${styles.soundToggle} ${soundOn ? styles.soundOn : ""}`}
             onClick={toggleSound}
             aria-pressed={soundOn}
+            aria-label={soundOn ? "Sound on, tap to mute" : "Enable sound"}
           >
             <span aria-hidden="true">{soundOn ? "🔊" : "🔇"}</span>
             <span>{soundOn ? "Sound on" : "Enable sound"}</span>

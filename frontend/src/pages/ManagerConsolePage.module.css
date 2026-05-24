@@ -312,6 +312,8 @@
   font-weight: 600;
   cursor: pointer;
   text-align: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     border-color 200ms ease,
     background 200ms ease,
@@ -390,12 +392,22 @@
   color: #92400e;
 }
 
+/* The slot reserves vertical space whether the picker is open or not, so
+   tapping Bonus does NOT push the Continue / Next-round row downward —
+   if it did, the host's next tap (aimed at where Continue used to be)
+   would land on a team button instead. Sized for the typical 2-3 team
+   single-row case; a 4-team layout that wraps to two rows still incurs
+   a small shift, which we accept. */
+.bonusPickerSlot {
+  min-height: 100px;
+  margin-bottom: 1rem;
+}
+
 .bonusPicker {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.85rem 1rem;
-  margin-bottom: 1rem;
   border: 1px dashed var(--color-warning);
   border-radius: var(--radius-md);
   background: rgba(245, 158, 11, 0.06);
