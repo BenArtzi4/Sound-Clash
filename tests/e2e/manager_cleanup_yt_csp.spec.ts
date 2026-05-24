@@ -2,7 +2,9 @@
 //   #1 Manager screen has no "Invite Players" section.
 //   #2 Manager screen has no per-team Kick button.
 //   #3 Post-buzz countdown bar replaces the old pre-buzz round timer.
-//   #4 Manager screen has no countdown bar (timer only on team + display).
+//   #4 Manager screen has no countdown bar (timer lives on the display only;
+//      the team screen used to mirror it but no longer does — players have
+//      the display in view and the team UI is now the full-bleed BUZZ).
 //   #5 YouTube player iframe loads with a real 11-char video ID after the
 //      first start_round (no more error 153 "blank embed URL").
 //   #6 Manager network traffic stays bounded after 20s of idle - the
@@ -48,7 +50,7 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     await manager.page.close();
   });
 
-  test("manager screen never renders a countdown timer; team + display do, only after buzz", async ({
+  test("countdown timer lives on the display only; manager + team never render one", async ({
     browser,
   }) => {
     const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
@@ -68,7 +70,6 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     ).toBeVisible({ timeout: 10_000 });
 
     // PRE-buzz: no timer on any of the three roles.
-    // (Old behaviour: 20s pre-buzz countdown on team + manager.)
     await expect(manager.page.getByRole("timer")).toHaveCount(0);
     await expect(team.page.getByRole("timer")).toHaveCount(0);
     await expect(display.getByRole("timer")).toHaveCount(0);
@@ -79,26 +80,30 @@ test.describe("manager-cleanup-yt-csp branch", () => {
       timeout: 10_000,
     });
 
-    // POST-buzz: timer on team + display, NOT on manager.
+    // POST-buzz: timer ONLY on display. Manager and team never show it (the
+    // team screen is now full-bleed BUZZ; players watch the display for time).
     await expect(manager.page.getByRole("timer")).toHaveCount(0);
-    const teamTimer = team.page.getByRole("timer");
+    await expect(team.page.getByRole("timer")).toHaveCount(0);
     const displayTimer = display.getByRole("timer");
-    await expect(teamTimer).toBeVisible({ timeout: 5_000 });
     await expect(displayTimer).toBeVisible({ timeout: 5_000 });
 
-    // Both timers count down (initial value at most 10, drops within ~3s).
-    const startTeam = parseInt(((await teamTimer.textContent()) ?? "").replace(/\D/g, ""), 10);
-    expect(startTeam).toBeGreaterThan(0);
-    expect(startTeam).toBeLessThanOrEqual(10);
+    const startDisplay = parseInt(
+      ((await displayTimer.textContent()) ?? "").replace(/\D/g, ""),
+      10,
+    );
+    expect(startDisplay).toBeGreaterThan(0);
+    expect(startDisplay).toBeLessThanOrEqual(10);
 
-    await team.page.waitForTimeout(3_000);
-    const laterTeam = parseInt(((await teamTimer.textContent()) ?? "").replace(/\D/g, ""), 10);
-    expect(laterTeam).toBeLessThan(startTeam);
+    await display.waitForTimeout(3_000);
+    const laterDisplay = parseInt(
+      ((await displayTimer.textContent()) ?? "").replace(/\D/g, ""),
+      10,
+    );
+    expect(laterDisplay).toBeLessThan(startDisplay);
 
-    // Manager scores + advances; lock clears; timers disappear on team + display.
+    // Manager scores + advances; lock clears; the display timer disappears.
     await manager.page.getByTestId("score-title").click();
     await manager.page.getByTestId("start-round").click();
-    await expect(team.page.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
     await expect(display.getByRole("timer")).toHaveCount(0, { timeout: 10_000 });
 
     await display.close();

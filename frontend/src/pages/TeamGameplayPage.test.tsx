@@ -187,78 +187,34 @@ describe("TeamGameplayPage", () => {
     expect(screen.queryByTestId("buzz")).not.toBeInTheDocument();
   });
 
-  it("does not render the post-buzz timer before any team has buzzed", async () => {
+  it("never renders the post-buzz countdown timer (the display screen is the source of truth)", async () => {
+    // The team screen used to mirror the 10s post-buzz countdown from the
+    // display, but it stole vertical real estate from the BUZZ button without
+    // adding new info (players are already looking at the display). We now
+    // assert there is never a timer here, even mid-buzz with another team
+    // holding the lock.
+    const FIXED_NOW = 1_780_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(FIXED_NOW);
+    const lockedAt = new Date(FIXED_NOW - 2_000).toISOString();
     window.localStorage.setItem(
       "game:ABCDEF:team",
       JSON.stringify({ id: "team-1", name: "Alice" }),
     );
     setHydrate({
-      game: makeActiveGame({ status: "playing", buzzed_team_id: null, locked_at: null }),
-      teams: [makeTeam({ id: "team-1", name: "Alice" })],
-      rounds: [],
+      game: makeActiveGame({
+        status: "playing",
+        current_round_id: "round-1",
+        buzzed_team_id: "team-2",
+        locked_at: lockedAt,
+      }),
+      teams: [makeTeam({ id: "team-1" }), makeTeam({ id: "team-2", name: "Bob" })],
+      rounds: [makeRound({ id: "round-1" })],
     });
     renderAt("/team/ABCDEF");
     await act(async () => {
       await fireSubscribed();
     });
     expect(screen.queryByRole("timer")).not.toBeInTheDocument();
-  });
-
-  describe("timer accessibility", () => {
-    // The countdown only runs AFTER a team buzzes (post-buzz answer timer,
-    // 10 seconds total). We hydrate with another team holding the lock so
-    // the local team sees the timer without being the one that buzzed.
-    function setupBuzzedRound(secondsAgo: number): void {
-      const FIXED_NOW = 1_780_000_000_000;
-      vi.spyOn(Date, "now").mockReturnValue(FIXED_NOW);
-      const lockedAt = new Date(FIXED_NOW - secondsAgo * 1000).toISOString();
-      window.localStorage.setItem(
-        "game:ABCDEF:team",
-        JSON.stringify({ id: "team-1", name: "Alice" }),
-      );
-      setHydrate({
-        game: makeActiveGame({
-          status: "playing",
-          current_round_id: "round-1",
-          buzzed_team_id: "team-2",
-          locked_at: lockedAt,
-        }),
-        teams: [makeTeam({ id: "team-1" }), makeTeam({ id: "team-2", name: "Bob" })],
-        rounds: [makeRound({ id: "round-1" })],
-      });
-    }
-
-    it("uses a static aria-label on the timer (no per-tick rewrite)", async () => {
-      setupBuzzedRound(2);
-      renderAt("/team/ABCDEF");
-      await act(async () => {
-        await fireSubscribed();
-      });
-      const timer = await screen.findByRole("timer");
-      expect(timer).toHaveAttribute("aria-label", "Time remaining");
-    });
-
-    it("renders an empty live region when there is plenty of time left", async () => {
-      setupBuzzedRound(2);
-      renderAt("/team/ABCDEF");
-      await act(async () => {
-        await fireSubscribed();
-      });
-      const timer = await screen.findByRole("timer");
-      const liveRegion = timer.querySelector('[aria-live="polite"]');
-      expect(liveRegion?.textContent).toBe("");
-    });
-
-    it("announces low time when remaining seconds drop to the 5→1 tail", async () => {
-      setupBuzzedRound(7);
-      renderAt("/team/ABCDEF");
-      await act(async () => {
-        await fireSubscribed();
-      });
-      const timer = await screen.findByRole("timer");
-      const liveRegion = timer.querySelector('[aria-live="polite"]');
-      expect(liveRegion?.textContent).toBe("3 seconds left");
-    });
   });
 
   it("pops a +N pill on this team's phone when our own score goes up", async () => {

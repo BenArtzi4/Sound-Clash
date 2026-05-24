@@ -258,10 +258,10 @@ export function ManagerConsolePage() {
   // "Correct +15" button instead of the title/artist split. The team's job is
   // to name the work (film / TV / game / musical), not the song title; awarding
   // both flags at once sums to 15 points via the existing award_attempt
-  // function -- no SQL change needed. Both tokens claim together, so unlike
-  // the regular Correct Song / Correct Artist buttons (which keep the buzz
-  // lock held so the team can also try the other token), we immediately
-  // release the lock and resume the song -- there is nothing more to score.
+  // function -- no SQL change needed. Both tokens claim together; nothing more
+  // can be scored on this round, so we let it sit in the fully-scored state
+  // (lock held, player paused) and wait for the manager's "Next round" click,
+  // mirroring how a regular round behaves once both title + artist are claimed.
   async function handleCorrectSoundtrack() {
     if (titleInFlightRef.current || artistInFlightRef.current) return;
     if (!state?.currentRound || busy || !managerToken) return;
@@ -280,8 +280,6 @@ export function ManagerConsolePage() {
         artist_correct: true,
         wrong_buzz: false,
       });
-      await releaseBuzzLockDirect(gameCode, managerToken);
-      playerRef.current?.play();
     } catch (err) {
       setPendingTitle(null);
       setPendingArtist(null);

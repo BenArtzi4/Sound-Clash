@@ -1,12 +1,23 @@
+/* Full-bleed team buzzer: the BUZZ button must reach every viewport edge on
+   phone AND desktop. Two things matter:
+     1. The shell has a *definite* height (100dvh, with 100vh fallback) so
+        flex children can resolve their `flex: 1` against a known size.
+        `min-height` alone leaves the flex axis ambiguous and the button
+        collapses to content size.
+     2. The `<main>` element is overridden away from any inherited block
+        defaults — no padding, no max-width, no margins — and stops the
+        body's page-gradient from leaking around the button. */
 .shell {
-  min-height: 100%;
-  padding: 0.75rem var(--space-md);
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
   max-width: none;
-  margin: 0 auto;
-  width: 100%;
+  overflow: hidden;
 }
 
 .pointStack {
@@ -23,42 +34,42 @@
   max-width: min(92vw, 360px);
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 0.5rem 0.9rem;
-  box-shadow: var(--shadow-sm);
-  flex: 0 0 auto;
-}
-
-.identity {
+.identityOverlay {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  z-index: 40;
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+  max-width: calc(100vw - 1.2rem);
+  overflow: hidden;
 }
 
 .teamName {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: #0f172a;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f8fafc;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60vw;
 }
 
 .roundPill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 10px;
+  padding: 1px 8px;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.2);
+  color: #f8fafc;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -73,109 +84,20 @@
   font-size: 1.05rem;
   color: var(--color-text-dim);
   box-shadow: var(--shadow-sm);
-}
-
-.timer {
-  --timer-pct: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.75rem 1rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-sm);
-  flex: 0 0 auto;
-}
-
-.timerBar {
-  flex: 1;
-  height: 8px;
-  background: rgba(245, 158, 11, 0.18);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.timerFill {
-  height: 100%;
-  width: var(--timer-pct);
-  background: var(--color-warning);
-  border-radius: 999px;
-  transition:
-    width 950ms linear,
-    background 200ms ease;
-}
-
-.timerValue {
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  font-size: 1rem;
-  color: var(--color-warning);
-  min-width: 2.5em;
-  text-align: right;
-}
-
-.timerLow .timerFill {
-  background: var(--color-danger);
-}
-
-.timerLow .timerValue {
-  color: var(--color-danger);
-  animation: timer-pulse-team 0.7s ease-in-out infinite;
-}
-
-@keyframes timer-pulse-team {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.12);
-  }
+  margin: 0.75rem;
 }
 
 .buzzZone {
-  display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
-  padding: 0;
-  justify-content: stretch;
-  align-items: stretch;
+  min-width: 0;
+  display: flex;
 }
 
-.scoreCard {
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-md);
-}
-
-.scoreCardTitle {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-  font-weight: 700;
-  margin-bottom: 1rem;
-}
-
-@media (min-width: 900px) {
-  .shell {
-    max-width: 900px;
-    padding: 1rem var(--space-lg);
-  }
-}
-
-@media (max-width: 480px) {
-  .shell {
-    padding: 0.5rem var(--space-sm);
-    gap: 0.5rem;
-  }
-  .teamName {
-    font-size: 1.05rem;
-  }
-  .gameCode {
-    font-size: 0.85rem;
-  }
+/* The BuzzButton's default 28px rounding would expose viewport corners when
+   it fills the screen, and its `height: 100%` needs a parent whose height
+   is fully resolved — the flex stretch from .buzzZone delivers that. */
+.buzzZone > button {
+  border-radius: 0;
+  flex: 1 1 auto;
 }

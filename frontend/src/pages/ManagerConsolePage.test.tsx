@@ -289,7 +289,7 @@ describe("ManagerConsolePage", () => {
     );
   });
 
-  it("Soundtrack rounds show a +15 button that fires both flags and auto-releases the lock", async () => {
+  it("Soundtrack rounds show a +15 button that fires both flags and leaves the lock/playback alone", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -301,7 +301,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1", name: "Alice" })],
       rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-S" })],
     });
-    // Source-non-null marks the song as a soundtrack round; the manager UI
+    // is_soundtrack=true marks the song as a soundtrack round; the manager UI
     // collapses to a single "Correct +15" button.
     setSongFetch({
       id: "song-S",
@@ -319,7 +319,6 @@ describe("ManagerConsolePage", () => {
       title_claimed_by: "t1",
       artist_claimed_by: "t1",
     });
-    vi.mocked(releaseBuzzLockDirect).mockResolvedValueOnce(undefined);
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -342,10 +341,11 @@ describe("ManagerConsolePage", () => {
         wrong_buzz: false,
       }),
     );
-    // Both tokens claim together; no extra Continue press needed -- the
-    // handler also fires releaseBuzzLockDirect so the lock is gone and the
-    // song resumes.
-    await waitFor(() => expect(releaseBuzzLockDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    // The round must stay in the fully-scored-but-locked state so the host
+    // explicitly advances with Next round — same as a non-soundtrack round
+    // where both title + artist were claimed. No auto-unlock, no auto-resume.
+    expect(releaseBuzzLockDirect).not.toHaveBeenCalled();
+    expect(lastHandle?.play).not.toHaveBeenCalled();
   });
 
   it("Continue button calls releaseBuzzLockDirect and resumes the player", async () => {
