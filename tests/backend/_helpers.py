@@ -21,15 +21,11 @@ def random_game_code() -> str:
 
 
 def random_youtube_id() -> str:
-    alphabet = (
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-    )
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
     return "".join(secrets.choice(alphabet) for _ in range(11))
 
 
-async def fetch_genre_ids(
-    db: asyncpg.Connection, slugs: list[str] | None = None
-) -> list[UUID]:
+async def fetch_genre_ids(db: asyncpg.Connection, slugs: list[str] | None = None) -> list[UUID]:
     if slugs:
         rows = await db.fetch(
             "SELECT id FROM genres WHERE slug = ANY($1::text[]) ORDER BY slug",
@@ -46,20 +42,20 @@ async def insert_song(
     title: str = "Test Title",
     artist: str = "Test Artist",
     youtube_id: str | None = None,
-    is_soundtrack: bool = False,
     genre_slugs: list[str] | None = None,
 ) -> UUID:
+    # Soundtrack-ness is derived from genre membership (migration 028); pass
+    # genre_slugs=["soundtracks"] to make a song a soundtrack round.
     yid = youtube_id or random_youtube_id()
     row = await db.fetchrow(
         """
-        INSERT INTO songs (title, artist, youtube_id, is_soundtrack)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO songs (title, artist, youtube_id)
+        VALUES ($1, $2, $3)
         RETURNING id
         """,
         title,
         artist,
         yid,
-        is_soundtrack,
     )
     assert row is not None
     song_id: UUID = row["id"]
@@ -105,9 +101,7 @@ def manager_headers(token: UUID | str) -> dict[str, str]:
     return {"X-Manager-Token": str(token)}
 
 
-async def insert_team(
-    db: asyncpg.Connection, game_code: str, *, name: str | None = None
-) -> UUID:
+async def insert_team(db: asyncpg.Connection, game_code: str, *, name: str | None = None) -> UUID:
     team_name = name or f"Team-{secrets.token_hex(3)}"
     row = await db.fetchrow(
         """

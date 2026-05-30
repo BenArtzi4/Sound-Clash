@@ -39,7 +39,6 @@ class SongCreate(BaseModel):
     artist: SongArtist
     youtube_id: YouTubeId
     start_time: int = Field(default=0, ge=0)
-    is_soundtrack: bool = False
     genre_ids: list[UUID] = Field(default_factory=list, min_length=1)
 
 
@@ -50,7 +49,6 @@ class SongUpdate(BaseModel):
     artist: SongArtist
     youtube_id: YouTubeId
     start_time: int = Field(default=0, ge=0)
-    is_soundtrack: bool = False
     genre_ids: list[UUID] = Field(default_factory=list, min_length=1)
 
 

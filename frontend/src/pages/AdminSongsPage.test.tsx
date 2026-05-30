@@ -259,7 +259,6 @@ describe("AdminSongsPage: create + edit + delete", () => {
         artist: "Some artist",
         youtube_id: "abcdefghijk",
         start_time: 0,
-        is_soundtrack: false,
         genre_ids: ["g1"],
       },
       "letmein",
@@ -267,51 +266,51 @@ describe("AdminSongsPage: create + edit + delete", () => {
     await waitFor(() => expect(screen.getByText(/song created/i)).toBeInTheDocument());
   });
 
-  it("auto-mirrors artist from title and tags Soundtracks when the soundtrack box is checked", async () => {
+  it("tags the Soundtracks genre and sends no separate soundtrack flag", async () => {
     vi.mocked(createSong).mockResolvedValue(SONG_A);
     renderPage();
     await signIn();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ new song/i }));
     fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "Star Wars" } });
+    fireEvent.change(screen.getByLabelText(/^artist$/i), { target: { value: "Star Wars" } });
     fireEvent.change(screen.getByLabelText(/^youtube id$/i), {
       target: { value: "abcdefghijk" },
     });
-    fireEvent.click(screen.getByLabelText(/^soundtrack round$/i));
-    fireEvent.click(screen.getByLabelText(/^rock$/i));
+    // Soundtrack-ness now comes from picking a soundtrack genre, not a checkbox.
+    fireEvent.click(screen.getByLabelText(/^soundtracks$/i));
 
     fireEvent.click(screen.getByRole("button", { name: /create song/i }));
 
     await waitFor(() => expect(createSong).toHaveBeenCalled());
     const [payload] = vi.mocked(createSong).mock.calls[0]!;
-    expect(payload.is_soundtrack).toBe(true);
     expect(payload.title).toBe("Star Wars");
     expect(payload.artist).toBe("Star Wars");
-    expect([...payload.genre_ids].sort()).toEqual(["g1", "g3"]);
+    expect([...payload.genre_ids].sort()).toEqual(["g3"]);
+    expect("is_soundtrack" in payload).toBe(false);
   });
 
-  it("auto-tags Israeli Soundtracks (not generic) when soundtrack title is Hebrew", async () => {
+  it("can tag the Israeli Soundtracks genre", async () => {
     vi.mocked(createSong).mockResolvedValue(SONG_A);
     renderPage();
     await signIn();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ new song/i }));
     fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "גבעת חלפון" } });
+    fireEvent.change(screen.getByLabelText(/^artist$/i), { target: { value: "גבעת חלפון" } });
     fireEvent.change(screen.getByLabelText(/^youtube id$/i), {
       target: { value: "abcdefghijk" },
     });
-    fireEvent.click(screen.getByLabelText(/^soundtrack round$/i));
-    fireEvent.click(screen.getByLabelText(/^rock$/i));
+    fireEvent.click(screen.getByLabelText(/^israeli soundtracks$/i));
 
     fireEvent.click(screen.getByRole("button", { name: /create song/i }));
 
     await waitFor(() => expect(createSong).toHaveBeenCalled());
     const [payload] = vi.mocked(createSong).mock.calls[0]!;
-    expect(payload.is_soundtrack).toBe(true);
     expect(payload.title).toBe("גבעת חלפון");
     expect(payload.artist).toBe("גבעת חלפון");
-    // g4 = Israeli Soundtracks; g3 = generic Soundtracks should NOT be added.
-    expect([...payload.genre_ids].sort()).toEqual(["g1", "g4"]);
+    expect([...payload.genre_ids].sort()).toEqual(["g4"]);
+    expect("is_soundtrack" in payload).toBe(false);
   });
 
   it("disables submit while the form is invalid", async () => {

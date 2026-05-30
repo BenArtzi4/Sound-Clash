@@ -134,7 +134,7 @@ Frontend wrapper: `frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect
   "song_artist": "Artist Name",
   "youtube_id": "dQw4w9WgXcQ",
   "start_time": 30,
-  "source": null
+  "is_soundtrack": false
 }]
 ```
 

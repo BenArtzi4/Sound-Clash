@@ -149,7 +149,6 @@ export interface SongWritePayload {
   artist: string;
   youtube_id: string;
   start_time: number;
-  is_soundtrack: boolean;
   genre_ids: string[];
 }
 
