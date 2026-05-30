@@ -64,17 +64,18 @@ test("scenario 13: bonus picker only lists current teams", async ({ browser }) =
   await joinAsTeam(browser, manager.gameCode, "Alpha");
   await joinAsTeam(browser, manager.gameCode, "Bravo");
 
-  // Open the picker and confirm both teams listed.
+  // Open the picker and confirm both teams listed. The picker buttons'
+  // accessible name is their aria-label ("Award +4 bonus to <name>").
   await manager.page.getByTestId("score-bonus").click();
   await expect(
-    manager.page.getByRole("button", { name: "Alpha", exact: true }),
+    manager.page.getByRole("button", { name: "Award +4 bonus to Alpha", exact: true }),
   ).toBeVisible();
   await expect(
-    manager.page.getByRole("button", { name: "Bravo", exact: true }),
+    manager.page.getByRole("button", { name: "Award +4 bonus to Bravo", exact: true }),
   ).toBeVisible();
   // No third "Charlie" team listed.
   await expect(
-    manager.page.getByRole("button", { name: "Charlie", exact: true }),
+    manager.page.getByRole("button", { name: "Award +4 bonus to Charlie", exact: true }),
   ).toHaveCount(0);
 });
 
