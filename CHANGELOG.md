@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-30: Re-tuned the playback start time for 588 songs in the catalog so each clip begins on a more recognizable part of the song.
 - 2026-05-25: Team buzzer screen is now full-bleed — the BUZZ button reaches every edge of the phone, with the team name + current round shown as a small pill overlay in the top corner. Larger tap target, no chrome competing for the screen.
 
 ### Removed
