@@ -7,6 +7,12 @@ testcontainers postgres:15 container.
 
 Migrations are idempotent so re-applying them on a persistent DB is safe.
 
+WARNING: the function-scoped fixtures TRUNCATE songs/genres/song_genres (see
+ALL_TABLES) and reseed genres before every test. Pointing $DATABASE_URL at a
+Supabase/dev database whose catalog you care about will WIPE it as the suite
+runs -- use a throwaway DB, or leave $DATABASE_URL unset to fall back to a
+testcontainer.
+
 See docs/testing-strategy.md §4.1 for the test inventory.
 """
 
