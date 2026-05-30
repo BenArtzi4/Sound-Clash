@@ -13,6 +13,7 @@ import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/us
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import { supabase } from "../lib/supabase";
+import { deriveIsSoundtrack, type SongGenreSlugEmbed } from "../lib/soundtrack";
 import type { Song } from "../lib/types";
 import styles from "./ManagerConsolePage.module.css";
 
@@ -105,11 +106,16 @@ export function ManagerConsolePage() {
     void (async () => {
       const { data, error } = await supabase
         .from("songs")
-        .select("id,title,artist,youtube_id,start_time,is_soundtrack")
+        .select("id,title,artist,youtube_id,start_time,song_genres(genres(slug))")
         .eq("id", currentRoundSongId)
         .maybeSingle();
       if (cancelled || error || !data) return;
-      const song = data as Song;
+      // is_soundtrack is derived from genre membership (migration 028 dropped
+      // the column), so compute it from the embedded genre slugs.
+      const { song_genres, ...base } = data as unknown as Omit<Song, "is_soundtrack" | "genres"> & {
+        song_genres: SongGenreSlugEmbed[] | null;
+      };
+      const song: Song = { ...base, is_soundtrack: deriveIsSoundtrack(song_genres) };
       setCurrentSong(song);
       if (playerReady) {
         playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
