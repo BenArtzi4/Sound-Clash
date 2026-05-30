@@ -20,9 +20,12 @@ export interface ManagerSession {
 }
 
 interface CreateOpts {
-  // Display name as it appears in the UI (e.g. "Rock", "Pop"), matched
-  // case-insensitively.
-  genreName: string;
+  // Display name(s) as they appear in the UI (e.g. "Rock", "Pop"), matched
+  // case-insensitively. Use `genreName` for a single genre or `genreNames`
+  // to tick several (e.g. mix Soundtracks + Rock so a game draws both
+  // soundtrack and normal rounds).
+  genreName?: string;
+  genreNames?: string[];
 }
 
 export async function openManagerAndCreateGame(
@@ -32,17 +35,23 @@ export async function openManagerAndCreateGame(
   const context = await browser.newContext();
   const page = await context.newPage();
 
+  const genres = opts.genreNames ?? (opts.genreName ? [opts.genreName] : []);
+  if (genres.length === 0) throw new Error("openManagerAndCreateGame: no genre(s) given");
+
   // 1. Land on home and click the "Host a game" CTA.
   await page.goto("/");
   await page.getByRole("link", { name: /host a game/i }).click();
   await expect(page).toHaveURL(/\/manager\/create$/);
 
-  // 2. Wait for genres to load (the form fetches them on mount).
-  const genreLabel = page.getByLabel(new RegExp(`^${opts.genreName}$`, "i"));
-  await expect(genreLabel).toBeVisible({ timeout: 10_000 });
+  // 2. Wait for genres to load (the form fetches them on mount), then tick
+  //    each requested genre.
+  for (const name of genres) {
+    const genreLabel = page.getByLabel(new RegExp(`^${name}$`, "i"));
+    await expect(genreLabel).toBeVisible({ timeout: 10_000 });
+    await genreLabel.check();
+  }
 
-  // 3. Pick a genre and submit.
-  await genreLabel.check();
+  // 3. Submit.
   await page.getByRole("button", { name: /create game/i }).click();
 
   // 4. App navigates to /manager/game/<code> client-side. Read the code

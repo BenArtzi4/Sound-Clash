@@ -67,7 +67,16 @@ function buildSelect(table: TableName | "songs") {
         return { data: state.hydrate.game, error: null };
       }
       if (table === "songs" && pendingId !== null) {
-        return { data: state.songsById[pendingId] ?? null, error: null };
+        const row = state.songsById[pendingId];
+        if (!row) return { data: null, error: null };
+        // The in-game pages no longer select the dropped is_soundtrack column;
+        // they embed genre slugs (`song_genres(genres(slug))`) and derive it.
+        // Reproduce that shape from the stored flag so tests keep setting
+        // is_soundtrack directly.
+        const song_genres = row.is_soundtrack
+          ? [{ genres: { slug: "soundtracks" } }]
+          : [{ genres: { slug: "rock" } }];
+        return { data: { ...row, song_genres }, error: null };
       }
       return { data: null, error: null };
     }),

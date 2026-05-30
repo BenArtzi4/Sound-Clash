@@ -8,6 +8,7 @@ import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { supabase } from "../lib/supabase";
+import { deriveIsSoundtrack, type SongGenreSlugEmbed } from "../lib/soundtrack";
 import type { Song } from "../lib/types";
 import styles from "./DisplayPage.module.css";
 
@@ -92,11 +93,16 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     void (async () => {
       const { data, error } = await supabase
         .from("songs")
-        .select("id,title,artist,youtube_id,start_time,is_soundtrack")
+        .select("id,title,artist,youtube_id,start_time,song_genres(genres(slug))")
         .eq("id", currentRoundSongId)
         .maybeSingle();
       if (cancelled || error || !data) return;
-      setCurrentSong(data as Song);
+      // is_soundtrack is derived from genre membership (migration 028 dropped
+      // the column), so compute it from the embedded genre slugs.
+      const { song_genres, ...base } = data as unknown as Omit<Song, "is_soundtrack" | "genres"> & {
+        song_genres: SongGenreSlugEmbed[] | null;
+      };
+      setCurrentSong({ ...base, is_soundtrack: deriveIsSoundtrack(song_genres) });
     })();
     return () => {
       cancelled = true;
