@@ -334,6 +334,7 @@ Behavior:
 - Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow).
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
 - Returns one row with the new round + the picked song's metadata.
+- The returned `is_soundtrack` flag is **computed** (migration 028), not read from a column — `songs.is_soundtrack` was dropped. It is `EXISTS(SELECT 1 FROM song_genres sg JOIN genres g ON g.id = sg.genre_id WHERE sg.song_id = <picked> AND g.slug IN ('soundtracks', 'israeli-soundtracks'))`, i.e. true when the song belongs to a soundtrack genre. The `RETURNS TABLE` shape is unchanged, so PostgREST routing and the realtime/frontend contract are identical.
 
 ### Idempotency
 

@@ -41,7 +41,6 @@ CREATE TABLE songs (
   artist        text NOT NULL,
   youtube_id    char(11) NOT NULL,
   start_time    integer NOT NULL DEFAULT 0,    -- seconds
-  is_soundtrack boolean NOT NULL DEFAULT false,  -- TRUE = soundtrack round: manager + display show a 🎬 badge, scoring collapses to a single "Correct (+15)" button, and admin save auto-tags the Soundtracks genre (Israeli Soundtracks when title contains Hebrew characters). Invariant for soundtracks: title = artist = show name (film / TV / game / musical); enforced by the admin form's auto-mirror and by the CSV importer.
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
@@ -120,6 +119,20 @@ CREATE INDEX song_genres_genre_idx        ON song_genres (genre_id);
 The `active_games_expires_at_idx` is the most important: it backs the hourly pg_cron sweep, which scans for rows past their TTL.
 
 ## 4. Field Notes
+
+### Soundtrack rounds — no `is_soundtrack` column
+
+There is **no `is_soundtrack` column** on `songs` (it was dropped in migration 028).
+Soundtrack-ness — whether a round uses the single **Correct (+15)** button and the 🎬
+badge instead of the title/artist split — is derived from genre membership: a song is a
+soundtrack ⇔ it belongs to a genre whose slug is in `('soundtracks', 'israeli-soundtracks')`.
+The genres table is the single source of truth, so the per-song flag can no longer drift
+from the genre tag. The value is still surfaced everywhere as a field named
+`is_soundtrack`, just **computed** rather than stored: `select_next_song` computes it in
+SQL via `EXISTS` over `song_genres → genres` (see `rpc-functions.md §3c`), and the admin
+list / CSV importer compute it in Python from the genre slugs (`SOUNDTRACK_GENRE_SLUGS`
+in `backend/app/constants.py`). Convention for a soundtrack row: `title = artist = show
+name` (film / TV / game / musical).
 
 ### `active_games.game_code`
 
