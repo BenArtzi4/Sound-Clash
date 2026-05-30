@@ -86,19 +86,22 @@ async def create_test_song(
     title: str = "Test Title",
     artist: str = "Test Artist",
     youtube_id: str = "abcdefghijk",
-    is_soundtrack: bool = False,
 ) -> uuid.UUID:
-    """Insert one row into songs and return its id."""
+    """Insert one row into songs and return its id.
+
+    Soundtrack-ness is derived from genre membership (migration 028), so there
+    is no is_soundtrack column to set here; attach the song to the 'soundtracks'
+    or 'israeli-soundtracks' genre via song_genres to make it a soundtrack.
+    """
     row = await conn.fetchrow(
         """
-        INSERT INTO songs (title, artist, youtube_id, is_soundtrack)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO songs (title, artist, youtube_id)
+        VALUES ($1, $2, $3)
         RETURNING id
         """,
         title,
         artist,
         youtube_id,
-        is_soundtrack,
     )
     assert row is not None
     return row["id"]

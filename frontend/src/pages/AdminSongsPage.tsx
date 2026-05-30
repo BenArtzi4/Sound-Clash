@@ -26,11 +26,6 @@ import styles from "./AdminSongsPage.module.css";
 const PER_PAGE = 50;
 const YT_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 const SEARCH_DEBOUNCE_MS = 250;
-const SOUNDTRACKS_GENRE_SLUG = "soundtracks";
-const ISRAELI_SOUNDTRACKS_GENRE_SLUG = "israeli-soundtracks";
-// Hebrew unicode block; used to route a soundtrack auto-tag to the Israeli
-// bucket when the title (= show name) is in Hebrew.
-const HEBREW_CHAR_RE = /[֐-׿]/;
 
 type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; song: Song };
 
@@ -39,7 +34,6 @@ interface FormState {
   artist: string;
   youtube_id: string;
   start_time: string;
-  is_soundtrack: boolean;
   genre_ids: Set<string>;
 }
 
@@ -48,7 +42,6 @@ const EMPTY_FORM: FormState = {
   artist: "",
   youtube_id: "",
   start_time: "0",
-  is_soundtrack: false,
   genre_ids: new Set(),
 };
 
@@ -58,43 +51,23 @@ function songToForm(song: Song, genreIds: string[]): FormState {
     artist: song.artist,
     youtube_id: song.youtube_id,
     start_time: String(song.start_time),
-    is_soundtrack: song.is_soundtrack,
     genre_ids: new Set(genreIds),
   };
 }
 
-function formToPayload(form: FormState, genres: Genre[]): SongWritePayload {
-  const title = form.title.trim();
-  // Soundtrack invariant: title = artist = show name. Mirror title into
-  // artist so non-soundtrack code paths can read both fields without
-  // a NULL check.
-  const artist = form.is_soundtrack ? title : form.artist.trim();
-  const genre_ids = new Set(form.genre_ids);
-  // Auto-tag: soundtrack rounds route to the Israeli bucket when the title
-  // (= show name) is Hebrew, otherwise the generic Soundtracks bucket.
-  // Admin can still toggle chips to override.
-  if (form.is_soundtrack) {
-    const targetSlug = HEBREW_CHAR_RE.test(title)
-      ? ISRAELI_SOUNDTRACKS_GENRE_SLUG
-      : SOUNDTRACKS_GENRE_SLUG;
-    const match = genres.find((g) => g.slug === targetSlug);
-    if (match) genre_ids.add(match.id);
-  }
+function formToPayload(form: FormState): SongWritePayload {
   return {
-    title,
-    artist,
+    title: form.title.trim(),
+    artist: form.artist.trim(),
     youtube_id: form.youtube_id.trim(),
     start_time: Number(form.start_time),
-    is_soundtrack: form.is_soundtrack,
-    genre_ids: Array.from(genre_ids),
+    genre_ids: Array.from(form.genre_ids),
   };
 }
 
 function formIsValid(form: FormState): boolean {
   if (form.title.trim().length === 0 || form.title.trim().length > 200) return false;
-  if (!form.is_soundtrack) {
-    if (form.artist.trim().length === 0 || form.artist.trim().length > 200) return false;
-  }
+  if (form.artist.trim().length === 0 || form.artist.trim().length > 200) return false;
   if (!YT_ID_PATTERN.test(form.youtube_id.trim())) return false;
   const start = Number(form.start_time);
   if (!Number.isInteger(start) || start < 0) return false;
@@ -544,7 +517,7 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!valid || busy) return;
-    onSubmit(formToPayload(form, genres));
+    onSubmit(formToPayload(form));
   }
 
   return (
@@ -562,14 +535,13 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
           />
         </label>
         <label className={styles.field}>
-          <span>{form.is_soundtrack ? "Artist (mirrors title for soundtracks)" : "Artist"}</span>
+          <span>Artist</span>
           <input
             type="text"
-            value={form.is_soundtrack ? form.title : form.artist}
+            value={form.artist}
             onChange={(e) => setForm({ ...form, artist: e.target.value })}
             maxLength={200}
             aria-label="Artist"
-            disabled={form.is_soundtrack}
           />
         </label>
         <label className={styles.field}>
@@ -592,18 +564,6 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
             onChange={(e) => setForm({ ...form, start_time: e.target.value })}
             aria-label="Start time"
           />
-        </label>
-        <label className={`${styles.field} ${styles.fieldFull} ${styles.soundtrackToggle}`}>
-          <input
-            type="checkbox"
-            checked={form.is_soundtrack}
-            onChange={(e) => setForm({ ...form, is_soundtrack: e.target.checked })}
-            aria-label="Soundtrack round"
-          />
-          <span>
-            Soundtrack round — title holds the show name; artist auto-mirrors and the song auto-tags
-            Israeli Soundtracks (Hebrew title) or Soundtracks (otherwise).
-          </span>
         </label>
         <div className={`${styles.field} ${styles.fieldFull}`}>
           <span>Genres ({form.genre_ids.size} selected)</span>

@@ -8,6 +8,7 @@ from uuid import UUID
 import anyio
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
+from app.constants import SOUNDTRACK_GENRE_SLUGS
 from app.db.errors import NotFoundError, mapped_postgrest_errors
 from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 from app.middleware.admin_auth import require_admin
@@ -27,7 +28,7 @@ router = APIRouter(
     dependencies=[Depends(require_admin)],
 )
 
-SONG_COLUMNS = "id,title,artist,youtube_id,start_time,is_soundtrack"
+SONG_COLUMNS = "id,title,artist,youtube_id,start_time"
 
 
 def _attach_genres(client: SupabaseClientLike, songs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -56,7 +57,11 @@ def _attach_genres(client: SupabaseClientLike, songs: list[dict[str, Any]]) -> l
         if meta:
             by_song.setdefault(r["song_id"], []).append(meta)
     for s in songs:
-        s["genres"] = by_song.get(s["id"], [])
+        genres = by_song.get(s["id"], [])
+        s["genres"] = genres
+        # Soundtrack-ness is derived from genre membership (migration 028): a
+        # song is a soundtrack iff it belongs to a soundtrack genre.
+        s["is_soundtrack"] = any(g.get("slug") in SOUNDTRACK_GENRE_SLUGS for g in genres)
     return songs
 
 
@@ -116,7 +121,6 @@ def _create_song_blocking(client: SupabaseClientLike, body: SongCreate) -> dict[
         "artist": body.artist,
         "youtube_id": body.youtube_id,
         "start_time": body.start_time,
-        "is_soundtrack": body.is_soundtrack,
     }
     with mapped_postgrest_errors():
         resp = client.table("songs").insert(payload).execute()
@@ -142,7 +146,6 @@ def _update_song_blocking(
         "artist": body.artist,
         "youtube_id": body.youtube_id,
         "start_time": body.start_time,
-        "is_soundtrack": body.is_soundtrack,
     }
     with mapped_postgrest_errors():
         client.table("songs").update(payload).eq("id", song_id).execute()

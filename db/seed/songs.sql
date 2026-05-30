@@ -16,23 +16,27 @@
 -- loads a video (guard against the "error 153 / video unavailable" regression),
 -- so the seed needs at least the chosen genre to have a real, embeddable ID.
 
-INSERT INTO songs (title, artist, youtube_id, start_time, is_soundtrack)
-SELECT s.title, s.artist, s.youtube_id, s.start_time, s.is_soundtrack
+-- Soundtrack-ness is derived from genre membership (migration 028 dropped the
+-- songs.is_soundtrack column). The two soundtrack rows get their soundtrack
+-- behaviour from the song_genres mapping below (genre slug 'soundtracks').
+INSERT INTO songs (title, artist, youtube_id, start_time)
+SELECT s.title, s.artist, s.youtube_id, s.start_time
 FROM (VALUES
-  ('E2E Test Song 1',  'E2E Test Artist A', 'dQw4w9WgXcQ', 0, false),
-  ('E2E Test Song 2',  'E2E Test Artist B', 'jNQXAC9IVRw', 0, false),
-  ('E2E Test Song 3',  'E2E Test Artist C', '9bZkp7q19f0', 0, false),
-  ('E2E Test Song 4',  'E2E Test Artist D', 'fJ9rUzIMcZQ', 0, false),
-  ('E2E Test Song 5',  'E2E Test Artist E', 'kJQP7kiw5Fk', 0, false),
-  ('E2E Test Song 6',  'E2E Test Artist F', 'OPf0YbXqDm0', 0, false),
-  ('E2E Test Song 7',  'E2E Test Artist G', 'JGwWNGJdvx8', 0, false),
-  ('E2E Test Song 8',  'E2E Test Artist H', 'CevxZvSJLk8', 0, false),
-  ('E2E Test Song 9',  'E2E Test Artist I', '09R8_2nJtjg', 0, false),
-  ('E2E Test Song 10', 'E2E Test Artist J', 'hT_nvWreIhg', 0, false),
-  -- Soundtrack rows follow the title=artist=show-name invariant.
-  ('Star Wars',        'Star Wars',         'nfWlot6h_JM', 0, true),
-  ('Inception',        'Inception',         'e-ORhEE9VVg', 0, true)
-) AS s(title, artist, youtube_id, start_time, is_soundtrack)
+  ('E2E Test Song 1',  'E2E Test Artist A', 'dQw4w9WgXcQ', 0),
+  ('E2E Test Song 2',  'E2E Test Artist B', 'jNQXAC9IVRw', 0),
+  ('E2E Test Song 3',  'E2E Test Artist C', '9bZkp7q19f0', 0),
+  ('E2E Test Song 4',  'E2E Test Artist D', 'fJ9rUzIMcZQ', 0),
+  ('E2E Test Song 5',  'E2E Test Artist E', 'kJQP7kiw5Fk', 0),
+  ('E2E Test Song 6',  'E2E Test Artist F', 'OPf0YbXqDm0', 0),
+  ('E2E Test Song 7',  'E2E Test Artist G', 'JGwWNGJdvx8', 0),
+  ('E2E Test Song 8',  'E2E Test Artist H', 'CevxZvSJLk8', 0),
+  ('E2E Test Song 9',  'E2E Test Artist I', '09R8_2nJtjg', 0),
+  ('E2E Test Song 10', 'E2E Test Artist J', 'hT_nvWreIhg', 0),
+  -- Soundtrack rows: the work name lives in title/artist; the 'soundtracks'
+  -- genre tag below is what makes them play as +15 soundtrack rounds.
+  ('Star Wars',        'Star Wars',         'nfWlot6h_JM', 0),
+  ('Inception',        'Inception',         'e-ORhEE9VVg', 0)
+) AS s(title, artist, youtube_id, start_time)
 WHERE NOT EXISTS (
   SELECT 1 FROM songs WHERE songs.youtube_id = s.youtube_id
 );
