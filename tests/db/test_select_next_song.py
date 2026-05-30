@@ -181,6 +181,55 @@ async def test_random_pick_advances_round_number(db: asyncpg.Connection) -> None
 
 
 # ---------------------------------------------------------------------------
+# is_soundtrack derivation (migration 028)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_is_soundtrack_derived_from_genre(db: asyncpg.Connection) -> None:
+    """is_soundtrack is computed from genre membership, not a stored column.
+
+    Migration 028 dropped songs.is_soundtrack and made select_next_song derive
+    it via EXISTS over song_genres -> genres. A song tagged with a soundtrack
+    slug ('soundtracks' or 'israeli-soundtracks') must return true; a song in
+    only non-soundtrack genres must return false.
+    """
+    game_code = await create_test_game(db, status="waiting")
+    token = await fetch_manager_token(db, game_code)
+
+    # The db fixture reseeds 008_seed_genres.sql (pre-026 split), so the
+    # soundtrack-slug genres aren't present -- create them explicitly.
+    soundtracks = await db.fetchval(
+        "INSERT INTO genres (name, slug) VALUES ('Soundtracks', 'soundtracks') "
+        "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id"
+    )
+    israeli = await db.fetchval(
+        "INSERT INTO genres (name, slug) "
+        "VALUES ('Israeli Soundtracks', 'israeli-soundtracks') "
+        "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id"
+    )
+    rock = (await _genre_ids(db, "rock"))[0]
+    await _set_selected_genres(db, game_code, [soundtracks, israeli, rock])
+
+    en_song = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11])
+    await _attach_song_to_genre(db, en_song, soundtracks)
+    il_song = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11])
+    await _attach_song_to_genre(db, il_song, israeli)
+    normal_song = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11])
+    await _attach_song_to_genre(db, normal_song, rock)
+
+    # Manual pick (p_song_id) forces the exact song, so we read the computed
+    # is_soundtrack for each directly off the RPC's returned row.
+    en_row = (await _call(db, game_code, token, song_id=en_song))[0]
+    il_row = (await _call(db, game_code, token, song_id=il_song))[0]
+    normal_row = (await _call(db, game_code, token, song_id=normal_song))[0]
+
+    assert en_row["is_soundtrack"] is True
+    assert il_row["is_soundtrack"] is True
+    assert normal_row["is_soundtrack"] is False
+
+
+# ---------------------------------------------------------------------------
 # Composition with start_round: prior open round is closed
 # ---------------------------------------------------------------------------
 
