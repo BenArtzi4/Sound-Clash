@@ -101,14 +101,14 @@ Maximum per **buzz** from `award_attempt`: **+15** (title + artist together). Mi
 
 ### Soundtrack rounds
 
-When the current song has a `source` set (i.e. it's from a film / TV show / game / musical), the round plays differently:
+When the current song belongs to a **soundtrack genre** (`Soundtracks` or `Israeli Soundtracks`), the round plays differently:
 
 - A 🎬 **Soundtrack** badge appears on both the manager and display screens above the song area, so everyone knows the round is a soundtrack round.
-- The manager's two scoring buttons collapse into a single **Correct (+15)** button. The team's job is to name the **work** (the source), not the song title — soundtrack trivia in practice means players recognise the film/show, not the track. Wrong (−3) still applies.
+- The manager's two scoring buttons collapse into a single **Correct (+15)** button. The team's job is to name the **work** (the film / TV show / game / musical), not the song title — soundtrack trivia in practice means players recognise the show, not the track. Wrong (−3) still applies.
 - The single Correct button fires `award_attempt` with `p_title=10, p_artist=5` so the sum lands as +15 via the existing SQL function — no new RPC, no scoring branch in the DB.
-- On the display, the reveal panel shows "🎵 Title" and "🎬 from <source>" (instead of "🎤 Artist") once the manager confirms; both rows light up together.
+- On the display, the reveal panel shows a single **🎬 <work name>** row (instead of the separate "🎵 Title" / "🎤 Artist" rows) once the manager confirms.
 
-**Admin convention for soundtrack songs**: store the work name in the `artist` field (e.g. `artist = "Star Wars"` for the Imperial March, `artist = "Titanic"` for "My Heart Will Go On"). `source` typically matches. Setting `source` on save auto-tags the song with the **Soundtracks** genre, or **Israeli Soundtracks** when `source` contains Hebrew characters, so the host can filter to a Hebrew-only or English-only soundtrack round.
+**Admin convention for soundtrack songs**: store the work name in **both** the `title` and `artist` fields (e.g. `title = artist = "Star Wars"` for the Imperial March, `title = artist = "Titanic"` for "My Heart Will Go On"), and **tag the song with the Soundtracks genre** — or **Israeli Soundtracks** for Hebrew film / TV themes, so the host can filter to a Hebrew-only or English-only soundtrack round. That genre tag is the single soundtrack marker: there is no separate per-song flag, checkbox, or `source` column. A song is a soundtrack round purely because it belongs to a soundtrack genre.
 
 ### Free-guess rule
 

@@ -16,6 +16,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-05-30: Songs in the **Soundtracks** / **Israeli Soundtracks** genres now always play as +15 soundtrack rounds. Soundtrack-ness is derived from genre membership instead of a separate per-song flag, fixing ~28 songs (e.g. Hungry Eyes, Shallow, the Star Wars and Disney themes) that were tagged as soundtracks but still scored as normal title/artist rounds. The admin Songs page drops the "Soundtrack round" checkbox — tagging a soundtrack genre is now the single marker.
 - 2026-05-25: Soundtrack rounds no longer auto-resume the song or re-arm the buzzers after the host taps **Correct (+15)**. The round now waits for an explicit **Next round** press, matching how regular rounds behave once both title and artist have been scored.
 
 ### Added

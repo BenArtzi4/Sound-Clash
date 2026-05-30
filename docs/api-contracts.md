@@ -310,10 +310,10 @@ All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (
 |---|---|---|
 | `GET`    | `/admin/songs` | List songs (paginated, `?page=1&per_page=50&search=&genre=`) |
 | `GET`    | `/admin/songs/{id}` | Get one song |
-| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, source, genre_ids[]`). When `source` is set, the admin UI auto-adds the Soundtracks genre id to `genre_ids` (or Israeli Soundtracks when `source` contains Hebrew characters) so soundtrack-only filtering works for game creation. |
+| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, genre_ids[]`). Tagging the song with a soundtrack genre (Soundtracks / Israeli Soundtracks) is what makes it a +15 soundtrack round — there is no separate flag; convention is `title = artist = show name`. |
 | `PUT`    | `/admin/songs/{id}` | Update a song (full replacement; partial use PATCH if needed later) |
 | `DELETE` | `/admin/songs/{id}` | Delete a song (cascades to `song_genres`) |
-| `POST`   | `/admin/songs/bulk-import` | Multipart CSV upload; columns: `title, artist, youtube_id, start_time, source, genres` (semicolon-separated genre slugs) |
+| `POST`   | `/admin/songs/bulk-import` | Multipart CSV upload; columns: `title, artist, youtube_id, start_time, genres` (semicolon-separated genre slugs). A row plays as a soundtrack round when its `genres` include `soundtracks` or `israeli-soundtracks`. |
 
 Bulk import is idempotent on `youtube_id`: existing songs are updated, new ones are inserted.
 
