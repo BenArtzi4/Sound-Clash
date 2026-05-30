@@ -30,7 +30,9 @@ export interface SongPayload {
   artist: string;
   youtube_id: string;
   start_time: number;
-  source: string | null;
+  // Derived from genre membership (migration 028 dropped the column); a song
+  // is a soundtrack when it belongs to a Soundtracks / Israeli Soundtracks genre.
+  is_soundtrack: boolean;
 }
 
 export interface SongCreate {
@@ -38,7 +40,6 @@ export interface SongCreate {
   artist: string;
   youtube_id: string;
   start_time?: number;
-  source?: string | null;
   genre_ids: string[];
 }
 

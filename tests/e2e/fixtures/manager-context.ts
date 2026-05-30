@@ -146,5 +146,9 @@ export async function skipRound(page: Page): Promise<void> {
 
 export async function awardBonusToTeam(page: Page, teamName: string): Promise<void> {
   await page.getByTestId("score-bonus").click();
-  await page.getByRole("button", { name: teamName, exact: true }).click();
+  // The picker button's accessible name is its aria-label
+  // ("Award +4 bonus to <name>"), not the bare team name.
+  await page
+    .getByRole("button", { name: `Award +4 bonus to ${teamName}`, exact: true })
+    .click();
 }
