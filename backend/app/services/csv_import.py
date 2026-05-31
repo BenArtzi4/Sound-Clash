@@ -15,7 +15,6 @@ from typing import IO
 
 import anyio
 
-from app.constants import SOUNDTRACK_GENRE_SLUGS
 from app.db.errors import ValidationError
 from app.db.supabase_client import SupabaseClientLike
 
@@ -86,10 +85,22 @@ def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
         title = (raw_row.get("title") or "").strip()
         artist = (raw_row.get("artist") or "").strip()
         youtube_id = (raw_row.get("youtube_id") or "").strip()
+        # title and artist are both required for every row. For ordinary songs
+        # title is the song and artist is the performer. For soundtrack rounds
+        # (identified by genre membership, migration 028) the meaning shifts:
+        # artist holds the film/show name — the answer players give and the only
+        # text revealed on screen — while title is the song/clip name, shown as
+        # a secondary hint. A soundtrack with no distinct clip name simply sets
+        # title = artist (the film name), as the older soundtrack rows already do.
         if not title:
             raise ValidationError(
                 f"row {index}: title is required",
                 details={"line": index, "field": "title", "issue": "empty"},
+            )
+        if not artist:
+            raise ValidationError(
+                f"row {index}: artist is required",
+                details={"line": index, "field": "artist", "issue": "empty"},
             )
         if not _YOUTUBE_ID.match(youtube_id):
             raise ValidationError(
@@ -114,29 +125,6 @@ def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
             raise ValidationError(
                 f"row {index}: genres must list at least one slug",
                 details={"line": index, "field": "genres", "issue": "empty"},
-            )
-
-        # Soundtrack-ness is derived from genre membership (migration 028). For
-        # soundtracks the show name lives in title and artist mirrors it; a blank
-        # artist is auto-filled, a mismatching one is rejected so the invariant
-        # can't silently split.
-        is_soundtrack = any(slug in SOUNDTRACK_GENRE_SLUGS for slug in genre_slugs)
-        if is_soundtrack:
-            if not artist:
-                artist = title
-            elif artist != title:
-                raise ValidationError(
-                    f"row {index}: for soundtracks, artist must be blank or equal to title",
-                    details={
-                        "line": index,
-                        "field": "artist",
-                        "issue": "soundtrack_artist_mismatch",
-                    },
-                )
-        elif not artist:
-            raise ValidationError(
-                f"row {index}: artist is required",
-                details={"line": index, "field": "artist", "issue": "empty"},
             )
 
         rows.append(

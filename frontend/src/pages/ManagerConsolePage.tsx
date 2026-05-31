@@ -495,6 +495,21 @@ export function ManagerConsolePage() {
   // gate on busy because they fire less often and the flash is
   // imperceptible there.
   const isSoundtrackRound = currentSong?.is_soundtrack === true;
+  // Soundtrack rounds ask players to name the film/show, which is stored in
+  // `artist`; that's the answer the host judges and the only text the display
+  // reveals. The song/clip name in `title` is shown as a smaller hint, and only
+  // when it actually differs from the film name (older rows duplicate them).
+  let songPrimaryLine: string | null = null;
+  let songSecondaryLine: string | null = null;
+  if (currentSong) {
+    if (isSoundtrackRound) {
+      songPrimaryLine = currentSong.artist;
+      songSecondaryLine = currentSong.title !== currentSong.artist ? currentSong.title : null;
+    } else {
+      songPrimaryLine = currentSong.title;
+      songSecondaryLine = currentSong.artist;
+    }
+  }
   const titleActionDisabled = !lockedTeam || titleClaimedById != null || pendingTitle === round?.id;
   const artistActionDisabled =
     !lockedTeam || artistClaimedById != null || pendingArtist === round?.id;
@@ -543,8 +558,8 @@ export function ManagerConsolePage() {
           {currentSong ? (
             <div className={styles.songBlock}>
               {isSoundtrackRound ? <SoundtrackBadge /> : null}
-              <p className={styles.songLine}>{currentSong.title}</p>
-              {isSoundtrackRound ? null : <p className={styles.songMeta}>{currentSong.artist}</p>}
+              <p className={styles.songLine}>{songPrimaryLine}</p>
+              {songSecondaryLine ? <p className={styles.songMeta}>{songSecondaryLine}</p> : null}
             </div>
           ) : (
             <p className={styles.songMeta}>No round started yet.</p>

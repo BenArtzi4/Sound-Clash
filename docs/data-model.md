@@ -129,10 +129,18 @@ soundtrack ⇔ it belongs to a genre whose slug is in `('soundtracks', 'israeli-
 The genres table is the single source of truth, so the per-song flag can no longer drift
 from the genre tag. The value is still surfaced everywhere as a field named
 `is_soundtrack`, just **computed** rather than stored: `select_next_song` computes it in
-SQL via `EXISTS` over `song_genres → genres` (see `rpc-functions.md §3c`), and the admin
-list / CSV importer compute it in Python from the genre slugs (`SOUNDTRACK_GENRE_SLUGS`
-in `backend/app/constants.py`). Convention for a soundtrack row: `title = artist = show
-name` (film / TV / game / musical).
+SQL via `EXISTS` over `song_genres → genres` (see `rpc-functions.md §3c`), the admin list
+(`backend/app/routers/admin_songs.py`) computes it in Python and the in-game React pages
+(`frontend/src/lib/soundtrack.ts`) compute it in TS, both from the genre slugs
+(`SOUNDTRACK_GENRE_SLUGS` in `backend/app/constants.py`).
+
+Convention for a soundtrack row: **`artist` holds the film/show name** (film / TV / game /
+musical) — it is the answer players must give and the only text revealed on the display
+and manager screens — while **`title` holds the song/clip name**, shown only as a smaller
+hint on the manager screen and only when it differs from the film name. When a soundtrack
+has no distinct clip name, set `title = artist` (the catalog's older soundtrack rows do
+this). The CSV importer no longer derives soundtrack-ness or rewrites these fields; it just
+requires both `title` and `artist` and stores them verbatim.
 
 ### `active_games.game_code`
 
