@@ -422,9 +422,20 @@
 }
 
 .bonusPickerList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+/* Each team sits in its own bordered box (from the global .btn base) so the
+   host can't blur two adjacent names together and award +4 to the wrong team.
+   Fill the grid cell and let long names wrap inside the box rather than
+   overflow it. */
+.bonusTeamBtn {
+  width: 100%;
+  min-height: 48px;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* Continue / Next-round sit below the four scoring buttons and now match
