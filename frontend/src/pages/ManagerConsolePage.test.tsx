@@ -373,9 +373,7 @@ describe("ManagerConsolePage", () => {
       await fireSubscribed();
     });
     // The film/show name (artist) is the answer the host judges.
-    await waitFor(() =>
-      expect(screen.getByText("Pirates of the Caribbean")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Pirates of the Caribbean")).toBeInTheDocument());
     // The song/clip name (title) appears only as a secondary hint.
     expect(screen.getByText("He's a Pirate")).toBeInTheDocument();
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
