@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-31: The host console now keeps the API warm while a game is running, so **Bonus**, **End game**, **Kick team**, and late team joins stay fast even after long rounds. Previously the backend could idle-sleep mid-game (all gameplay goes straight to the database), making the host's next button press wait several seconds on a cold start.
 - 2026-05-30: Re-tuned the playback start time for 588 songs in the catalog so each clip begins on a more recognizable part of the song.
 - 2026-05-25: Team buzzer screen is now full-bleed — the BUZZ button reaches every edge of the phone, with the team name + current round shown as a small pill overlay in the top corner. Larger tap target, no chrome competing for the screen.
 

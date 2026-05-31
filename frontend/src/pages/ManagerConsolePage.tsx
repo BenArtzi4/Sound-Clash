@@ -7,6 +7,7 @@ import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
+import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { ApiError, awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/useManagerActions";
@@ -24,6 +25,11 @@ export function ManagerConsolePage() {
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
+
+  // Keep the Render-hosted API warm while a game is running so the host's
+  // occasional REST calls (Bonus / End game / Kick) and late team joins don't
+  // hit a mid-game cold start. See useKeepBackendWarm for the why.
+  useKeepBackendWarm(state?.game?.status === "playing" || state?.game?.status === "waiting");
 
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [busy, setBusy] = useState(false);
