@@ -88,24 +88,31 @@ def test_parse_csv_missing_artist_for_non_soundtrack() -> None:
     assert exc_info.value.details["field"] == "artist"
 
 
-def test_parse_csv_soundtrack_auto_mirrors_blank_artist() -> None:
-    # Soundtrack-ness comes from the genre slug now; blank artist auto-mirrors.
-    rows = csv_import.parse_csv(_bytes(["Pirates of the Caribbean,,YQHsXMglC9A,0,soundtracks"]))
-    assert rows[0].title == "Pirates of the Caribbean"
+def test_parse_csv_soundtrack_keeps_distinct_title_and_artist() -> None:
+    # Soundtrack rounds reveal the film/show name (artist); the song/clip name
+    # (title) is now kept as a separate hint instead of being forced to match.
+    rows = csv_import.parse_csv(
+        _bytes(["He's a Pirate,Pirates of the Caribbean,YQHsXMglC9A,0,soundtracks"])
+    )
+    assert rows[0].title == "He's a Pirate"
     assert rows[0].artist == "Pirates of the Caribbean"
 
 
-def test_parse_csv_soundtrack_artist_must_match_title() -> None:
+def test_parse_csv_soundtrack_requires_artist() -> None:
+    # artist now holds the film/show name — the answer — so it is required for
+    # soundtracks too (it used to auto-mirror from a blank).
     with pytest.raises(ValidationError) as exc_info:
-        csv_import.parse_csv(_bytes(["Pirates,Klaus Badelt,YQHsXMglC9A,0,soundtracks"]))
+        csv_import.parse_csv(_bytes(["Theme,,YQHsXMglC9A,0,soundtracks"]))
     assert exc_info.value.details["field"] == "artist"
-    assert exc_info.value.details["issue"] == "soundtrack_artist_mismatch"
+    assert exc_info.value.details["issue"] == "empty"
 
 
-def test_parse_csv_israeli_soundtrack_genre_is_soundtrack() -> None:
-    # The israeli-soundtracks slug also triggers the soundtrack mirror rule.
-    rows = csv_import.parse_csv(_bytes(["נילס,,YQHsXMglC9A,0,israeli-soundtracks"]))
-    assert rows[0].artist == "נילס"
+def test_parse_csv_israeli_soundtrack_keeps_film_name() -> None:
+    rows = csv_import.parse_csv(
+        _bytes(["שיר הנושא,נילס הולגרסון,YQHsXMglC9A,0,israeli-soundtracks"])
+    )
+    assert rows[0].title == "שיר הנושא"
+    assert rows[0].artist == "נילס הולגרסון"
 
 
 def test_parse_csv_negative_start_time() -> None:

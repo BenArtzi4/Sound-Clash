@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-05-31: Soundtrack rounds now reveal the **film/show name** (taken from the song's Artist field) as the answer on the display and manager screens, instead of the song-clip title. This corrects ~28 soundtrack songs whose Title was the track name (e.g. "Hakuna Matata", "He's a Pirate") rather than the work — they now show "The Lion King", "Pirates of the Caribbean", etc. The manager screen additionally shows the clip title as a small hint. The admin Songs form and CSV import follow the same convention: put the film/show name in **Artist**, the clip name in **Title** (set them equal when there's no distinct clip).
 - 2026-05-31: The host console now keeps the API warm while a game is running, so **Bonus**, **End game**, **Kick team**, and late team joins stay fast even after long rounds. Previously the backend could idle-sleep mid-game (all gameplay goes straight to the database), making the host's next button press wait several seconds on a cold start.
 - 2026-05-30: Re-tuned the playback start time for 588 songs in the catalog so each clip begins on a more recognizable part of the song.
 - 2026-05-25: Team buzzer screen is now full-bleed — the BUZZ button reaches every edge of the phone, with the team name + current round shown as a small pill overlay in the top corner. Larger tap target, no chrome competing for the screen.

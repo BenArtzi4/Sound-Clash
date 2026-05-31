@@ -233,7 +233,9 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
                 🎬
               </span>
               <span className={styles.revealText}>
-                {titleClaimedById && currentSong ? currentSong.title : "???"}
+                {/* Soundtrack rounds ask for the film/show name, which lives in
+                    `artist` (title holds the song/clip name). Reveal the answer. */}
+                {titleClaimedById && currentSong ? currentSong.artist : "???"}
               </span>
             </div>
           ) : (

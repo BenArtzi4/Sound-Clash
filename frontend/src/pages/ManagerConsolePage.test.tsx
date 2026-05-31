@@ -348,6 +348,39 @@ describe("ManagerConsolePage", () => {
     expect(lastHandle?.play).not.toHaveBeenCalled();
   });
 
+  it("Soundtrack rounds show the film name (artist) with the song title as a hint", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        current_round_id: "r1",
+        current_song_id: "song-P",
+        round_number: 1,
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-P" })],
+    });
+    // Distinct title (song/clip) and artist (film) — the Approach-B shape.
+    setSongFetch({
+      id: "song-P",
+      title: "He's a Pirate",
+      artist: "Pirates of the Caribbean",
+      youtube_id: "abcdefghijk",
+      start_time: 0,
+      is_soundtrack: true,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // The film/show name (artist) is the answer the host judges.
+    await waitFor(() =>
+      expect(screen.getByText("Pirates of the Caribbean")).toBeInTheDocument(),
+    );
+    // The song/clip name (title) appears only as a secondary hint.
+    expect(screen.getByText("He's a Pirate")).toBeInTheDocument();
+    expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
+  });
+
   it("Continue button calls releaseBuzzLockDirect and resumes the player", async () => {
     setHydrate({
       game: makeActiveGame({

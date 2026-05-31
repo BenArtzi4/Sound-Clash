@@ -310,7 +310,7 @@ All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (
 |---|---|---|
 | `GET`    | `/admin/songs` | List songs (paginated, `?page=1&per_page=50&search=&genre=`) |
 | `GET`    | `/admin/songs/{id}` | Get one song |
-| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, genre_ids[]`). Tagging the song with a soundtrack genre (Soundtracks / Israeli Soundtracks) is what makes it a +15 soundtrack round — there is no separate flag; convention is `title = artist = show name`. |
+| `POST`   | `/admin/songs` | Create a song (body: `title, artist, youtube_id, start_time, genre_ids[]`). Tagging the song with a soundtrack genre (Soundtracks / Israeli Soundtracks) is what makes it a +15 soundtrack round — there is no separate flag. For soundtracks, `artist` holds the film/show name (the answer revealed on screen) and `title` holds the song/clip name (shown only as a hint); set `title = artist` when there is no distinct song. |
 | `PUT`    | `/admin/songs/{id}` | Update a song (full replacement; partial use PATCH if needed later) |
 | `DELETE` | `/admin/songs/{id}` | Delete a song (cascades to `song_genres`) |
 | `POST`   | `/admin/songs/bulk-import` | Multipart CSV upload; columns: `title, artist, youtube_id, start_time, genres` (semicolon-separated genre slugs). A row plays as a soundtrack round when its `genres` include `soundtracks` or `israeli-soundtracks`. |

@@ -523,6 +523,12 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
   return (
     <form className={styles.formPanel} onSubmit={handleSubmit}>
       <h2>{submitLabel}</h2>
+      <p className="muted">
+        Tagging a song with the Soundtracks or Israeli Soundtracks genre makes it a +15
+        “name the film/show” round. For those, put the film/show name in <strong>Artist</strong>{" "}
+        (that’s the answer revealed on screen); <strong>Title</strong> is the song/clip name, shown
+        only as a hint. Set Title equal to the film name when there’s no distinct song.
+      </p>
       <div className={styles.formGrid}>
         <label className={styles.field}>
           <span>Title</span>

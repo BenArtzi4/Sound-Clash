@@ -279,4 +279,39 @@ describe("DisplayPage board", () => {
     );
     expect(screen.getByTestId("display-reveal-artist")).toHaveTextContent("???");
   });
+
+  it("reveals the film name (artist), not the song title, on a soundtrack round", async () => {
+    setSongFetch({
+      id: "song-1",
+      title: "He's a Pirate",
+      artist: "Pirates of the Caribbean",
+      youtube_id: "izGwDsrQ1eQ",
+      is_soundtrack: true,
+    });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", current_round_id: "round-1" }),
+      teams: [makeTeam({ id: "t1", name: "Alpha" })],
+      rounds: [
+        makeRound({
+          id: "round-1",
+          song_id: "song-1",
+          title_claimed_by: "t1",
+          artist_claimed_by: "t1",
+        }),
+      ],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // The single 🎬 reveal row shows the film name (artist); there is no
+    // separate artist row, and the song title is never shown on the display.
+    await waitFor(() =>
+      expect(screen.getByTestId("display-reveal-title")).toHaveTextContent(
+        "Pirates of the Caribbean",
+      ),
+    );
+    expect(screen.queryByTestId("display-reveal-artist")).not.toBeInTheDocument();
+    expect(screen.queryByText("He's a Pirate")).not.toBeInTheDocument();
+  });
 });
