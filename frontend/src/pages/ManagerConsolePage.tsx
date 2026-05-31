@@ -665,7 +665,7 @@ export function ManagerConsolePage() {
                     <button
                       key={t.id}
                       type="button"
-                      className="btn btn-ghost"
+                      className={`btn ${styles.bonusTeamBtn}`}
                       onClick={() => void handleBonus(t.id, t.name)}
                       disabled={busy}
                       aria-label={`Award +4 bonus to ${t.name}`}
