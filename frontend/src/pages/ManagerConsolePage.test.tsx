@@ -1521,4 +1521,90 @@ describe("ManagerConsolePage", () => {
     );
     expect(handle(1).commitPrebuffered).not.toHaveBeenCalled();
   });
+
+  it("prebuffers the first song during 'waiting' and commits it in-gesture on Start game", async () => {
+    // Regression for the mobile bug: the first song was loaded only AFTER
+    // select_next_song resolved (post-await), so mobile blocked its autoplay and
+    // round 1 stayed silent until a stray buzz + Continue. The standby now warms
+    // the first song during the waiting screen, and Start game commits it
+    // synchronously inside the tap (in-gesture) via the exact peeked song id.
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [],
+      rounds: [],
+    });
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-1",
+      youtube_id: "vid1aaaaaaa",
+      start_time: 12,
+    });
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      round_number: 1,
+      song: {
+        id: "song-1",
+        title: "First",
+        artist: "A",
+        youtube_id: "vid1aaaaaaa",
+        start_time: 12,
+        is_soundtrack: false,
+      },
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Active A gates the Start button; the standby B becoming ready wakes the
+    // waiting-prebuffer effect.
+    act(() => {
+      onReadyHandler?.();
+    });
+    await act(async () => {
+      onReadyHandlers[1]?.();
+    });
+    // First song peeked + prebuffered into the standby (player B) while waiting.
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid1aaaaaaa", 12));
+
+    const startBtn = screen.getByRole("button", { name: /start game/i });
+    await waitFor(() => expect(startBtn).toBeEnabled());
+    fireEvent.click(startBtn);
+    // Commit happens synchronously in the click (before the RPC await) so the
+    // unmute+play lands inside the user gesture.
+    await waitFor(() => expect(handle(1).commitPrebuffered).toHaveBeenCalledWith(12));
+    await waitFor(() => expect(handle(0).stop).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-1"),
+    );
+    await waitFor(() =>
+      expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
+        expect.objectContaining({ preloaded: true, songId: "song-1" }),
+      ),
+    );
+  });
+
+  it("stops the just-started player if select_next_song fails after an in-gesture commit", async () => {
+    // If we begin playing the prebuffered song in-gesture but the round fails to
+    // advance server-side, we must stop playback so the room isn't left hearing a
+    // song no round backs.
+    await setupPlayingRoundWithBothPlayersReady();
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-2",
+      youtube_id: "vid2bbbbbbb",
+      start_time: 0,
+    });
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("network down"));
+
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 0));
+
+    fireEvent.click(screen.getByTestId("start-round"));
+    // Promoted player (B, now active) is committed, then stopped when the RPC rejects.
+    await waitFor(() => expect(handle(1).commitPrebuffered).toHaveBeenCalled());
+    await waitFor(() => expect(handle(1).stop).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/network down/i)).toBeInTheDocument());
+  });
 });

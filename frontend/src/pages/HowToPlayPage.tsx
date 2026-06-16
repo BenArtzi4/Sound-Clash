@@ -26,7 +26,8 @@ const STEPS: ReadonlyArray<{ title: string; body: React.ReactNode }> = [
     body: (
       <>
         On a TV or laptop everyone in the room can see, open <strong>Display screen</strong> and
-        enter the code. It shows the join QR, the scoreboard, and the YouTube clip.
+        enter the code. It shows the join QR and the live scoreboard. (The song itself plays from
+        the host's device — see the next step.)
       </>
     ),
   },
@@ -44,6 +45,8 @@ const STEPS: ReadonlyArray<{ title: string; body: React.ReactNode }> = [
     body: (
       <>
         Once the teams are in, the host taps <strong>Start game</strong> and the first song plays.
+        The music comes out of the <strong>host's own device</strong>, so connect it to the room's
+        speakers (or keep the host near everyone).
       </>
     ),
   },
@@ -51,7 +54,7 @@ const STEPS: ReadonlyArray<{ title: string; body: React.ReactNode }> = [
     title: "Buzz and judge",
     body: (
       <>
-        The first team to buzz answers out loud. The host taps <strong>Correct Title</strong> (+10),{" "}
+        The first team to buzz answers out loud. The host taps <strong>Correct Song</strong> (+10),{" "}
         <strong>Correct Artist</strong> (+5), or <strong>Wrong</strong> (−3). The team that just
         answered keeps the floor to also try the other half.
       </>
@@ -185,7 +188,7 @@ export function HowToPlayPage() {
               <ul className={styles.scoringList}>
                 <li className={styles.scoringRow}>
                   <span className={`${styles.chip} ${styles.chipGood}`}>+10</span>
-                  <span>Correct title</span>
+                  <span>Correct song</span>
                 </li>
                 <li className={styles.scoringRow}>
                   <span className={`${styles.chip} ${styles.chipGood}`}>+5</span>
