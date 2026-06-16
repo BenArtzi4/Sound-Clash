@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useImperativeHandle, useRef } from "react";
 
 vi.mock("../lib/supabase", async () => {
   const mod = await import("../test/supabaseMock");
@@ -40,6 +40,10 @@ vi.mock("../hooks/useSelectNextSong", () => ({
   selectNextSongDirect: vi.fn(),
 }));
 
+vi.mock("../hooks/usePeekNextSong", () => ({
+  peekNextSongDirect: vi.fn(),
+}));
+
 // Telemetry wrapper: assert the headline metrics (song-start, score-start) are
 // wired without touching real Faro. startSongStart returns a spy handle so the
 // page's songStart.rpcDone(...) calls don't crash.
@@ -71,35 +75,80 @@ vi.mock("../lib/telemetry", () => ({
 
 interface MockHandle {
   loadVideoById: ReturnType<typeof vi.fn>;
+  prebuffer: ReturnType<typeof vi.fn>;
+  commitPrebuffered: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
   play: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 }
 
+function makeMockHandle(): MockHandle {
+  return {
+    loadVideoById: vi.fn(),
+    prebuffer: vi.fn(),
+    commitPrebuffered: vi.fn(),
+    pause: vi.fn(),
+    play: vi.fn(),
+    stop: vi.fn(),
+  };
+}
+
+// The console now renders TWO players (active + standby preload buffer). The
+// mock registers them in mount order: index 0 = player A (initially active),
+// index 1 = player B (initially standby). `onReadyHandler` / `lastHandle` keep
+// pointing at player A so the existing single-player tests (which never swap)
+// are unaffected; new tests reach player B via `playerHandles[1]` and drive its
+// onReady/onPlaying via the parallel handler arrays.
 let onReadyHandler: (() => void) | null = null;
 let lastHandle: MockHandle | null = null;
+let playerHandles: MockHandle[] = [];
+let onReadyHandlers: Array<(() => void) | undefined> = [];
+let onPlayingHandlers: Array<((d: "statechange" | "poll") => void) | undefined> = [];
+
+// Typed accessor (tsconfig has noUncheckedIndexedAccess): the handle is pushed
+// before this is ever read, so a missing index is a test-setup bug.
+function handle(i: number): MockHandle {
+  const h = playerHandles[i];
+  if (!h) throw new Error(`no player handle registered at index ${i}`);
+  return h;
+}
 
 vi.mock("../components/YouTubePlayer", () => ({
-  YouTubePlayer: forwardRef<MockHandle, { onReady?: () => void }>((props, ref) => {
-    onReadyHandler = props.onReady ?? null;
-    useImperativeHandle(ref, () => {
-      if (!lastHandle) {
-        lastHandle = {
-          loadVideoById: vi.fn(),
-          pause: vi.fn(),
-          play: vi.fn(),
-          stop: vi.fn(),
-        };
-      }
-      return lastHandle;
-    }, []);
-    return <div data-testid="yt-player" />;
+  YouTubePlayer: forwardRef<
+    MockHandle,
+    {
+      onReady?: () => void;
+      onPlaying?: (d: "statechange" | "poll") => void;
+      testId?: string;
+    }
+  >((props, ref) => {
+    const idxRef = useRef<number | null>(null);
+    if (idxRef.current === null) {
+      idxRef.current = playerHandles.length;
+      playerHandles.push(makeMockHandle());
+      onReadyHandlers.push(props.onReady);
+      onPlayingHandlers.push(props.onPlaying);
+    }
+    const idx = idxRef.current;
+    // Keep the handler captures current across re-renders — the page recreates
+    // these closures each render (onPlayerReady's flushPendingSong, etc.), so
+    // the LATEST one is what a test must invoke. onReadyHandler / lastHandle
+    // mirror the active player (index 0) for the legacy single-player tests.
+    onReadyHandlers[idx] = props.onReady;
+    onPlayingHandlers[idx] = props.onPlaying;
+    if (idx === 0) {
+      onReadyHandler = props.onReady ?? null;
+      lastHandle = handle(0);
+    }
+    useImperativeHandle(ref, () => handle(idx), [idx]);
+    return <div data-testid={props.testId ?? "yt-player"} />;
   }),
 }));
 
 import { awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
+import { peekNextSongDirect } from "../hooks/usePeekNextSong";
 import type { ActiveGame, GameRound } from "../lib/types";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
@@ -125,7 +174,11 @@ beforeEach(() => {
   setManagerToken("ABCDEF", TOKEN);
   onReadyHandler = null;
   lastHandle = null;
+  playerHandles = [];
+  onReadyHandlers = [];
+  onPlayingHandlers = [];
   vi.mocked(selectNextSongDirect).mockReset();
+  vi.mocked(peekNextSongDirect).mockReset();
   vi.mocked(awardAttemptDirect).mockReset();
   vi.mocked(releaseBuzzLockDirect).mockReset();
   vi.mocked(awardBonus).mockReset();
@@ -1362,5 +1415,110 @@ describe("ManagerConsolePage", () => {
         screen.getByText(/all songs in your selected genres have been played/i),
       ).toBeInTheDocument(),
     );
+  });
+
+  // ---- double-buffer preload (peek_next_song + standby player) ----
+
+  async function setupPlayingRoundWithBothPlayersReady() {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1, current_round_id: "r1" }),
+      teams: [],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-1" })],
+    });
+    setSongFetch({
+      id: "song-1",
+      title: "First",
+      artist: "A",
+      youtube_id: "vid1aaaaaaa",
+      start_time: 0,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Both players report ready (index 0 = active A, index 1 = standby B).
+    act(() => {
+      onReadyHandler?.();
+    });
+    act(() => {
+      onReadyHandlers[1]?.();
+    });
+  }
+
+  it("prebuffers the next song once the current one plays, then commits + swaps on Next round", async () => {
+    await setupPlayingRoundWithBothPlayersReady();
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-2",
+      youtube_id: "vid2bbbbbbb",
+      start_time: 30,
+    });
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
+      round_id: "r2",
+      round_number: 2,
+      song: {
+        id: "song-2",
+        title: "Second",
+        artist: "B",
+        youtube_id: "vid2bbbbbbb",
+        start_time: 30,
+        is_soundtrack: false,
+      },
+    });
+
+    // The live player reaches PLAYING -> peek + prebuffer the next song into
+    // the standby (player B), silently.
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 30));
+
+    // Host clicks Next round: commit the EXACT prebuffered song id, promote the
+    // standby (resume), stop the old live player, and record preloaded=true.
+    fireEvent.click(screen.getByTestId("start-round"));
+    await waitFor(() =>
+      expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-2"),
+    );
+    await waitFor(() => expect(handle(1).commitPrebuffered).toHaveBeenCalledWith(30));
+    await waitFor(() => expect(handle(0).stop).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
+        expect.objectContaining({ preloaded: true, songId: "song-2" }),
+      ),
+    );
+  });
+
+  it("falls back to a cold random pick when the pool is empty at peek time", async () => {
+    await setupPlayingRoundWithBothPlayersReady();
+    // Peek returns null -> nothing prebuffered.
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce(null);
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
+      round_id: "r2",
+      round_number: 2,
+      song: {
+        id: "song-2",
+        title: "Second",
+        artist: "B",
+        youtube_id: "vid2bbbbbbb",
+        start_time: 0,
+        is_soundtrack: false,
+      },
+    });
+
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalled());
+    expect(handle(1).prebuffer).not.toHaveBeenCalled();
+
+    // Next round uses the 2-arg random pick (no songId) and reports preloaded=false.
+    fireEvent.click(screen.getByTestId("start-round"));
+    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() =>
+      expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
+        expect.objectContaining({ preloaded: false }),
+      ),
+    );
+    expect(handle(1).commitPrebuffered).not.toHaveBeenCalled();
   });
 });

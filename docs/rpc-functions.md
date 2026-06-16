@@ -344,6 +344,38 @@ Not idempotent on its own — every call inserts a new round. The composition re
 
 - Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect`). Single caller in the deployed system.
 
+## 3d. `peek_next_song`: read-only "what would the next random song be?"
+
+Added in migration 029. Called **direct from the manager browser** during the current round so the host's hidden second YouTube player can **prebuffer** the upcoming video. Production traces showed ~89% of the click→audio-playing time is YouTube's own buffering (`game.song_start.load_to_playing`); because `select_next_song` picks randomly at click time there is nothing to preload in advance, so this probe runs the same picker without committing.
+
+```sql
+CREATE OR REPLACE FUNCTION peek_next_song(
+  p_game_code      text,
+  p_manager_token  uuid
+) RETURNS TABLE(
+  song_id     uuid,
+  youtube_id  text,
+  start_time  integer
+) LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- Token + game-state gate runs first, **identical** to `select_next_song`: raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) / `no_genres_selected` (`22023`) before returning any candidate.
+- Runs the **same** unplayed-song random picker as `select_next_song`'s random path (exclude already-played, bucket by selected genre, random genre then random song).
+- **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
+- **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "nothing to prebuffer"; the real `no_more_songs` still surfaces from the eventual `select_next_song` commit.
+- On the actual "Next round" click the browser commits the peeked song via `select_next_song(..., p_song_id => <peeked id>)` (manual-pick path), so the buffered video and the started round can never disagree.
+
+### Idempotency
+
+Idempotent and side-effect-free (read-only `CREATE OR REPLACE`; no overload clash since the name is new in migration 029).
+
+### Callers
+
+- Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/usePeekNextSong.ts::peekNextSongDirect`). Single caller in the deployed system.
+
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
 Added in migration 014. Independent of round state and the buzz lock; the host picks any team in the game and grants a positive number of points (default 4). Does not touch `game_rounds`. Called by FastAPI (`POST /games/{code}/bonus`). Not exposed to anon.

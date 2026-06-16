@@ -14,6 +14,7 @@ vi.mock("../lib/telemetry", () => telemetry);
 
 import { awardAttemptDirect, releaseBuzzLockDirect } from "./useManagerActions";
 import { selectNextSongDirect } from "./useSelectNextSong";
+import { peekNextSongDirect } from "./usePeekNextSong";
 import { resetSupabaseMock, setRpcResponse } from "../test/supabaseMock";
 
 const TOKEN = "11111111-1111-1111-1111-111111111111";
@@ -44,6 +45,19 @@ describe("direct-RPC telemetry wiring", () => {
     await selectNextSongDirect("ABCDEF", TOKEN);
     expect(telemetry.tracedRpc).toHaveBeenCalledWith(
       "select_next_song",
+      { game_code: "ABCDEF" },
+      expect.any(Function),
+    );
+  });
+
+  it("wraps peek_next_song", async () => {
+    setRpcResponse({
+      data: [{ song_id: "s-1", youtube_id: "yt", start_time: 0 }],
+      error: null,
+    });
+    await peekNextSongDirect("ABCDEF", TOKEN);
+    expect(telemetry.tracedRpc).toHaveBeenCalledWith(
+      "peek_next_song",
       { game_code: "ABCDEF" },
       expect.any(Function),
     );

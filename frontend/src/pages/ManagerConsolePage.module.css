@@ -97,6 +97,34 @@
   gap: 1.5rem;
 }
 
+/* Double-buffer player stack: two players overlaid in one 16:9 box. The active
+   one is opaque and on top; the standby sits behind at opacity 0 but is still
+   laid out and in-viewport (NOT display:none) so its media pipeline keeps
+   running and muted-autoplay isn't throttled. Swapping which layer is active
+   crossfades instantly with no iframe rebuild. */
+.playerStack {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.playerLayer {
+  position: absolute;
+  inset: 0;
+  transition: opacity 200ms ease;
+}
+
+.playerActive {
+  opacity: 1;
+  z-index: 2;
+}
+
+.playerStandby {
+  opacity: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
 .card {
   background: #ffffff;
   border: 1px solid var(--color-border);
