@@ -47,6 +47,11 @@ export function ManagerConsolePage() {
   const [activeKey, setActiveKey] = useState<"A" | "B">("A");
   const activeKeyRef = useRef<"A" | "B">("A");
   const playersReadyRef = useRef<{ A: boolean; B: boolean }>({ A: false, B: false });
+  // State mirror of the standby player's readiness. playersReadyRef is a ref
+  // (read synchronously by the click handlers), but the waiting-screen preload
+  // effect needs a re-render trigger when the standby finishes constructing, so
+  // we also track it as state. Flipped in onPlayerBReady.
+  const [standbyConstructed, setStandbyConstructed] = useState(false);
   const activePlayer = (): YouTubePlayerHandle | null =>
     activeKeyRef.current === "A" ? playerARef.current : playerBRef.current;
   const standbyPlayer = (): YouTubePlayerHandle | null =>
@@ -117,6 +122,23 @@ export function ManagerConsolePage() {
       activePlayer()?.pause();
     }
   }, [state?.game.buzzed_team_id]);
+
+  // Warm up the FIRST song during the pre-game "waiting" screen. Mobile
+  // browsers block unmuted playback that resumes after an `await`, so if the
+  // first video isn't loaded until after select_next_song returns, round 1
+  // stays silent until the host taps something a second time. Prebuffering the
+  // first song here lets the "Start game" tap commit an already-buffered
+  // (muted-then-unmuted) video synchronously inside the gesture — the same
+  // in-gesture path every later round already uses. Best-effort: maybePreloadNext
+  // is fully guarded and a miss just falls back to the post-await cold load.
+  const waitingStatus = state?.game.status;
+  useEffect(() => {
+    if (waitingStatus === "waiting") maybePreloadNext();
+    // maybePreloadNext is a hoisted closure over the current render; we only
+    // need to (re)try when the game enters waiting or the standby player
+    // finishes constructing (standbyConstructed).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingStatus, standbyConstructed]);
 
   // Reset the per-click pending flags whenever the round changes. The
   // disabled checks already compare against `round?.id` so stale flags
@@ -242,15 +264,23 @@ export function ManagerConsolePage() {
   }
 
   // Prebuffer the next song into the standby player so the upcoming Next round
-  // resumes an already-downloaded video. Triggered once the current round's
-  // song is actually PLAYING (so it never contends with the current song's
-  // critical first-play). Read-only `peek_next_song` tells us which song
-  // select_next_song would pick; on the click we commit that exact id. Best-
-  // effort throughout: a peek/prebuffer failure must never disturb the round.
+  // resumes an already-downloaded video. During play it's triggered once the
+  // current round's song is actually PLAYING (so it never contends with the
+  // current song's critical first-play); during the pre-game "waiting" screen
+  // it's triggered by an effect once the standby player is ready, so the very
+  // first "Start game" also commits an already-buffered video in-gesture (see
+  // the waiting-prebuffer effect + handleNextRound for why that matters on
+  // mobile). Read-only `peek_next_song` tells us which song select_next_song
+  // would pick; on the click we commit that exact id. Best-effort throughout:
+  // a peek/prebuffer failure must never disturb the round.
   function maybePreloadNext() {
     if (!managerToken) return;
-    if (state?.game.status !== "playing") return;
-    if (!state.currentRound?.id) return;
+    const gameStatus = state?.game.status;
+    if (gameStatus !== "playing" && gameStatus !== "waiting") return;
+    // During play, only prebuffer once a round is live so peek excludes the
+    // current song. During waiting there is no round yet — that's expected, and
+    // the first song is the thing we want to warm up.
+    if (gameStatus === "playing" && !state?.currentRound?.id) return;
     if (preloadRef.current !== null || preloadInFlightRef.current) return;
     if (!standbyReady()) return;
     preloadInFlightRef.current = true;
@@ -506,11 +536,34 @@ export function ManagerConsolePage() {
     // Snapshot + clear the prebuffered song now so a late preload can't reuse it.
     const preloaded = preloadRef.current;
     preloadRef.current = null;
+
+    // FAST PATH — start the prebuffered song *synchronously inside this tap*,
+    // BEFORE awaiting the RPC. Mobile browsers only allow unmuted playback that
+    // begins within a user gesture; resuming after `await select_next_song`
+    // counts as blocked autoplay, which is exactly the reported bug (round 1 /
+    // Next round stayed silent until a stray buzz + Continue finally unlocked
+    // it). We pass preloaded.song_id to the RPC below, so the video we begin
+    // playing here is guaranteed to be the one the round records — it's safe to
+    // start it before the round is committed server-side. commitPrebuffered
+    // resumes an already-downloaded (muted) buffer, so the unmute+play lands in
+    // the gesture and the room hears it immediately.
+    let committedPreloaded = false;
+    if (preloaded) {
+      songStart.loadIssued();
+      armSongStartTimeout();
+      const promoted = standbyPlayer();
+      const demoted = activePlayer();
+      promoted?.commitPrebuffered(preloaded.start_time);
+      demoted?.stop();
+      const nextKey = activeKeyRef.current === "A" ? "B" : "A";
+      activeKeyRef.current = nextKey;
+      setActiveKey(nextKey);
+      committedPreloaded = true;
+    }
+
     try {
-      if (preloaded) {
-        // Fast path: commit the EXACT song we prebuffered (manual-pick arg), so
-        // the buffered video and the started round can never disagree, then
-        // promote the standby (an already-downloaded resume, ~tens of ms).
+      if (committedPreloaded && preloaded) {
+        // Confirm/record the round for the exact song we already started.
         const result = await selectNextSongDirect(gameCode, managerToken, preloaded.song_id);
         songStart.rpcDone({
           roundNumber: result.round_number,
@@ -519,24 +572,18 @@ export function ManagerConsolePage() {
           preloaded: true,
         });
         setCurrentSong(result.song);
-        if (result.song.id === preloaded.song_id) {
-          songStart.loadIssued();
-          armSongStartTimeout();
-          const promoted = standbyPlayer();
-          const demoted = activePlayer();
-          promoted?.commitPrebuffered(result.song.start_time);
-          demoted?.stop();
-          const nextKey = activeKeyRef.current === "A" ? "B" : "A";
-          activeKeyRef.current = nextKey;
-          setActiveKey(nextKey);
-        } else {
-          // Defensive: committed something other than what we buffered (should
-          // not happen) -> cold-load on the live player instead of swapping.
+        if (result.song.id !== preloaded.song_id) {
+          // Defensive: the RPC picked something other than what we prebuffered
+          // and already began playing (should not happen with an explicit
+          // song_id). Cold-load the real song onto the now-live player.
           await loadSongIntoPlayer(result.song);
         }
       } else {
-        // Slow path (first round, preload missed, or pool was empty at peek
-        // time): random pick + cold load on the live player.
+        // Slow path (first round without a warmed buffer, preload missed, or
+        // pool was empty at peek time): random pick + cold load on the live
+        // player. On mobile this load lands after the await, so it can't reliably
+        // autoplay — but the waiting-screen prebuffer normally routes round 1
+        // through the fast path above, leaving this as a rare fallback.
         const result = await selectNextSongDirect(gameCode, managerToken);
         songStart.rpcDone({
           roundNumber: result.round_number,
@@ -550,6 +597,10 @@ export function ManagerConsolePage() {
     } catch (err) {
       songStart.fail("select_next_song_failed");
       songStartRef.current = null;
+      // We already promoted + started the prebuffered song in-gesture, but the
+      // round failed to advance server-side. Stop it so the room isn't left
+      // hearing a song no round backs; the host can simply retry Next round.
+      if (committedPreloaded) activePlayer()?.stop();
       reportError(err);
     } finally {
       setBusy(false);
@@ -609,8 +660,11 @@ export function ManagerConsolePage() {
   // onReady for the standby player (B). It only ever plays after a swap, so it
   // doesn't gate the Start button or flush the first song — it just records
   // readiness so we don't prebuffer into a player that hasn't constructed yet.
+  // The state flip wakes the waiting-prebuffer effect so the first song warms
+  // up as soon as both the standby is ready and the game is in "waiting".
   function onPlayerBReady() {
     playersReadyRef.current.B = true;
+    setStandbyConstructed(true);
   }
 
   if (!managerToken) {
