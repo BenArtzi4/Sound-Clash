@@ -40,6 +40,35 @@ vi.mock("../hooks/useSelectNextSong", () => ({
   selectNextSongDirect: vi.fn(),
 }));
 
+// Telemetry wrapper: assert the headline metrics (song-start, score-start) are
+// wired without touching real Faro. startSongStart returns a spy handle so the
+// page's songStart.rpcDone(...) calls don't crash.
+const telemetry = vi.hoisted(() => {
+  const handle = {
+    rpcDone: vi.fn(),
+    loadIssued: vi.fn(),
+    playing: vi.fn(),
+    fail: vi.fn(),
+  };
+  return {
+    handle,
+    startSongStart: vi.fn(() => handle),
+    markScoreStart: vi.fn(),
+    failScore: vi.fn(),
+    log: vi.fn(),
+  };
+});
+vi.mock("../lib/telemetry", () => ({
+  startSongStart: telemetry.startSongStart,
+  markScoreStart: telemetry.markScoreStart,
+  failScore: telemetry.failScore,
+  log: telemetry.log,
+  // Also consumed by useGameChannel, which the page renders.
+  recordFanout: vi.fn(),
+  resolveBuzzE2E: vi.fn(),
+  resolveScoreE2E: vi.fn(),
+}));
+
 interface MockHandle {
   loadVideoById: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
@@ -101,6 +130,15 @@ beforeEach(() => {
   vi.mocked(releaseBuzzLockDirect).mockReset();
   vi.mocked(awardBonus).mockReset();
   vi.mocked(endGame).mockReset();
+  // Re-establish the telemetry handle impl (afterEach's clearAllMocks drops it).
+  telemetry.startSongStart.mockReset();
+  telemetry.startSongStart.mockImplementation(() => telemetry.handle);
+  telemetry.handle.rpcDone.mockClear();
+  telemetry.handle.loadIssued.mockClear();
+  telemetry.handle.playing.mockClear();
+  telemetry.handle.fail.mockClear();
+  telemetry.markScoreStart.mockClear();
+  telemetry.failScore.mockClear();
 });
 
 afterEach(() => {
@@ -199,6 +237,67 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText("Wayne's World")).toBeInTheDocument());
     // Soundtrack rounds: show name is the only label; no "from X" subline.
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
+  });
+
+  it("opens a song-start span and reports rpcDone when Start is pressed", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting" }),
+      teams: [],
+      rounds: [],
+    });
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      round_number: 1,
+      song: {
+        id: "s1",
+        title: "T",
+        artist: "A",
+        youtube_id: "abcdefghijk",
+        start_time: 0,
+        is_soundtrack: false,
+      },
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start game/i }));
+    expect(telemetry.startSongStart).toHaveBeenCalledWith({ game_code: "ABCDEF" });
+    await waitFor(() =>
+      expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
+        expect.objectContaining({ roundNumber: 1, songId: "s1", youtubeId: "abcdefghijk" }),
+      ),
+    );
+  });
+
+  it("marks a score-start span when a correct answer is scored", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 10,
+      team_total_score: 10,
+      title_claimed_by: "t1",
+      artist_claimed_by: null,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-title"));
+    expect(telemetry.markScoreStart).toHaveBeenCalledWith("ABCDEF", "r1", "title");
   });
 
   it("score buttons enable only when a team is buzzed", async () => {
