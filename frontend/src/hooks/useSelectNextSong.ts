@@ -11,6 +11,7 @@
 // click-to-feedback gap is ~10ms.
 
 import { supabase } from "../lib/supabase";
+import { tracedRpc } from "../lib/telemetry";
 import { RpcError } from "./useManagerActions";
 import type { SelectSongResponse } from "../lib/types";
 
@@ -30,14 +31,16 @@ export async function selectNextSongDirect(
   managerToken: string,
   songId?: string,
 ): Promise<SelectSongResponse> {
-  const { data, error } = await supabase.rpc("select_next_song", {
-    p_game_code: gameCode,
-    p_manager_token: managerToken,
-    // null vs undefined matters: PostgREST drops undefined-valued keys, which
-    // would route the call to a 2-arg overload that doesn't exist. Always
-    // send p_song_id explicitly so we hit the 3-arg signature.
-    p_song_id: songId ?? null,
-  });
+  const { data, error } = await tracedRpc("select_next_song", { game_code: gameCode }, () =>
+    supabase.rpc("select_next_song", {
+      p_game_code: gameCode,
+      p_manager_token: managerToken,
+      // null vs undefined matters: PostgREST drops undefined-valued keys, which
+      // would route the call to a 2-arg overload that doesn't exist. Always
+      // send p_song_id explicitly so we hit the 3-arg signature.
+      p_song_id: songId ?? null,
+    }),
+  );
   if (error) {
     throw new RpcError(error.message, error.code);
   }

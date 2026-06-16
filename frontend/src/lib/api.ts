@@ -1,4 +1,5 @@
 import { env } from "./env";
+import { tracedFetch } from "./telemetry";
 import type {
   ApiErrorBody,
   AwardBonusRequest,
@@ -33,6 +34,18 @@ interface RequestOptions {
   body?: unknown;
 }
 
+// Collapse per-request identifiers (game codes, team/song ids, query strings)
+// to placeholders so the telemetry span's `http.route` groups by endpoint
+// rather than fragmenting into one series per game.
+function normalizeRoute(method: string, path: string): string {
+  const route = path
+    .replace(/\?.*$/, "")
+    .replace(/\/games\/[^/]+/, "/games/:code")
+    .replace(/\/teams\/[^/]+/, "/teams/:id")
+    .replace(/\/admin\/songs\/[^/]+/, "/admin/songs/:id");
+  return `${method} ${route}`;
+}
+
 async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
   const isFormData = typeof FormData !== "undefined" && opts.body instanceof FormData;
@@ -55,11 +68,19 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
     body = JSON.stringify(opts.body);
   }
 
-  const response = await fetch(`${env.VITE_API_URL}${path}`, {
-    method,
-    headers,
-    body,
-  });
+  const doFetch = (): Promise<Response> =>
+    fetch(`${env.VITE_API_URL}${path}`, {
+      method,
+      headers,
+      body,
+    });
+  // Trace every REST call except the frequent /health warm-up pings (they'd
+  // drown out the meaningful create/join/bonus/end latencies). The route is
+  // id-normalized so per-game codes don't explode span cardinality.
+  const response =
+    path === "/health"
+      ? await doFetch()
+      : await tracedFetch(method, normalizeRoute(method, path), doFetch);
 
   if (response.status === 204) {
     return undefined as T;

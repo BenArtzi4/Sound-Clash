@@ -19,6 +19,8 @@
     "test:e2e": "cd ../tests/e2e && npx playwright test"
   },
   "dependencies": {
+    "@grafana/faro-web-sdk": "^2.7.1",
+    "@grafana/faro-web-tracing": "^2.7.1",
     "@sentry/react": "^8.40.0",
     "@supabase/supabase-js": "^2.46.0",
     "@types/qrcode": "^1.5.6",

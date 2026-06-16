@@ -6,6 +6,7 @@
 // Frankfurt -> back) to ~150ms (browser -> Supabase direct).
 
 import { supabase } from "../lib/supabase";
+import { tracedRpc } from "../lib/telemetry";
 import type { AttemptResponse } from "../lib/types";
 
 const TITLE_POINTS = 10;
@@ -45,14 +46,16 @@ export async function awardAttemptDirect(
   roundId: string,
   flags: AttemptFlags,
 ): Promise<AttemptResponse> {
-  const { data, error } = await supabase.rpc("award_attempt", {
-    p_game_code: gameCode,
-    p_round_id: roundId,
-    p_title: flags.title_correct ? TITLE_POINTS : 0,
-    p_artist: flags.artist_correct ? ARTIST_POINTS : 0,
-    p_wrong_buzz: flags.wrong_buzz ? WRONG_BUZZ_PENALTY : 0,
-    p_manager_token: managerToken,
-  });
+  const { data, error } = await tracedRpc("award_attempt", { game_code: gameCode }, () =>
+    supabase.rpc("award_attempt", {
+      p_game_code: gameCode,
+      p_round_id: roundId,
+      p_title: flags.title_correct ? TITLE_POINTS : 0,
+      p_artist: flags.artist_correct ? ARTIST_POINTS : 0,
+      p_wrong_buzz: flags.wrong_buzz ? WRONG_BUZZ_PENALTY : 0,
+      p_manager_token: managerToken,
+    }),
+  );
   if (error) {
     throw new RpcError(error.message, error.code);
   }
@@ -72,10 +75,12 @@ export async function awardAttemptDirect(
 }
 
 export async function releaseBuzzLockDirect(gameCode: string, managerToken: string): Promise<void> {
-  const { error } = await supabase.rpc("release_buzz_lock", {
-    p_game_code: gameCode,
-    p_manager_token: managerToken,
-  });
+  const { error } = await tracedRpc("release_buzz_lock", { game_code: gameCode }, () =>
+    supabase.rpc("release_buzz_lock", {
+      p_game_code: gameCode,
+      p_manager_token: managerToken,
+    }),
+  );
   if (error) {
     throw new RpcError(error.message, error.code);
   }

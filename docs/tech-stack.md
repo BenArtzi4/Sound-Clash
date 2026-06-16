@@ -13,7 +13,8 @@ For quota analysis (capacity in games/month), see `free-tier-budget.md`. For why
 | Frontend hosting | Cloudflare Pages | Unlimited bandwidth, 500 builds/mo |
 | DNS | Cloudflare | Free; existing |
 | CI/CD | GitHub Actions | Unlimited for public repos |
-| Error tracking | Sentry | 5,000 errors/mo, 10k performance events |
+| Error tracking | Sentry | 5,000 errors/mo (errors only; tracing off) |
+| Latency observability | Grafana Cloud (Faro + OTel) | ~50 GB traces + 50 GB logs/mo, 14-day retention |
 | Render keepalive | cron-job.org | 50 cron jobs |
 | Domain | Namecheap (existing) | $12/yr (only paid item) |
 
@@ -174,8 +175,11 @@ GitHub Actions is **unlimited minutes for public repos**, 2,000/mo for private. 
 
 | Layer | What's tracked |
 |---|---|
-| Frontend (browser) | Unhandled errors, React error boundaries, `buzz_in` RPC duration as a custom transaction |
-| Backend (FastAPI) | Unhandled exceptions, slow RPC calls (>1s), 5xx responses |
+| Frontend (browser) | Unhandled errors, React error boundaries |
+| Backend (FastAPI) | Unhandled exceptions, 5xx responses |
+
+Sentry is **errors only** (`tracesSampleRate: 0` / `traces_sample_rate=0.0`).
+Latency tracing lives in Grafana Cloud — see §7.5.
 
 ### What we DON'T send
 
@@ -183,6 +187,41 @@ GitHub Actions is **unlimited minutes for public repos**, 2,000/mo for private. 
 - Team names (user-supplied; could be inappropriate; sanitized via `beforeSend` hook)
 - Admin passwords (scrubbed by header filters)
 - PII (none collected anyway)
+
+## 7.5 Latency Observability: Grafana Cloud + OpenTelemetry
+
+**Logs + distributed traces for "how long did X take?" — separate from Sentry
+(errors).** Chosen for a much larger free tier (~50 GB traces/logs vs Sentry's
+10k spans) and because it's OpenTelemetry-native (no vendor lock-in). Queryable
+by the maintainer in Grafana Explore and by Claude via the Grafana MCP.
+
+### Data flow
+
+- **Frontend → Grafana Faro Web SDK → Faro collector → Tempo (traces) + Loki (logs).**
+  Faro is Grafana's OTel-based RUM SDK; its collector endpoint is browser-safe
+  (app-key in the URL), so no write credential ships in the bundle. Auto fetch/XHR
+  instrumentation is **disabled** — we trace manually (`frontend/src/lib/telemetry.ts`)
+  so nothing ever injects a `traceparent` header into a cross-origin Supabase RPC
+  (which would CORS-break the <200 ms buzzer path).
+- **Backend → OpenTelemetry Python → Grafana Cloud OTLP gateway (server-side
+  token) → Tempo/Loki** (`backend/app/middleware/otel.py`; FastAPI + httpx
+  auto-instrumentation). Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+
+### What we measure (custom spans)
+
+| Span (`op`) | Window |
+|---|---|
+| `game.song_start` (+ children) | "Next round" click → audio actually PLAYING |
+| `game.buzz.e2e` | pointerdown → buzz lock observed in Realtime (won/lost_race) |
+| `game.score.e2e` | scoring click → `game_rounds` UPDATE observed in Realtime |
+| `db.rpc` | each Supabase PostgREST RPC round-trip (`rpc.name` attribute) |
+| `http.client` | each REST call to FastAPI (id-normalized route) |
+| `game.player_init` | YouTube IFrame API load → player ready |
+| `realtime_fanout` (event) | Postgres commit → client receipt, per table |
+
+The hot path is browser→Supabase direct, so the signal is almost entirely
+client-side. Sampling is per-game (`SAMPLE_RATE` in `telemetry.ts`); Grafana's
+free tier has ample headroom. Credentials + rotation: `runbook.md` §3.6.
 
 ## 8. Render Keepalive: cron-job.org
 

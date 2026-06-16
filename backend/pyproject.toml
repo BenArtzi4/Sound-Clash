@@ -18,6 +18,12 @@ dependencies = [
     "slowapi>=0.1.9",
     "sentry-sdk[fastapi]>=2.18",
     "python-dotenv>=1.0",
+    # OpenTelemetry → Grafana Cloud (Tempo/Loki). Tracing is opt-in at runtime
+    # via OTEL_EXPORTER_OTLP_ENDPOINT; see app/middleware/otel.py.
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp-proto-http>=1.27",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "opentelemetry-instrumentation-httpx>=0.48b0",
 ]
 
 [project.optional-dependencies]
