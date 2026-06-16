@@ -8,6 +8,10 @@ interface FakeYTPlayer {
   pauseVideo: ReturnType<typeof vi.fn>;
   playVideo: ReturnType<typeof vi.fn>;
   stopVideo: ReturnType<typeof vi.fn>;
+  mute: ReturnType<typeof vi.fn>;
+  unMute: ReturnType<typeof vi.fn>;
+  seekTo: ReturnType<typeof vi.fn>;
+  getPlayerState: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
 }
 
@@ -36,6 +40,10 @@ function installFakeYT() {
       pauseVideo: vi.fn(),
       playVideo: vi.fn(),
       stopVideo: vi.fn(),
+      mute: vi.fn(),
+      unMute: vi.fn(),
+      seekTo: vi.fn(),
+      getPlayerState: vi.fn(() => 1),
       destroy: vi.fn(),
     };
     lastConfig = config;
@@ -265,6 +273,96 @@ describe("YouTubePlayer", () => {
       lastConfig?.events?.onError?.({ data: 150 });
     });
     expect(onError).toHaveBeenCalledWith(150);
+  });
+
+  it("uses a custom testId on the wrapper when provided", async () => {
+    installFakeYT();
+    const { container } = render(<YouTubePlayer noCover testId="youtube-player-preload" />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastPlayer).not.toBeNull());
+    expect(container.querySelector('[data-testid="youtube-player-preload"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="youtube-player"]')).toBeNull();
+  });
+
+  it("prebuffer mutes, loads, and freezes the video on PLAYING without firing onPlaying", async () => {
+    installFakeYT();
+    const onPlaying = vi.fn();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container } = render(<YouTubePlayer ref={ref} noCover onPlaying={onPlaying} />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+
+    act(() => {
+      ref.current?.prebuffer("nextvideoid", 30);
+    });
+    expect(lastPlayer?.mute).toHaveBeenCalled();
+    expect(lastPlayer?.loadVideoById).toHaveBeenCalledWith({
+      videoId: "nextvideoid",
+      startSeconds: 30,
+    });
+
+    // The silently-buffering player reaches PLAYING: it must be paused (frozen,
+    // buffered) and must NOT resolve the song-start span.
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data: 1 });
+    });
+    expect(lastPlayer?.pauseVideo).toHaveBeenCalled();
+    expect(onPlaying).not.toHaveBeenCalled();
+  });
+
+  it("commitPrebuffered seeks, unmutes, plays, and re-arms onPlaying for the resume", async () => {
+    installFakeYT();
+    const onPlaying = vi.fn();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container } = render(<YouTubePlayer ref={ref} noCover onPlaying={onPlaying} />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+
+    // Prebuffer + freeze.
+    act(() => {
+      ref.current?.prebuffer("nextvideoid", 30);
+    });
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data: 1 });
+    });
+    expect(onPlaying).not.toHaveBeenCalled();
+
+    // Host clicks Next round -> promote the buffered video to live playback.
+    act(() => {
+      ref.current?.commitPrebuffered(30);
+    });
+    expect(lastPlayer?.seekTo).toHaveBeenCalledWith(30, true);
+    expect(lastPlayer?.unMute).toHaveBeenCalled();
+    expect(lastPlayer?.playVideo).toHaveBeenCalled();
+
+    // The resume reaches PLAYING: now onPlaying fires exactly once.
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data: 1 });
+    });
+    expect(onPlaying).toHaveBeenCalledTimes(1);
+    expect(onPlaying).toHaveBeenCalledWith("statechange");
+  });
+
+  it("loadVideoById unmutes (recovering a player previously used as a muted prebuffer)", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container } = render(<YouTubePlayer ref={ref} noCover />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastPlayer).not.toBeNull());
+    act(() => {
+      ref.current?.prebuffer("a", 0);
+    });
+    act(() => {
+      ref.current?.loadVideoById("b", 0);
+    });
+    expect(lastPlayer?.unMute).toHaveBeenCalled();
+    expect(lastPlayer?.loadVideoById).toHaveBeenLastCalledWith({ videoId: "b", startSeconds: 0 });
   });
 
   it("loads the iframe API script when YT is not yet on window", async () => {

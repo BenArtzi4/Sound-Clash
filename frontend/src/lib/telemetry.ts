@@ -196,8 +196,18 @@ export async function tracedFetch<T extends Response>(
 // ---------------------------------------------------------------------------
 
 export interface SongStartHandle {
-  /** Call when select_next_song resolves; supplies the round/song identity. */
-  rpcDone(info: { roundNumber?: number; songId?: string; youtubeId?: string }): void;
+  /**
+   * Call when select_next_song resolves; supplies the round/song identity.
+   * `preloaded` records whether this round's video was prebuffered into the
+   * standby player (the double-buffer preload) — it segments the
+   * load_to_playing p50/p95 into cold vs warm starts in Tempo.
+   */
+  rpcDone(info: {
+    roundNumber?: number;
+    songId?: string;
+    youtubeId?: string;
+    preloaded?: boolean;
+  }): void;
   /** Call right after loadVideoById is issued to the player. */
   loadIssued(): void;
   /** Call when the player reaches PLAYING (or the load times out). Ends all. */
@@ -232,6 +242,7 @@ export function startSongStart(attrs: { game_code: string }): SongStartHandle {
         round_number: info.roundNumber,
         song_id: info.songId,
         youtube_id: info.youtubeId,
+        preloaded: info.preloaded,
       });
       closeChild();
       child = startChild(SPAN_OPS.songRpcToLoad, parent);

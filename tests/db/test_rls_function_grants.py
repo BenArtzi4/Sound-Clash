@@ -2,14 +2,14 @@
 
 Spec: docs/security-rls.md §2.
 
-Four RPCs are callable by anon -- ``buzz_in`` (since migration 006),
+Five RPCs are callable by anon -- ``buzz_in`` (since migration 006),
 ``award_attempt`` and ``release_buzz_lock`` (as of migration 021, with the
-legacy un-tokenised overloads retired by migration 023), and
-``select_next_song`` (as of migration 022). Each does its own in-function
-manager-token check before performing any work, so the function-level
-EXECUTE grant is safe. The remaining backend-only RPCs -- ``start_round``,
-``end_round``, ``award_bonus``, ``end_game``, ``cleanup_expired_games`` --
-must still reject anon.
+legacy un-tokenised overloads retired by migration 023), ``select_next_song``
+(as of migration 022), and ``peek_next_song`` (the read-only prebuffer probe,
+as of migration 029). Each does its own in-function manager-token check before
+performing any work, so the function-level EXECUTE grant is safe. The remaining
+backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
+``end_game``, ``cleanup_expired_games`` -- must still reject anon.
 """
 
 from __future__ import annotations
@@ -96,6 +96,25 @@ async def test_anon_can_execute_select_next_song_but_token_check_runs(
     with pytest.raises(asyncpg.PostgresError) as exc:
         await anon_conn.execute(
             "SELECT select_next_song($1, $2, NULL::uuid)",
+            "ABCDEF",
+            uuid.uuid4(),
+        )
+    assert not isinstance(exc.value, asyncpg.InsufficientPrivilegeError)
+    assert exc.value.sqlstate in ("P0002", "28000")
+
+
+@pytest.mark.asyncio
+async def test_anon_can_execute_peek_next_song_but_token_check_runs(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 029: anon CAN call peek_next_song (the read-only prebuffer
+    probe), but the in-function manager_token check rejects forged calls. The
+    error must be ``manager_token_required`` (sqlstate 28000) or, if the
+    game-code lookup fires first, ``game_not_found`` (P0002) -- either way the
+    function ran, it wasn't blocked at the grant gate."""
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await anon_conn.execute(
+            "SELECT peek_next_song($1, $2)",
             "ABCDEF",
             uuid.uuid4(),
         )
@@ -251,6 +270,12 @@ async def test_legacy_overloads_were_dropped(
         (
             "select_next_song",
             "p_game_code text, p_manager_token uuid, p_song_id uuid",
+        ),
+        # peek_next_song: read-only prebuffer probe added in migration 029.
+        # Same anon-grant + in-function token-check model as select_next_song.
+        (
+            "peek_next_song",
+            "p_game_code text, p_manager_token uuid",
         ),
     ],
 )

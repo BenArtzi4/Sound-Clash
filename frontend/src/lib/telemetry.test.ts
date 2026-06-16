@@ -193,6 +193,18 @@ describe("telemetry (enabled)", () => {
     expect(() => song.playing("poll")).not.toThrow();
   });
 
+  it("startSongStart records the preloaded flag on the parent span", async () => {
+    await enable();
+    const i = spanCount();
+    const song = tele.startSongStart({ game_code: "ABC" });
+    song.rpcDone({ roundNumber: 2, songId: "s1", youtubeId: "yt", preloaded: true });
+    song.loadIssued();
+    song.playing("statechange");
+    // The parent span is the first one startSongStart opened.
+    const parent = spansFrom(i)[0];
+    expect(parent.setAttribute).toHaveBeenCalledWith("preloaded", true);
+  });
+
   it("startSongStart.fail errors the span", async () => {
     await enable();
     const i = spanCount();

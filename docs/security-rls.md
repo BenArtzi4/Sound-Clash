@@ -49,13 +49,14 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `award_attempt`         | ✅ (token-gated: validates `p_manager_token` in-body) | ✅ |
 | `release_buzz_lock`     | ✅ (token-gated: same as above) | ✅ |
 | `select_next_song`      | ✅ (token-gated: same as above; added in migration 022) | ✅ |
+| `peek_next_song`        | ✅ (token-gated, read-only prebuffer probe; added in migration 029) | ✅ |
 | `start_round`           | ❌ | ✅ |
 | `end_round`             | ❌ | ✅ |
 | `award_bonus`           | ❌ | ✅ |
 | `end_game`              | ❌ | ✅ |
 | `cleanup_expired_games` | ❌ | ✅ (called by `pg_cron`, not FastAPI) |
 
-Four RPCs are reachable from the browser: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), and `select_next_song` (the "Next round" / "Start game" hot path, since migration 022). All four perform their auth check inside the SECURITY DEFINER function body. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
+Five RPCs are reachable from the browser: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), and `peek_next_song` (the read-only prebuffer probe, since migration 029). All five perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
 
 ### Why anon can SELECT any game
 

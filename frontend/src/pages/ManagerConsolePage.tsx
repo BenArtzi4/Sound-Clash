@@ -12,6 +12,7 @@ import { usePlayerReady } from "../hooks/usePlayerReady";
 import { ApiError, awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
+import { peekNextSongDirect, type PeekedSong } from "../hooks/usePeekNextSong";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
 import {
   failScore,
@@ -31,7 +32,36 @@ export function ManagerConsolePage() {
   const managerToken = useMemo(() => getManagerToken(gameCode), [gameCode]);
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
-  const playerRef = useRef<YouTubePlayerHandle | null>(null);
+
+  // Double-buffer: two persistent YouTube players overlaid in one box. One is
+  // the live "active" player (audible, on top); the other is the "standby" that
+  // silently prebuffers the NEXT song during the current round so that clicking
+  // Next round resumes an already-downloaded video (~tens of ms) instead of a
+  // cold YouTube load (~1.2s). They swap roles on commit. See
+  // db/migrations/029_peek_next_song.sql for the read-only picker that tells us
+  // which song to prebuffer. `activeKey` (state) drives opacity/testId; a
+  // mirror ref lets the click handlers and player callbacks read it
+  // synchronously without going stale.
+  const playerARef = useRef<YouTubePlayerHandle | null>(null);
+  const playerBRef = useRef<YouTubePlayerHandle | null>(null);
+  const [activeKey, setActiveKey] = useState<"A" | "B">("A");
+  const activeKeyRef = useRef<"A" | "B">("A");
+  const playersReadyRef = useRef<{ A: boolean; B: boolean }>({ A: false, B: false });
+  const activePlayer = (): YouTubePlayerHandle | null =>
+    activeKeyRef.current === "A" ? playerARef.current : playerBRef.current;
+  const standbyPlayer = (): YouTubePlayerHandle | null =>
+    activeKeyRef.current === "A" ? playerBRef.current : playerARef.current;
+  const standbyReady = (): boolean =>
+    activeKeyRef.current === "A" ? playersReadyRef.current.B : playersReadyRef.current.A;
+
+  // The song currently prebuffered into the standby player (or null). Set after
+  // a successful peek+prebuffer; consumed (and cleared) when Next round commits
+  // it. `preloadInFlightRef` dedupes concurrent peeks; `preloadEpochRef` is
+  // bumped on every Next round / swap so a peek that resolves after the host has
+  // already moved on is discarded instead of buffering into the wrong player.
+  const preloadRef = useRef<PeekedSong | null>(null);
+  const preloadInFlightRef = useRef(false);
+  const preloadEpochRef = useRef(0);
   // Song-start measurement: the handle is opened on a "Next round" click and
   // resolved when the player reaches PLAYING (or the timeout fires). It crosses
   // the click handler → loadVideoById → YouTubePlayer.onPlaying boundary, so it
@@ -79,10 +109,12 @@ export function ManagerConsolePage() {
   const continueInFlightRef = useRef(false);
   const nextRoundInFlightRef = useRef(false);
 
-  // When we get the buzz lock signal, pause playback.
+  // When we get the buzz lock signal, pause playback on the live player.
   useEffect(() => {
     if (state?.game.buzzed_team_id != null) {
-      playerRef.current?.pause();
+      // activePlayer() reads activeKeyRef synchronously, so it always pauses
+      // whichever player is live regardless of swaps.
+      activePlayer()?.pause();
     }
   }, [state?.game.buzzed_team_id]);
 
@@ -137,7 +169,7 @@ export function ManagerConsolePage() {
       const song: Song = { ...base, is_soundtrack: deriveIsSoundtrack(song_genres) };
       setCurrentSong(song);
       if (playerReady) {
-        playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
+        activePlayer()?.loadVideoById(song.youtube_id, song.start_time);
       } else {
         player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
       }
@@ -201,12 +233,45 @@ export function ManagerConsolePage() {
     if (player.ready) {
       songStartRef.current?.loadIssued();
       armSongStartTimeout();
-      playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
+      activePlayer()?.loadVideoById(song.youtube_id, song.start_time);
     } else {
       // Player not ready yet (first song): the load is deferred to
       // onPlayerReady, which issues loadVideoById and marks loadIssued there.
       player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
     }
+  }
+
+  // Prebuffer the next song into the standby player so the upcoming Next round
+  // resumes an already-downloaded video. Triggered once the current round's
+  // song is actually PLAYING (so it never contends with the current song's
+  // critical first-play). Read-only `peek_next_song` tells us which song
+  // select_next_song would pick; on the click we commit that exact id. Best-
+  // effort throughout: a peek/prebuffer failure must never disturb the round.
+  function maybePreloadNext() {
+    if (!managerToken) return;
+    if (state?.game.status !== "playing") return;
+    if (!state.currentRound?.id) return;
+    if (preloadRef.current !== null || preloadInFlightRef.current) return;
+    if (!standbyReady()) return;
+    preloadInFlightRef.current = true;
+    const epoch = preloadEpochRef.current;
+    void (async () => {
+      try {
+        const peeked = await peekNextSongDirect(gameCode, managerToken);
+        // A Next round / swap happened while we were peeking: discard so we
+        // don't mute or overwrite what is now the live player.
+        if (epoch !== preloadEpochRef.current) return;
+        if (!peeked) return; // pool exhausted -> nothing to prebuffer
+        preloadRef.current = peeked;
+        standbyPlayer()?.prebuffer(peeked.youtube_id, peeked.start_time);
+      } catch (err) {
+        log("warn", "preload_peek_failed", {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        preloadInFlightRef.current = false;
+      }
+    })();
   }
 
   // Bound the song-start span so a video that never reaches PLAYING (autoplay
@@ -220,7 +285,9 @@ export function ManagerConsolePage() {
     }, 8000);
   }
 
-  // Resolve the open song-start span when the player actually starts playing.
+  // Resolve the open song-start span when the live player actually starts
+  // playing, then prebuffer the next song into the standby (now that the
+  // current song is up, there's idle time and no contention with its start).
   function handlePlayerPlaying(detection: "statechange" | "poll") {
     if (songStartTimeoutRef.current !== null) {
       window.clearTimeout(songStartTimeoutRef.current);
@@ -228,6 +295,22 @@ export function ManagerConsolePage() {
     }
     songStartRef.current?.playing(detection);
     songStartRef.current = null;
+    maybePreloadNext();
+  }
+
+  // A YouTube error on the standby/preload buffer must not alarm the host (the
+  // live song is fine); just abandon the preload so Next round falls back to a
+  // fresh random pick. An error on the live player surfaces as before.
+  function handlePlayerError(key: "A" | "B", code: number) {
+    if (key === activeKeyRef.current) {
+      log("warn", "yt_player_error", { code: String(code) });
+      toast("Video unavailable — click Next round to pick a different song.", {
+        variant: "error",
+      });
+    } else {
+      log("warn", "yt_preload_error", { code: String(code) });
+      preloadRef.current = null;
+    }
   }
 
   // Apply an attempt via the direct browser -> Supabase RPC. Migration 021
@@ -362,7 +445,7 @@ export function ManagerConsolePage() {
     setBusy(true);
     try {
       await releaseBuzzLockDirect(gameCode, managerToken);
-      playerRef.current?.play();
+      activePlayer()?.play();
     } catch (err) {
       reportError(err);
     } finally {
@@ -396,7 +479,7 @@ export function ManagerConsolePage() {
         artist_correct: false,
         wrong_buzz: true,
       });
-      playerRef.current?.play();
+      activePlayer()?.play();
     } catch (err) {
       setPendingWrong(null);
       reportError(err);
@@ -410,27 +493,60 @@ export function ManagerConsolePage() {
     if (nextRoundInFlightRef.current) return;
     if (busy || !managerToken) return;
     nextRoundInFlightRef.current = true;
+    // Bump the preload epoch so any in-flight peek is discarded rather than
+    // buffering into a player we're about to repurpose.
+    preloadEpochRef.current += 1;
     // Open the song-start span at the click instant (before the toast) so it
     // captures click → RPC → load → audio actually playing.
     const songStart = startSongStart({ game_code: gameCode });
     songStartRef.current = songStart;
-    // Optimistic toast confirms the click immediately. The single direct RPC
-    // (migration 022 -> select_next_song) replaces what used to be two
-    // chained Render hops (POST /end-round + POST /select-song), so the
-    // perceived latency is ~150ms instead of ~500-900ms. start_round, called
-    // inside the function, already closes any still-open prior round, so we
-    // don't need a separate end_round call.
+    // Optimistic toast confirms the click immediately.
     toast("Loading next round...", { variant: "info" });
     setBusy(true);
+    // Snapshot + clear the prebuffered song now so a late preload can't reuse it.
+    const preloaded = preloadRef.current;
+    preloadRef.current = null;
     try {
-      const result = await selectNextSongDirect(gameCode, managerToken);
-      songStart.rpcDone({
-        roundNumber: result.round_number,
-        songId: result.song.id,
-        youtubeId: result.song.youtube_id,
-      });
-      setCurrentSong(result.song);
-      await loadSongIntoPlayer(result.song);
+      if (preloaded) {
+        // Fast path: commit the EXACT song we prebuffered (manual-pick arg), so
+        // the buffered video and the started round can never disagree, then
+        // promote the standby (an already-downloaded resume, ~tens of ms).
+        const result = await selectNextSongDirect(gameCode, managerToken, preloaded.song_id);
+        songStart.rpcDone({
+          roundNumber: result.round_number,
+          songId: result.song.id,
+          youtubeId: result.song.youtube_id,
+          preloaded: true,
+        });
+        setCurrentSong(result.song);
+        if (result.song.id === preloaded.song_id) {
+          songStart.loadIssued();
+          armSongStartTimeout();
+          const promoted = standbyPlayer();
+          const demoted = activePlayer();
+          promoted?.commitPrebuffered(result.song.start_time);
+          demoted?.stop();
+          const nextKey = activeKeyRef.current === "A" ? "B" : "A";
+          activeKeyRef.current = nextKey;
+          setActiveKey(nextKey);
+        } else {
+          // Defensive: committed something other than what we buffered (should
+          // not happen) -> cold-load on the live player instead of swapping.
+          await loadSongIntoPlayer(result.song);
+        }
+      } else {
+        // Slow path (first round, preload missed, or pool was empty at peek
+        // time): random pick + cold load on the live player.
+        const result = await selectNextSongDirect(gameCode, managerToken);
+        songStart.rpcDone({
+          roundNumber: result.round_number,
+          songId: result.song.id,
+          youtubeId: result.song.youtube_id,
+          preloaded: false,
+        });
+        setCurrentSong(result.song);
+        await loadSongIntoPlayer(result.song);
+      }
     } catch (err) {
       songStart.fail("select_next_song_failed");
       songStartRef.current = null;
@@ -465,7 +581,8 @@ export function ManagerConsolePage() {
     setBusy(true);
     try {
       await endGame(gameCode, managerToken);
-      playerRef.current?.stop();
+      playerARef.current?.stop();
+      playerBRef.current?.stop();
       clearManagerToken(gameCode);
     } catch (err) {
       reportError(err);
@@ -474,7 +591,10 @@ export function ManagerConsolePage() {
     }
   }
 
+  // onReady for the initially-active player (A). Drives the reactive ready gate
+  // (Start button) and flushes any deferred first song into the live player.
   function onPlayerReady() {
+    playersReadyRef.current.A = true;
     player.setReady();
     const queued = player.flushPendingSong();
     if (queued) {
@@ -482,8 +602,15 @@ export function ManagerConsolePage() {
       // song-start span's load_to_playing child measures from the real load.
       songStartRef.current?.loadIssued();
       armSongStartTimeout();
-      playerRef.current?.loadVideoById(queued.youtube_id, queued.start_time);
+      activePlayer()?.loadVideoById(queued.youtube_id, queued.start_time);
     }
+  }
+
+  // onReady for the standby player (B). It only ever plays after a swap, so it
+  // doesn't gate the Start button or flush the first song — it just records
+  // readiness so we don't prebuffer into a player that hasn't constructed yet.
+  function onPlayerBReady() {
+    playersReadyRef.current.B = true;
   }
 
   if (!managerToken) {
@@ -606,18 +733,39 @@ export function ManagerConsolePage() {
       </header>
 
       <div className={styles.column}>
-        <YouTubePlayer
-          ref={playerRef}
-          noCover
-          onReady={onPlayerReady}
-          onPlaying={handlePlayerPlaying}
-          onError={(code) => {
-            log("warn", "yt_player_error", { code: String(code) });
-            toast("Video unavailable — click Next round to pick a different song.", {
-              variant: "error",
-            });
-          }}
-        />
+        {/* Two overlaid players: the active one (audible, on top) and the
+            standby that silently prebuffers the next song. testId follows the
+            active player so E2E's strict youtube-player locators stay valid. */}
+        <div className={styles.playerStack}>
+          <div
+            className={`${styles.playerLayer} ${
+              activeKey === "A" ? styles.playerActive : styles.playerStandby
+            }`}
+          >
+            <YouTubePlayer
+              ref={playerARef}
+              noCover
+              testId={activeKey === "A" ? "youtube-player" : "youtube-player-preload"}
+              onReady={onPlayerReady}
+              onPlaying={handlePlayerPlaying}
+              onError={(code) => handlePlayerError("A", code)}
+            />
+          </div>
+          <div
+            className={`${styles.playerLayer} ${
+              activeKey === "B" ? styles.playerActive : styles.playerStandby
+            }`}
+          >
+            <YouTubePlayer
+              ref={playerBRef}
+              noCover
+              testId={activeKey === "B" ? "youtube-player" : "youtube-player-preload"}
+              onReady={onPlayerBReady}
+              onPlaying={handlePlayerPlaying}
+              onError={(code) => handlePlayerError("B", code)}
+            />
+          </div>
+        </div>
 
         <section className={styles.card}>
           {currentSong ? (
