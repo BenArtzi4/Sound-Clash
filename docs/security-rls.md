@@ -82,6 +82,24 @@ CREATE POLICY "anon_read_game_rounds"  ON game_rounds  FOR SELECT TO anon USING 
 
 No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all writes are denied by default.
 
+### Table grants
+
+```sql
+-- anon needs the base-table privilege before RLS even gates anything (it only
+-- ever SELECTs; the read policies above scope it). Migration 006.
+GRANT SELECT ON songs, genres, song_genres, active_games, game_teams, game_rounds TO anon;
+
+-- service_role bypasses RLS but STILL needs base-table privileges (Postgres
+-- checks GRANTs before RLS). Hosted Supabase auto-grants these on bootstrap, so
+-- prod has always worked; a migrations-only stack (the CI e2e `supabase start`)
+-- does not, so service_role table access 500s with `42501 permission denied`.
+-- Migration 030 grants them explicitly -- same "don't trust the auto-grant"
+-- stance as the function grants below. No-op in production.
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON songs, genres, song_genres, active_games, game_teams, game_rounds
+  TO service_role;
+```
+
 ### Function grants
 
 ```sql
