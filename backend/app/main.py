@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 from app import __version__
 from app.middleware import cors as cors_module
-from app.middleware import error_handler, sentry
+from app.middleware import error_handler, otel, sentry
 from app.middleware import rate_limit as rate_limit_module
 from app.routers import admin_songs, games, genres, health
 
@@ -26,6 +26,10 @@ def create_app() -> FastAPI:
     app.include_router(genres.router)
     app.include_router(games.router)
     app.include_router(admin_songs.router)
+
+    # Opt-in OpenTelemetry tracing; no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is
+    # set. Instrument after routers so all routes are wrapped.
+    otel.install(app)
     return app
 
 

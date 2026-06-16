@@ -13,6 +13,13 @@ import { ApiError, awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
+import {
+  failScore,
+  log,
+  markScoreStart,
+  startSongStart,
+  type SongStartHandle,
+} from "../lib/telemetry";
 import { supabase } from "../lib/supabase";
 import { deriveIsSoundtrack, type SongGenreSlugEmbed } from "../lib/soundtrack";
 import type { Song } from "../lib/types";
@@ -25,6 +32,12 @@ export function ManagerConsolePage() {
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
+  // Song-start measurement: the handle is opened on a "Next round" click and
+  // resolved when the player reaches PLAYING (or the timeout fires). It crosses
+  // the click handler → loadVideoById → YouTubePlayer.onPlaying boundary, so it
+  // lives in a ref rather than state.
+  const songStartRef = useRef<SongStartHandle | null>(null);
+  const songStartTimeoutRef = useRef<number | null>(null);
 
   // Keep the Render-hosted API warm while a game is running so the host's
   // occasional REST calls (Bonus / End game / Kick) and late team joins don't
@@ -174,18 +187,47 @@ export function ManagerConsolePage() {
         );
         return;
       }
+      log("error", "manager_rpc_failed", { message: err.message });
       toast(err.message, { variant: "error" });
       return;
     }
+    log("error", "manager_action_failed", {
+      message: err instanceof Error ? err.message : String(err),
+    });
     toast(err instanceof Error ? err.message : "Request failed", { variant: "error" });
   }
 
   async function loadSongIntoPlayer(song: Song) {
     if (player.ready) {
+      songStartRef.current?.loadIssued();
+      armSongStartTimeout();
       playerRef.current?.loadVideoById(song.youtube_id, song.start_time);
     } else {
+      // Player not ready yet (first song): the load is deferred to
+      // onPlayerReady, which issues loadVideoById and marks loadIssued there.
       player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
     }
+  }
+
+  // Bound the song-start span so a video that never reaches PLAYING (autoplay
+  // blocked, dead embed) is recorded as a timeout outlier rather than left open.
+  function armSongStartTimeout() {
+    if (songStartTimeoutRef.current !== null) window.clearTimeout(songStartTimeoutRef.current);
+    songStartTimeoutRef.current = window.setTimeout(() => {
+      songStartRef.current?.playing("timeout");
+      songStartRef.current = null;
+      songStartTimeoutRef.current = null;
+    }, 8000);
+  }
+
+  // Resolve the open song-start span when the player actually starts playing.
+  function handlePlayerPlaying(detection: "statechange" | "poll") {
+    if (songStartTimeoutRef.current !== null) {
+      window.clearTimeout(songStartTimeoutRef.current);
+      songStartTimeoutRef.current = null;
+    }
+    songStartRef.current?.playing(detection);
+    songStartRef.current = null;
   }
 
   // Apply an attempt via the direct browser -> Supabase RPC. Migration 021
@@ -226,6 +268,7 @@ export function ManagerConsolePage() {
     // flicker in the gap.
     setPendingTitle(roundId);
     setBusy(true);
+    markScoreStart(gameCode, roundId, "title");
     try {
       await applyAttempt(roundId, {
         title_correct: true,
@@ -233,6 +276,7 @@ export function ManagerConsolePage() {
         wrong_buzz: false,
       });
     } catch (err) {
+      failScore(roundId, "title");
       setPendingTitle(null);
       reportError(err);
     } finally {
@@ -251,6 +295,7 @@ export function ManagerConsolePage() {
     if (teamName) toast(`+5 to ${teamName}`, { variant: "success" });
     setPendingArtist(roundId);
     setBusy(true);
+    markScoreStart(gameCode, roundId, "artist");
     try {
       await applyAttempt(roundId, {
         title_correct: false,
@@ -258,6 +303,7 @@ export function ManagerConsolePage() {
         wrong_buzz: false,
       });
     } catch (err) {
+      failScore(roundId, "artist");
       setPendingArtist(null);
       reportError(err);
     } finally {
@@ -286,6 +332,7 @@ export function ManagerConsolePage() {
     setPendingTitle(roundId);
     setPendingArtist(roundId);
     setBusy(true);
+    markScoreStart(gameCode, roundId, "soundtrack");
     try {
       await applyAttempt(roundId, {
         title_correct: true,
@@ -293,6 +340,7 @@ export function ManagerConsolePage() {
         wrong_buzz: false,
       });
     } catch (err) {
+      failScore(roundId, "soundtrack");
       setPendingTitle(null);
       setPendingArtist(null);
       reportError(err);
@@ -362,6 +410,10 @@ export function ManagerConsolePage() {
     if (nextRoundInFlightRef.current) return;
     if (busy || !managerToken) return;
     nextRoundInFlightRef.current = true;
+    // Open the song-start span at the click instant (before the toast) so it
+    // captures click → RPC → load → audio actually playing.
+    const songStart = startSongStart({ game_code: gameCode });
+    songStartRef.current = songStart;
     // Optimistic toast confirms the click immediately. The single direct RPC
     // (migration 022 -> select_next_song) replaces what used to be two
     // chained Render hops (POST /end-round + POST /select-song), so the
@@ -372,9 +424,16 @@ export function ManagerConsolePage() {
     setBusy(true);
     try {
       const result = await selectNextSongDirect(gameCode, managerToken);
+      songStart.rpcDone({
+        roundNumber: result.round_number,
+        songId: result.song.id,
+        youtubeId: result.song.youtube_id,
+      });
       setCurrentSong(result.song);
       await loadSongIntoPlayer(result.song);
     } catch (err) {
+      songStart.fail("select_next_song_failed");
+      songStartRef.current = null;
       reportError(err);
     } finally {
       setBusy(false);
@@ -419,6 +478,10 @@ export function ManagerConsolePage() {
     player.setReady();
     const queued = player.flushPendingSong();
     if (queued) {
+      // This is the deferred first-song load; mark loadIssued here so the
+      // song-start span's load_to_playing child measures from the real load.
+      songStartRef.current?.loadIssued();
+      armSongStartTimeout();
       playerRef.current?.loadVideoById(queued.youtube_id, queued.start_time);
     }
   }
@@ -547,11 +610,13 @@ export function ManagerConsolePage() {
           ref={playerRef}
           noCover
           onReady={onPlayerReady}
-          onError={() =>
+          onPlaying={handlePlayerPlaying}
+          onError={(code) => {
+            log("warn", "yt_player_error", { code: String(code) });
             toast("Video unavailable — click Next round to pick a different song.", {
               variant: "error",
-            })
-          }
+            });
+          }}
         />
 
         <section className={styles.card}>

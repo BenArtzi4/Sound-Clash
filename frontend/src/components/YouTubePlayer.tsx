@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { startPlayerInit } from "../lib/telemetry";
 import styles from "./YouTubePlayer.module.css";
 
 export interface YouTubePlayerHandle {
@@ -23,6 +24,12 @@ interface Props {
   coverWhilePaused?: boolean;
   onReady?: () => void;
   onError?: (code: number) => void;
+  // Fired the first time the player reaches PLAYING after a loadVideoById. The
+  // YouTube IFrame API has no native "audio started" event, so we derive it
+  // from onStateChange (PLAYING) with a bounded getPlayerState poll as a
+  // fallback. Used to measure song-start latency; `detection` records which
+  // mechanism fired. Fires at most once per load.
+  onPlaying?: (detection: "statechange" | "poll") => void;
 }
 
 interface YTPlayer {
@@ -30,6 +37,7 @@ interface YTPlayer {
   pauseVideo: () => void;
   playVideo: () => void;
   stopVideo: () => void;
+  getPlayerState: () => number;
   destroy: () => void;
 }
 
@@ -41,10 +49,14 @@ interface YTStateChangeEvent {
   data: number;
 }
 
-// YT.PlayerState.ENDED. We don't import the namespace at runtime because the
-// IFrame API loads asynchronously; hard-coding the constant keeps the import
-// surface flat.
+// YT.PlayerState.ENDED / PLAYING. We don't import the namespace at runtime
+// because the IFrame API loads asynchronously; hard-coding the constants keeps
+// the import surface flat.
 const YT_STATE_ENDED = 0;
+const YT_STATE_PLAYING = 1;
+// getPlayerState poll cadence + cap for the PLAYING fallback (~6s).
+const PLAY_POLL_MS = 250;
+const PLAY_POLL_MAX_TICKS = 24;
 
 interface YTNamespace {
   Player: new (
@@ -106,7 +118,7 @@ const EMBED_SRC =
   }).toString();
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
-  { noCover, hideOverlay, coverWhilePaused, onReady, onError },
+  { noCover, hideOverlay, coverWhilePaused, onReady, onError, onPlaying },
   ref,
 ) {
   const containerRef = useRef<HTMLIFrameElement | null>(null);
@@ -125,10 +137,20 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // hammered (~10 req/s, hundreds of MB/min).
   const onReadyRef = useRef(onReady);
   const onErrorRef = useRef(onError);
+  const onPlayingRef = useRef(onPlaying);
   useEffect(() => {
     onReadyRef.current = onReady;
     onErrorRef.current = onError;
+    onPlayingRef.current = onPlaying;
   });
+
+  // PLAYING-detection state for the song-start measurement. `playingFiredRef`
+  // dedupes the two sources (onStateChange + poll) so onPlaying fires once per
+  // load; `playWatchRef` holds the bounded fallback poll's interval id. Cleared
+  // inline (only refs are touched) so the run-once mount effect and the
+  // imperative handle stay free of extra deps.
+  const playingFiredRef = useRef(false);
+  const playWatchRef = useRef<number | null>(null);
 
   // We render the iframe ourselves (rather than letting YT.Player replace a
   // div) and wait for its `load` event before attaching the API. Otherwise
@@ -140,9 +162,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // host emits once a video plays.
   useEffect(() => {
     let cancelled = false;
+    const playerInit = startPlayerInit();
     void (async () => {
+      const apiCached = !!window.YT?.Player;
       const YT = await loadApi();
       if (cancelled || !containerRef.current) return;
+      playerInit.apiLoaded(apiCached);
       const iframe = containerRef.current;
       await new Promise<void>((resolve) => {
         if (iframe.dataset.ytLoaded === "1") {
@@ -162,6 +187,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
           onReady: () => {
             setErrorCode(null);
             setLoaded(true);
+            playerInit.ready();
             onReadyRef.current?.();
           },
           onError: (event) => {
@@ -169,6 +195,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             onErrorRef.current?.(event.data);
           },
           onStateChange: (event) => {
+            if (event.data === YT_STATE_PLAYING && !playingFiredRef.current) {
+              playingFiredRef.current = true;
+              if (playWatchRef.current !== null) {
+                window.clearInterval(playWatchRef.current);
+                playWatchRef.current = null;
+              }
+              onPlayingRef.current?.("statechange");
+            }
             if (event.data === YT_STATE_ENDED) {
               setEnded(true);
               playerRef.current?.stopVideo();
@@ -179,6 +213,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     })();
     return () => {
       cancelled = true;
+      if (playWatchRef.current !== null) {
+        window.clearInterval(playWatchRef.current);
+        playWatchRef.current = null;
+      }
       playerRef.current?.destroy();
       playerRef.current = null;
     };
@@ -193,6 +231,29 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         // covered mode) doesn't keep showing "Video unavailable" for what
         // is now a different, valid video.
         setErrorCode(null);
+        // Arm PLAYING detection for this load: reset the dedupe flag and start
+        // a bounded fallback poll in case onStateChange(PLAYING) is coalesced
+        // or missed. The poll self-clears once PLAYING is seen or the cap hits.
+        playingFiredRef.current = false;
+        if (playWatchRef.current !== null) window.clearInterval(playWatchRef.current);
+        let ticks = 0;
+        playWatchRef.current = window.setInterval(() => {
+          ticks += 1;
+          if (
+            !playingFiredRef.current &&
+            playerRef.current?.getPlayerState() === YT_STATE_PLAYING
+          ) {
+            playingFiredRef.current = true;
+            onPlayingRef.current?.("poll");
+          }
+          if (
+            (playingFiredRef.current || ticks >= PLAY_POLL_MAX_TICKS) &&
+            playWatchRef.current !== null
+          ) {
+            window.clearInterval(playWatchRef.current);
+            playWatchRef.current = null;
+          }
+        }, PLAY_POLL_MS);
         playerRef.current?.loadVideoById({
           videoId,
           startSeconds: startSeconds ?? 0,

@@ -9,6 +9,7 @@ import type {
   Team,
 } from "../lib/types";
 import { observeServerTime } from "./useServerTime";
+import { log, recordFanout, resolveBuzzE2E, resolveScoreE2E } from "../lib/telemetry";
 
 export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting" | "gone";
 
@@ -204,6 +205,15 @@ export function useGameChannel(gameCode: string): {
         (payload) => {
           const typed = payload as PostgresChangePayload<ActiveGame>;
           observeServerTime(typed.commit_timestamp);
+          recordFanout("game", typed.commit_timestamp);
+          // Resolve the local player's open buzz span the moment we see the
+          // lock land (won if it's our team, lost_race otherwise).
+          if (typed.eventType !== "DELETE") {
+            const row = typed.new as ActiveGame;
+            if (row.buzzed_team_id) {
+              resolveBuzzE2E(row.buzzed_team_id, typed.commit_timestamp);
+            }
+          }
           dispatchOrQueue({ type: "GAME_CHANGE", payload: typed });
           if (typed.eventType === "DELETE") setStatus("gone");
         },
@@ -214,6 +224,7 @@ export function useGameChannel(gameCode: string): {
         (payload) => {
           const typed = payload as PostgresChangePayload<Team>;
           observeServerTime(typed.commit_timestamp);
+          recordFanout("team", typed.commit_timestamp);
           dispatchOrQueue({ type: "TEAM_CHANGE", payload: typed });
         },
       )
@@ -223,6 +234,12 @@ export function useGameChannel(gameCode: string): {
         (payload) => {
           const typed = payload as PostgresChangePayload<GameRound>;
           observeServerTime(typed.commit_timestamp);
+          recordFanout("round", typed.commit_timestamp);
+          // Resolve any open score span for this round (click → ROUND_CHANGE).
+          if (typed.eventType !== "DELETE") {
+            const row = typed.new as GameRound;
+            if (row.id) resolveScoreE2E(row.id, typed.commit_timestamp);
+          }
           dispatchOrQueue({ type: "ROUND_CHANGE", payload: typed });
         },
       )
@@ -232,6 +249,7 @@ export function useGameChannel(gameCode: string): {
           setStatus("subscribed");
           void hydrate();
         } else if (subStatus === "CHANNEL_ERROR" || subStatus === "TIMED_OUT") {
+          log("warn", "realtime_disconnect", { game_code: gameCode, sub_status: subStatus });
           setStatus("reconnecting");
         } else if (subStatus === "CLOSED") {
           setStatus("idle");

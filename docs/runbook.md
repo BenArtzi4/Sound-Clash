@@ -126,6 +126,23 @@ The anon key is shipped to the browser; it's not really a secret, but rotating i
 1. Cloudflare dashboard → "My Profile" → API Tokens → revoke + create new.
 2. Update GitHub repo secret `CF_API_TOKEN`.
 
+### 3.6 Grafana Cloud (latency observability)
+
+Three distinct credentials, all from one free Grafana Cloud stack. See
+`tech-stack.md` §7.5 for the architecture.
+
+| Credential | Where it lives | Public? | Rotate |
+|---|---|---|---|
+| Faro collector URL (`VITE_FARO_URL`) | Cloudflare Pages env + `frontend/.env.production` | Yes — app-key in the URL, ships in the browser bundle | Grafana → Frontend Observability → app → regenerate; redeploy frontend |
+| OTLP write token (`OTEL_EXPORTER_OTLP_HEADERS`) | Render env vars only | No — server-side write credential | Grafana → Access Policies → rotate token; update Render `OTEL_EXPORTER_OTLP_*`; redeploy backend |
+| Service-account token (Grafana MCP / queries) | Local only (Claude Code MCP config, `claude mcp add-json`) | No — read-only | Grafana → Administration → Service accounts → rotate |
+
+The Faro URL is browser-safe **by design** (like the Supabase anon key); the
+OTLP write token must **never** appear in the frontend bundle. Render OTel env
+vars: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
+`OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, `OTEL_SERVICE_NAME=sound-clash-backend`.
+Tracing is OFF until `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+
 ## 4. Common Issues
 
 ### 4.1 "Buzzer is slow"
