@@ -138,7 +138,15 @@ const EMBED_SRC =
   }).toString();
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
-  { testId = "youtube-player", noCover, hideOverlay, coverWhilePaused, onReady, onError, onPlaying },
+  {
+    testId = "youtube-player",
+    noCover,
+    hideOverlay,
+    coverWhilePaused,
+    onReady,
+    onError,
+    onPlaying,
+  },
   ref,
 ) {
   const containerRef = useRef<HTMLIFrameElement | null>(null);
