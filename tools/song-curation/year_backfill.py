@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import random
 import sys
 from pathlib import Path
 
@@ -203,6 +204,15 @@ def _write_flagged(path: Path, flagged: list[dict[str, str]]) -> None:
         writer.writerows(flagged)
 
 
+def _write_accepted(path: Path, rows: list[dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fields = ["youtube_id", "title", "artist", "year", "is_cover", "lang"]
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     extract = _gather(Path(args.extract_dir), args.extract_prefix)
     judge = _gather(Path(args.judge_dir), args.judge_prefix)
@@ -211,12 +221,24 @@ def cmd_build(args: argparse.Namespace) -> int:
         return 1
 
     accepted: list[tuple[str, int]] = []
+    accepted_rows: list[dict[str, str]] = []
     flagged: list[dict[str, str]] = []
     for vid, ext in extract.items():
         j = judge.get(vid)
         year, reason = _classify(ext, j, args.threshold)
         if year is not None:
             accepted.append((vid, year))
+            ext_lang = "he" if _has_hebrew(ext.get("title", "") + ext.get("artist", "")) else "en"
+            accepted_rows.append(
+                {
+                    "youtube_id": vid,
+                    "title": ext.get("title", ""),
+                    "artist": ext.get("artist", ""),
+                    "year": str(year),
+                    "is_cover": ext.get("is_cover", ""),
+                    "lang": ext_lang,
+                }
+            )
         else:
             flagged.append(
                 {
@@ -241,9 +263,14 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     flagged.sort(key=_flag_key)
     accepted.sort(key=lambda pair: pair[0])
+    accepted_rows.sort(key=lambda r: r["youtube_id"])
 
     _write_sql(Path(args.out), accepted)
     _write_flagged(Path(args.flagged), flagged)
+    accepted_path = (
+        Path(args.accepted) if args.accepted else Path(args.flagged).with_name("accepted.csv")
+    )
+    _write_accepted(accepted_path, accepted_rows)
 
     total = len(extract)
     pct = (100 * len(accepted) // total) if total else 0
@@ -253,6 +280,107 @@ def cmd_build(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     print(f"wrote {len(accepted)} UPDATEs -> {args.out}", file=sys.stderr)
+    print(f"wrote {len(accepted_rows)} accepted rows -> {accepted_path}", file=sys.stderr)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# sample / sample-report: the third validation (real-Google spot-check)
+# ---------------------------------------------------------------------------
+
+
+def cmd_sample(args: argparse.Namespace) -> int:
+    """Pick a random non-cover slice of the auto-accepted songs for a manual,
+    real-Google spot-check (covers are excluded -- the literal Google query
+    returns the cover's year, not the original; covers are reviewed via
+    flagged.csv instead)."""
+    rows = [
+        r
+        for r in _read_rows(Path(args.accepted))
+        if (r.get("is_cover") or "").strip().lower() != "yes"
+    ]
+    he = [r for r in rows if (r.get("lang") or "").strip() == "he"]
+    en = [r for r in rows if (r.get("lang") or "").strip() != "he"]
+    rng = random.Random(args.seed)
+    picked = rng.sample(he, min(args.he, len(he))) + rng.sample(en, min(args.en, len(en)))
+    rng.shuffle(picked)
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["youtube_id", "title", "artist", "lang"])
+        writer.writeheader()
+        for r in picked:
+            writer.writerow({k: r.get(k, "") for k in ("youtube_id", "title", "artist", "lang")})
+
+    n_he = sum(1 for r in picked if (r.get("lang") or "").strip() == "he")
+    print(
+        f"sampled {len(picked)} accepted non-cover songs ({n_he} he / {len(picked) - n_he} en) "
+        f"-> {out}",
+        file=sys.stderr,
+    )
+    return 0
+
+
+def cmd_sample_report(args: argparse.Namespace) -> int:
+    """Compare the Google spot-check answers to the pipeline's accepted years."""
+    accepted = {r["youtube_id"]: r for r in _read_rows(Path(args.accepted))}
+    answers = {r["youtube_id"]: r for r in _read_rows(Path(args.answers))}
+    sample = _read_rows(Path(args.sample))
+
+    out_rows: list[dict[str, str]] = []
+    match = miss = 0
+    for r in sample:
+        vid = (r.get("youtube_id") or "").strip()
+        pipeline_year = _read_year((accepted.get(vid) or {}).get("year"))
+        google_year = _read_year((answers.get(vid) or {}).get("google_year"))
+        if google_year is None:
+            verdict = "no-answer"
+        elif pipeline_year == google_year:
+            verdict = "match"
+            match += 1
+        else:
+            verdict = "MISMATCH"
+            miss += 1
+        out_rows.append(
+            {
+                "youtube_id": vid,
+                "title": r.get("title", ""),
+                "artist": r.get("artist", ""),
+                "lang": r.get("lang", ""),
+                "pipeline_year": str(pipeline_year) if pipeline_year is not None else "",
+                "google_year": str(google_year) if google_year is not None else "",
+                "verdict": verdict,
+                "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            }
+        )
+
+    order = {"MISMATCH": 0, "no-answer": 1, "match": 2}
+    out_rows.sort(key=lambda r: order.get(r["verdict"], 3))
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fields = [
+        "youtube_id",
+        "title",
+        "artist",
+        "lang",
+        "pipeline_year",
+        "google_year",
+        "verdict",
+        "youtube_url",
+    ]
+    with out.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+    checked = match + miss
+    rate = (100 * match // checked) if checked else 0
+    print(
+        f"spot-check: {match}/{checked} match ({rate}%), {miss} mismatch, "
+        f"{len(out_rows) - checked} no-answer -> {out}",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -276,9 +404,31 @@ def main() -> int:
     p_build.add_argument("--out", required=True, help="release_years.sql output path")
     p_build.add_argument("--flagged", required=True, help="flagged.csv (review list) output path")
     p_build.add_argument(
+        "--accepted", default=None, help="accepted.csv path (default: alongside --flagged)"
+    )
+    p_build.add_argument(
         "--threshold", type=float, default=DEFAULT_THRESHOLD, help="min agreeing confidence"
     )
     p_build.set_defaults(func=cmd_build)
+
+    p_sample = sub.add_parser(
+        "sample", help="pick a random non-cover slice of accepted.csv for the Google spot-check"
+    )
+    p_sample.add_argument("--accepted", required=True, help="accepted.csv from build")
+    p_sample.add_argument("--he", type=int, default=25, help="Hebrew songs to sample (default 25)")
+    p_sample.add_argument("--en", type=int, default=15, help="English songs to sample (default 15)")
+    p_sample.add_argument("--seed", type=int, default=18, help="RNG seed (reproducible sample)")
+    p_sample.add_argument("--out", required=True, help="sample_in.csv output path")
+    p_sample.set_defaults(func=cmd_sample)
+
+    p_report = sub.add_parser(
+        "sample-report", help="compare Google spot-check answers to the pipeline years"
+    )
+    p_report.add_argument("--sample", required=True, help="sample_in.csv from sample")
+    p_report.add_argument("--answers", required=True, help="CSV: youtube_id,google_year")
+    p_report.add_argument("--accepted", required=True, help="accepted.csv from build")
+    p_report.add_argument("--out", required=True, help="sample_report.csv output path")
+    p_report.set_defaults(func=cmd_sample_report)
 
     args = ap.parse_args()
     return int(args.func(args))
