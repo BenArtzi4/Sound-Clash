@@ -80,17 +80,25 @@ youtube_id,title,artist,year,is_cover,original_artist,confidence,source
 - `confidence` — 0.0–1.0 (the agent's own certainty).
 - `source` — the URL it trusted most.
 
-### 4. Judge wave (independent, blind)
+### 4. Judge wave (independent, blind — database validation)
 
 A second set of agents gets the **same `year_in/batch_NN.csv`** — **not** the
-extractor's answers — and re-derives the year independently, leading with the
-structured sources (MusicBrainz / Wikidata) so the two waves don't share a
-failure mode. Run them on a different model than the extractor where possible
-for true cross-model corroboration. Write to `year_out/judge_batch_NN.csv`:
+extractor's answers — and re-derives the year independently. This wave is the
+**database-validation** layer: each agent must **first query the structured
+music databases** — MusicBrainz (`musicbrainz.org/ws/2`, first-release-date of
+the work/recording) and Wikidata (property P577 publication date) via `WebFetch`
+(both are keyless JSON APIs) — and only fall back to `WebSearch` when the song
+isn't found there. Leading with the databases means the two waves don't share a
+failure mode (the extractor leads with WebSearch). Run them on a different model
+than the extractor where possible for true cross-model corroboration. Write to
+`year_out/judge_batch_NN.csv`:
 
 ```
 youtube_id,year,confidence,note
 ```
+
+`note` should say which database the year came from (e.g. `musicbrainz`,
+`wikidata`, or `websearch-fallback`) so disagreements are easy to triage.
 
 ### 5. Build → SQL + review list
 
@@ -119,7 +127,7 @@ matching years, confidence `1.0`) and re-running `build`, or by hand-editing
 `release_years.sql`. Covers and disagreements cluster at the top — that's where
 the judgement is.
 
-### 7. Third validation — real-Google spot-check (~40 songs)
+### 7. Third validation — real-Google spot-check (~50 songs)
 
 An independent confidence gate on the **auto-accepted** songs (the ones that skip
 the `flagged.csv` review and go straight to prod). It re-asks the exact question
@@ -129,14 +137,15 @@ if not, widen the review. Covers are excluded — the literal template returns t
 *cover's* year, not the original, so a cover would false-mismatch; covers are
 already covered by `flagged.csv`.
 
-1. **Pick the sample** (reproducible via `--seed`; ~25 Hebrew + 15 English by
-   default, because English non-covers are the easy case and Hebrew is where
-   errors hide):
+1. **Pick the sample** (reproducible via `--seed`). Flat random 50 across the
+   accepted non-cover songs:
    ```bash
    PYTHONUTF8=1 backend/.venv/Scripts/python.exe tools/song-curation/year_backfill.py \
      sample --accepted batches/<date>/accepted.csv \
-     --he 25 --en 15 --out batches/<date>/sample_in.csv
+     --size 50 --out batches/<date>/sample_in.csv
    ```
+   (Omit `--size` for the language-weighted default — 30 Hebrew + 20 English —
+   which oversamples the higher-risk Hebrew set instead of sampling flat.)
 2. **Ask the real Google** — for each row in `sample_in.csv`, drive the Playwright
    MCP browser to a Google search and read the **AI Overview ("סקירת AI")** box:
    - **en:** `What year did <artist> release the song '<title>'?`
