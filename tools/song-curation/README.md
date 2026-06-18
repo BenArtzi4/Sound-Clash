@@ -41,6 +41,23 @@ research (web search)  ──>  candidates_in.csv  ──>  verify.py  ──>  
 | `batches/<date>/candidates.js` | no (gitignored) | per-batch verified data |
 | `batches/<date>/approved-songs-*.csv` | no | exported approvals |
 
+## Bulk sourcing from YouTube playlists
+
+For genres where Claude's recall is weak (esp. Hebrew), the fastest high-quality
+source is a curated YouTube playlist: scraping it yields **real video ids + titles
+in bulk** (no per-song guessing). Load a playlist in a browser, extract
+`{id, title}` pairs from the `a[href*="watch?v="]` anchors, save as JSON, then:
+
+```bash
+python parse_playlist.py pl_dump.json --genre mizrahit --source "yt mizrahit playlist" --out candidates_in.csv
+```
+
+`parse_playlist.py` splits each "Artist - Song (Prod...)" title into artist/song,
+strips production credits/noise, tags the genre, and appends upload-format rows.
+The artist/song split is best-effort — run a clean-context validation pass (and the
+review tool) over the result. Soundtrack rows need artist = film/show name, so they
+usually need manual mapping rather than the generic split.
+
 ## Input CSV format
 
 Same column order as the importer (`backend/app/services/csv_import.py`), plus an
