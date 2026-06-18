@@ -107,7 +107,9 @@ Reconcile rule (tune with `--threshold`, default `0.7`): a year is **auto-
 accepted** only when the extractor and judge agree **and** both are ≥ threshold
 confident. Everything else (`disagree`, `low-confidence`, `no-judge`, `no-year`)
 goes to `flagged.csv`, sorted worst-first with the YouTube link and both
-proposed years.
+proposed years. `build` also writes `accepted.csv`
+(`youtube_id,title,artist,year,is_cover,lang`) next to `flagged.csv` — the input
+to the spot-check in step 7.
 
 ### 6. Human review
 
@@ -117,7 +119,49 @@ matching years, confidence `1.0`) and re-running `build`, or by hand-editing
 `release_years.sql`. Covers and disagreements cluster at the top — that's where
 the judgement is.
 
-### 7. Apply
+### 7. Third validation — real-Google spot-check (~40 songs)
+
+An independent confidence gate on the **auto-accepted** songs (the ones that skip
+the `flagged.csv` review and go straight to prod). It re-asks the exact question
+validated by hand, against the **real Google AI Overview**, for a random
+non-cover sample: if those agree with the pipeline, trust the whole accepted set;
+if not, widen the review. Covers are excluded — the literal template returns the
+*cover's* year, not the original, so a cover would false-mismatch; covers are
+already covered by `flagged.csv`.
+
+1. **Pick the sample** (reproducible via `--seed`; ~25 Hebrew + 15 English by
+   default, because English non-covers are the easy case and Hebrew is where
+   errors hide):
+   ```bash
+   PYTHONUTF8=1 backend/.venv/Scripts/python.exe tools/song-curation/year_backfill.py \
+     sample --accepted batches/<date>/accepted.csv \
+     --he 25 --en 15 --out batches/<date>/sample_in.csv
+   ```
+2. **Ask the real Google** — for each row in `sample_in.csv`, drive the Playwright
+   MCP browser to a Google search and read the **AI Overview ("סקירת AI")** box:
+   - **en:** `What year did <artist> release the song '<title>'?`
+     (e.g. `What year did AC/DC release the song 'Back in Black'?` → AI Overview
+     "…released … on **July 25, 1980**" → record `1980`.)
+   - **he:** `באיזו שנה יצא השיר '<title>' של <artist>?`
+
+   Write `youtube_id,google_year` into `batches/<date>/sample_answers.csv` (take
+   the **year** out of whatever date the AI Overview gives; if no AI Overview
+   appears, leave `google_year` blank → counts as `no-answer`). No `--no-sandbox`
+   is needed for the Playwright MCP browser, and at ~40 queries Google won't
+   rate-limit; if a one-off consent/CAPTCHA page appears, clear it and continue.
+3. **Report**:
+   ```bash
+   PYTHONUTF8=1 backend/.venv/Scripts/python.exe tools/song-curation/year_backfill.py \
+     sample-report --sample batches/<date>/sample_in.csv \
+     --answers batches/<date>/sample_answers.csv \
+     --accepted batches/<date>/accepted.csv \
+     --out batches/<date>/sample_report.csv
+   ```
+   Prints `match / mismatch / no-answer` and writes `sample_report.csv` (MISMATCH
+   rows first). A high match rate (≥ ~95%) clears the accepted set; each MISMATCH
+   is a real correction — fix it like a flagged row (step 6) and re-run `build`.
+
+### 8. Apply
 
 ```bash
 # dry-run on a throwaway local stack first
