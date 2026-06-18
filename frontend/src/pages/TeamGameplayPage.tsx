@@ -75,8 +75,7 @@ export function TeamGameplayPage() {
   }
 
   // Once the host has ended the game, surface the same celebratory podium the
-  // display + manager show. The team's own row gets a "YOU" pill via the
-  // EndScreen sort, and the BUZZ button is gone — there's nothing left to do.
+  // display + manager show. The BUZZ button is gone — there's nothing left to do.
   if (state?.game.status === "ended") {
     const finalTeams = Array.from(state.teams.values());
     return (
