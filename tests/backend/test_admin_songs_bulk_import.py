@@ -83,3 +83,16 @@ async def test_admin_required(client) -> None:
         files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
     )
     assert resp.status_code == 401
+
+
+async def test_bulk_import_persists_release_year(admin_client, db) -> None:
+    header = "title,artist,youtube_id,start_time,genres,release_year\n"
+    body = "Yr Song,Yr Artist,YQHsXMglC9A,0,rock,1994\n"
+    csv = (header + body).encode("utf-8")
+    resp = await admin_client.post(
+        "/admin/songs/bulk-import",
+        files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert resp.status_code == 200, resp.text
+    row = await db.fetchrow("SELECT release_year FROM songs WHERE youtube_id = $1", "YQHsXMglC9A")
+    assert row["release_year"] == 1994

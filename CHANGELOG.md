@@ -29,6 +29,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-06-18: Admin song catalog now has an optional **Release year** field (song form + CSV import), recording each song's original release year. This is the groundwork for an upcoming "filter by decade" option when hosting a game; for covers the year is the song's original release, not the cover's.
 - 2026-06-18: Added **195 new songs** to the catalog (804 → 999), curated and human-reviewed across every genre — heaviest on Israeli music: israeli-rock-pop (+47), mizrahit (+35), israeli-pop (+21), israeli-rap-hip-hop (+7), plus current 2024–2026 Hebrew hits, and refreshes to pop (+27), electronic (+22), rock (+15), hip-hop (+15), soundtracks (+5), israeli-cover (+2).
 - 2026-05-24: How-to-play page now opens with a hero illustration showing the three-screen setup at a glance — host's phone with the manager console, TV/laptop running the display + scoreboard + join QR, and team phones with the BUZZ button — so first-time visitors can see how everything connects before reading the steps.
 - 2026-05-24: New **Israeli Soundtracks** genre, separated from the existing soundtrack bucket so hosts can run a Hebrew-only (or English-only) soundtrack round. Six Israeli titles (גבעת חלפון אינה עונה, גברת פלפלת, נילס הולגרסון, הדרדסים, איזה עולם, הפיג'מות) moved into the new genre.

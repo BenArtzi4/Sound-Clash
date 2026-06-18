@@ -37,6 +37,7 @@ class SongImportRow:
     youtube_id: str
     start_time: int
     genre_slugs: list[str]
+    release_year: int | None
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,29 @@ def _parse_int(value: str, *, line: int, field: str) -> int:
             f"row {line}: {field} must be an integer",
             details={"line": line, "field": field, "issue": "not_an_integer"},
         ) from exc
+
+
+def _parse_optional_year(value: str | None, *, line: int) -> int | None:
+    """Parse the optional ``release_year`` column. Empty/absent -> None.
+
+    Bounds mirror the DB CHECK and the ``ReleaseYear`` model constraint.
+    """
+    stripped = (value or "").strip()
+    if not stripped:
+        return None
+    try:
+        year = int(stripped)
+    except ValueError as exc:
+        raise ValidationError(
+            f"row {line}: release_year must be an integer",
+            details={"line": line, "field": "release_year", "issue": "not_an_integer"},
+        ) from exc
+    if not 1900 <= year <= 2100:
+        raise ValidationError(
+            f"row {line}: release_year must be between 1900 and 2100",
+            details={"line": line, "field": "release_year", "issue": "out_of_range"},
+        )
+    return year
 
 
 def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
@@ -127,6 +151,8 @@ def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
                 details={"line": index, "field": "genres", "issue": "empty"},
             )
 
+        release_year = _parse_optional_year(raw_row.get("release_year"), line=index)
+
         rows.append(
             SongImportRow(
                 line=index,
@@ -135,6 +161,7 @@ def parse_csv(stream: IO[bytes] | bytes) -> list[SongImportRow]:
                 youtube_id=youtube_id,
                 start_time=start_time,
                 genre_slugs=genre_slugs,
+                release_year=release_year,
             )
         )
 
@@ -183,6 +210,7 @@ def _apply_blocking(client: SupabaseClientLike, rows: list[SongImportRow]) -> Im
             "artist": row.artist,
             "youtube_id": row.youtube_id,
             "start_time": row.start_time,
+            "release_year": row.release_year,
         }
         if row.youtube_id in existing:
             song_id = existing[row.youtube_id]

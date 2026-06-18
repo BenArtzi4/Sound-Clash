@@ -41,6 +41,8 @@ CREATE TABLE songs (
   artist        text NOT NULL,
   youtube_id    char(11) NOT NULL,
   start_time    integer NOT NULL DEFAULT 0,    -- seconds
+  release_year  integer                        -- original release year (mig 031); nullable
+                  CHECK (release_year IS NULL OR release_year BETWEEN 1900 AND 2100),
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
@@ -141,6 +143,20 @@ hint on the manager screen and only when it differs from the film name. When a s
 has no distinct clip name, set `title = artist` (the catalog's older soundtrack rows do
 this). The CSV importer no longer derives soundtrack-ness or rewrites these fields; it just
 requires both `title` and `artist` and stores them verbatim.
+
+### `songs.release_year`
+
+Nullable `integer` (migration 031). The **original commercial release year of the song**,
+not of the recording in our catalog: for a cover, store the year the song was first released
+by its original artist (a 2012 cover of a 1967 song is `1967`). This is what makes a decade
+filter like "play 60s music" behave the way players expect even when the clip is a famous
+later cover. `NULL` means the year is unknown / not yet backfilled.
+
+The decade filter (migration 032) derives a song's decade as `release_year / 10 * 10`
+(integer division: `1985 → 1980`). A `NULL`-year song therefore matches **no** specific
+decade, so it is excluded from a decade-filtered game and included only when the host picks
+no decade. The catalog is backfilled by `tools/song-curation/`; the admin song form and CSV
+importer both accept an optional `release_year` so new songs can carry it from creation.
 
 ### `active_games.game_code`
 

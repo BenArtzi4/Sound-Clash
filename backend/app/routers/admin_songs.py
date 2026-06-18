@@ -28,7 +28,7 @@ router = APIRouter(
     dependencies=[Depends(require_admin)],
 )
 
-SONG_COLUMNS = "id,title,artist,youtube_id,start_time"
+SONG_COLUMNS = "id,title,artist,youtube_id,start_time,release_year"
 
 
 def _attach_genres(client: SupabaseClientLike, songs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -121,6 +121,7 @@ def _create_song_blocking(client: SupabaseClientLike, body: SongCreate) -> dict[
         "artist": body.artist,
         "youtube_id": body.youtube_id,
         "start_time": body.start_time,
+        "release_year": body.release_year,
     }
     with mapped_postgrest_errors():
         resp = client.table("songs").insert(payload).execute()
@@ -146,6 +147,7 @@ def _update_song_blocking(
         "artist": body.artist,
         "youtube_id": body.youtube_id,
         "start_time": body.start_time,
+        "release_year": body.release_year,
     }
     with mapped_postgrest_errors():
         client.table("songs").update(payload).eq("id", song_id).execute()

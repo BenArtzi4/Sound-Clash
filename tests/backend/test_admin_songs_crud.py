@@ -66,6 +66,73 @@ async def test_update(admin_client, db) -> None:
     assert resp.json()["title"] == "Updated"
 
 
+async def test_create_and_update_release_year(admin_client, db) -> None:
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    create = await admin_client.post(
+        "/admin/songs",
+        json={
+            "title": "Yr",
+            "artist": "Yr",
+            "youtube_id": "yrSONG12345",
+            "start_time": 0,
+            "release_year": 1991,
+            "genre_ids": [str(rock[0])],
+        },
+    )
+    assert create.status_code == 201, create.text
+    song = create.json()
+    assert song["release_year"] == 1991
+
+    # Omitting the year (null) on update clears it.
+    upd = await admin_client.put(
+        f"/admin/songs/{song['id']}",
+        json={
+            "title": "Yr",
+            "artist": "Yr",
+            "youtube_id": "yrSONG12345",
+            "start_time": 0,
+            "release_year": None,
+            "genre_ids": [str(rock[0])],
+        },
+    )
+    assert upd.status_code == 200, upd.text
+    assert upd.json()["release_year"] is None
+
+
+async def test_create_without_release_year_defaults_null(admin_client, db) -> None:
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await admin_client.post(
+        "/admin/songs",
+        json={
+            "title": "NoYr",
+            "artist": "NoYr",
+            "youtube_id": "noYR1234567",
+            "start_time": 0,
+            "genre_ids": [str(rock[0])],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["release_year"] is None
+
+
+async def test_release_year_out_of_range_400(admin_client, db) -> None:
+    # Pydantic constraint violations are mapped to 400 here (same as a bad
+    # youtube_id), not FastAPI's default 422.
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await admin_client.post(
+        "/admin/songs",
+        json={
+            "title": "Bad",
+            "artist": "Bad",
+            "youtube_id": "badYR123456",
+            "start_time": 0,
+            "release_year": 1850,
+            "genre_ids": [str(rock[0])],
+        },
+    )
+    assert resp.status_code == 400
+
+
 async def test_delete(admin_client, db) -> None:
     song_id = await insert_song(db)
     resp = await admin_client.delete(f"/admin/songs/{song_id}")
