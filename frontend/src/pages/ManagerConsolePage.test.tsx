@@ -651,7 +651,7 @@ describe("ManagerConsolePage", () => {
     expect(lastHandle?.play).not.toHaveBeenCalled();
   });
 
-  it("Wrong skips the -3 toast when a token was already claimed (free-guess rule)", async () => {
+  it("Wrong skips the -3 toast when the round's free-guess flag is armed", async () => {
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -659,8 +659,9 @@ describe("ManagerConsolePage", () => {
         current_round_id: "r1",
       }),
       teams: [makeTeam({ id: "t1", name: "Alice" })],
-      // title already claimed earlier this round -> free_guess rule waives -3
-      rounds: [makeRound({ id: "r1", title_claimed_by: "t1" })],
+      // free_guess_active is the server's one-shot flag: with it armed the next
+      // wrong is waived (0), so the optimistic -3 toast must be suppressed.
+      rounds: [makeRound({ id: "r1", title_claimed_by: "t1", free_guess_active: true })],
     });
     vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
       round_id: "r1",
@@ -677,6 +678,43 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("score-wrong"));
     // The -3 toast must NOT appear since the round is in free-guess state.
     expect(screen.queryByText(/-3 to Alice/i)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+        title_correct: false,
+        artist_correct: false,
+        wrong_buzz: true,
+      }),
+    );
+  });
+
+  it("Wrong still shows the -3 toast when a token is claimed but the free-guess flag was consumed", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      // A token is claimed, but the one-shot free-guess flag was already
+      // consumed by an earlier attempt -> the server applies the real -3, so
+      // the host's optimistic toast must reflect it rather than be suppressed
+      // by the coarse "any token claimed" heuristic.
+      rounds: [makeRound({ id: "r1", title_claimed_by: "t1", free_guess_active: false })],
+    });
+    vi.mocked(awardAttemptDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: -3,
+      team_total_score: 7,
+      title_claimed_by: "t1",
+      artist_claimed_by: null,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-wrong"));
+    expect(screen.getByText(/-3 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
       expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
         title_correct: false,

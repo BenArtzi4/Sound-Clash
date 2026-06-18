@@ -486,11 +486,14 @@ export function ManagerConsolePage() {
 
   // Wrong is a one-click verdict: it fires award_attempt with wrong_buzz=true,
   // re-arms the buzzers, and resumes the song (no separate "Continue round"
-  // press needed). Per game-rules.md §4, if a correct answer was already
-  // scored this round, the SQL function waives the -3 penalty; we skip the
-  // toast in that case so we don't lie about the delta. Playback resume is
-  // held until the RPC commits so a failed Wrong leaves the song paused with
-  // the lock still held -- the manager can simply retry.
+  // press needed). Per game-rules.md §4 the -3 is waived only when the round's
+  // one-shot free-guess flag is armed (`free_guess_active`), which the SQL
+  // arms after a correct attempt and consumes on the very next attempt. We
+  // mirror that exact flag here so the optimistic toast matches the score the
+  // server will commit -- reading "any token claimed" instead would wrongly
+  // suppress the -3 toast for every later wrong in a round that had a correct.
+  // Playback resume is held until the RPC commits so a failed Wrong leaves the
+  // song paused with the lock still held -- the manager can simply retry.
   async function handleWrong() {
     if (wrongInFlightRef.current) return;
     if (!state?.currentRound || busy || !managerToken) return;
@@ -498,8 +501,7 @@ export function ManagerConsolePage() {
     wrongInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
-    const freeGuess =
-      state.currentRound.title_claimed_by != null || state.currentRound.artist_claimed_by != null;
+    const freeGuess = state.currentRound.free_guess_active;
     if (teamName && !freeGuess) toast(`-3 to ${teamName}`, { variant: "info" });
     setPendingWrong(roundId);
     setBusy(true);
