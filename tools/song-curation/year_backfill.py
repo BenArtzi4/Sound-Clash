@@ -299,10 +299,15 @@ def cmd_sample(args: argparse.Namespace) -> int:
         for r in _read_rows(Path(args.accepted))
         if (r.get("is_cover") or "").strip().lower() != "yes"
     ]
-    he = [r for r in rows if (r.get("lang") or "").strip() == "he"]
-    en = [r for r in rows if (r.get("lang") or "").strip() != "he"]
     rng = random.Random(args.seed)
-    picked = rng.sample(he, min(args.he, len(he))) + rng.sample(en, min(args.en, len(en)))
+    if args.size:
+        # Flat random across all non-cover accepted songs (honours "N random").
+        picked = rng.sample(rows, min(args.size, len(rows)))
+    else:
+        # Language-weighted: Hebrew is where errors hide, English is the easy case.
+        he = [r for r in rows if (r.get("lang") or "").strip() == "he"]
+        en = [r for r in rows if (r.get("lang") or "").strip() != "he"]
+        picked = rng.sample(he, min(args.he, len(he))) + rng.sample(en, min(args.en, len(en)))
     rng.shuffle(picked)
 
     out = Path(args.out)
@@ -415,8 +420,11 @@ def main() -> int:
         "sample", help="pick a random non-cover slice of accepted.csv for the Google spot-check"
     )
     p_sample.add_argument("--accepted", required=True, help="accepted.csv from build")
-    p_sample.add_argument("--he", type=int, default=25, help="Hebrew songs to sample (default 25)")
-    p_sample.add_argument("--en", type=int, default=15, help="English songs to sample (default 15)")
+    p_sample.add_argument(
+        "--size", type=int, default=None, help="flat random N (overrides --he/--en)"
+    )
+    p_sample.add_argument("--he", type=int, default=30, help="Hebrew songs to sample (default 30)")
+    p_sample.add_argument("--en", type=int, default=20, help="English songs to sample (default 20)")
     p_sample.add_argument("--seed", type=int, default=18, help="RNG seed (reproducible sample)")
     p_sample.add_argument("--out", required=True, help="sample_in.csv output path")
     p_sample.set_defaults(func=cmd_sample)
