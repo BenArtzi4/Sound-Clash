@@ -113,7 +113,10 @@ PYTHONUTF8=1 backend/.venv/Scripts/python.exe tools/song-curation/year_backfill.
 
 Reconcile rule (tune with `--threshold`, default `0.7`): a year is **auto-
 accepted** only when the extractor and judge agree **and** both are ≥ threshold
-confident. Everything else (`disagree`, `low-confidence`, `no-judge`, `no-year`)
+confident. With `--decade-tolerance` the two waves are treated as agreeing when
+their years fall in the same decade (the extractor's year is kept) — for the
+decade-filter use case where the exact year inside a decade is irrelevant.
+Everything else (`disagree`, `low-confidence`, `no-judge`, `no-year`)
 goes to `flagged.csv`, sorted worst-first with the YouTube link and both
 proposed years. `build` also writes `accepted.csv`
 (`youtube_id,title,artist,year,is_cover,lang`) next to `flagged.csv` — the input

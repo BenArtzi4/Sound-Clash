@@ -140,9 +140,19 @@ def cmd_partition(args: argparse.Namespace) -> int:
 
 
 def _classify(
-    extract: dict[str, str], judge: dict[str, str] | None, threshold: float
+    extract: dict[str, str],
+    judge: dict[str, str] | None,
+    threshold: float,
+    decade_tolerance: bool = False,
 ) -> tuple[int | None, str]:
-    """Return (accepted_year, reason). accepted_year is None when flagged."""
+    """Return (accepted_year, reason). accepted_year is None when flagged.
+
+    With ``decade_tolerance``, the extractor and judge are treated as agreeing
+    when their years fall in the same decade (e.g. 2004 vs 2005) and the
+    extractor's year is kept. This suits the decade-filter use case, where the
+    exact year inside a decade is irrelevant; only cross-decade disagreements
+    (and missing/low-confidence years) still flag for review.
+    """
     ext_year = _read_year(extract.get("year"))
     if ext_year is None:
         return None, "no-year"
@@ -151,7 +161,8 @@ def _classify(
     judge_year = _read_year(judge.get("year"))
     if judge_year is None:
         return None, "no-judge"
-    if ext_year != judge_year:
+    agree = (ext_year // 10 == judge_year // 10) if decade_tolerance else (ext_year == judge_year)
+    if not agree:
         return None, "disagree"
     if min(_read_conf(extract.get("confidence")), _read_conf(judge.get("confidence"))) < threshold:
         return None, "low-confidence"
@@ -225,7 +236,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     flagged: list[dict[str, str]] = []
     for vid, ext in extract.items():
         j = judge.get(vid)
-        year, reason = _classify(ext, j, args.threshold)
+        year, reason = _classify(ext, j, args.threshold, args.decade_tolerance)
         if year is not None:
             accepted.append((vid, year))
             ext_lang = "he" if _has_hebrew(ext.get("title", "") + ext.get("artist", "")) else "en"
@@ -413,6 +424,11 @@ def main() -> int:
     )
     p_build.add_argument(
         "--threshold", type=float, default=DEFAULT_THRESHOLD, help="min agreeing confidence"
+    )
+    p_build.add_argument(
+        "--decade-tolerance",
+        action="store_true",
+        help="accept when extractor and judge land in the same decade (keep extractor's year)",
     )
     p_build.set_defaults(func=cmd_build)
 
