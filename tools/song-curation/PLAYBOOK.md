@@ -2,210 +2,253 @@
 
 **Read this end-to-end before adding songs to the Sound Clash catalog.** It is the
 authoritative runbook for finding, validating, reviewing and uploading new songs.
-A future agent should be able to execute the whole flow from this file alone.
+A future agent should be able to execute the whole flow from this file alone —
+including the concrete sources, search queries, and cleanup rules already proven to
+work (see §6 "Known-good sources" and §7 "Quality lessons").
+
+History: built over several passes in June 2026; grew the candidate batch to ~760
+validated net-new songs (mostly Hebrew). The catalog had ~804 songs at that point.
 
 ---
 
 ## 0. Goal & non-negotiable principles
 
 - **Add *net-new*, *popular* songs per genre.** The prod catalog already holds
-  **800+ songs**, so most famous tracks already exist — always dedup against the
-  live catalog, every run.
-- **NEVER trust a YouTube id recalled from memory.** Claude hallucinates ids,
-  worst of all for Hebrew songs. Every id must come from a real source (web search
-  result or a real YouTube playlist) **and** be machine-verified via YouTube oEmbed
-  before a human ever sees it.
+  **~800+ songs**, so most famous tracks already exist — always dedup against the
+  live catalog *and the in-progress batch*, every run.
+- **NEVER trust a YouTube id recalled from memory.** Claude hallucinates ids, worst
+  of all for Hebrew. Every id must come from a real source (a YouTube playlist scrape
+  or a web-search result) **and** be machine-verified via YouTube oEmbed before a
+  human sees it.
+- **Names come from YouTube, not from Claude.** `validate.py` standardises every
+  title/artist on the real oEmbed video title; `audit.py` then proves 100% of names
+  actually appear in the real video title.
 - **The human does the final call.** The pipeline produces a *clean, verified,
-  deduped* candidate set; the user approves/rejects, sets start times, and fixes
-  genres in `review.html`. Aim to make their review fast, not to be perfect.
-- **Names come from YouTube, not from Claude.** Validation standardises every
-  title/artist on the real oEmbed video title (see `validate.py`).
+  deduped* set; the user approves/rejects, sets start times, fixes genres in
+  `review.html`. Make their review fast — drop garbage rather than ship it.
+- **Recent years matter for teens.** Many players know only current-year songs, so
+  each pass should pull the latest annual charts (2024/2025/2026…). See §6.
 
-## 1. The tools (all in `tools/song-curation/`)
+## 1. The pipeline & tools (`tools/song-curation/`)
 
-| file | what it does |
-| --- | --- |
-| `verify.py` | calls YouTube **oEmbed** for each candidate id → confirms it's valid + embeddable, fetches the real title/channel, match-scores vs the proposed name, dedups against the live catalog, writes `candidates.js`. stdlib-only. |
-| `parse_playlist.py` | turns a scraped YouTube-playlist JSON (`[{id,title}]`) into upload-format candidate rows (splits "Artist - Song", strips prod credits, tags a genre). |
-| `validate.py` | **per-batch, copy from a previous batch and adapt.** Standardises names on the real oEmbed title (preserving Hebrew apostrophes/gershayim), reassigns Israeli genres by a curated artist→genre map, drops playlist-banner rows, flags suspect rows → `candidates.js` + `flagged.json`. |
-| `review.html` / `review.js` / `review.css` | the browser review UI (same YouTube IFrame player the game uses). Approve/reject, set start time, edit genre, export CSV. Loads `candidates.js` as a `<script>` so it works from `file://`. |
+The flow is **scrape → parse → verify → consolidate → validate → fix → audit → review → upload.**
 
-## 2. Reference facts (verify before relying on them — code changes)
+| file | reusable? | what it does |
+| --- | --- | --- |
+| `parse_playlist.py` | yes (root) | scraped playlist JSON `[{id,title}]` → upload-format rows (splits "Artist - Song", strips prod credits, tags a genre). |
+| `verify.py` | yes (root) | calls YouTube **oEmbed** per id → valid + embeddable? fetches real title/channel, match-scores vs proposed name, dedups against `--existing` files. stdlib-only. |
+| `validate.py` | per-batch template | standardises names on the real oEmbed title (preserving Hebrew `'"׳״`), reassigns Israeli genres by a curated artist→genre map, sets soundtracks `artist=title=film`, drops banners; → `candidates.js` + `flagged.json`. |
+| `fix.py` | per-batch template | second pass: swaps **reversed** "Song-Artist" rows (KNOWN-artist list), trims latin transliteration tails, **drops junk/foreign/medleys/minor-self-promoters**, **within-batch name-dedup**. |
+| `audit.py` | per-batch template | re-scores every final artist+title against the real oEmbed title; should be ~100% "clean match". Writes `suspects.json`. |
+| `chart_songs.py` | per-batch template | holds a hand-entered best-of-year chart list; dedups by title vs batch+catalog; prints which songs still need an id found. |
+| `review.html`/`.js`/`.css` | yes (root) | browser review UI (same YouTube IFrame player as the game). Loads `candidates.js` as a `<script>` (works from `file://`). |
+
+`validate.py` / `fix.py` / `audit.py` / `chart_songs.py` are committed at the tool
+root as the canonical templates; they read/write `_verified.js` / `candidates.js`
+from their own directory, so **copy them into a new `batches/<date>/` and run them
+there** (tweak the artist lists / chart songs for the batch). Per-batch data
+(`*_in.csv`, `master_all.csv`, `prod_catalog.csv`, `_verified.js`, `candidates.js`,
+`_dumps/`) is gitignored.
+
+## 2. Reference facts
 
 - **Valid genre slugs (11):** `rock, pop, hip-hop, electronic, soundtracks,
   israeli-pop, israeli-cover, israeli-rock-pop, israeli-rap-hip-hop, mizrahit,
-  israeli-soundtracks` (source: `db/backups/genres-20260531.csv`).
-- **Upload CSV columns** (importer = `backend/app/services/csv_import.py`):
-  `title,artist,youtube_id,start_time,genres`. `genres` is `;`-separated slugs.
-  `youtube_id` must match `^[A-Za-z0-9_-]{11}$`; `start_time` integer seconds ≥ 0.
-  An `is_soundtrack` column is ignored (derived from genre, mig 028).
-- **Soundtrack convention:** for the `soundtracks` / `israeli-soundtracks` genres,
-  **`artist` = the film/show name** (the answer players give); `title` = the cue
-  name, or just set `title = artist` if there's no distinct clip name.
-- **Prod project ref:** `jvfddxuaqcsrguibkymp`. Catalog is durable; ephemeral game
-  tables auto-delete — never touch those.
-- **Upload path:** >100 rows exceed Render's import timeout → generate idempotent
-  SQL and apply with `supabase db query --linked` (mirror `db/seed/songs.sql`'s
-  `WHERE NOT EXISTS (youtube_id)` + `ON CONFLICT DO NOTHING` pattern). The
-  `/admin/songs/bulk-import` endpoint is only for a handful of rows.
+  israeli-soundtracks` (`db/backups/genres-20260531.csv`).
+- **Upload CSV columns** (`backend/app/services/csv_import.py`):
+  `title,artist,youtube_id,start_time,genres` (`genres` = `;`-sep slugs;
+  `youtube_id` = `^[A-Za-z0-9_-]{11}$`; `start_time` int seconds ≥ 0). A trailing
+  `is_soundtrack` column is ignored (derived from genre, mig 028).
+- **Soundtrack convention:** `artist` = film/show name (the answer); `title` = cue,
+  or just `title = artist`.
+- **Prod ref:** `jvfddxuaqcsrguibkymp`. Don't touch the ephemeral game tables.
+- **Upload:** >100 rows exceed Render's import timeout → idempotent SQL via
+  `supabase db query --linked` (mirror `db/seed/songs.sql`: `INSERT … WHERE NOT
+  EXISTS (youtube_id)` + `song_genres … ON CONFLICT DO NOTHING`). The
+  `/admin/songs/bulk-import` endpoint is only for a handful of rows. Nothing ships
+  until the user approves; add a `### Added` CHANGELOG line.
 
 ## 3. Environment gotchas (Windows) — READ THESE
 
-- **Always run Python with `PYTHONUTF8=1`** (`PYTHONUTF8=1 backend/.venv/Scripts/python.exe …`).
-  The default Windows console is cp1255 and crashes on Hebrew/emoji in `print`.
-- **Network egress needs the sandbox off.** oEmbed (`verify.py`) and `supabase`
-  calls require `dangerouslyDisableSandbox: true` on the Bash tool. The sandbox
-  blocks non-GitHub egress.
-- **Playwright cannot open `file://`** — serve the tool over localhost to drive it
-  with Playwright (`python -m http.server 8753 --directory tools/song-curation`),
-  but the *user* can just double-click `review.html`.
-- The Python interpreter is `backend/.venv/Scripts/python.exe`.
+- **Always run Python with `PYTHONUTF8=1`.** Default console is cp1255 and crashes
+  on Hebrew/emoji in `print` (the data files are fine, only stdout breaks).
+- **Network egress needs `dangerouslyDisableSandbox: true`** on the Bash tool for
+  `verify.py` (oEmbed) and `supabase` calls (sandbox blocks non-GitHub egress).
+- **Playwright can't open `file://`** — serve the tool for play-testing:
+  `python -m http.server 8753 --directory tools/song-curation`, then
+  `http://localhost:8753/review.html`. The *user* can just double-click the file.
+- Interpreter: `backend/.venv/Scripts/python.exe`.
 
 ## 4. The workflow, step by step
 
-### Step 1 — Dedup baseline (dump the live catalog)
+**1 — Dedup baseline.** Dump the live catalog (sandbox off):
 ```bash
-supabase link --project-ref jvfddxuaqcsrguibkymp   # once
-supabase db query --linked "select youtube_id, title, artist from songs"   # returns JSON
+supabase db query --linked "select youtube_id, title, artist from songs"   # JSON → prod_catalog.csv
 ```
-Parse the JSON `rows` into `batches/<date>/prod_catalog.csv` (cols
-`youtube_id,title,artist`). Also check per-genre coverage to find the thin genres
-worth filling:
-```sql
-select g.slug, count(*) from genres g left join song_genres sg on sg.genre_id=g.id group by g.slug order by 2 desc;
-```
+Per-genre coverage (find thin genres): `select g.slug, count(*) from genres g left
+join song_genres sg on sg.genre_id=g.id group by g.slug order by 2 desc;`
+**Also dump the current batch** (`candidates.js`) into the dedup set if you're adding
+to an existing batch — `fix.py`'s within-batch name-dedup is the backstop.
 
-### Step 2 — Source candidates
+**2 — Source candidates** (see §6 for concrete sources):
+- *Global `rock/pop/hip-hop/electronic`*: Claude's recall of canonical official-video
+  ids is ~90% reliable; hand-write a CSV, verify, web-search only the `invalid`/
+  `mismatch` ones. Prefer newer/deeper cuts (famous ones are already in the catalog —
+  expect ~66% duplicates).
+- *Israeli/Hebrew*: **scrape curated YouTube playlists** (real ids + clean titles in
+  bulk) and/or **find ids per song from annual hit-charts** (best for popularity).
+- *Soundtracks*: scrape a movie-scores playlist, map `Composer/Film - Cue` → `artist=
+  film, title=film` by hand. Low priority (well covered).
 
-**Global / English genres (`rock,pop,hip-hop,electronic`):** Claude's recall of
-*canonical official-video ids* for mega-hits is actually reliable (~90%+), and
-`verify.py` catches the rest. So: hand-write a CSV of well-known songs with your
-best-guess official ids, verify, then web-search only the ones flagged
-`invalid`/`mismatch`. Prefer **newer/deeper cuts** since the famous ones are
-already in the catalog (expect a high duplicate rate on first pass).
-
-**Israeli / Hebrew genres + soundtracks:** Claude's recall is unreliable here —
-**source from curated YouTube playlists instead.** This is the key technique: a
-playlist scrape yields real ids + clean "Artist – Song" titles in bulk. See §5.
-
-**Soundtracks (global film/TV):** scrape a "movie scores" playlist, but the titles
-are "Composer/Film - Cue" — map each to `artist=film name, title=cue` by hand
-(can't use the generic parser). Already-covered genre; low priority.
-
-### Step 3 — Parse playlist scrapes
+**3 — Parse playlist scrapes:**
 ```bash
-PYTHONUTF8=1 backend/.venv/Scripts/python.exe tools/song-curation/parse_playlist.py \
-    <dump>.json --genre <slug> --source "<note>" --out batches/<date>/israeli_in.csv
+PYTHONUTF8=1 .../python.exe parse_playlist.py <dump>.json --genre <slug> --source "<note>" --out batches/<date>/israeli_in.csv
 ```
-(appends rows; run once per playlist with the right `--genre`.)
 
-### Step 4 — Verify (oEmbed + dedup + embeddability)
+**4 — Verify (oEmbed + dedup + embeddability):**
 ```bash
-PYTHONUTF8=1 backend/.venv/Scripts/python.exe tools/song-curation/verify.py \
-    batches/<date>/<input>.csv \
-    --existing batches/<date>/prod_catalog.csv \
-    --existing .claude/example_upload.csv \
-    --out batches/<date>/_verified.js
+PYTHONUTF8=1 .../python.exe verify.py batches/<date>/master_all.csv \
+  --existing batches/<date>/prod_catalog.csv --existing .claude/example_upload.csv --out batches/<date>/_verified.js
 ```
-Status meanings: `ok` = net-new & name matches; `duplicate` = already in catalog
-(drop); `invalid` = dead/private/embedding-disabled (re-search a real id, or drop);
-`check-title`/`check-artist`/`mismatch` = valid but name didn't match — usually a
-punctuation/transliteration difference that `validate.py` fixes, occasionally a
-wrong id. **When adding to an existing batch, also pass the previous
-`master_all.csv` as `--existing` so you dedup against your own batch.**
+Status: `ok` = net-new + name matches; `duplicate` = already in catalog (dropped);
+`invalid` = dead/private/embed-disabled (re-search or drop); `check-*`/`mismatch` =
+usually punctuation/transliteration (fixed downstream), occasionally a wrong id.
 
-### Step 5 — Consolidate
-Merge every `*_in.csv` into `batches/<date>/master_all.csv`, deduping by
-`youtube_id` (keep first). This is the source of truth.
+**5 — Consolidate** every `*_in.csv` → `master_all.csv`, dedup by `youtube_id`.
 
-### Step 6 — Validate (standardise names + fix genres)
-Copy a previous `batches/*/validate.py`, adjust the curated `POP`/`ROCKPOP`/
-`MIZRAHIT` artist lists, run it. It:
-- drops `duplicate`/`invalid`/playlist-banner rows,
-- re-derives `artist`/`title` from the real oEmbed title for playlist-sourced rows
-  (preserving Hebrew `'`/`"`/`׳`/`״`),
-- reassigns Israeli genres by artist (this is how `israeli-pop` gets split out of
-  the mixed "mizrahit/Mediterranean" bucket),
-- sets soundtracks to `artist=film, title=film`,
-- writes `candidates.js` + `flagged.json` (rows needing a human eye).
-Copy `candidates.js` next to `review.html`.
+**6 — Validate → Fix → Audit:**
+```bash
+PYTHONUTF8=1 .../python.exe batches/<date>/validate.py   # → candidates.js + flagged.json
+PYTHONUTF8=1 .../python.exe batches/<date>/fix.py        # reversals/trims/drops/within-batch dedup
+PYTHONUTF8=1 .../python.exe batches/<date>/audit.py      # expect ~100% clean; check suspects.json
+cp batches/<date>/candidates.js tools/song-curation/candidates.js
+```
+Tune the curated artist lists in `validate.py` (POP/ROCKPOP/MIZRAHIT) and `fix.py`
+(KNOWN, ALLOW, DROP_ARTIST, JUNK) for the new batch's artists.
 
-### Step 7 — Human review
-User opens `review.html`, plays each song, sets start time, approves/rejects,
-fixes genres, checks the **Flagged** filter, exports the approved CSV.
+**7 — Human review.** `review.html` → play, set start time, approve/reject, fix
+genres, scan the **Flagged** filter, export CSV.
 
-### Step 8 — Upload
-Generate idempotent SQL from the approved CSV (see §2) and apply via
-`supabase db query --linked`. Dry-run against a local `supabase start` stack first;
-re-apply to confirm 0 net new rows (idempotency). Add a `### Added` line to
-`CHANGELOG.md`. Nothing is uploaded until the user approves.
+**8 — Upload.** Idempotent SQL → `supabase db query --linked`. Dry-run on a local
+`supabase start` stack, re-apply to confirm 0 net new rows, then prod. CHANGELOG line.
 
-## 5. The Playwright playlist-scrape recipe (the workhorse)
+## 5. The Playwright scrape recipe (the workhorse)
 
-**Find playlists** — navigate to YouTube's playlist-filtered search (the `sp`
-param filters to playlists), then pull `list=` ids out of the DOM:
+**Find playlists** — playlist-filtered YouTube search, pull `list=` ids from the DOM:
 ```
 https://www.youtube.com/results?search_query=<query>&sp=EgIQAw%253D%253D
 ```
-Prefer bigger, genre-specific, curated-looking playlists; avoid single-artist
-playlists (noisy). Hebrew queries that work: `מזרחית להיטים`, `פופ ישראלי להיטים`,
-`רוק ישראלי קלאסי`, `ראפ ישראלי היפ הופ`, `קאברים בעברית`.
+Prefer big, genre-specific, curated playlists; **avoid single-artist playlists**
+(noisy) and **DJ "סט"/"מחרוזת"/"רמיקסים" mixes** (medleys — multiple songs per video).
 
-**Scrape a playlist** — navigate to `https://www.youtube.com/playlist?list=<id>`,
-then run this in `browser_evaluate` (save with the `filename` param):
+**Scrape** — navigate to `youtube.com/playlist?list=<id>`, run in `browser_evaluate`
+(save with the `filename` param). The visible link text is the *duration*; the real
+title is another anchor to the same id, so collect all texts per id and take the
+longest non-duration one:
 ```js
 () => {
   const byId = {};
   document.querySelectorAll('a[href*="watch?v="]').forEach(a => {
-    const m = a.href.match(/[?&]v=([A-Za-z0-9_-]{11})/);
-    if (!m) return;
-    const t = (a.getAttribute('title') || a.textContent || '').trim();
-    (byId[m[1]] = byId[m[1]] || []).push(t);
+    const m = a.href.match(/[?&]v=([A-Za-z0-9_-]{11})/); if (!m) return;
+    (byId[m[1]] = byId[m[1]] || []).push((a.getAttribute('title')||a.textContent||'').trim());
   });
   const isDur = s => /^\d+:\d+(:\d+)?$/.test(s);
-  return Object.entries(byId).map(([id, texts]) => ({
-    id,
-    title: texts.filter(t => t && !isDur(t) && t !== 'להפעלת כל הסרטונים')
-                .sort((a,b)=>b.length-a.length)[0] || ''
-  })).filter(x => x.title);
+  return Object.entries(byId).map(([id,t]) => ({ id,
+    title: t.filter(x=>x && !isDur(x) && x!=='להפעלת כל הסרטונים').sort((a,b)=>b.length-a.length)[0]||''
+  })).filter(x=>x.title);
 }
 ```
-(The visible link text is the *duration*; the real title is another anchor to the
-same id — hence collecting all texts per id and taking the longest non-duration
-one.) Initial load gives ~100 videos; that's plenty per playlist.
+Initial load gives ~100 videos (plenty). Some playlists 404 (title shows just
+"YouTube", 0 videos) — pick another, or use hit-charts instead.
 
-**Real-YouTube validation via Playwright:** to confirm a sample actually plays,
-serve the tool on localhost, open `review.html`, and in `browser_evaluate` click a
-card's `button.load` then read `player.getPlayerState()` (1 = PLAYING).
+**Real-YouTube play-test** — serve on localhost, open `review.html`, in
+`browser_evaluate` click a card's `button.load`, read `player.getPlayerState()` (1=PLAYING).
 
-## 6. Quality lessons (don't relearn these)
+## 6. Known-good sources (reuse these first)
 
-- **Preserve Hebrew punctuation** (`'`, `"`, `׳`, `״`) in names — `9 מ"מ`,
-  `צ'אקי`, `ת'עיניים` break if you strip them. (`check-*` flags are usually just
-  this.)
-- **"Top in Israel" playlists include foreign hits** (Shakira, Arabic pop). Flag
-  pop/mizrahit/rock rows with **zero Hebrew** as `maybe-foreign`; do *not* flag
-  `israeli-cover`/`israeli-rap-hip-hop` for that (English titles are normal there).
-- **Genre is fuzzy** (mizrahit vs israeli-pop blur). Best-effort artist map + let
-  the user finalise in the tool's genre checkboxes. Don't over-engineer it.
-- **Playlist titles** are `Artist - Song (Prod. by X)`; split on the first
-  spaced dash, drop bracketed/`|`/`//` tails.
-- **Embedding-disabled** official videos return `invalid` from oEmbed — they're
-  unusable in-game, so re-search for an embeddable upload (lyric/official-audio) or
-  drop the song.
-- **Soundtrack score playlists** are messy (`Film Soundtrack - Cue`); map by hand.
-- **Dedup catches a lot** — on the first global pass ~66% were already in the
-  catalog. That's expected; lean into newer/deeper cuts.
+**Annual hit-charts (authoritative for popularity — best for "best of year YYYY"):**
+- **Mako Hitlist annual** — `https://hitlist.mako.co.il/annual/2024` (and `/2025`, …).
+  `WebFetch` it with "list the ranked songs as 'Artist — Song' in Hebrew". Gives ~40
+  clean ranked names per year; then find each id by WebSearch (see below). On the 2024
+  pass, 45/68 chart songs were already in the batch — dedup by title first
+  (`chart_songs.py`).
+- ice.co.il year-in-review articles also list the year's biggest songs.
 
-## 7. One-screen cheat sheet
+**Per-song id discovery (when you have a name from a chart):** WebSearch
+`"<artist> <song> קליפ רשמי"` (or `הקליפ הרשמי`) with `allowed_domains:["youtube.com"]`.
+Take the official-channel / `(Prod. by …)` result, not live/remix/karaoke. English
+acts: `"<artist> <song> official video"`.
+
+**YouTube playlists that worked (list ids; some may go stale):**
+- General recent Israeli (mizrahit+pop mix): `PLQvANBcZRbWrefTmmL21F_fNU0EH60wDy`
+  (ים-תיכוני 2026), `PLJ4dTHPAykBm1Yp_lHM_GJP_m0gADRQEB` (גלגלצ 2026),
+  `PLbzsxtRrMUe8XrDGI_w2MOjHkpYUS6F4U` (חמים 2025), `PL4fGSI1pDJn4ECcNLNscMAPND-Degbd5N`
+  (100 המובילים ישראל), `PL8eSCDXgHmoMPehdNd5qy9msZC33tYe72` (קצביים).
+- mizrahit: `PLbXAgsnPq-EP8BTMVrIeQrJvFaWQRHpO_` (10M+ views — classic popular),
+  `PL70-abtm3JOZi0XsVGe4fR-i1EMbhmij-` (נוסטלגיה 90s-2000s).
+- israeli-rock-pop: `PL21aXNqt5qEzpZ2KAQSZtm0taHGdcTqLS` (רוק ישראלי הכי טוב — good).
+  AVOID `PLwF9UaW7tpginBeZDP3rwuLgde1AtuzsK` (single-artist עמית חיו spam).
+- israeli-rap-hip-hop: `PLHhZwUQwkzySAOfRz_tCazth9noBopA4o`,
+  `PLUrpxYINqnvZVjee_TDtGl1Wvfg9fdS8U` (ראפ הכי חם 2026).
+- israeli-cover: `PL8KzolpuNRvaW1CbEN9XioBMMdjYd8NeV` (קאברים יפים),
+  `PL3hv9QuhnTBlP1aTQq52xk3KYjiEoGOQ4` (אקוסטיים) — **both mix in foreign originals;
+  fix.py drops the non-Hebrew-artist ones.**
+- israeli-soundtracks: `PL-4qmSLhuPJaOuuEnizI7080Hblyf8UB8` (שירי פתיחה סדרות — only
+  ~7; this genre is hard, low value).
+- soundtracks (global): `PL4BrNFx1j7E5qDxSPIkeXgBqX0J7WaB2a` (Ultimate Movie Scores).
+
+**Search-query patterns that surfaced good playlists:** `מזרחית <year> להיטים`,
+`להיטים ישראלים <year>`, `גלגלצ <year>`, `ראפ ישראלי <year>`, `רוק ישראלי מיטב
+הלהיטים`, `קאברים בעברית`, `פופ ישראלי להיטים`.
+
+## 7. Quality lessons (don't relearn these)
+
+- **Foreign contamination.** "Top in Israel"/cover charts include Arabic & global
+  hits (Shakira, Justin Bieber, Ed Sheeran, Wael Kfoury…). Rule: a `pop/mizrahit/
+  israeli-rock-pop/israeli-cover` row with **zero Hebrew in the artist** is foreign →
+  **drop** (fix.py does this). Allow-list real Israeli acts with Latin stage names
+  (e.g. **Static & Ben El**, **Noam Bettan** — both WebSearch-confirmed Israeli) and
+  force them to `israeli-pop`. Don't apply this to `israeli-rap-hip-hop` (English
+  names are normal there).
+- **Medleys.** `מחרוזת` (and DJ "סט") videos contain several songs — useless for
+  "name the song". Drop anything with `מחרוזת` in title/oEmbed.
+- **Reversed "Song - Artist".** Some playlists list the song first. `fix.py` swaps
+  when a KNOWN artist sits in the title field but not the artist field — keep the
+  KNOWN-artist list current.
+- **Transliteration tails.** Titles like `אתה תותח - Sarit Hadad -` get the trailing
+  latin trimmed; preserve the Hebrew. (`check-*` verify flags are usually just this
+  or apostrophes.)
+- **Preserve Hebrew punctuation** `'"׳״` — `9 מ"מ`, `צ'אקי`, `ת'עיניים` break if stripped.
+- **Minor self-promoters / junk titles.** One artist (עמית חיו) spammed a "rock"
+  playlist with verbose self-promo titles; `fix.py` has a DROP_ARTIST + JUNK-phrase
+  list ("זמר לחתונה", "סינגל חדש", "הלהיט של הזמר", "קריוקי", "פלייבק"…). Keep JUNK
+  *specific* — bare words like `חתונה`/`מופע` appear in real song/band names.
+- **Blank artist → drop.** If neither the parse nor the oEmbed title yields an artist,
+  drop the row (validate.py); don't ship blank-artist rows.
+- **Within-batch dedup** by normalized (artist,title) catches the same song uploaded
+  twice under different ids across playlists (fix.py).
+- **Embed-disabled** official videos return `invalid` from oEmbed → re-search for an
+  embeddable upload or drop.
+- **Genre is fuzzy** (mizrahit ↔ israeli-pop blur). Best-effort artist map; the user
+  finalises in the tool. The mixed "Mediterranean" playlists need the artist→genre
+  split most.
+- **Some year playlists 404** (2024 mizrahit ones did) — fall back to the Mako
+  annual chart + per-song id search.
+- **Audit should be ~100%.** Residual `audit.py` suspects are normally just
+  Hebrew-artist-vs-Latin-video-title (e.g. עומר אדם on an "- Topic" channel, עדן גולן
+  = "Eden Golan") — verify the channel and move on.
+
+## 8. One-screen cheat sheet
 
 ```bash
 P="PYTHONUTF8=1 backend/.venv/Scripts/python.exe"; T=tools/song-curation; B=$T/batches/$(date +%F)
-# 1. catalog dump → prod_catalog.csv (sandbox off)
-# 2..3. scrape playlists (Playwright) → *.json ; parse:
-$P $T/parse_playlist.py dump.json --genre mizrahit --source "yt …" --out $B/in.csv
-# 4. verify (sandbox off):
-$P $T/verify.py $B/in.csv --existing $B/prod_catalog.csv --existing .claude/example_upload.csv --out $B/_verified.js
-# 5. consolidate → master_all.csv  6. cp+adapt validate.py → candidates.js + flagged.json
-# 7. cp $B/candidates.js $T/candidates.js ; open review.html  8. export CSV → idempotent SQL → prod
+mkdir -p $B/_dumps; cp $T/{validate,fix,audit,chart_songs}.py $B/   # copy templates from tool root
+# 1. dump catalog → $B/prod_catalog.csv (supabase, sandbox off)
+# 2. scrape playlists (Playwright §5) → $B/_dumps/*.json   |  or WebFetch Mako chart + WebSearch ids
+$P $T/parse_playlist.py $B/_dumps/x.json --genre mizrahit --source "yt …" --out $B/israeli_in.csv
+# 5. consolidate *_in.csv → $B/master_all.csv (dedup youtube_id)
+$P $T/verify.py $B/master_all.csv --existing $B/prod_catalog.csv --existing .claude/example_upload.csv --out $B/_verified.js   # sandbox off
+$P $B/validate.py && $P $B/fix.py && $P $B/audit.py        # 6
+cp $B/candidates.js $T/candidates.js                       # 7. open review.html
+# 8. approved CSV → idempotent SQL → supabase db query --linked
 ```
