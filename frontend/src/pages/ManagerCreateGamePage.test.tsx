@@ -67,6 +67,7 @@ describe("ManagerCreateGamePage", () => {
       game_code: "ZZZZZZ",
       status: "waiting",
       selected_genres: ["g1"],
+      selected_decades: [],
       started_at: "2026-05-05T12:00:00Z",
       expires_at: "2026-05-05T16:00:00Z",
       manager_token: "abc-token-123",
@@ -78,8 +79,39 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => expect(screen.getByText("game console")).toBeInTheDocument());
     expect(createGame).toHaveBeenCalledWith({
       selected_genres: ["g1"],
+      selected_decades: [],
     });
     expect(getManagerToken("ZZZZZZ")).toBe("abc-token-123");
+  });
+
+  it("sends selected decades in the create payload; a decade alone needs a genre", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
+    vi.mocked(createGame).mockResolvedValueOnce({
+      game_code: "ZZZZZZ",
+      status: "waiting",
+      selected_genres: ["g1"],
+      selected_decades: [1980],
+      started_at: "2026-05-05T12:00:00Z",
+      expires_at: "2026-05-05T16:00:00Z",
+      manager_token: "abc-token-123",
+    });
+    renderPage();
+    await waitFor(() => screen.getByText("Rock"));
+    const submit = screen.getByRole("button", { name: /create game/i });
+
+    // Decades are optional: picking one without a genre keeps submit disabled.
+    fireEvent.click(screen.getByLabelText(/80s/i));
+    expect(submit).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/rock/i));
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(createGame).toHaveBeenCalled());
+    expect(createGame).toHaveBeenCalledWith({
+      selected_genres: ["g1"],
+      selected_decades: [1980],
+    });
   });
 
   it("shows the error message when createGame fails", async () => {

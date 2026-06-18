@@ -192,6 +192,7 @@ export function makeActiveGame(overrides: Partial<ActiveGame> = {}): ActiveGame 
     game_code: "ABCDEF",
     status: "waiting",
     selected_genres: [],
+    selected_decades: [],
     round_number: 0,
     current_song_id: null,
     current_round_id: null,

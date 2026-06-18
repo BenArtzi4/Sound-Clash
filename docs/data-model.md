@@ -65,6 +65,7 @@ CREATE TABLE active_games (
   status            text NOT NULL DEFAULT 'waiting'
                      CHECK (status IN ('waiting','playing','ended')),
   selected_genres   uuid[] NOT NULL DEFAULT '{}',
+  selected_decades  integer[] NOT NULL DEFAULT '{}',   -- mig 032; decade start-years
   round_number      integer NOT NULL DEFAULT 0,
   current_song_id   uuid REFERENCES songs(id) ON DELETE SET NULL,
   current_round_id  uuid,                              -- FK added below
@@ -186,6 +187,16 @@ WHERE sg.genre_id = ANY($1)
   )
 ORDER BY random() LIMIT 1;
 ```
+
+### `active_games.selected_decades`
+
+Postgres `integer[]` (migration 032), set once at `POST /games` and empty by
+default. Each element is a **decade start-year** (the 80s = `1980`). When
+non-empty, the song picker (`select_next_song` / `peek_next_song`) only serves
+songs whose `release_year` floored to its decade (`release_year / 10 * 10`) is in
+this array — combined with `selected_genres` as **genre AND decade**. Empty means
+no year limit; a `NULL`-year song matches no specific decade (see
+`songs.release_year`). Mirrors `selected_genres`' storage and lifecycle.
 
 ### `active_games.expires_at`
 

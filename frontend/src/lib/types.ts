@@ -7,6 +7,7 @@ export interface ActiveGame {
   game_code: string;
   status: GameStatus;
   selected_genres: string[];
+  selected_decades: number[];
   round_number: number;
   current_song_id: string | null;
   current_round_id: string | null;
@@ -110,6 +111,7 @@ export interface CreateGameResponse {
   game_code: string;
   status: GameStatus;
   selected_genres: string[];
+  selected_decades: number[];
   started_at: string;
   expires_at: string;
   manager_token: string;
