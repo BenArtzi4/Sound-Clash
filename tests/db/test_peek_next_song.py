@@ -212,6 +212,56 @@ async def test_peek_returns_no_rows_when_pool_exhausted(db: asyncpg.Connection) 
 
 
 # ---------------------------------------------------------------------------
+# Decade filter (migration 032) -- must match select_next_song in lockstep
+# ---------------------------------------------------------------------------
+
+
+async def _set_selected_decades(
+    conn: asyncpg.Connection, game_code: str, decades: list[int]
+) -> None:
+    await conn.execute(
+        "UPDATE active_games SET selected_decades = $1::int[] WHERE game_code = $2",
+        decades,
+        game_code,
+    )
+
+
+@pytest.mark.asyncio
+async def test_peek_respects_decade_filter(db: asyncpg.Connection) -> None:
+    """Peek must only ever surface a song inside the selected decade, so the
+    browser never prebuffers a song the commit (select_next_song) would reject."""
+    game_code = await create_test_game(db, status="waiting")
+    token = await fetch_manager_token(db, game_code)
+    rock = (await _genre_ids(db, "rock"))[0]
+    await _set_selected_genres(db, game_code, [rock])
+    s80 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1985)
+    s90 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1995)
+    await _attach_song_to_genre(db, s80, rock)
+    await _attach_song_to_genre(db, s90, rock)
+    await _set_selected_decades(db, game_code, [1980])
+
+    for _ in range(5):
+        rows = await _peek(db, game_code, token)
+        assert len(rows) == 1
+        assert rows[0]["song_id"] == s80
+
+
+@pytest.mark.asyncio
+async def test_peek_returns_no_rows_when_decade_excludes_all(db: asyncpg.Connection) -> None:
+    """When no in-genre song is in the selected decade, peek returns zero rows
+    (not an error) -- the host just doesn't prebuffer."""
+    game_code = await create_test_game(db, status="waiting")
+    token = await fetch_manager_token(db, game_code)
+    rock = (await _genre_ids(db, "rock"))[0]
+    await _set_selected_genres(db, game_code, [rock])
+    s90 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1995)
+    await _attach_song_to_genre(db, s90, rock)
+    await _set_selected_decades(db, game_code, [1980])
+
+    assert await _peek(db, game_code, token) == []
+
+
+# ---------------------------------------------------------------------------
 # Token validation
 # ---------------------------------------------------------------------------
 

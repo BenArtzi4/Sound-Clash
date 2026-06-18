@@ -331,6 +331,7 @@ Behavior:
 - Token + game-state gate runs first (same shape as `award_attempt`): raises `game_not_found` / `game_ended` / `manager_token_required` before any reads of song / round state.
 - Then `no_genres_selected` (`22023`) if `selected_genres` is empty.
 - Random path: picks an unplayed song from `song_genres` constrained to `selected_genres`. Equal-weight per eligible genre, picked via Postgres `random()` in a CTE. Raises `no_more_songs` (`22023`) when the pool is exhausted. (Historically this logic lived in `backend/app/services/song_picker.py`, removed in the dead-code cleanup.)
+- **Decade filter (migration 032):** when `active_games.selected_decades` is non-empty, the `eligible` CTE additionally requires `(songs.release_year / 10 * 10) = ANY(selected_decades)` — the song's decade must be one the host chose. The empty default imposes no year limit. A `NULL` `release_year` matches no specific decade, so unknown-year songs are excluded when a decade is selected and included when none is. `selected_decades` is optional; only `selected_genres` is required.
 - Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow).
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
 - Returns one row with the new round + the picked song's metadata.
@@ -363,7 +364,7 @@ SET search_path = public;
 
 Behavior:
 - Token + game-state gate runs first, **identical** to `select_next_song`: raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) / `no_genres_selected` (`22023`) before returning any candidate.
-- Runs the **same** unplayed-song random picker as `select_next_song`'s random path (exclude already-played, bucket by selected genre, random genre then random song).
+- Runs the **same** unplayed-song random picker as `select_next_song`'s random path (exclude already-played, bucket by selected genre, random genre then random song) — including the decade filter (migration 032), kept in lockstep so a peeked candidate is never one the eventual commit would reject.
 - **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "nothing to prebuffer"; the real `no_more_songs` still surfaces from the eventual `select_next_song` commit.
 - On the actual "Next round" click the browser commits the peeked song via `select_next_song(..., p_song_id => <peeked id>)` (manual-pick path), so the buffered video and the started round can never disagree.

@@ -39,6 +39,14 @@
   gap: 0.6rem;
 }
 
+/* Decade chips reuse the .genre / .genreSelected look in a tighter grid; the
+   labels are short ("80s") so they pack into narrow columns. */
+.decades {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 0.6rem;
+}
+
 .genre {
   display: flex;
   align-items: center;

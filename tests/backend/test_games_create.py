@@ -38,6 +38,39 @@ async def test_validation_requires_genres(client) -> None:
     assert resp.json()["error"] == "validation_error"
 
 
+async def test_selected_decades_persisted(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await client.post(
+        "/games",
+        json={"selected_genres": [str(genres[0])], "selected_decades": [1980, 1990]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert sorted(resp.json()["selected_decades"]) == [1980, 1990]
+    # It actually lands on the active_games row the picker reads.
+    row = await db.fetchrow(
+        "SELECT selected_decades FROM active_games WHERE game_code = $1",
+        resp.json()["game_code"],
+    )
+    assert sorted(row["selected_decades"]) == [1980, 1990]
+
+
+async def test_selected_decades_default_empty(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await client.post("/games", json={"selected_genres": [str(genres[0])]})
+    assert resp.status_code == 201
+    assert resp.json()["selected_decades"] == []
+
+
+async def test_selected_decades_out_of_range_rejected(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await client.post(
+        "/games",
+        json={"selected_genres": [str(genres[0])], "selected_decades": [1850]},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "validation_error"
+
+
 async def test_unique_token_per_game(client, db) -> None:
     """Each game's manager_token is independently random."""
     genres = await fetch_genre_ids(db, slugs=["rock"])
