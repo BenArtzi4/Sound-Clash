@@ -1,5 +1,10 @@
 # Song curation tool
 
+> **Adding songs? Read [`PLAYBOOK.md`](./PLAYBOOK.md) first** — it's the full
+> step-by-step process (find → verify → validate → review → upload) a future
+> agent can execute end-to-end. This README is just the tool reference.
+
+
 A small, reusable workflow for adding popular songs to the Sound Clash catalog
 **without** trusting Claude's from-memory guesses for song name, artist, or — the
 big one — the YouTube id. IDs are discovered from the web, then **every id is
