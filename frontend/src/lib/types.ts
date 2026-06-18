@@ -47,6 +47,10 @@ export interface Song {
   artist: string;
   youtube_id: string;
   start_time: number;
+  // Original release year of the song (mig 031). Null when unknown / not yet
+  // backfilled; optional because the `select_next_song` RPC returns
+  // Song-shaped rows without it.
+  release_year?: number | null;
   is_soundtrack: boolean;
   // Optional because the `select_next_song` RPC returns Song-shaped rows
   // without joined genres. The admin list/get/create/update endpoints
@@ -149,6 +153,7 @@ export interface SongWritePayload {
   artist: string;
   youtube_id: string;
   start_time: number;
+  release_year: number | null;
   genre_ids: string[];
 }
 

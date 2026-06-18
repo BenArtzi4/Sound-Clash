@@ -34,6 +34,7 @@ interface FormState {
   artist: string;
   youtube_id: string;
   start_time: string;
+  release_year: string;
   genre_ids: Set<string>;
 }
 
@@ -42,6 +43,7 @@ const EMPTY_FORM: FormState = {
   artist: "",
   youtube_id: "",
   start_time: "0",
+  release_year: "",
   genre_ids: new Set(),
 };
 
@@ -51,6 +53,7 @@ function songToForm(song: Song, genreIds: string[]): FormState {
     artist: song.artist,
     youtube_id: song.youtube_id,
     start_time: String(song.start_time),
+    release_year: song.release_year != null ? String(song.release_year) : "",
     genre_ids: new Set(genreIds),
   };
 }
@@ -61,6 +64,7 @@ function formToPayload(form: FormState): SongWritePayload {
     artist: form.artist.trim(),
     youtube_id: form.youtube_id.trim(),
     start_time: Number(form.start_time),
+    release_year: form.release_year.trim() === "" ? null : Number(form.release_year),
     genre_ids: Array.from(form.genre_ids),
   };
 }
@@ -71,6 +75,11 @@ function formIsValid(form: FormState): boolean {
   if (!YT_ID_PATTERN.test(form.youtube_id.trim())) return false;
   const start = Number(form.start_time);
   if (!Number.isInteger(start) || start < 0) return false;
+  const year = form.release_year.trim();
+  if (year !== "") {
+    const y = Number(year);
+    if (!Number.isInteger(y) || y < 1900 || y > 2100) return false;
+  }
   if (form.genre_ids.size === 0) return false;
   return true;
 }
@@ -569,6 +578,18 @@ function SongForm({ genres, initial, submitLabel, busy, onCancel, onSubmit }: So
             value={form.start_time}
             onChange={(e) => setForm({ ...form, start_time: e.target.value })}
             aria-label="Start time"
+          />
+        </label>
+        <label className={styles.field}>
+          <span>Release year (optional)</span>
+          <input
+            type="number"
+            min={1900}
+            max={2100}
+            placeholder="e.g. 1985"
+            value={form.release_year}
+            onChange={(e) => setForm({ ...form, release_year: e.target.value })}
+            aria-label="Release year"
           />
         </label>
         <div className={`${styles.field} ${styles.fieldFull}`}>

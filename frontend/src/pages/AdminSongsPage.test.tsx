@@ -50,6 +50,7 @@ const SONG_A: Song = {
   artist: "Artist A",
   youtube_id: "aaaaaaaaaaa",
   start_time: 0,
+  release_year: 1980,
   is_soundtrack: false,
   genres: [{ id: "g1", name: "Rock", slug: "rock" }],
 };
@@ -259,11 +260,39 @@ describe("AdminSongsPage: create + edit + delete", () => {
         artist: "Some artist",
         youtube_id: "abcdefghijk",
         start_time: 0,
+        release_year: null,
         genre_ids: ["g1"],
       },
       "letmein",
     );
     await waitFor(() => expect(screen.getByText(/song created/i)).toBeInTheDocument());
+  });
+
+  it("sends a valid release year and rejects an out-of-range one", async () => {
+    vi.mocked(createSong).mockResolvedValue(SONG_A);
+    renderPage();
+    await signIn();
+
+    fireEvent.click(screen.getByRole("button", { name: /\+ new song/i }));
+    fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: "Made up" } });
+    fireEvent.change(screen.getByLabelText(/^artist$/i), { target: { value: "Some artist" } });
+    fireEvent.change(screen.getByLabelText(/^youtube id$/i), {
+      target: { value: "abcdefghijk" },
+    });
+    fireEvent.click(screen.getByLabelText(/^rock$/i));
+
+    const submit = screen.getByRole("button", { name: /create song/i });
+    // Out-of-range year blocks submission.
+    fireEvent.change(screen.getByLabelText(/release year/i), { target: { value: "1850" } });
+    expect(submit).toBeDisabled();
+    // A valid year flows into the payload.
+    fireEvent.change(screen.getByLabelText(/release year/i), { target: { value: "1985" } });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(createSong).toHaveBeenCalled());
+    const [payload] = vi.mocked(createSong).mock.calls[0]!;
+    expect(payload.release_year).toBe(1985);
   });
 
   it("tags the Soundtracks genre and sends no separate soundtrack flag", async () => {
@@ -352,6 +381,8 @@ describe("AdminSongsPage: create + edit + delete", () => {
     expect(id).toBe(SONG_A.id);
     expect(payload.title).toBe("Alpha v2");
     expect(payload.youtube_id).toBe(SONG_A.youtube_id);
+    // The release year pre-fills from the song and survives the round-trip.
+    expect(payload.release_year).toBe(1980);
     expect([...payload.genre_ids].sort()).toEqual(["g1", "g2"]);
     expect(pw).toBe("letmein");
   });

@@ -200,6 +200,7 @@ describe("api - admin-songs routes", () => {
     artist: "Artist",
     youtube_id: "abcdefghijk",
     start_time: 0,
+    release_year: null,
     genre_ids: ["g1"],
   };
 

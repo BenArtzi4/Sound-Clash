@@ -139,3 +139,41 @@ def test_parse_csv_strips_bom() -> None:
     raw = b"\xef\xbb\xbf" + _bytes(["Hi,Adele,YQHsXMglC9A,0,rock"])
     rows = csv_import.parse_csv(raw)
     assert rows[0].title == "Hi"
+
+
+# ----- csv_import release_year (optional column) ------------------------
+
+HEADER_YEAR = HEADER + ",release_year"
+
+
+def _bytes_year(rows: list[str]) -> bytes:
+    return ("\n".join([HEADER_YEAR, *rows]) + "\n").encode("utf-8")
+
+
+def test_parse_csv_release_year_absent_is_none() -> None:
+    # The release_year column is optional: a header without it still parses.
+    rows = csv_import.parse_csv(_bytes(["Hello,Adele,YQHsXMglC9A,0,rock"]))
+    assert rows[0].release_year is None
+
+
+def test_parse_csv_release_year_parsed() -> None:
+    rows = csv_import.parse_csv(_bytes_year(["Hello,Adele,YQHsXMglC9A,0,rock,1994"]))
+    assert rows[0].release_year == 1994
+
+
+def test_parse_csv_release_year_blank_is_none() -> None:
+    rows = csv_import.parse_csv(_bytes_year(["Hello,Adele,YQHsXMglC9A,0,rock,"]))
+    assert rows[0].release_year is None
+
+
+def test_parse_csv_release_year_out_of_range() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        csv_import.parse_csv(_bytes_year(["Hello,Adele,YQHsXMglC9A,0,rock,1700"]))
+    assert exc_info.value.details["field"] == "release_year"
+    assert exc_info.value.details["issue"] == "out_of_range"
+
+
+def test_parse_csv_release_year_not_integer() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        csv_import.parse_csv(_bytes_year(["Hello,Adele,YQHsXMglC9A,0,rock,nineteen"]))
+    assert exc_info.value.details["issue"] == "not_an_integer"
