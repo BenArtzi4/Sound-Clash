@@ -377,6 +377,7 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
               <th>Artist</th>
               <th>YouTube ID</th>
               <th>Start</th>
+              <th>Year</th>
               <th>Genres</th>
               <th aria-label="Actions" />
             </tr>
@@ -398,6 +399,9 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
                     <Skeleton width="40px" height={16} />
                   </td>
                   <td>
+                    <Skeleton width="40px" height={16} />
+                  </td>
+                  <td>
                     <Skeleton width="120px" height={16} />
                   </td>
                   <td />
@@ -405,7 +409,7 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
               ))
             ) : songs.length === 0 ? (
               <tr>
-                <td colSpan={6} className={styles.empty}>
+                <td colSpan={7} className={styles.empty}>
                   No songs found.
                 </td>
               </tr>
@@ -419,6 +423,9 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
                     <td className={styles.ytId}>{s.youtube_id}</td>
                     <td className={styles.startTime}>
                       {s.start_time > 0 ? `${s.start_time}s` : "—"}
+                    </td>
+                    <td className={styles.startTime}>
+                      {s.release_year != null ? s.release_year : "—"}
                     </td>
                     <td>
                       <div className={styles.genreList}>

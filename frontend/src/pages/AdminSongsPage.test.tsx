@@ -153,18 +153,20 @@ describe("AdminSongsPage: list", () => {
     expect(screen.getByText("aaaaaaaaaaa")).toBeInTheDocument();
   });
 
-  it("renders start_time and the song's explicit genre tags", async () => {
+  it("renders start_time, release year, and the song's explicit genre tags", async () => {
     renderPage();
     await signIn();
-    // Alpha: start_time=0 renders as em-dash; one genre tag (Rock).
+    // Alpha: start_time=0 renders as em-dash; release_year 1980; one genre tag (Rock).
     const alphaRow = screen.getByText("Alpha").closest("tr") as HTMLElement;
     expect(within(alphaRow).getByText("—")).toBeInTheDocument();
+    expect(within(alphaRow).getByText("1980")).toBeInTheDocument();
     expect(within(alphaRow).getByText("Rock")).toBeInTheDocument();
     expect(within(alphaRow).queryByText("Soundtracks")).not.toBeInTheDocument();
-    // Bravo: start_time=12 renders as "12s"; the row reflects only the
-    // genre tags actually stored on the song (Pop + Soundtracks).
+    // Bravo: start_time=12 renders as "12s"; no release_year → em-dash; the row
+    // reflects only the genre tags actually stored on the song (Pop + Soundtracks).
     const bravoRow = screen.getByText("Bravo").closest("tr") as HTMLElement;
     expect(within(bravoRow).getByText("12s")).toBeInTheDocument();
+    expect(within(bravoRow).getByText("—")).toBeInTheDocument();
     expect(within(bravoRow).getByText("Pop")).toBeInTheDocument();
     expect(within(bravoRow).getByText("Soundtracks")).toBeInTheDocument();
   });
