@@ -124,10 +124,7 @@ export function ManagerCreateGamePage() {
             {DECADES.map((d) => {
               const isSel = selectedDecades.has(d);
               return (
-                <label
-                  key={d}
-                  className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
-                >
+                <label key={d} className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}>
                   <input type="checkbox" checked={isSel} onChange={() => toggleDecade(d)} />
                   {decadeLabel(d)}
                 </label>
