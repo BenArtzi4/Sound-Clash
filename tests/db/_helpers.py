@@ -86,22 +86,27 @@ async def create_test_song(
     title: str = "Test Title",
     artist: str = "Test Artist",
     youtube_id: str = "abcdefghijk",
+    release_year: int | None = None,
 ) -> uuid.UUID:
     """Insert one row into songs and return its id.
 
     Soundtrack-ness is derived from genre membership (migration 028), so there
     is no is_soundtrack column to set here; attach the song to the 'soundtracks'
     or 'israeli-soundtracks' genre via song_genres to make it a soundtrack.
+
+    release_year (migration 031) is NULL unless given; pass it to exercise the
+    decade filter (migration 032).
     """
     row = await conn.fetchrow(
         """
-        INSERT INTO songs (title, artist, youtube_id)
-        VALUES ($1, $2, $3)
+        INSERT INTO songs (title, artist, youtube_id, release_year)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
         """,
         title,
         artist,
         youtube_id,
+        release_year,
     )
     assert row is not None
     return row["id"]

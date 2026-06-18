@@ -181,6 +181,98 @@ async def test_random_pick_advances_round_number(db: asyncpg.Connection) -> None
 
 
 # ---------------------------------------------------------------------------
+# Decade filter (migration 032)
+# ---------------------------------------------------------------------------
+
+
+async def _set_selected_decades(
+    conn: asyncpg.Connection, game_code: str, decades: list[int]
+) -> None:
+    await conn.execute(
+        "UPDATE active_games SET selected_decades = $1::int[] WHERE game_code = $2",
+        decades,
+        game_code,
+    )
+
+
+async def _seed_rock_game(conn: asyncpg.Connection) -> tuple[str, uuid.UUID, uuid.UUID]:
+    """active_games (waiting) + 'rock' selected, returns (game_code, token, rock_id)."""
+    game_code = await create_test_game(conn, status="waiting")
+    token = await fetch_manager_token(conn, game_code)
+    rock = (await _genre_ids(conn, "rock"))[0]
+    await _set_selected_genres(conn, game_code, [rock])
+    return game_code, token, rock
+
+
+@pytest.mark.asyncio
+async def test_decade_filter_limits_pick_to_selected_decade(db: asyncpg.Connection) -> None:
+    """With the 80s selected, only the 1985 song is eligible; the 1995 song is
+    never served, so the pool exhausts after the one in-decade song."""
+    game_code, token, rock = await _seed_rock_game(db)
+    s80 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1985)
+    s90 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1995)
+    await _attach_song_to_genre(db, s80, rock)
+    await _attach_song_to_genre(db, s90, rock)
+    await _set_selected_decades(db, game_code, [1980])
+
+    assert (await _call(db, game_code, token))[0]["song_id"] == s80
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert "no_more_songs" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_multiple_decades_are_unioned(db: asyncpg.Connection) -> None:
+    """Selecting the 80s and 00s serves songs from either, but never the 90s."""
+    game_code, token, rock = await _seed_rock_game(db)
+    s80 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1988)
+    s90 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1994)
+    s00 = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=2003)
+    for sid in (s80, s90, s00):
+        await _attach_song_to_genre(db, sid, rock)
+    await _set_selected_decades(db, game_code, [1980, 2000])
+
+    picked = {
+        (await _call(db, game_code, token))[0]["song_id"],
+        (await _call(db, game_code, token))[0]["song_id"],
+    }
+    assert picked == {s80, s00}
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert "no_more_songs" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_null_year_song_excluded_when_decade_selected(db: asyncpg.Connection) -> None:
+    """A song with an unknown (NULL) release_year matches no specific decade."""
+    game_code, token, rock = await _seed_rock_game(db)
+    s_null = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=None)
+    await _attach_song_to_genre(db, s_null, rock)
+    await _set_selected_decades(db, game_code, [1990])
+
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert "no_more_songs" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_empty_decades_includes_all_years(db: asyncpg.Connection) -> None:
+    """The default empty selected_decades imposes no year limit -- a known-year
+    song and a NULL-year song are both eligible."""
+    game_code, token, rock = await _seed_rock_game(db)
+    s_known = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1975)
+    s_null = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=None)
+    await _attach_song_to_genre(db, s_known, rock)
+    await _attach_song_to_genre(db, s_null, rock)
+
+    picked = {
+        (await _call(db, game_code, token))[0]["song_id"],
+        (await _call(db, game_code, token))[0]["song_id"],
+    }
+    assert picked == {s_known, s_null}
+
+
+# ---------------------------------------------------------------------------
 # is_soundtrack derivation (migration 028)
 # ---------------------------------------------------------------------------
 

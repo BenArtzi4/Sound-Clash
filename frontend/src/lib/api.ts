@@ -143,7 +143,10 @@ export function joinTeam(gameCode: string, name: string): Promise<Team> {
   return request("POST", `/games/${gameCode}/teams`, { body: { name } });
 }
 
-export function createGame(body: { selected_genres: string[] }): Promise<CreateGameResponse> {
+export function createGame(body: {
+  selected_genres: string[];
+  selected_decades: number[];
+}): Promise<CreateGameResponse> {
   return request("POST", "/games", { body });
 }
 

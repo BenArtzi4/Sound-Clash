@@ -7,12 +7,21 @@ import { setManagerToken } from "../lib/managerToken";
 import type { Genre } from "../lib/types";
 import styles from "./ManagerCreateGamePage.module.css";
 
+// Decades are stored as their start year (the 80s = 1980); the picker floors a
+// song's release_year to its decade and matches by membership (migration 032).
+const DECADES = [1960, 1970, 1980, 1990, 2000, 2010, 2020] as const;
+
+function decadeLabel(decade: number): string {
+  return `${String(decade).slice(2)}s`; // 1980 -> "80s", 2000 -> "00s"
+}
+
 export function ManagerCreateGamePage() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const [genres, setGenres] = useState<Genre[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedDecades, setSelectedDecades] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [genresLoading, setGenresLoading] = useState(true);
 
@@ -43,6 +52,15 @@ export function ManagerCreateGamePage() {
     });
   }
 
+  function toggleDecade(decade: number) {
+    setSelectedDecades((prev) => {
+      const next = new Set(prev);
+      if (next.has(decade)) next.delete(decade);
+      else next.add(decade);
+      return next;
+    });
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (selected.size === 0 || busy) return;
@@ -50,6 +68,7 @@ export function ManagerCreateGamePage() {
     try {
       const game = await createGame({
         selected_genres: Array.from(selected),
+        selected_decades: Array.from(selectedDecades),
       });
       setManagerToken(game.game_code, game.manager_token);
       toast(`Game ${game.game_code} created`, { variant: "success" });
@@ -95,6 +114,26 @@ export function ManagerCreateGamePage() {
               })}
             </div>
           )}
+        </div>
+
+        <div className={styles.field}>
+          <span className={styles.label}>
+            Release decade <span className="muted">(optional — any year if none picked)</span>
+          </span>
+          <div className={styles.decades}>
+            {DECADES.map((d) => {
+              const isSel = selectedDecades.has(d);
+              return (
+                <label
+                  key={d}
+                  className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
+                >
+                  <input type="checkbox" checked={isSel} onChange={() => toggleDecade(d)} />
+                  {decadeLabel(d)}
+                </label>
+              );
+            })}
+          </div>
         </div>
 
         <div className={styles.actions}>

@@ -12,12 +12,17 @@ TeamName = Annotated[
     str,
     StringConstraints(min_length=1, max_length=30, strip_whitespace=True),
 ]
+# A decade is stored as its start year (the 80s = 1980). Bounds mirror the
+# songs.release_year CHECK; the picker floors release_year to its decade and
+# matches by membership (migration 032).
+Decade = Annotated[int, Field(ge=1900, le=2100)]
 
 
 class CreateGameRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     selected_genres: list[UUID] = Field(min_length=1)
+    selected_decades: list[Decade] = Field(default_factory=list)
 
 
 class CreateGameResponse(BaseModel):
@@ -26,6 +31,7 @@ class CreateGameResponse(BaseModel):
     game_code: str
     status: str
     selected_genres: list[UUID]
+    selected_decades: list[int] = Field(default_factory=list)
     started_at: datetime
     expires_at: datetime
     manager_token: UUID

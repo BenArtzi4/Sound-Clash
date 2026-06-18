@@ -44,12 +44,14 @@ Create a new game. **No auth.** Anyone can host. Rate-limited 10/min/IP.
 **Request body**:
 ```json
 {
-  "selected_genres": ["<genre_uuid>", "..."]
+  "selected_genres": ["<genre_uuid>", "..."],
+  "selected_decades": [1980, 1990]
 }
 ```
 
 Validation:
 - `selected_genres`: at least 1 genre UUID
+- `selected_decades` (optional): array of decade start-years (the 80s = `1980`), each in `[1900, 2100]`. Omitted or empty means no year limit. The song picker (`select_next_song`) serves only songs whose `release_year` falls in one of these decades; see `rpc-functions.md §3c`.
 
 Games run for as many rounds as the host wants and end only when the host calls `POST /games/{code}/end`. There is no per-game round limit.
 
@@ -59,6 +61,7 @@ Games run for as many rounds as the host wants and end only when the host calls 
   "game_code": "ABCDEF",
   "status": "waiting",
   "selected_genres": ["..."],
+  "selected_decades": [1980, 1990],
   "started_at": "2026-05-03T14:23:01.234Z",
   "expires_at": "2026-05-03T18:23:01.234Z",
   "manager_token": "1f1a2b3c-4d5e-6f70-8190-a1b2c3d4e5f6"

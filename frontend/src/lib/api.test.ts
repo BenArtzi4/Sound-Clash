@@ -106,12 +106,13 @@ describe("api - public routes", () => {
         game_code: "ABCDEF",
         status: "waiting",
         selected_genres: [],
+        selected_decades: [],
         started_at: "2026-05-05T12:00:00Z",
         expires_at: "2026-05-05T16:00:00Z",
         manager_token: "11111111-1111-1111-1111-111111111111",
       }),
     );
-    const res = await createGame({ selected_genres: ["g1"] });
+    const res = await createGame({ selected_genres: ["g1"], selected_decades: [] });
     expect(res.manager_token).toBe("11111111-1111-1111-1111-111111111111");
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;

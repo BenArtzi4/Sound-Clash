@@ -50,12 +50,13 @@ router = APIRouter(tags=["games"])
 
 
 def _insert_game_blocking(
-    client: SupabaseClientLike, code: str, genre_ids: list[str]
+    client: SupabaseClientLike, code: str, genre_ids: list[str], decades: list[int]
 ) -> dict[str, Any]:
     payload = {
         "game_code": code,
         "status": "waiting",
         "selected_genres": genre_ids,
+        "selected_decades": decades,
     }
     with mapped_postgrest_errors():
         resp = client.table("active_games").insert(payload).execute()
@@ -68,7 +69,10 @@ def _insert_game_blocking(
 def _fetch_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:
     resp = (
         client.table("active_games")
-        .select("game_code,status,selected_genres,started_at,expires_at,ended_at,round_number")
+        .select(
+            "game_code,status,selected_genres,selected_decades,"
+            "started_at,expires_at,ended_at,round_number"
+        )
         .eq("game_code", code)
         .execute()
     )
@@ -140,12 +144,15 @@ def _kick_blocking(client: SupabaseClientLike, code: str, team_id: str) -> None:
 async def create_game(request: Request, body: CreateGameRequest) -> CreateGameResponse:
     client = get_supabase_client()
     genre_ids = [str(g) for g in body.selected_genres]
+    decades = list(body.selected_decades)
 
     inserted: dict[str, Any] = {}
 
     async def insert(code: str) -> None:
         nonlocal inserted
-        inserted = await anyio.to_thread.run_sync(_insert_game_blocking, client, code, genre_ids)
+        inserted = await anyio.to_thread.run_sync(
+            _insert_game_blocking, client, code, genre_ids, decades
+        )
 
     await generate_unique_code(insert)
     return CreateGameResponse.model_validate(inserted)
