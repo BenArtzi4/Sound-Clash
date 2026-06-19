@@ -39,12 +39,101 @@
   gap: 0.6rem;
 }
 
-/* Decade chips reuse the .genre / .genreSelected look in a tighter grid; the
-   labels are short ("80s", "2000s") so they pack into narrow columns. */
+/* Decades are a small, well-known closed set, so they read best as a justified
+   row of toggle pills (the Spotify/Apple-Music filter-bar pattern) rather than a
+   ragged checkbox grid. The row breaks are defined in the markup (two .decadeRow
+   groups, 4 + 3) instead of by fluid wrapping, so a lonely orphan pill is
+   impossible at any width — fluid wrap on a 7-item (prime) set strands the last
+   chip on its own line at certain narrow widths (e.g. a 320px / Z-Fold cover). */
 .decades {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-  gap: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.decadeRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Above the mobile breakpoint the two rows dissolve (display: contents) so all
+   seven pills become one justified line again — the desktop look is unchanged. */
+@media (min-width: 601px) {
+  .decades {
+    flex-direction: row;
+  }
+  .decadeRow {
+    display: contents;
+  }
+}
+
+/* flex: 1 1 0 makes every pill stretch to share its row's width equally, so each
+   row is fully justified (4 across on top, 3 across below on a phone; all 7 in a
+   line on desktop). min-width:auto floors each pill at its content width, so the
+   longest label ("2000s") can never clip. */
+.decade {
+  flex: 1 1 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  text-align: center;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.decade:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+}
+
+/* The checkbox is still the real input (kept for accessibility + form
+   semantics); the filled pill is the visual indicator, so hide the box itself
+   off-screen rather than rendering it inside the pill. */
+.decade input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Keyboard focus still needs a visible ring; pointer clicks don't (:has lets the
+   pill carry the ring even though the focused element is the hidden input). */
+.decade:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+/* A solid fill reads unambiguously as "on" without a checkbox to lean on. */
+.decadeSelected {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.decadeSelected:hover {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-strong);
+  color: #ffffff;
 }
 
 .genre {
