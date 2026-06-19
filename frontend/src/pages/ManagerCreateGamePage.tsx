@@ -12,7 +12,10 @@ import styles from "./ManagerCreateGamePage.module.css";
 const DECADES = [1960, 1970, 1980, 1990, 2000, 2010, 2020] as const;
 
 function decadeLabel(decade: number): string {
-  return `${String(decade).slice(2)}s`; // 1980 -> "80s", 2000 -> "00s"
+  // 1960–1990 use the familiar two-digit shorthand ("80s"); 2000 onward spell
+  // the full year ("2000s") because "00s"/"10s" read as ambiguous. Matches how
+  // Spotify / Apple Music label their decade playlists.
+  return decade < 2000 ? `${String(decade).slice(2)}s` : `${decade}s`;
 }
 
 export function ManagerCreateGamePage() {

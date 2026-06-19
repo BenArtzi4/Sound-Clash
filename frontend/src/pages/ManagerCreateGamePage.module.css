@@ -40,10 +40,10 @@
 }
 
 /* Decade chips reuse the .genre / .genreSelected look in a tighter grid; the
-   labels are short ("80s") so they pack into narrow columns. */
+   labels are short ("80s", "2000s") so they pack into narrow columns. */
 .decades {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   gap: 0.6rem;
 }
 
@@ -89,6 +89,19 @@
   padding: 0;
   margin: 0;
   accent-color: var(--color-primary);
+}
+
+/* Clicking a chip focuses its native checkbox, which paints the browser's
+   default blue focus ring around the box. Drop it for pointer interaction but
+   keep a visible ring for keyboard users (:focus-visible) so we don't strip
+   accessibility along with the cosmetic fix. */
+.genre input:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.genre input:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
 }
 
 .genreSelected {
