@@ -66,10 +66,10 @@
     box-shadow 200ms ease;
 }
 
-/* Hover feedback uses box-shadow, not transform. A translateY lift moves the
-   chip's hit-area out from under a pointer resting on its bottom edge, which
-   toggles :hover on/off and makes the chip visibly shake. Shadow gives the
-   same "raised" feel without ever moving the element. */
+/* These chips never move. Feedback is colour/border/shadow only — no transform
+   in any state (:hover or :active). A translateY on :hover moved the chip out
+   from under the pointer and made it shake; a translateY on :active nudged it
+   down on every click, which also reads as a shake. Static is the requirement. */
 .genre:hover {
   border-color: var(--color-primary);
   background: var(--color-primary-soft);
@@ -77,16 +77,15 @@
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
-/* Tactile press feedback, matching the global .btn convention. Safe on :active
-   (not :hover): the state is held for the whole mousedown regardless of pointer
-   position, so the 1px nudge can't toggle itself on and off the way the old
-   hover lift did. */
-.genre:active {
-  transform: translateY(1px);
-}
-
+/* Pin the checkbox to a fixed box. A native checkbox with width:auto renders a
+   different intrinsic size when checked vs unchecked (~16px unchecked, ~13px
+   checked), and because the checkbox and label text share a flex row, that size
+   change shoved the text sideways on every toggle — the "text shaking" on check.
+   Explicit width/height + flex:none keep the footprint constant in both states. */
 .genre input {
-  width: auto;
+  flex: none;
+  width: 1rem;
+  height: 1rem;
   padding: 0;
   margin: 0;
   accent-color: var(--color-primary);
