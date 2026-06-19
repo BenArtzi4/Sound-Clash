@@ -77,6 +77,14 @@
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
+/* Tactile press feedback, matching the global .btn convention. Safe on :active
+   (not :hover): the state is held for the whole mousedown regardless of pointer
+   position, so the 1px nudge can't toggle itself on and off the way the old
+   hover lift did. */
+.genre:active {
+  transform: translateY(1px);
+}
+
 .genre input {
   width: auto;
   padding: 0;
