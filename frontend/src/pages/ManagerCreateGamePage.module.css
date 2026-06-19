@@ -63,14 +63,18 @@
     border-color 200ms ease,
     background 200ms ease,
     color 200ms ease,
-    transform 100ms ease;
+    box-shadow 200ms ease;
 }
 
+/* Hover feedback uses box-shadow, not transform. A translateY lift moves the
+   chip's hit-area out from under a pointer resting on its bottom edge, which
+   toggles :hover on/off and makes the chip visibly shake. Shadow gives the
+   same "raised" feel without ever moving the element. */
 .genre:hover {
   border-color: var(--color-primary);
   background: var(--color-primary-soft);
   color: var(--color-primary-strong);
-  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
 .genre input {
