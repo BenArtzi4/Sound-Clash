@@ -9,7 +9,13 @@ import styles from "./ManagerCreateGamePage.module.css";
 
 // Decades are stored as their start year (the 80s = 1980); the picker floors a
 // song's release_year to its decade and matches by membership (migration 032).
-const DECADES = [1960, 1970, 1980, 1990, 2000, 2010, 2020] as const;
+// Split into two fixed rows so the chips never wrap to a lonely orphan: the
+// 20th-century decades on top, 2000s-onward below. On desktop the rows collapse
+// back into a single line (see .decadeRow display:contents in the CSS).
+const DECADE_ROWS = [
+  [1960, 1970, 1980, 1990],
+  [2000, 2010, 2020],
+] as const;
 
 function decadeLabel(decade: number): string {
   // 1960–1990 use the familiar two-digit shorthand ("80s"); 2000 onward spell
@@ -124,15 +130,22 @@ export function ManagerCreateGamePage() {
             Release decade <span className="muted">(optional — any year if none picked)</span>
           </span>
           <div className={styles.decades}>
-            {DECADES.map((d) => {
-              const isSel = selectedDecades.has(d);
-              return (
-                <label key={d} className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}>
-                  <input type="checkbox" checked={isSel} onChange={() => toggleDecade(d)} />
-                  {decadeLabel(d)}
-                </label>
-              );
-            })}
+            {DECADE_ROWS.map((row, i) => (
+              <div key={i} className={styles.decadeRow}>
+                {row.map((d) => {
+                  const isSel = selectedDecades.has(d);
+                  return (
+                    <label
+                      key={d}
+                      className={`${styles.decade} ${isSel ? styles.decadeSelected : ""}`}
+                    >
+                      <input type="checkbox" checked={isSel} onChange={() => toggleDecade(d)} />
+                      {decadeLabel(d)}
+                    </label>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </div>
 
