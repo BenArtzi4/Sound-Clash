@@ -123,6 +123,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE
   ON game_history, game_history_teams, game_history_songs
   TO service_role;
 
+-- Defense-in-depth (mirror migrations 020/030's "don't trust the auto-grant"
+-- stance): hosted Supabase auto-grants privileges on every new public table to
+-- anon/authenticated. RLS-with-no-policy already denies anon every row, but we
+-- also strip the base privilege so anon/authenticated have no access at all --
+-- the history is operator-only. No-op on a bare-Postgres stack (nothing to
+-- revoke); on Supabase it runs after the CREATE TABLE auto-grant, so it wins.
+REVOKE ALL ON game_history, game_history_teams, game_history_songs
+  FROM anon, authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 4. archive_game: snapshot one game into the durable history tables.
 --    SECURITY DEFINER, service-role-only. Idempotent. Skips 0-round games.

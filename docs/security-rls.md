@@ -115,6 +115,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON game_history, game_history_teams, game_history_songs
   TO service_role;
+
+-- Defense in depth: hosted Supabase auto-grants base privileges on every new
+-- public table to anon/authenticated. RLS-with-no-policy already denies anon
+-- every row, but we ALSO revoke the base privilege so anon gets a hard
+-- permission-denied rather than an RLS-empty result -- the privacy boundary
+-- doesn't rest on RLS alone. No-op on a bare-Postgres stack.
+REVOKE ALL ON game_history, game_history_teams, game_history_songs
+  FROM anon, authenticated;
 ```
 
 ### Function grants
