@@ -40,8 +40,11 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `active_games`  | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_teams`    | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_rounds`   | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
+| `game_history` *(mig 033)*        | ❌ (operator-only) | ❌ | ❌ | ❌ |
+| `game_history_teams` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
+| `game_history_songs` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 
-`service_role` bypasses all RLS.
+`service_role` bypasses all RLS. The durable `game_history*` tables (mig 033) are the **only** tables `anon` cannot read: they have RLS enabled with no read policy and no anon `GRANT`, so the game history is operator-only (read via the service role / Supabase SQL editor). The host-facing "export songs" feature reads the live ephemeral tables in the host's own session, not these.
 
 | RPC function | anon EXECUTE | service_role EXECUTE |
 |---|---|---|
@@ -55,6 +58,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `award_bonus`           | ❌ | ✅ |
 | `end_game`              | ❌ | ✅ |
 | `cleanup_expired_games` | ❌ | ✅ (called by `pg_cron`, not FastAPI) |
+| `archive_game`          | ❌ | ✅ (internal: called by `end_game` + `cleanup_expired_games`; added in migration 033) |
 
 Five RPCs are reachable from the browser: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), and `peek_next_song` (the read-only prebuffer probe, since migration 029). All five perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
 
@@ -78,9 +82,15 @@ CREATE POLICY "anon_read_song_genres"  ON song_genres  FOR SELECT TO anon USING 
 CREATE POLICY "anon_read_active_games" ON active_games FOR SELECT TO anon USING (true);
 CREATE POLICY "anon_read_game_teams"   ON game_teams   FOR SELECT TO anon USING (true);
 CREATE POLICY "anon_read_game_rounds"  ON game_rounds  FOR SELECT TO anon USING (true);
+
+-- Durable game history (mig 033): RLS on, but deliberately NO policy of any kind
+-- for anon, so every anon access is denied. Operator-only.
+ALTER TABLE game_history       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_history_teams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_history_songs ENABLE ROW LEVEL SECURITY;
 ```
 
-No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all writes are denied by default.
+No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all writes are denied by default. No policy at all is created for the `game_history*` tables → anon reads are denied too.
 
 ### Table grants
 
@@ -97,6 +107,13 @@ GRANT SELECT ON songs, genres, song_genres, active_games, game_teams, game_round
 -- stance as the function grants below. No-op in production.
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON songs, genres, song_genres, active_games, game_teams, game_rounds
+  TO service_role;
+
+-- Durable game history (mig 033): service_role only -- deliberately NO anon
+-- grant, so the history stays operator-only even though anon can read the live
+-- game tables above.
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON game_history, game_history_teams, game_history_songs
   TO service_role;
 ```
 
@@ -119,7 +136,8 @@ GRANT EXECUTE ON FUNCTION release_buzz_lock(text, uuid)
 -- Backend-only RPCs: the creating migrations REVOKE FROM PUBLIC; migration 020
 -- additionally revokes the direct anon/authenticated grants that hosted
 -- Supabase adds, and re-asserts the grant for service_role.
---   start_round, end_round, award_bonus, end_game, cleanup_expired_games
+--   start_round, end_round, award_bonus, end_game, cleanup_expired_games,
+--   archive_game (mig 033, internal snapshot helper)
 ```
 
 ## 3. Realtime Subscriptions

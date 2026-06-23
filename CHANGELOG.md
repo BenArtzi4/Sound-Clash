@@ -33,6 +33,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-06-23: Hosts can now **export the songs that played** from the end-of-game screen — open them all as a single YouTube playlist link, or download a self-contained HTML file that lists every song in play order with a clickable YouTube link.
 - 2026-06-18: Hosts can now **filter songs by decade** when creating a game — tap any of the 60s–20s buttons (multi-select) alongside genres, and only songs from those decades play (genres **and** decades). Leaving decades unpicked keeps every year, exactly as before. For covers, the decade follows the song's original release year, not the cover's.
 - 2026-06-18: Admin song catalog now has an optional **Release year** field (song form + CSV import) and shows each song's year as a **Year column** in the catalog list. This is the groundwork for an upcoming "filter by decade" option when hosting a game.
 - 2026-06-18: Added **195 new songs** to the catalog (804 → 999), curated and human-reviewed across every genre — heaviest on Israeli music: israeli-rock-pop (+47), mizrahit (+35), israeli-pop (+21), israeli-rap-hip-hop (+7), plus current 2024–2026 Hebrew hits, and refreshes to pop (+27), electronic (+22), rock (+15), hip-hop (+15), soundtracks (+5), israeli-cover (+2).

@@ -1396,6 +1396,8 @@ describe("ManagerConsolePage", () => {
     // Alice shows on the podium and in the always-on full scoreboard.
     expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("continue-round")).not.toBeInTheDocument();
+    // The post-game song export lives alongside the scoreboard (host-only).
+    expect(screen.getByTestId("export-download")).toBeInTheDocument();
   });
 
   it("rehydrates the current song after a manager refresh mid-round", async () => {

@@ -21,6 +21,27 @@ ALL_TABLES = (
     "game_rounds",
 )
 
+# Durable game history (migration 033) is operator-only: unlike the tables above,
+# anon gets NO read policy and NO base SELECT grant.
+HISTORY_TABLES = (
+    "game_history",
+    "game_history_teams",
+    "game_history_songs",
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("table", HISTORY_TABLES)
+async def test_anon_cannot_read_history(
+    table: str, anon_conn: asyncpg.Connection
+) -> None:
+    """anon must be denied SELECT on the durable history tables (no grant at all),
+    in contrast to the ephemeral tables it can read freely."""
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.execute(f"SELECT * FROM {table}")  # noqa: S608 - constant table list
+
 
 @pytest.mark.asyncio
 async def test_anon_can_select_every_table(

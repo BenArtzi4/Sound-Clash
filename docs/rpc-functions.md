@@ -411,7 +411,7 @@ Not idempotent. Each call adds `p_points` to the team's score. The host is expec
 
 ## 4. `end_game`: manager ends the game
 
-Called by FastAPI (`POST /games/{code}/end`). Not exposed to anon.
+Called by FastAPI (`POST /games/{code}/end`). Not exposed to anon. As of migration 033 it also snapshots the game into durable history (`archive_game`, §5a) before flipping the status.
 
 ```sql
 CREATE OR REPLACE FUNCTION end_game(p_game_code char(6))
@@ -434,6 +434,10 @@ BEGIN
   IF v_status = 'ended' THEN
     RAISE EXCEPTION 'game_already_ended' USING ERRCODE = 'P0001';
   END IF;
+
+  -- Snapshot to durable history before marking ended (mig 033). Idempotent and
+  -- skips 0-round games; the cast bridges char(6) -> text.
+  PERFORM archive_game(p_game_code::text);
 
   UPDATE active_games
      SET status   = 'ended',
@@ -460,7 +464,7 @@ Not idempotent on the game-state side (raises on repeat call). FastAPI returns 4
 
 ### Side effects
 
-The pg_cron sweeper (§5) will eventually delete the game row. Setting `status = 'ended'` does not trigger immediate deletion; the game and its scoreboard remain queryable until `expires_at` is reached.
+Writes the durable history snapshot via `archive_game` (§5a) in the same transaction — so a finished game is preserved even though its live rows are swept ~4h later. The pg_cron sweeper (§5) will eventually delete the live game row; setting `status = 'ended'` does not trigger immediate deletion, so the game and its scoreboard remain queryable until `expires_at` is reached. Because the archive runs *before* the status flip, a failed archive aborts the whole transaction and the game stays un-ended (the host can retry) rather than ending up "ended but unarchived".
 
 ### Callers
 
@@ -480,6 +484,13 @@ AS $$
 DECLARE
   v_count integer;
 BEGIN
+  -- Archive every expiring game to durable history before deleting (mig 033).
+  -- archive_game is idempotent and skips 0-round games, so games already
+  -- archived by end_game are no-oped and abandoned-but-played games are caught.
+  PERFORM archive_game(ag.game_code)
+     FROM active_games ag
+    WHERE ag.expires_at < now();
+
   WITH deleted AS (
     DELETE FROM active_games
      WHERE expires_at < now()
@@ -495,7 +506,7 @@ REVOKE ALL ON FUNCTION cleanup_expired_games() FROM PUBLIC;
 
 ### Behaviour
 
-Deletes every `active_games` row whose `expires_at` has passed. `game_teams` and `game_rounds` cascade-delete via FK (defined in `data-model.md`).
+Archives every expiring game into durable history (`archive_game`, §5a), then deletes every `active_games` row whose `expires_at` has passed. `game_teams` and `game_rounds` cascade-delete via FK (defined in `data-model.md`). The archive + delete run in one transaction, so a game is never deleted without first being archived (a 0-round game is simply skipped by the archiver and deleted).
 
 ### Schedule
 
@@ -544,6 +555,81 @@ async def test_cleanup_deletes_expired(db):
     assert row is None
 ```
 
+## 5a. `archive_game`: snapshot a finished game into durable history
+
+Added in migration 033. Internal-only (no HTTP caller, not exposed to anon): invoked by `end_game` (§4) and `cleanup_expired_games` (§5). Copies a game's metadata, teams + final scores, and the ordered, **denormalized** song list into the durable `game_history*` tables so a finished game survives the 4h sweep. The denormalized `song_title`/`song_artist`/`youtube_id` are the canonical record — they don't change if the catalog song is later edited or deleted (the soft `song_id` FK then goes NULL via `ON DELETE SET NULL`).
+
+```sql
+CREATE OR REPLACE FUNCTION archive_game(p_game_code text)
+RETURNS uuid  -- the game_history.id (existing or new), or NULL if skipped
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_started_at timestamptz; v_ended_at timestamptz;
+  v_genres uuid[]; v_decades integer[];
+  v_round_cnt integer; v_team_cnt integer; v_history_id uuid;
+BEGIN
+  SELECT ag.started_at, ag.ended_at, ag.selected_genres, ag.selected_decades
+    INTO v_started_at, v_ended_at, v_genres, v_decades
+    FROM active_games ag WHERE ag.game_code = p_game_code;
+  IF NOT FOUND THEN RETURN NULL; END IF;                  -- already swept / never existed
+
+  SELECT count(*) INTO v_round_cnt FROM game_rounds WHERE game_code = p_game_code;
+  IF v_round_cnt = 0 THEN RETURN NULL; END IF;            -- nothing worth keeping
+
+  SELECT gh.id INTO v_history_id FROM game_history gh
+   WHERE gh.game_code = p_game_code AND gh.started_at = v_started_at;
+  IF FOUND THEN RETURN v_history_id; END IF;              -- idempotent: already archived
+
+  SELECT count(*) INTO v_team_cnt FROM game_teams WHERE game_code = p_game_code;
+
+  INSERT INTO game_history (game_code, started_at, ended_at, round_count,
+                            selected_genres, selected_decades, team_count)
+  VALUES (p_game_code, v_started_at, COALESCE(v_ended_at, now()), v_round_cnt,
+          v_genres, v_decades, v_team_cnt)
+  ON CONFLICT ON CONSTRAINT game_history_code_started_key DO NOTHING  -- concurrent-race backstop
+  RETURNING id INTO v_history_id;
+  IF v_history_id IS NULL THEN                            -- lost the race; re-read and bail
+    SELECT gh.id INTO v_history_id FROM game_history gh
+     WHERE gh.game_code = p_game_code AND gh.started_at = v_started_at;
+    RETURN v_history_id;
+  END IF;
+
+  INSERT INTO game_history_teams (game_history_id, name, score, joined_at)
+  SELECT v_history_id, gt.name, gt.score, gt.joined_at
+    FROM game_teams gt WHERE gt.game_code = p_game_code;
+
+  INSERT INTO game_history_songs (game_history_id, round_number, song_id,
+                                  song_title, song_artist, youtube_id, start_time)
+  SELECT v_history_id, gr.round_number, gr.song_id,
+         COALESCE(s.title, '(deleted song)'), COALESCE(s.artist, ''),
+         COALESCE(s.youtube_id::text, ''), COALESCE(s.start_time, 0)
+    FROM game_rounds gr LEFT JOIN songs s ON s.id = gr.song_id
+   WHERE gr.game_code = p_game_code ORDER BY gr.round_number;
+
+  RETURN v_history_id;
+END $$;
+
+-- Service-role only (mirror migration 020 lock-down).
+REVOKE ALL ON FUNCTION archive_game(text) FROM PUBLIC;
+-- (033 also REVOKEs EXECUTE from anon/authenticated and GRANTs it to service_role.)
+```
+
+### Error semantics
+
+Never raises. Returns `NULL` (a no-op) when the game doesn't exist or played 0 rounds; returns the existing `game_history.id` when already archived; otherwise the new id. This lets both callers `PERFORM archive_game(...)` unconditionally.
+
+### Idempotency
+
+Idempotent on `(game_code, started_at)` — the existence check short-circuits a repeat call, and the `ON CONFLICT DO NOTHING` on the unique constraint is a backstop for the (vanishingly rare) concurrent end-game/sweep race. `game_code` alone is **not** unique over time (codes recycle after the TTL), which is why the key includes `started_at`.
+
+### Callers
+
+- `end_game` (§4) — before flipping status to `ended`.
+- `cleanup_expired_games` (§5) — for every expiring game, before the delete.
+
 ## 6. Function ↔ Caller Reference Matrix
 
 | Function | Anon callable? | Service role callable? | Called by |
@@ -557,6 +643,7 @@ async def test_cleanup_deletes_expired(db):
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
+| `archive_game` | ❌ | ✅ | Internal call from `end_game` + `cleanup_expired_games`. No HTTP caller. |
 
 The four anon-callable functions all validate authentication inside the
 function body (`buzz_in` checks the game-code; the other three check the

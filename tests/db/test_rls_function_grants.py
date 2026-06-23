@@ -163,6 +163,17 @@ async def test_anon_cannot_execute_cleanup_expired_games(
         await anon_conn.execute("SELECT cleanup_expired_games()")
 
 
+@pytest.mark.asyncio
+async def test_anon_cannot_execute_archive_game(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 033: archive_game is service-role-only (called only from inside
+    end_game / cleanup_expired_games). anon must be denied at the grant gate."""
+    game_code = await create_test_game(db)
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await anon_conn.execute("SELECT archive_game($1)", game_code)
+
+
 # ----- migration 020: explicit grant state on the backend-only RPCs ----------
 #
 # On hosted Supabase a `REVOKE ... FROM PUBLIC` is not enough, because the
@@ -183,6 +194,7 @@ async def test_anon_cannot_execute_cleanup_expired_games(
         "award_bonus",
         "end_game",
         "cleanup_expired_games",
+        "archive_game",
     ],
 )
 async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) -> None:

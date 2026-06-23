@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { Skeleton } from "../components/Skeleton";
+import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { YouTubePlayer, type YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useToast } from "../context/useToast";
@@ -715,6 +716,7 @@ export function ManagerConsolePage() {
       <main className={styles.shell}>
         <EndScreen teams={teams} gameCode={gameCode} />
         <div className={styles.endActions}>
+          <SongExport game={game} rounds={state.rounds} teams={teams} />
           <Link to="/" className="btn btn-primary">
             Back to home
           </Link>
