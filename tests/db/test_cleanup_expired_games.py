@@ -58,3 +58,42 @@ async def test_cleanup_returns_zero_when_nothing_expired(
     await create_test_game(db, status="playing")
     deleted = await db.fetchval("SELECT cleanup_expired_games()")
     assert deleted == 0
+
+
+@pytest.mark.asyncio
+async def test_cleanup_archives_before_delete(db: asyncpg.Connection) -> None:
+    """An abandoned game the host never ended is still archived before the sweep."""
+    code = await create_test_game(db, status="playing")
+    await create_test_team(db, code, name="Lapsed")
+    song_id = await create_test_song(db, youtube_id="kkkkkkkkkkk")
+    await db.execute(
+        "INSERT INTO game_rounds (game_code, round_number, song_id) VALUES ($1, 1, $2)",
+        code,
+        song_id,
+    )
+    await db.execute(
+        "UPDATE active_games SET expires_at = now() - interval '1 minute' WHERE game_code = $1",
+        code,
+    )
+
+    await db.fetchval("SELECT cleanup_expired_games()")
+
+    # The ephemeral row is gone, but the durable snapshot remains.
+    assert await db.fetchrow("SELECT 1 FROM active_games WHERE game_code = $1", code) is None
+    hist = await db.fetchrow("SELECT round_count FROM game_history WHERE game_code = $1", code)
+    assert hist is not None
+    assert hist["round_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_skips_archive_for_zero_round_game(db: asyncpg.Connection) -> None:
+    code = await create_test_game(db, status="playing")
+    await db.execute(
+        "UPDATE active_games SET expires_at = now() - interval '1 minute' WHERE game_code = $1",
+        code,
+    )
+
+    await db.fetchval("SELECT cleanup_expired_games()")
+
+    assert await db.fetchrow("SELECT 1 FROM active_games WHERE game_code = $1", code) is None
+    assert await db.fetchval("SELECT count(*) FROM game_history WHERE game_code = $1", code) == 0

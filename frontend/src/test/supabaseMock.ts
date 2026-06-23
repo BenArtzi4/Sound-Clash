@@ -53,11 +53,19 @@ channelMock.subscribe.mockImplementation((cb: (status: string) => void) => {
 
 function buildSelect(table: TableName | "songs") {
   let pendingId: string | null = null;
+  let pendingInIds: string[] | null = null;
   const builder = {
     select: vi.fn(() => builder),
     eq: vi.fn((column: string, value: unknown) => {
       if (table === "songs" && column === "id" && typeof value === "string") {
         pendingId = value;
+      }
+      return builder;
+    }),
+    // Batch lookup used by SongExport: from("songs").select(...).in("id", ids).
+    in: vi.fn((column: string, values: readonly unknown[]) => {
+      if (table === "songs" && column === "id") {
+        pendingInIds = (values as string[]).slice();
       }
       return builder;
     }),
@@ -82,6 +90,21 @@ function buildSelect(table: TableName | "songs") {
     }),
     single: vi.fn(async () => ({ data: null, error: null })),
     then<T>(onfulfilled?: (value: { data: unknown; error: unknown }) => T): Promise<T> {
+      if (table === "songs" && pendingInIds !== null) {
+        const rows: { id: string; title: string; artist: string; youtube_id: string }[] = [];
+        for (const id of pendingInIds) {
+          const row = state.songsById[id];
+          if (row) {
+            rows.push({
+              id: row.id,
+              title: row.title,
+              artist: row.artist,
+              youtube_id: row.youtube_id,
+            });
+          }
+        }
+        return Promise.resolve({ data: rows, error: null }).then(onfulfilled);
+      }
       const data =
         table === "game_teams"
           ? state.hydrate.teams

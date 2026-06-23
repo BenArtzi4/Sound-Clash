@@ -24,8 +24,9 @@ active_games (PK: game_code) ◄────────────────
 
 **Durable** (never auto-deleted): `songs`, `genres`, `song_genres`.
 **Ephemeral** (deleted 4h after `started_at`): `active_games`, `game_teams`, `game_rounds`. Pruned by pg_cron.
+**Durable game history** (never pruned; mig 033): `game_history`, `game_history_teams`, `game_history_songs` — an end-of-game snapshot written by `archive_game()` so a finished game survives the 4h sweep. Operator-only (no `anon` read).
 
-The only FK crossing the durable ↔ ephemeral boundary is `game_rounds.song_id → songs.id`, with `ON DELETE SET NULL` so deleting a song doesn't break in-progress rounds.
+The only FK crossing the durable ↔ ephemeral boundary is `game_rounds.song_id → songs.id`, with `ON DELETE SET NULL` so deleting a song doesn't break in-progress rounds. The history tables likewise keep a soft `game_history_songs.song_id → songs.id` (ON DELETE SET NULL) but **denormalize** title/artist/youtube_id, so a later catalog edit or delete can't rewrite the recorded history.
 
 ## 2. DDL
 
@@ -108,6 +109,42 @@ ALTER TABLE active_games
 ALTER TABLE active_games
   ADD CONSTRAINT active_games_buzzed_team_fkey
   FOREIGN KEY (buzzed_team_id) REFERENCES game_teams(id) ON DELETE SET NULL;
+
+-- ====== Durable: game history (archive of finished games) ======
+-- Snapshotted by archive_game() when a game ends or is swept (mig 033). Never
+-- pruned. Song columns are denormalized so history survives later catalog edits.
+CREATE TABLE game_history (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_code         text NOT NULL,
+  started_at        timestamptz NOT NULL,
+  ended_at          timestamptz,                       -- end_game time, or sweep time if abandoned
+  round_count       integer NOT NULL,                  -- rounds actually played (>= 1)
+  selected_genres   uuid[] NOT NULL DEFAULT '{}',
+  selected_decades  integer[] NOT NULL DEFAULT '{}',
+  team_count        integer NOT NULL DEFAULT 0,
+  archived_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (game_code, started_at)                       -- idempotency key (game_code recycles over time)
+);
+
+CREATE TABLE game_history_teams (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_history_id  uuid NOT NULL REFERENCES game_history(id) ON DELETE CASCADE,
+  name             text NOT NULL,
+  score            integer NOT NULL,
+  joined_at        timestamptz
+);
+
+CREATE TABLE game_history_songs (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_history_id  uuid NOT NULL REFERENCES game_history(id) ON DELETE CASCADE,
+  round_number     integer NOT NULL,
+  song_id          uuid REFERENCES songs(id) ON DELETE SET NULL,  -- soft FK; denorm columns are canonical
+  song_title       text NOT NULL,
+  song_artist      text NOT NULL,
+  youtube_id       text NOT NULL,
+  start_time       integer NOT NULL DEFAULT 0,
+  UNIQUE (game_history_id, round_number)
+);
 ```
 
 ## 3. Indexes
@@ -117,6 +154,12 @@ CREATE INDEX active_games_expires_at_idx  ON active_games (expires_at);  -- cron
 CREATE INDEX game_teams_game_code_idx     ON game_teams  (game_code);
 CREATE INDEX game_rounds_game_code_idx    ON game_rounds (game_code);
 CREATE INDEX song_genres_genre_idx        ON song_genres (genre_id);
+
+-- Game history (mig 033)
+CREATE INDEX game_history_teams_history_idx ON game_history_teams (game_history_id);
+CREATE INDEX game_history_songs_history_idx ON game_history_songs (game_history_id);
+CREATE INDEX game_history_started_at_idx    ON game_history (started_at);
+CREATE INDEX game_history_game_code_idx     ON game_history (game_code);
 ```
 
 The `active_games_expires_at_idx` is the most important: it backs the hourly pg_cron sweep, which scans for rows past their TTL.
@@ -228,13 +271,13 @@ The 014 migration dropped `source_points` and `timeout_penalty` columns. The 016
 
 ## 5. Row-Level Security (summary)
 
-Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on all tables; mutations are exclusively via service_role or via the `buzz_in` RPC (the only function `anon` is granted EXECUTE on).
+Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the `buzz_in` RPC (the only function `anon` is granted EXECUTE on). The durable history tables (`game_history*`, mig 033) are the exception: RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
 
 Full policy DDL and threat model: see **`security-rls.md`**.
 
 ## 6. RPC Functions (summary)
 
-Seven PL/pgSQL functions encode all state transitions:
+These core PL/pgSQL functions encode the game's state transitions (plus the history archiver); see `rpc-functions.md` for the full list:
 
 | Function | Purpose | Caller |
 |---|---|---|
@@ -243,8 +286,9 @@ Seven PL/pgSQL functions encode all state transitions:
 | `award_attempt(p_game_code, p_round_id, p_title, p_artist, p_wrong_buzz)` | Score one buzz; round stays open | FastAPI |
 | `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | FastAPI |
 | `award_bonus(p_game_code, p_team_id, p_points DEFAULT 4)` | Host-discretion bonus to a team | FastAPI |
-| `end_game(p_game_code)` | Mark game ended | FastAPI |
-| `cleanup_expired_games()` | TTL sweep | pg_cron |
+| `end_game(p_game_code)` | Archive, then mark game ended | FastAPI |
+| `cleanup_expired_games()` | Archive expiring games, then TTL-sweep | pg_cron |
+| `archive_game(p_game_code)` | Snapshot a finished game into durable history (idempotent; skips 0-round games) | internal (`end_game`, `cleanup_expired_games`) |
 
 Full bodies, race-correctness arguments, and tests: see **`rpc-functions.md`**.
 
@@ -270,7 +314,9 @@ db/migrations/
 ├── 014_scoring_revamp.sql    -- wrong-buzz penalty, +4 bonus, drop source/timeout
 ├── 015_drop_total_rounds.sql
 ├── 016_multi_buzz_rounds.sql -- multi-buzz model: token claims, award_attempt, end_round
-└── 017_free_guess_flag.sql   -- per-round free-guess flag; waives -3 after first correct
+├── 017_free_guess_flag.sql   -- per-round free-guess flag; waives -3 after first correct
+│   … 018–032: manager-token RPCs, browser-direct RPC migration, soundtrack/decade filters, etc.
+└── 033_game_history.sql      -- durable game-history archive: game_history*, archive_game(); end_game + cleanup sweep into it
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
@@ -290,6 +336,8 @@ At expected scale (100–1000 games/mo):
 
 **Total live size**: ~5 MB. Free tier is 500 MB. Headroom is enormous.
 
+`game_history*` (mig 033) is the one set of tables that **accumulates** rather than being pruned: roughly 1 + ~8 team + ~30 song rows per archived game, ~150 bytes each → on the order of tens of MB per year at the high end of this range. Still tiny against the 500 MB tier for years, but unlike the ephemeral tables it grows monotonically. If pruning is ever wanted it's a one-line cron `DELETE FROM game_history WHERE started_at < now() - interval '<N> years'` (children cascade); none is scheduled today.
+
 ## 9. Dropped from Old Schema
 
 The legacy Sound Clash codebase had tables and columns that **will not** be carried over. Listed here so future contributors don't reintroduce them:
@@ -299,6 +347,6 @@ The legacy Sound Clash codebase had tables and columns that **will not** be carr
 - AI song-selection cache table; feature dropped.
 - DynamoDB-style ephemeral state with TTL; replaced by Postgres `expires_at` + pg_cron.
 - ElastiCache Redis sessions; Realtime handles fan-out; no server sessions to cache.
-- Per-game audit log; out of scope (ephemeral).
+- Per-game *buzz-by-buzz* audit log; out of scope (the live `game_round_attempts` table is ephemeral). Note: a durable end-of-game **summary** now exists — `game_history*` (mig 033) records start/end, teams + final scores, round count, and the ordered song list — but the per-buzz attempt stream is still not retained.
 
 If any of these are wanted later, add a separate migration; do not retrofit into the base schema.

@@ -31,7 +31,13 @@ MIGRATIONS_DIR = REPO_ROOT / "db" / "migrations"
 
 # Truncated between tests so each function starts clean. Durable tables
 # (songs/genres/song_genres) are included so tests populate exactly what they need.
+# The game_history* tables are durable and have NO FK to active_games, so the
+# CASCADE that clears the ephemeral tables does not reach them -- list them
+# explicitly or archived rows leak across tests.
 ALL_TABLES = (
+    "game_history_songs",
+    "game_history_teams",
+    "game_history",
     "game_rounds",
     "game_teams",
     "active_games",
