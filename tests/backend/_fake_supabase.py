@@ -97,6 +97,7 @@ def _map_pg_exc(exc: Exception) -> FakeAPIError:
 @dataclass
 class FakeResponse:
     data: list[dict[str, Any]] | dict[str, Any] | Any
+    count: int | None = None
 
 
 class _Query:
@@ -112,12 +113,15 @@ class _Query:
         self._limit: int | None = None
         self._order: str | None = None
         self._on_conflict: str | None = None
+        self._count: str | None = None
+        self._range: tuple[int, int] | None = None
 
     # builder methods -----------------------------------------------------
 
-    def select(self, cols: str = "*") -> "_Query":
+    def select(self, cols: str = "*", count: str | None = None) -> "_Query":
         self._op = "select"
         self._cols = cols
+        self._count = count
         return self
 
     def insert(self, values: dict[str, Any] | list[dict[str, Any]]) -> "_Query":
@@ -159,6 +163,11 @@ class _Query:
 
     def limit(self, n: int) -> "_Query":
         self._limit = n
+        return self
+
+    def range(self, start: int, end: int) -> "_Query":
+        # PostgREST range() is inclusive on both ends, 0-based.
+        self._range = (start, end)
         return self
 
     def order(self, col: str) -> "_Query":
@@ -207,7 +216,9 @@ class FakeSupabaseClient:
         conn = self._connect()
         try:
             if q._op == "select":
-                return FakeResponse(self._do_select(conn, q))
+                rows = self._do_select(conn, q)
+                count = self._do_count(conn, q) if q._count else None
+                return FakeResponse(rows, count)
             if q._op == "insert":
                 return FakeResponse(self._do_insert(conn, q))
             if q._op == "update":
@@ -247,13 +258,27 @@ class FakeSupabaseClient:
         sql = f"SELECT {q._cols} FROM {q._table}{where}"
         if q._order:
             sql += f" ORDER BY {q._order}"
-        if q._limit is not None:
+        if q._range is not None:
+            rstart, rend = q._range
+            limit = max(0, rend - rstart + 1)
+            sql += f" LIMIT {limit} OFFSET {rstart}"
+        elif q._limit is not None:
             sql += f" LIMIT {q._limit}"
         try:
             rows = self._runner.run(conn.fetch(sql, *params))
         except asyncpg.PostgresError as exc:
             raise _map_pg_exc(exc) from exc
         return [_record_to_dict(r) for r in rows]
+
+    def _do_count(self, conn: Any, q: _Query) -> int:
+        """count="exact": total matching rows, ignoring range/limit."""
+        where, params = self._build_where(q)
+        sql = f"SELECT count(*) AS n FROM {q._table}{where}"
+        try:
+            rec = self._runner.run(conn.fetchrow(sql, *params))
+        except asyncpg.PostgresError as exc:
+            raise _map_pg_exc(exc) from exc
+        return int(rec["n"]) if rec else 0
 
     def _normalize_values(
         self, values: dict[str, Any] | list[dict[str, Any]] | None

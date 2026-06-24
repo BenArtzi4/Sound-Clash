@@ -73,6 +73,8 @@ def _list_blocking(
     search: str | None,
     genre: str | None,
 ) -> dict[str, Any]:
+    start = max(0, (page - 1) * per_page)
+    end = start + per_page - 1  # range() is inclusive on both ends
     if genre:
         gen_resp = client.table("genres").select("id").eq("slug", genre).execute()
         gen_rows = gen_resp.data or []
@@ -83,22 +85,26 @@ def _list_blocking(
         ids = [r["song_id"] for r in (sg_resp.data or [])]
         if not ids:
             return {"items": [], "page": page, "per_page": per_page, "total": 0}
-        query = client.table("songs").select(SONG_COLUMNS).in_("id", ids)
+        query = client.table("songs").select(SONG_COLUMNS, count="exact").in_("id", ids)
     else:
-        query = client.table("songs").select(SONG_COLUMNS)
+        query = client.table("songs").select(SONG_COLUMNS, count="exact")
 
     if search:
         query = query.ilike("title", f"%{search}%")
 
-    resp = query.order("title").execute()
+    # Page in the database with range() and read the true total from the
+    # exact-count header. The previous approach fetched every matching row and
+    # counted/sliced in Python, which silently capped both the returned list
+    # and `total` at PostgREST's default 1000-row ceiling once the catalog
+    # passed 1000 songs (gameplay was unaffected — song selection runs inside
+    # Postgres, not over PostgREST).
+    resp = query.order("title").range(start, end).execute()
     rows = [dict(r) for r in (resp.data or [])]
-    total = len(rows)
-    start = max(0, (page - 1) * per_page)
-    end = start + per_page
-    page_rows = rows[start:end]
-    _attach_genres(client, page_rows)
+    # count="exact" always populates resp.count (the Content-Range total).
+    total = resp.count
+    _attach_genres(client, rows)
     return {
-        "items": page_rows,
+        "items": rows,
         "page": page,
         "per_page": per_page,
         "total": total,

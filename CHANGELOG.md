@@ -22,6 +22,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-06-24: The admin **Songs** list no longer caps at 1000. Once the catalog passed 1000 songs the page fetched only the first 1000 (by title) over the REST API and reported "1000" as the total; it now pages in the database (`range`) and reads the exact count, so the true total shows and every song is reachable. (Gameplay was never affected — song selection runs inside Postgres, not over the REST API.)
 - 2026-06-19: Genre and decade buttons on the **Host a game** page no longer show a stray blue focus ring around the checkbox after you tap one (the ring still appears for keyboard navigation, for accessibility).
 - 2026-06-19: Genre and decade buttons on the **Host a game** page no longer jitter/"shake" when you click one. The hover effect lifted the button by 1px, which could move it out from under the cursor at its bottom edge and rapidly toggle the hover on and off; the lift is now a shadow that doesn't move the button.
 - 2026-06-16: The host's **−3** point toast now appears whenever a Wrong buzz actually deducts points. Previously, once any answer had been scored in a round, the host's −3 toast was hidden for every later wrong buzz that round — even though the team still lost 3 points (the free-guess waiver only applies to the single buzz immediately after a correct answer). Scores were always correct on the scoreboard and team devices; only the host's pop-up feedback was missing.
@@ -33,6 +34,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-06-24: Added **26 new songs** to the catalog (999 → 1025) — the most-watched YouTube tracks from eight famous artists, human-reviewed: The Beatles, Pink Floyd (rock), Beyoncé, Rihanna, Lady Gaga (pop), and רביד פלוטניק, טונה (Israeli rap/hip-hop) plus שלמה ארצי (Israeli rock-pop).
 - 2026-06-23: Hosts can now **export the songs that played** from the end-of-game screen — open them all as a single YouTube playlist link, or download a self-contained HTML file that lists every song in play order with a clickable YouTube link.
 - 2026-06-18: Hosts can now **filter songs by decade** when creating a game — tap any of the 60s–20s buttons (multi-select) alongside genres, and only songs from those decades play (genres **and** decades). Leaving decades unpicked keeps every year, exactly as before. For covers, the decade follows the song's original release year, not the cover's.
 - 2026-06-18: Admin song catalog now has an optional **Release year** field (song form + CSV import) and shows each song's year as a **Year column** in the catalog list. This is the groundwork for an upcoming "filter by decade" option when hosting a game.
