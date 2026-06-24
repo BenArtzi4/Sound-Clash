@@ -106,15 +106,54 @@ export interface AttemptToggles {
   artist?: boolean;
 }
 
-async function applyCorrect(page: Page, toggles: AttemptToggles): Promise<void> {
-  if (toggles.title === true) {
-    await page.getByTestId("score-title").click();
-    await expect(page.getByTestId("score-title")).toBeDisabled({ timeout: 10_000 });
-  }
-  if (toggles.artist === true) {
-    await page.getByTestId("score-artist").click();
-    await expect(page.getByTestId("score-artist")).toBeDisabled({ timeout: 10_000 });
-  }
+// The manager console serialises every scoring / advance action behind a single
+// `busy` flag, and each handler early-returns while it's set (the prior
+// award_attempt / select_next_song RPC is still in flight). A follow-up click
+// fired off the *optimistic* disabled flag — which flips synchronously, before
+// the RPC returns — lands inside that window and is silently dropped. On CI the
+// RPC is fast enough to dodge it; on a slower machine it drops the second token
+// claim or the round advance and the spec fails for no real reason.
+//
+// The Bonus button is the one control whose disabled state mirrors `busy`
+// (ManagerConsolePage: bonusDisabled = busy), so waiting for it to re-enable is
+// a reliable "the last RPC settled" signal. Gate every chained manager click on
+// it so nothing is dropped, regardless of stack speed.
+async function waitNotBusy(page: Page): Promise<void> {
+  await expect(page.getByTestId("score-bonus")).toBeEnabled({ timeout: 10_000 });
+}
+
+// Claim one scoring token, robust to the busy-race: wait for any in-flight RPC
+// to settle, click, confirm the claim landed (the button disables via the
+// optimistic pending flag), then wait for this claim's RPC to settle too so the
+// caller's next click can't be dropped.
+async function claimToken(page: Page, testId: string): Promise<void> {
+  await waitNotBusy(page);
+  await page.getByTestId(testId).click();
+  await expect(page.getByTestId(testId)).toBeDisabled({ timeout: 10_000 });
+  await waitNotBusy(page);
+}
+
+export async function applyCorrect(page: Page, toggles: AttemptToggles): Promise<void> {
+  if (toggles.title === true) await claimToken(page, "score-title");
+  if (toggles.artist === true) await claimToken(page, "score-artist");
+}
+
+// Advance exactly one round. We must NOT retry-click here: select_next_song is
+// not idempotent (each accepted click opens a new round), and the round header
+// is Realtime-driven, so a header that merely lags would make a retry
+// over-advance (a 21st round in a 20-round game). Instead we guarantee the
+// single click lands: waitNotBusy ensures no in-flight RPC will swallow it via
+// the handler's `if (busy) return`, so the one click is always accepted. Then we
+// wait — generously, to absorb Realtime lag — for the header to tick up by one.
+export async function advanceRound(page: Page): Promise<void> {
+  const header = page.getByText(/Round \d+$/i).first();
+  const before = Number(((await header.textContent()) ?? "").replace(/\D+/g, ""));
+  await waitNotBusy(page);
+  await expect(page.getByTestId("start-round")).toBeEnabled();
+  await page.getByTestId("start-round").click();
+  await expect(page.getByText(new RegExp(`Round ${before + 1}$`, "i"))).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 export async function awardAndContinue(
@@ -122,6 +161,7 @@ export async function awardAndContinue(
   toggles: AttemptToggles,
 ): Promise<void> {
   await applyCorrect(page, toggles);
+  await waitNotBusy(page);
   await page.getByTestId("continue-round").click();
   // Continue releases the buzz lock; once released, Continue itself
   // disables again. Wait for that so the caller can chain.
@@ -129,7 +169,9 @@ export async function awardAndContinue(
 }
 
 export async function markWrong(page: Page): Promise<void> {
+  await waitNotBusy(page);
   await page.getByTestId("score-wrong").click();
+  await waitNotBusy(page);
 }
 
 export async function awardAndAdvance(
@@ -137,14 +179,15 @@ export async function awardAndAdvance(
   toggles: AttemptToggles,
 ): Promise<void> {
   await applyCorrect(page, toggles);
-  await page.getByTestId("start-round").click();
+  await advanceRound(page);
 }
 
 export async function skipRound(page: Page): Promise<void> {
-  await page.getByTestId("start-round").click();
+  await advanceRound(page);
 }
 
 export async function awardBonusToTeam(page: Page, teamName: string): Promise<void> {
+  await waitNotBusy(page);
   await page.getByTestId("score-bonus").click();
   // The picker button's accessible name is its aria-label
   // ("Award +4 bonus to <name>"), not the bare team name.
