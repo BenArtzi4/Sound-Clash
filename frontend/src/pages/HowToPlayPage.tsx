@@ -14,7 +14,7 @@ const SETUP_STEPS: ReadonlyArray<Step> = [
     title: "Pick genres",
     body: (
       <>
-        choose your music; get a 6-letter <strong>code</strong>
+        choose your music and get a 6-letter <strong>code</strong>
       </>
     ),
   },
@@ -33,19 +33,19 @@ const PLAY_STEPS: ReadonlyArray<Step> = [
     title: "Start",
     body: (
       <>
-        tap <strong>Start game</strong> — the first song plays
+        tap <strong>Start game</strong> and the first song plays
       </>
     ),
   },
   {
     title: "Buzz & judge",
-    body: "first team to buzz answers out loud; the host scores it",
+    body: "first team to buzz answers out loud, then the host scores it",
   },
   {
     title: "Bonus",
     body: (
       <>
-        optional: give <strong>+4</strong> to any team, anytime
+        give <strong>+4</strong> to any team, anytime (optional)
       </>
     ),
   },
@@ -56,8 +56,8 @@ const FAQ: ReadonlyArray<{ term: string; def: React.ReactNode }> = [
     term: "Free guess after a correct answer",
     def: (
       <>
-        Got the title (+10)? You can take a shot at the artist with no risk — the very next wrong
-        buzz in the round costs <strong>0</strong> instead of −3.
+        Got the title (+10)? You can take a shot at the artist with no risk. The very next wrong
+        buzz in the round costs <strong>0</strong> instead of 3 points.
       </>
     ),
   },
@@ -73,7 +73,7 @@ const FAQ: ReadonlyArray<{ term: string; def: React.ReactNode }> = [
     term: "Bonus anytime",
     def: (
       <>
-        The host can grant <strong>+4</strong> to any team at any moment — for trivia, singing,
+        The host can grant <strong>+4</strong> to any team at any moment, for trivia, singing,
         dancing, or sportsmanship.
       </>
     ),
@@ -191,7 +191,7 @@ export function HowToPlayPage() {
                   🔊
                 </span>
                 <span>
-                  <strong>Audio plays from the host's phone</strong> — connect it to the room's
+                  <strong>Audio plays from the host's phone.</strong> Connect it to the room's
                   speakers, or keep the host near everyone.
                 </span>
               </p>
@@ -214,7 +214,7 @@ export function HowToPlayPage() {
                 </li>
                 <li className={styles.scoringRow}>
                   <span className={`${styles.chip} ${styles.chipBonus}`}>+4</span>
-                  <span>Manager bonus — the host can award +4 to any team at any time.</span>
+                  <span>Manager bonus. The host can award +4 to any team at any time.</span>
                 </li>
               </ul>
             </section>
