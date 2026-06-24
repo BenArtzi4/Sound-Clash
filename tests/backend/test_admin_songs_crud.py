@@ -157,6 +157,24 @@ async def test_list_pagination_and_search(admin_client, db) -> None:
     assert "BBB Second" in titles
 
 
+async def test_list_pages_through_full_total(admin_client, db) -> None:
+    # Five sortable titles; page through 2 at a time. Guards the regression
+    # where the list fetched every row and counted/sliced in Python — which
+    # capped both the window and `total` at PostgREST's 1000-row ceiling.
+    for n in ("1", "2", "3", "4", "5"):
+        await insert_song(db, title=f"Zpage {n}", genre_slugs=["rock"])
+    pages = [
+        (await admin_client.get(f"/admin/songs?search=Zpage&per_page=2&page={p}")).json()
+        for p in (1, 2, 3)
+    ]
+    # `total` is the exact count of all matches, not just the returned page.
+    assert all(pg["total"] == 5 for pg in pages)
+    assert [len(pg["items"]) for pg in pages] == [2, 2, 1]
+    # Server-side range() returns the correct, ordered, non-overlapping window.
+    titles = [s["title"] for pg in pages for s in pg["items"]]
+    assert titles == [f"Zpage {n}" for n in ("1", "2", "3", "4", "5")]
+
+
 async def test_list_genre_filter(admin_client, db) -> None:
     await insert_song(db, title="RockSong", genre_slugs=["rock"])
     await insert_song(db, title="PopSong", genre_slugs=["pop"])
@@ -169,6 +187,15 @@ async def test_list_genre_filter(admin_client, db) -> None:
 
 async def test_list_genre_filter_unknown_returns_empty(admin_client) -> None:
     resp = await admin_client.get("/admin/songs?genre=nonexistent_slug")
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+    assert resp.json()["total"] == 0
+
+
+async def test_list_genre_real_but_empty_pool_returns_empty(admin_client, db) -> None:
+    # `jazz` is a real seeded genre, but no song is tagged with it here, so its
+    # song pool is empty (distinct from the unknown-slug case above).
+    resp = await admin_client.get("/admin/songs?genre=jazz")
     assert resp.status_code == 200
     assert resp.json()["items"] == []
     assert resp.json()["total"] == 0
