@@ -3,69 +3,49 @@ import { Logo } from "../components/Logo";
 import { DisplayIcon, ManagerIcon, TeamIcon } from "../components/RoleIcons";
 import styles from "./HowToPlayPage.module.css";
 
-const STEPS: ReadonlyArray<{ title: string; body: React.ReactNode }> = [
+type Step = { title: string; body: React.ReactNode };
+
+const SETUP_STEPS: ReadonlyArray<Step> = [
   {
     title: "Host a game",
+    body: "from the home page",
+  },
+  {
+    title: "Pick genres",
     body: (
       <>
-        From the home page, tap <strong>Host a game</strong>.
+        choose your music; get a 6-letter <strong>code</strong>
       </>
     ),
   },
   {
-    title: "Pick genres and create",
+    title: "Open the Display",
+    body: "put the join QR + scoreboard on a TV everyone sees",
+  },
+  {
+    title: "Teams join",
+    body: "each team scans the QR on one phone",
+  },
+];
+
+const PLAY_STEPS: ReadonlyArray<Step> = [
+  {
+    title: "Start",
     body: (
       <>
-        Choose the music genres you want. Sound Clash hands you a 6-letter{" "}
-        <strong>game code</strong>.
+        tap <strong>Start game</strong> — the first song plays
       </>
     ),
   },
   {
-    title: "Open the Display screen",
-    body: (
-      <>
-        On a TV or laptop everyone in the room can see, open <strong>Display screen</strong> and
-        enter the code. It shows the join QR and the live scoreboard. (The song itself plays from
-        the host's device — see the next step.)
-      </>
-    ),
+    title: "Buzz & judge",
+    body: "first team to buzz answers out loud; the host scores it",
   },
   {
-    title: "Teams join from their phones",
+    title: "Bonus",
     body: (
       <>
-        Each team needs one phone. Scan the QR on the display, or open soundclash.org and tap{" "}
-        <strong>Join a game</strong>.
-      </>
-    ),
-  },
-  {
-    title: "Start the game",
-    body: (
-      <>
-        Once the teams are in, the host taps <strong>Start game</strong> and the first song plays.
-        The music comes out of the <strong>host's own device</strong>, so connect it to the room's
-        speakers (or keep the host near everyone).
-      </>
-    ),
-  },
-  {
-    title: "Buzz and judge",
-    body: (
-      <>
-        The first team to buzz answers out loud. The host taps <strong>Correct Song</strong> (+10),{" "}
-        <strong>Correct Artist</strong> (+5), or <strong>Wrong</strong> (−3). The team that just
-        answered keeps the floor to also try the other half.
-      </>
-    ),
-  },
-  {
-    title: "Award a bonus (optional)",
-    body: (
-      <>
-        At any moment the host can tap <strong>+4 Bonus</strong> and pick a team — for great
-        singing, dancing, or a fun trivia detail. It's independent of rounds.
+        optional: give <strong>+4</strong> to any team, anytime
       </>
     ),
   },
@@ -104,6 +84,32 @@ const FAQ: ReadonlyArray<{ term: string; def: React.ReactNode }> = [
   },
 ];
 
+function StepFlow({
+  steps,
+  startAt,
+  variant,
+}: {
+  steps: ReadonlyArray<Step>;
+  startAt: number;
+  variant: "setup" | "play";
+}) {
+  return (
+    <ol className={`${styles.flow} ${variant === "play" ? styles.flowPlay : ""}`}>
+      {steps.map((step, idx) => (
+        <li key={step.title} className={styles.flowRow}>
+          <span className={styles.flowNum} aria-hidden="true">
+            {startAt + idx}
+          </span>
+          <p className={styles.flowText}>
+            <strong className={styles.flowName}>{step.title}</strong>{" "}
+            <span className={styles.flowDesc}>{step.body}</span>
+          </p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function HowToPlayPage() {
   return (
     <div className={styles.page}>
@@ -119,8 +125,7 @@ export function HowToPlayPage() {
             <section className={styles.intro}>
               <h1 className={styles.title}>How to Play</h1>
               <p className={styles.subtitle}>
-                Roles, the seven steps to run a game, scoring, and the rules that come up most
-                often.
+                Roles, the quick setup, scoring, and the rules that come up most often.
               </p>
               <img
                 src="/how-to-play-hero.png"
@@ -168,19 +173,28 @@ export function HowToPlayPage() {
 
             <section className={styles.section}>
               <h2 className={styles.sectionTitle}>Steps to run a game</h2>
-              <ol className={styles.stepsList}>
-                {STEPS.map((step, idx) => (
-                  <li key={step.title} className={styles.stepRow}>
-                    <span className={styles.stepNumber} aria-hidden="true">
-                      {idx + 1}
-                    </span>
-                    <div className={styles.stepBody}>
-                      <h3 className={styles.stepTitle}>{step.title}</h3>
-                      <p className={styles.stepText}>{step.body}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
+
+              <div className={styles.phaseLabel}>
+                <span className={styles.phaseName}>Set up</span>
+                <span className={styles.phaseMeta}>once, about 2 min</span>
+              </div>
+              <StepFlow steps={SETUP_STEPS} startAt={1} variant="setup" />
+
+              <div className={`${styles.phaseLabel} ${styles.phaseLabelPlay}`}>
+                <span className={styles.phaseName}>Play</span>
+                <span className={styles.phaseMeta}>every round</span>
+              </div>
+              <StepFlow steps={PLAY_STEPS} startAt={5} variant="play" />
+
+              <p className={styles.audioNote}>
+                <span className={styles.audioIcon} aria-hidden="true">
+                  🔊
+                </span>
+                <span>
+                  <strong>Audio plays from the host's phone</strong> — connect it to the room's
+                  speakers, or keep the host near everyone.
+                </span>
+              </p>
             </section>
 
             <section className={styles.section}>
