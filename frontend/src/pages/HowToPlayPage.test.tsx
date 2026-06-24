@@ -17,28 +17,47 @@ describe("HowToPlayPage", () => {
     expect(screen.getByRole("heading", { name: /rules & faq/i })).toBeInTheDocument();
   });
 
+  it("groups the steps into a Set up phase and a Play phase", () => {
+    render(
+      <MemoryRouter>
+        <HowToPlayPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/^set up$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^play$/i)).toBeInTheDocument();
+  });
+
   it("renders all seven steps in order with visible numbers", () => {
     render(
       <MemoryRouter>
         <HowToPlayPage />
       </MemoryRouter>,
     );
-    const stepHeadings = [
+    const stepTitles = [
       /host a game/i,
-      /pick genres and create/i,
-      /open the display screen/i,
-      /teams join from their phones/i,
-      /start the game/i,
-      /buzz and judge/i,
-      /award a bonus/i,
+      /^pick genres$/i,
+      /open the display/i,
+      /^teams join$/i,
+      /^start$/i,
+      /buzz & judge/i,
+      /^bonus$/i,
     ];
-    for (const name of stepHeadings) {
-      expect(screen.getByRole("heading", { level: 3, name })).toBeInTheDocument();
+    for (const name of stepTitles) {
+      expect(screen.getByText(name)).toBeInTheDocument();
     }
-    // Numbers 1–7 are rendered as text in the step circles.
+    // Numbers 1–7 are rendered as text in the step circles (1–4 setup, 5–7 play).
     for (let i = 1; i <= 7; i++) {
       expect(screen.getByText(String(i))).toBeInTheDocument();
     }
+  });
+
+  it("calls out that audio plays from the host's phone", () => {
+    render(
+      <MemoryRouter>
+        <HowToPlayPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/audio plays from the host's phone/i)).toBeInTheDocument();
   });
 
   it("surfaces the key gameplay rules in the FAQ", () => {
