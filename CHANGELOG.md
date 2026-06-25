@@ -23,6 +23,8 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-06-25: Joining a game that has passed its 4-hour expiry (but hasn't been swept from the database yet) now returns a clear "game is gone" error instead of a misleading success that created a team about to be deleted.
+- 2026-06-25: The admin **Songs** delete confirmation no longer issues a duplicate delete on a fast double-click — which previously surfaced a spurious "Delete failed" toast even though the song had been removed.
 - 2026-06-24: The admin **Songs** list no longer caps at 1000. Once the catalog passed 1000 songs the page fetched only the first 1000 (by title) over the REST API and reported "1000" as the total; it now pages in the database (`range`) and reads the exact count, so the true total shows and every song is reachable. (Gameplay was never affected — song selection runs inside Postgres, not over the REST API.)
 - 2026-06-19: Genre and decade buttons on the **Host a game** page no longer show a stray blue focus ring around the checkbox after you tap one (the ring still appears for keyboard navigation, for accessibility).
 - 2026-06-19: Genre and decade buttons on the **Host a game** page no longer jitter/"shake" when you click one. The hover effect lifted the button by 1px, which could move it out from under the cursor at its bottom edge and rapidly toggle the hover on and off; the lift is now a shadow that doesn't move the button.
@@ -32,6 +34,10 @@ This project does not currently cut versioned releases; every change lands direc
 - 2026-05-31: The manager **Bonus** picker now shows each team in its own separated, bordered box (an equal-sized grid of cells) instead of a run of plain names, so the host no longer risks tapping the wrong team and awarding +4 to the wrong side.
 - 2026-05-30: Songs in the **Soundtracks** / **Israeli Soundtracks** genres now always play as +15 soundtrack rounds. Soundtrack-ness is derived from genre membership instead of a separate per-song flag, fixing ~28 songs (e.g. Hungry Eyes, Shallow, the Star Wars and Disney themes) that were tagged as soundtracks but still scored as normal title/artist rounds. The admin Songs page drops the "Soundtrack round" checkbox — tagging a soundtrack genre is now the single marker.
 - 2026-05-25: Soundtrack rounds no longer auto-resume the song or re-arm the buzzers after the host taps **Correct (+15)**. The round now waits for an explicit **Next round** press, matching how regular rounds behave once both title and artist have been scored.
+
+### Security
+
+- 2026-06-25: Server error (500) responses no longer echo raw database error text; they now return a generic message, with the detail logged server-side only.
 
 ### Added
 

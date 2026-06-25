@@ -1,6 +1,6 @@
 # Sound Clash: Postgres RPC Functions
 
-The eight PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
+The eleven PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
 Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), and `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token).
 
@@ -202,7 +202,7 @@ CREATE OR REPLACE FUNCTION award_attempt(
   p_title         integer DEFAULT 0,   -- 0 or 10
   p_artist        integer DEFAULT 0,   -- 0 or 5
   p_wrong_buzz    integer DEFAULT 0,   -- 0 or 3 (deducted)
-  p_manager_token uuid    DEFAULT NULL -- required; validated in the body
+  p_manager_token uuid                 -- required, NO default: a default would make this 6-arg overload ambiguous with 5-arg calls (Postgres 42725); see mig 021
 )
 RETURNS TABLE(
   team_id            uuid,

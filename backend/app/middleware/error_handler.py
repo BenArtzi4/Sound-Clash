@@ -25,6 +25,12 @@ def _envelope(
 
 async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, DomainError)
+    if exc.status >= 500:
+        # Never expose internal/DB error detail to clients (it may carry table,
+        # column, or constraint names); log it server-side and return a generic
+        # body, matching unhandled_handler.
+        logger.error("internal domain error: %s", exc.message)
+        return _envelope(status=exc.status, code=exc.code, message="internal server error")
     return _envelope(
         status=exc.status,
         code=exc.code,

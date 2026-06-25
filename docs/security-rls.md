@@ -25,7 +25,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 | Credential | Header | Scope | Lifetime |
 |---|---|---|---|
-| **manager token** | `X-Manager-Token` | One specific game's host actions (`select-song`, `award-points`, `end`, kick a team) | Generated server-side at `POST /games`; lives 4h with the row; auto-expires when `cleanup_expired_games` deletes the game |
+| **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `release_buzz_lock` / `select_next_song` via token-gated direct RPC; bonus / end / kick a team via REST) | Generated server-side at `POST /games`; lives 4h with the row; auto-expires when `cleanup_expired_games` deletes the game |
 | **admin password** | `X-Admin-Password` | Song catalog only (`/admin/songs/*` CRUD + bulk import) | Single env var on FastAPI; rotated by changing the env and restarting |
 
 `POST /games` is **public** (rate-limited 10/min/IP). The browser keeps the returned manager token in `localStorage` under `game:<code>:manager-token` and presents it on subsequent host calls. Players who happen to know the game code cannot manage it because they don't have the token. Hosting requires no signup, login, or persistent identity.
@@ -129,8 +129,8 @@ REVOKE ALL ON game_history, game_history_teams, game_history_songs
 
 ```sql
 -- buzz_in: browser-callable; the game_code itself is the auth.
-REVOKE ALL ON FUNCTION buzz_in(text, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION buzz_in(text, uuid) TO anon;
+REVOKE ALL ON FUNCTION buzz_in(char, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
 
 -- award_attempt / release_buzz_lock: browser-callable via Supabase RPC,
 -- gated by the per-game manager_token (validated in the function body,
