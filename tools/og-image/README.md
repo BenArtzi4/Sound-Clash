@@ -28,7 +28,9 @@ It is referenced by the `og:image` / `twitter:image` tags in
   `index.html` for every route, so one card covers `soundclash.org` and every
   `/join/<code>` link.
 - **Absolute https URL.** Crawlers fetch the image directly, so the tag points at
-  `https://soundclash.org/og-image.jpg`, not a relative path.
+  `https://www.soundclash.org/og-image.jpg`, not a relative path. (Note: the
+  bare apex `soundclash.org` only redirects over HTTP and has no HTTPS listener,
+  so the tag must use the `www` host that Cloudflare Pages actually serves.)
 - **JPEG, not PNG, and small.** WhatsApp silently refuses to render preview
   images much over ~300 KB. The gradient-heavy card is ~415 KB as PNG but ~55 KB
   as JPEG with no visible quality loss.
@@ -40,6 +42,6 @@ It is referenced by the `og:image` / `twitter:image` tags in
 After deploying a change to the image or tags, WhatsApp and the other platforms
 keep showing the **old** preview for a while — they cache per-URL aggressively
 and there is no public purge button for WhatsApp. To check the new card without
-waiting, share a one-off variant URL (e.g. `soundclash.org/?v=2`) or run the URL
+waiting, share a one-off variant URL (e.g. `www.soundclash.org/?v=2`) or run the URL
 through the [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/),
 which forces a re-scrape on shared crawler infrastructure.
