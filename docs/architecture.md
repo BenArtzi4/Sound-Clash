@@ -64,6 +64,8 @@ Three browser roles (team / manager / display) connect to:
 
 The system has two networking paths but one source of truth (Postgres). Everything either reads from or writes to the Supabase database.
 
+The SPA also ships as an installable **PWA**: a web app manifest (`frontend/public/manifest.webmanifest`) plus a deliberately minimal, cache-nothing service worker (`frontend/public/sw.js`, registered from `main.tsx`) let hosts and players add Sound Clash to a home screen and launch it standalone (no browser chrome). The service worker exists *only* to satisfy install criteria — it intercepts no requests and stores nothing offline, so there is no offline mode and nothing is ever added to the buzzer path. The join-by-link flow is unchanged for anyone using a normal browser tab.
+
 ## 3. The Central Architectural Insight
 
 A **<200ms buzzer** + **free Python hosting** is impossible if Python sits in the buzzer path (cold starts of 2–30s).
