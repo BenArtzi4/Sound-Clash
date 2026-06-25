@@ -41,6 +41,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-06-25: Sound Clash is now an **installable app (PWA)** — hosts and players can add it to their phone or desktop home screen and launch it **full-screen, without browser chrome**, with a proper Sound Clash icon. Nothing changes for people who keep using it in a browser tab; the join-by-link flow is unchanged. (No offline mode — the game still needs a live connection.)
 - 2026-06-24: Added **26 new songs** to the catalog (999 → 1025) — the most-watched YouTube tracks from eight famous artists, human-reviewed: The Beatles, Pink Floyd (rock), Beyoncé, Rihanna, Lady Gaga (pop), and רביד פלוטניק, טונה (Israeli rap/hip-hop) plus שלמה ארצי (Israeli rock-pop).
 - 2026-06-23: Hosts can now **export the songs that played** from the end-of-game screen — open them all as a single YouTube playlist link, or download a self-contained HTML file that lists every song in play order with a clickable YouTube link.
 - 2026-06-18: Hosts can now **filter songs by decade** when creating a game — tap any of the 60s–20s buttons (multi-select) alongside genres, and only songs from those decades play (genres **and** decades). Leaving decades unpicked keeps every year, exactly as before. For covers, the decade follows the song's original release year, not the cover's.
