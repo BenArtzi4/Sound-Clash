@@ -254,7 +254,7 @@ Manager: award a discretionary bonus to any team in the game. Independent of rou
 
 Server-side: calls Postgres `award_bonus` RPC. Does not touch round state.
 
-**Errors**: `unauthorized` (401), `not_found` (404; team not in this game, or game does not exist), `conflict` (409; game already ended), `validation_error` (422; non-positive `points`).
+**Errors**: `unauthorized` (401), `not_found` (404; team not in this game, or game does not exist), `conflict` (409; game already ended), `validation_error` (400; non-positive `points`).
 
 ---
 

@@ -42,6 +42,15 @@ async def test_ended_game_returns_410(client, db) -> None:
     assert resp.json()["error"] == "gone"
 
 
+async def test_expired_but_unswept_game_returns_410(client, db) -> None:
+    # cleanup_expired_games sweeps only hourly, so a game can be past its 4h TTL
+    # while its row still exists with status!='ended'. Joining must still 410.
+    code, _ = await insert_game(db, status="playing", expires_in_hours=-1)
+    resp = await client.post(f"/games/{code}/teams", json={"name": "TooLate"})
+    assert resp.status_code == 410
+    assert resp.json()["error"] == "gone"
+
+
 async def test_team_name_trimmed_and_validated(client, db) -> None:
     code, _ = await insert_game(db, status="waiting")
     too_long = "A" * 31

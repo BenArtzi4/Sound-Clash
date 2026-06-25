@@ -16,6 +16,7 @@ RPCs ``end_game`` and ``award_bonus``.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -82,10 +83,30 @@ def _fetch_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any
     return dict(rows[0])
 
 
+def _is_expired(game: dict[str, Any]) -> bool:
+    """True when the game's 4h TTL has lapsed. cleanup_expired_games sweeps only
+    hourly, so an expired row can still exist between expiry and the next sweep."""
+    raw = game.get("expires_at")
+    if not raw:
+        return False
+    if isinstance(raw, datetime):
+        expires = raw
+    else:
+        try:
+            expires = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return False
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    return expires < datetime.now(UTC)
+
+
 def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dict[str, Any]:
     game = _fetch_game_blocking(client, code)
     if game["status"] == "ended" or game.get("ended_at"):
         raise GoneError(f"game {code} has ended")
+    if _is_expired(game):
+        raise GoneError(f"game {code} has expired")
 
     with mapped_postgrest_errors():
         resp = client.table("game_teams").insert({"game_code": code, "name": name}).execute()

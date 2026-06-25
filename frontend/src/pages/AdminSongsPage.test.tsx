@@ -403,6 +403,29 @@ describe("AdminSongsPage: create + edit + delete", () => {
     await waitFor(() => expect(screen.getByText(/song deleted/i)).toBeInTheDocument());
   });
 
+  it("ignores a double-click on confirm (no duplicate DELETE)", async () => {
+    let resolveDelete: () => void = () => {};
+    vi.mocked(deleteSong).mockImplementation(
+      () =>
+        new Promise<void>((res) => {
+          resolveDelete = res;
+        }),
+    );
+    renderPage();
+    await signIn();
+
+    const deleteButtons = screen.getAllByRole("button", { name: /delete/i });
+    fireEvent.click(deleteButtons[0]!);
+    const dialog = await screen.findByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: /^delete$/i });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm); // second click while the first DELETE is still in flight
+
+    resolveDelete();
+    await waitFor(() => expect(screen.getByText(/song deleted/i)).toBeInTheDocument());
+    expect(deleteSong).toHaveBeenCalledTimes(1);
+  });
+
   it("cancel on the form returns to the list without calling the API", async () => {
     renderPage();
     await signIn();
