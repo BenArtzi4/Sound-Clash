@@ -97,6 +97,9 @@ CREATE TABLE game_rounds (
   title_points       integer NOT NULL DEFAULT 0,
   artist_points      integer NOT NULL DEFAULT 0,
   wrong_buzz_penalty integer NOT NULL DEFAULT 0,
+  title_claimed_by   uuid REFERENCES game_teams(id) ON DELETE SET NULL,   -- mig 016 (multi-buzz)
+  artist_claimed_by  uuid REFERENCES game_teams(id) ON DELETE SET NULL,   -- mig 016 (multi-buzz)
+  free_guess_active  boolean NOT NULL DEFAULT false,                      -- mig 017 (free-guess flag)
   ended_at           timestamptz,
   UNIQUE (game_code, round_number)
 );

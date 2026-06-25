@@ -173,6 +173,7 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const deleteInFlightRef = useRef(false);
 
   const reportError = useCallback(
     (err: unknown, fallback: string) => {
@@ -262,7 +263,8 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
   }
 
   async function handleConfirmDelete() {
-    if (deleteId === null) return;
+    if (deleteId === null || deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
     setBusy(true);
     try {
       await deleteSong(deleteId, pw);
@@ -273,6 +275,7 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
       reportError(err, "Delete failed");
     } finally {
       setBusy(false);
+      deleteInFlightRef.current = false;
     }
   }
 
