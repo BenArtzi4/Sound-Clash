@@ -23,3 +23,15 @@ createRoot(rootEl).render(
     <App />
   </StrictMode>,
 );
+
+// Register the PWA service worker so the app is installable / launches
+// standalone. Prod-only (dev and tests never register one), fired after load so
+// it never competes with first paint or the buzzer. The worker caches nothing
+// (see public/sw.js); registration is best-effort and failure is non-fatal.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* installability is a progressive enhancement; ignore failures */
+    });
+  });
+}

@@ -8,6 +8,21 @@ export default [
   { ignores: ["dist", "node_modules", "coverage"] },
   js.configs.recommended,
   {
+    // The PWA service worker runs in ServiceWorkerGlobalScope, not the DOM, so
+    // it needs its own globals (self/caches/clients) to lint cleanly.
+    files: ["public/sw.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "script",
+      globals: {
+        self: "readonly",
+        caches: "readonly",
+        clients: "readonly",
+        Promise: "readonly",
+      },
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2022,
@@ -19,6 +34,7 @@ export default [
       globals: {
         window: "readonly",
         document: "readonly",
+        navigator: "readonly",
         console: "readonly",
         localStorage: "readonly",
         sessionStorage: "readonly",
