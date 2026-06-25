@@ -41,6 +41,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-06-25: Shared **soundclash.org** links now unfurl into a rich preview card in WhatsApp, iMessage, Slack, Discord, X, and other apps — the Sound Clash logo, name, and "Buzz in. Name the tune. Win the round." tagline on a branded 1200×630 image, instead of a bare blue link.
 - 2026-06-25: Sound Clash is now an **installable app (PWA)** — hosts and players can add it to their phone or desktop home screen and launch it **full-screen, without browser chrome**, with a proper Sound Clash icon. Nothing changes for people who keep using it in a browser tab; the join-by-link flow is unchanged. (No offline mode — the game still needs a live connection.)
 - 2026-06-24: Added **26 new songs** to the catalog (999 → 1025) — the most-watched YouTube tracks from eight famous artists, human-reviewed: The Beatles, Pink Floyd (rock), Beyoncé, Rihanna, Lady Gaga (pop), and רביד פלוטניק, טונה (Israeli rap/hip-hop) plus שלמה ארצי (Israeli rock-pop).
 - 2026-06-23: Hosts can now **export the songs that played** from the end-of-game screen — open them all as a single YouTube playlist link, or download a self-contained HTML file that lists every song in play order with a clickable YouTube link.
