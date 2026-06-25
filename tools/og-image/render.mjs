@@ -19,10 +19,15 @@ const outPath = process.argv[2]
   ? resolve(process.cwd(), process.argv[2])
   : resolve(here, '../../frontend/public/og-image.jpg');
 
+// Render at 2x device scale so the 1200x630 logical card rasterises to a
+// 2400x1260 image. WhatsApp/iMessage re-encode and downscale the preview on
+// their own servers; feeding them a supersampled source keeps text and the
+// logo crisp after that pass instead of soft. The og:image:width/height meta
+// in frontend/index.html must match these output pixels.
 const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: 1200, height: 630 },
-  deviceScaleFactor: 1,
+  deviceScaleFactor: 2,
 });
 await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'load' });
 await page.evaluate(() => document.fonts.ready);
@@ -30,7 +35,7 @@ const isJpeg = /\.jpe?g$/i.test(outPath);
 await page.screenshot({
   path: outPath,
   clip: { x: 0, y: 0, width: 1200, height: 630 },
-  ...(isJpeg ? { type: 'jpeg', quality: 90 } : {}),
+  ...(isJpeg ? { type: 'jpeg', quality: 92 } : {}),
 });
 await browser.close();
 console.log('wrote', outPath);

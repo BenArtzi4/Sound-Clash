@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+      }
+      .plate {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+      }
+      #glyph { width: 64%; height: 64%; }
+    </style>
+  </head>
+  <body>
+    <div class="plate">
+      <!-- viewBox is the exact bounding box of the four bars (x6..58, y6..58),
+           so the glyph fills the SVG and all padding is controlled by the
+           .plate / #glyph CSS sizes below. -->
+      <svg id="glyph" viewBox="6 6 52 52" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- brand: green -> cyan -> blue -->
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#10b981" />
+            <stop offset="0.5" stop-color="#06b6d4" />
+            <stop offset="1" stop-color="#3b82f6" />
+          </linearGradient>
+          <!-- blue: sky -> blue, single-hue Apple-clean look -->
+          <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#38bdf8" />
+            <stop offset="1" stop-color="#2563eb" />
+          </linearGradient>
+        </defs>
+        <g id="bars" fill="url(#g)">
+          <rect x="6" y="22" width="10" height="20" rx="3" />
+          <rect x="20" y="14" width="10" height="36" rx="3" />
+          <rect x="34" y="6" width="10" height="52" rx="3" />
+          <rect x="48" y="18" width="10" height="28" rx="3" />
+        </g>
+      </svg>
+    </div>
+    <script>
+      // Query params:
+      //   scale=NN     glyph size as % of the canvas (default 64; maskable ~54)
+      //   bg=gradient  whisper-light cool gradient instead of flat white
+      //   color=blue   single-hue blue bars instead of the brand gradient
+      //   round=1      home-screen mock: rounded tile + shadow on a grey field
+      const p = new URLSearchParams(location.search);
+      const body = document.body;
+      const plate = document.querySelector('.plate');
+      const glyph = document.getElementById('glyph');
+      const scale = p.get('scale');
+      if (scale) { glyph.style.width = scale + '%'; glyph.style.height = scale + '%'; }
+      if (p.get('color') === 'blue') {
+        document.getElementById('bars').setAttribute('fill', 'url(#blue)');
+      }
+      const bg = p.get('bg') === 'gradient'
+        ? 'linear-gradient(155deg, #ffffff 0%, #eef3f8 100%)'
+        : '#ffffff';
+      plate.style.background = bg;
+      if (p.get('round')) {
+        body.style.background = '#dfe3ea';
+        plate.style.width = '78%';
+        plate.style.height = '78%';
+        plate.style.borderRadius = '22.5%';
+        plate.style.boxShadow = '0 14px 34px rgba(15, 23, 42, 0.20)';
+      }
+    </script>
+  </body>
+</html>

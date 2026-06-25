@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-06-25: The installable **app icon** is now a clean, Apple-style white tile with blue equalizer bars (replacing the dark navy icon) and ships at higher resolution, including a new 1024px size. The **link-preview card** shared on WhatsApp / iMessage / Slack / etc. is now rendered at 2× resolution (2400×1260) so it stays crisp instead of soft after those apps re-compress it.
 - 2026-06-24: The **How to Play** page's "Steps to run a game" section is now a scannable two-phase flow instead of seven dense paragraphs — a **Set up** group (one-time) and a **Play** group (every round), each step trimmed to a single line, with the "audio plays from the host's phone" caveat pulled out into its own callout. Faster to grok at a glance for first-time hosts.
 - 2026-06-19: The decade filter on the **Host a game** page now labels the 2000s and 2010s in full ("2000s", "2010s") instead of the ambiguous "00s"/"10s"; the 60s–90s keep their familiar shorthand.
 - 2026-06-19: The decade filter on the **Host a game** page is now a row of toggle pills instead of checkbox cards — a compact, optional refinement that lays out cleanly at every screen size (one row on desktop, a balanced 4 + 3 on phones, with no stray chip stranded on its own line).
