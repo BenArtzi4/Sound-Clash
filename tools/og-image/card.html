@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1200px; height: 630px; }
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+        color: #e2e8f0;
+        background:
+          radial-gradient(900px 620px at 50% 30%, rgba(6, 182, 212, 0.20), rgba(6, 182, 212, 0) 60%),
+          radial-gradient(760px 520px at 86% 102%, rgba(59, 130, 246, 0.18), rgba(59, 130, 246, 0) 60%),
+          radial-gradient(620px 520px at 12% 2%, rgba(16, 185, 129, 0.14), rgba(16, 185, 129, 0) 55%),
+          linear-gradient(158deg, #0b1224 0%, #0a0f1f 55%, #090c19 100%);
+      }
+
+      /* Subtle equalizer texture hugging the bottom edge. */
+      .bg-bars {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 230px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 14px;
+        opacity: 0.07;
+        pointer-events: none;
+      }
+      .bg-bars i {
+        width: 26px;
+        border-radius: 9px 9px 0 0;
+        background: linear-gradient(#10b981, #06b6d4, #3b82f6);
+      }
+
+      .lockup {
+        display: flex;
+        align-items: center;
+        gap: 34px;
+        white-space: nowrap;
+        z-index: 2;
+      }
+      .logo { filter: drop-shadow(0 10px 34px rgba(6, 182, 212, 0.45)); }
+      .wordmark {
+        font-weight: 800;
+        font-size: 106px;
+        letter-spacing: 2px;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .wordmark .sound { color: #f8fafc; }
+      .wordmark .clash {
+        background: linear-gradient(180deg, #34d399 0%, #22d3ee 52%, #3b82f6 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .tagline {
+        margin-top: 42px;
+        font-size: 42px;
+        font-weight: 500;
+        color: #94a3b8;
+        letter-spacing: 0.3px;
+        z-index: 2;
+      }
+      .accent {
+        margin-top: 36px;
+        width: 360px;
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #10b981, #06b6d4, #3b82f6);
+        z-index: 2;
+      }
+      .url {
+        margin-top: 30px;
+        font-size: 29px;
+        font-weight: 600;
+        letter-spacing: 3px;
+        color: #22d3ee;
+        z-index: 2;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg-bars">
+      <i style="height: 70px"></i><i style="height: 120px"></i><i style="height: 90px"></i>
+      <i style="height: 160px"></i><i style="height: 110px"></i><i style="height: 200px"></i>
+      <i style="height: 140px"></i><i style="height: 80px"></i><i style="height: 170px"></i>
+      <i style="height: 100px"></i><i style="height: 190px"></i><i style="height: 60px"></i>
+      <i style="height: 150px"></i><i style="height: 120px"></i><i style="height: 95px"></i>
+      <i style="height: 210px"></i><i style="height: 130px"></i><i style="height: 75px"></i>
+      <i style="height: 165px"></i><i style="height: 105px"></i><i style="height: 185px"></i>
+      <i style="height: 85px"></i><i style="height: 145px"></i><i style="height: 115px"></i>
+      <i style="height: 200px"></i><i style="height: 70px"></i><i style="height: 155px"></i>
+      <i style="height: 125px"></i><i style="height: 90px"></i><i style="height: 175px"></i>
+      <i style="height: 100px"></i><i style="height: 195px"></i><i style="height: 65px"></i>
+      <i style="height: 140px"></i>
+    </div>
+
+    <div class="lockup">
+      <svg class="logo" width="140" height="140" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#10b981" />
+            <stop offset="0.5" stop-color="#06b6d4" />
+            <stop offset="1" stop-color="#3b82f6" />
+          </linearGradient>
+        </defs>
+        <g fill="url(#g)">
+          <rect x="6" y="22" width="10" height="20" rx="3" />
+          <rect x="20" y="14" width="10" height="36" rx="3" />
+          <rect x="34" y="6" width="10" height="52" rx="3" />
+          <rect x="48" y="18" width="10" height="28" rx="3" />
+        </g>
+      </svg>
+      <div class="wordmark"><span class="sound">SOUND</span> <span class="clash">CLASH</span></div>
+    </div>
+
+    <div class="tagline">Buzz in. Name the tune. Win the round.</div>
+    <div class="accent"></div>
+    <div class="url">soundclash.org</div>
+  </body>
+</html>
