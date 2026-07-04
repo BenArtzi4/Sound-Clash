@@ -130,10 +130,7 @@ export function listGenres(): Promise<Genre[]> {
   if (inflightGenres) return inflightGenres;
   inflightGenres = (async () => {
     try {
-      const { data, error } = await supabase
-        .from("genres")
-        .select("id,name,slug")
-        .order("name");
+      const { data, error } = await supabase.from("genres").select("id,name,slug").order("name");
       if (error) throw new Error(error.message);
       const result = (data ?? []) as Genre[];
       cachedGenres = result;
