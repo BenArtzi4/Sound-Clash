@@ -18,11 +18,27 @@ import {
 } from "./api";
 import type { SongWritePayload } from "./types";
 
+// listGenres reads genres straight from Supabase (no Render cold start), so we
+// mock the supabase client's `from("genres").select(...).order(...)` chain.
+// Every other endpoint still goes through fetch (mocked below).
+const supabaseMocks = vi.hoisted(() => {
+  const order = vi.fn();
+  const select = vi.fn(() => ({ order }));
+  const from = vi.fn(() => ({ select }));
+  return { order, select, from };
+});
+vi.mock("./supabase", () => ({
+  supabase: { from: supabaseMocks.from },
+}));
+
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
+  supabaseMocks.from.mockClear();
+  supabaseMocks.select.mockClear();
+  supabaseMocks.order.mockReset();
   __resetListGenresCacheForTests();
 });
 
@@ -52,34 +68,50 @@ describe("api - public routes", () => {
     expect(headers["X-Manager-Token"]).toBeUndefined();
   });
 
-  it("listGenres GETs /genres", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
+  it("listGenres reads genres directly from Supabase (not via fetch/Render)", async () => {
+    supabaseMocks.order.mockResolvedValueOnce({
+      data: [{ id: "g1", name: "Rock", slug: "rock" }],
+      error: null,
+    });
     const res = await listGenres();
     expect(res).toHaveLength(1);
+    expect(supabaseMocks.from).toHaveBeenCalledWith("genres");
+    expect(supabaseMocks.select).toHaveBeenCalledWith("id,name,slug");
+    expect(supabaseMocks.order).toHaveBeenCalledWith("name");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("listGenres memoizes the result so a second call does not hit the network", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
+    supabaseMocks.order.mockResolvedValueOnce({
+      data: [{ id: "g1", name: "Rock", slug: "rock" }],
+      error: null,
+    });
     const first = await listGenres();
     const second = await listGenres();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(supabaseMocks.order).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
   });
 
   it("listGenres dedupes concurrent calls (single in-flight request)", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
+    supabaseMocks.order.mockResolvedValueOnce({
+      data: [{ id: "g1", name: "Rock", slug: "rock" }],
+      error: null,
+    });
     const [a, b] = await Promise.all([listGenres(), listGenres()]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(supabaseMocks.order).toHaveBeenCalledTimes(1);
     expect(a).toEqual(b);
   });
 
-  it("listGenres retries after a failed fetch (cache stays empty on error)", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("network down"));
+  it("listGenres surfaces a Supabase error and retries (cache stays empty on error)", async () => {
+    supabaseMocks.order.mockResolvedValueOnce({ data: null, error: { message: "network down" } });
     await expect(listGenres()).rejects.toThrow(/network down/);
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, [{ id: "g1", name: "Rock", slug: "rock" }]));
+    supabaseMocks.order.mockResolvedValueOnce({
+      data: [{ id: "g1", name: "Rock", slug: "rock" }],
+      error: null,
+    });
     const res = await listGenres();
     expect(res).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(supabaseMocks.order).toHaveBeenCalledTimes(2);
   });
 
   it("joinTeam POSTs name to the right URL", async () => {

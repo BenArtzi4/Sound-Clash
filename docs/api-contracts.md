@@ -303,6 +303,8 @@ Public. List all genres.
 ]
 ```
 
+> **Note:** the SPA no longer calls this endpoint. The "Host a game" genre picker reads the anon-readable `genres` table **directly from Supabase** (`from('genres').select('id,name,slug').order('name')`) so it never waits on a cold Render container. This endpoint is retained for smoke tests and any external caller; its contract is unchanged.
+
 ---
 
 ### 2.10 Admin Songs CRUD
