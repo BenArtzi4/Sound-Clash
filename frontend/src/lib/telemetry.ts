@@ -75,8 +75,12 @@ export async function initTelemetry(): Promise<void> {
   if (faro || initStarted || !url) return;
   initStarted = true;
   try {
-    const sdk = await import("@grafana/faro-web-sdk");
-    const { TracingInstrumentation } = await import("@grafana/faro-web-tracing");
+    // Fetch the two Faro chunks in parallel rather than in series so the
+    // (already-deferred) init resolves a round-trip sooner.
+    const [sdk, { TracingInstrumentation }] = await Promise.all([
+      import("@grafana/faro-web-sdk"),
+      import("@grafana/faro-web-tracing"),
+    ]);
     const instance = sdk.initializeFaro({
       url,
       app: {

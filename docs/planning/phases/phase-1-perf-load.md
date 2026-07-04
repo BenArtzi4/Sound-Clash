@@ -33,10 +33,10 @@
 - [x] Confirm the pending-event queue still covers the gap (add/adjust `useGameChannel.test.ts`). (2 new tests + existing queue test all green.)
 
 ### T1.4 · Trim the join-path bundle `[S→M]` — `I-Faro`, `I-Sentry`
-- [ ] Defer Faro: `initTelemetry()` behind `requestIdleCallback` on `load`; `Promise.all` the two dynamic imports.
-- [ ] Set `VITE_FARO_URL` unset in prod env until #145 is fixed (coordinate: this is an env/ops change on Cloudflare — note in PR, may need the maintainer to unset the Pages var).
-- [ ] Lazy-load Sentry after first render with a temporary `window.onerror` buffer.
-- [ ] (Stretch) `manualChunks: { vendor: ['react','react-dom','react-router-dom'] }` in `vite.config.ts` — `I-Vendor`.
+- [x] Defer Faro: `initTelemetry()` behind `requestIdleCallback` on `load`; `Promise.all` the two dynamic imports. (PR C — `main.tsx` `whenIdle()` on `load` with a 5s timeout; `telemetry.ts` now `Promise.all`s the two Faro chunk imports.)
+- [x] Set `VITE_FARO_URL` unset in prod env until #145 is fixed. (PR C — removed from committed `frontend/.env.production` with a comment documenting the re-enable path AND the Cloudflare Pages build-env caveat. **Flagged in PR:** if Faro still loads after deploy, the maintainer must also clear `VITE_FARO_URL` in the Cloudflare Pages dashboard.)
+- [x] Lazy-load Sentry after first render with a temporary `window.onerror` buffer. (PR C — new `lib/sentry.ts`: `installErrorBuffer()` attaches cheap native `error`/`unhandledrejection` handlers synchronously; `loadSentry()` runs on idle, dynamically imports `@sentry/react`, inits, and drains the buffer. Moved `@sentry/react` off the entry chunk: index gz 151.72 kB → 57.77 kB.)
+- [x] (Stretch) `manualChunks` `vendor` (react/react-dom/react-router/scheduler) in `vite.config.ts` — `I-Vendor`. (PR C — Vite 8/Rolldown only accepts the function form of `manualChunks`; used a regex over `node_modules` paths. Emits a 73.85 kB gz `vendor` chunk that immutable-caching keeps across deploys.)
 
 ### T1.5 · Overlap chunk download with idle time `[S]` — `I-Prefetch`, `I-JoinWarm`, `I-Suspense`
 - [ ] `JoinTeamPage`: `useEffect(() => { void import('./TeamGameplayPage') }, [])` to prefetch the gameplay chunk while the player types.
