@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam } from "../lib/api";
 import { setStoredTeam } from "../lib/teamStorage";
 import styles from "./JoinTeamPage.module.css";
@@ -19,6 +20,20 @@ export function JoinTeamPage() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Wake the Render backend now so the join POST (which goes through Render) is
+  // warm by the time the player finishes typing.
+  usePrewarmBackend();
+  // After ~2.5s of a pending join, tell the user the server is waking (cold
+  // start can take up to ~30s) instead of leaving "Joining…" hanging.
+  const wakingServer = useSlowPending(busy);
+
+  // Prefetch the gameplay chunk while the player types their name, so the jump
+  // to /team/:code after a successful join is instant (React.lazy in App.tsx
+  // requests the same chunk — Vite dedupes it).
+  useEffect(() => {
+    void import("./TeamGameplayPage");
+  }, []);
 
   const trimmedName = name.trim();
   const codeValid = CODE_RE.test(code);
@@ -100,7 +115,7 @@ export function JoinTeamPage() {
             Cancel
           </Link>
           <button type="submit" className="btn btn-primary" disabled={!submittable}>
-            {busy ? "Joining…" : "Join game"}
+            {busy ? (wakingServer ? "Waking the server — up to 30s…" : "Joining…") : "Join game"}
           </button>
         </div>
       </form>

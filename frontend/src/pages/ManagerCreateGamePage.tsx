@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
+import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { createGame, listGenres } from "../lib/api";
 import { setManagerToken } from "../lib/managerToken";
 import type { Genre } from "../lib/types";
@@ -33,6 +34,12 @@ export function ManagerCreateGamePage() {
   const [selectedDecades, setSelectedDecades] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [genresLoading, setGenresLoading] = useState(true);
+
+  // Wake the Render backend so the create-game POST is warm. HomePage already
+  // pre-warms on landing; this covers a direct deep-link to /manager/create.
+  usePrewarmBackend();
+  // Surface a "waking the server…" hint if create stays pending past ~2.5s.
+  const wakingServer = useSlowPending(busy);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,7 +161,7 @@ export function ManagerCreateGamePage() {
             Cancel
           </Link>
           <button type="submit" className="btn btn-primary" disabled={selected.size === 0 || busy}>
-            {busy ? "Creating…" : "Create game"}
+            {busy ? (wakingServer ? "Waking the server — up to 30s…" : "Creating…") : "Create game"}
           </button>
         </div>
       </form>

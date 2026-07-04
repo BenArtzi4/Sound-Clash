@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,14 +15,20 @@ vi.mock("../lib/api", () => ({
     }
   },
   joinTeam: vi.fn(),
+  getHealth: vi.fn(() => Promise.resolve({ status: "ok", version: "test", supabase: "ok" })),
 }));
 
-import { ApiError, joinTeam } from "../lib/api";
+// The page prefetches the gameplay chunk on mount; stub it so the test doesn't
+// pull in the real (heavy) module or its Supabase/YouTube side effects.
+vi.mock("./TeamGameplayPage", () => ({ TeamGameplayPage: () => null }));
+
+import { ApiError, getHealth, joinTeam } from "../lib/api";
 import { JoinTeamPage } from "./JoinTeamPage";
 
 beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(joinTeam).mockReset();
+  vi.mocked(getHealth).mockClear();
 });
 
 afterEach(() => {
@@ -120,5 +126,28 @@ describe("JoinTeamPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /join game/i }));
     await waitFor(() => expect(screen.getByText(/something went wrong/i)).toBeInTheDocument());
+  });
+
+  it("pre-warms the backend on mount", () => {
+    renderAt("/join/ABCDEF");
+    expect(getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("switches the submit label to a waking-server hint after a slow pending join", () => {
+    vi.useFakeTimers();
+    try {
+      // A join that never settles, so the slow-pending timer can fire.
+      vi.mocked(joinTeam).mockReturnValueOnce(new Promise(() => {}));
+      renderAt("/join/ABCDEF");
+      fireEvent.change(screen.getByLabelText(/team name/i), { target: { value: "Alice" } });
+      fireEvent.click(screen.getByRole("button", { name: /join game/i }));
+      expect(screen.getByRole("button", { name: /joining/i })).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(2500);
+      });
+      expect(screen.getByRole("button", { name: /waking the server/i })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
