@@ -7,15 +7,17 @@ import styles from "./HomePage.module.css";
 
 export function HomePage() {
   useEffect(() => {
-    // Pre-warm the Render-hosted backend. Its free-tier container spins down
-    // after ~15 min idle, so the next request (Create / Join / Display)
-    // would otherwise stall the user for 2-30s on cold start. We fire two
-    // throwaway requests in the background:
-    //   1. /health wakes the container.
-    //   2. /genres warms it AND seeds the listGenres cache so the manager's
-    //      "Host a game" form has its options ready when they click through.
-    // Errors are ignored — if pre-warm fails, the user just hits the same
-    // cold start they would have hit before. No worse, often much better.
+    // Pre-warm on landing so the next step is fast. Two background requests:
+    //   1. getHealth() wakes the Render backend. Its free-tier container spins
+    //      down after ~15 min idle, so the create-game / join POST would
+    //      otherwise stall the user 2-30s on cold start; pinging /health now
+    //      warms the container ahead of that click.
+    //   2. listGenres() seeds the genre cache. Genres load straight from
+    //      Supabase (not Render), so it's already fast and cold-start-free;
+    //      prefetching here just means the "Host a game" picker is already in
+    //      memory on arrival.
+    // Errors are ignored — a failed pre-warm just means the user hits the same
+    // path they would have anyway. No worse, often much better.
     void getHealth().catch(() => undefined);
     void listGenres().catch(() => undefined);
   }, []);
