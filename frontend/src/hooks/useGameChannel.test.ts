@@ -456,6 +456,40 @@ describe("useGameChannel - subscription", () => {
     }
   });
 
+  it("fires the initial hydrate immediately on mount, before SUBSCRIBED", async () => {
+    const game = makeActiveGame({ status: "playing" });
+    const team = makeTeam({ id: "t1" });
+    setHydrate({ game, teams: [team], rounds: [] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+
+    // The initial hydrate runs on mount in parallel with the WebSocket
+    // handshake: state is populated and the three state GETs have already
+    // fired WITHOUT the Realtime SUBSCRIBED callback ever running (status is
+    // still "connecting"). This is the time-to-BUZZ win.
+    await waitFor(() => {
+      expect(result.current.state?.teams.get("t1")?.id).toBe("t1");
+    });
+    expect(result.current.status).toBe("connecting");
+    expect(supabaseMock.from.mock.calls.length).toBe(3);
+  });
+
+  it("re-hydrates on SUBSCRIBED after the immediate mount hydrate (gap coverage)", async () => {
+    const game = makeActiveGame({ status: "playing" });
+    setHydrate({ game, teams: [], rounds: [] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+
+    // Immediate mount hydrate: one pass over the three ephemeral tables.
+    await waitFor(() => expect(supabaseMock.from.mock.calls.length).toBe(3));
+
+    // SUBSCRIBED fires a SECOND hydrate so nothing committed during the
+    // handshake window is missed; total is now two passes = six table reads.
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(result.current.status).toBe("subscribed"));
+    expect(supabaseMock.from.mock.calls.length).toBe(6);
+  });
+
   it("hydrates on SUBSCRIBED and applies events afterwards", async () => {
     const game = makeActiveGame({ status: "waiting" });
     const team = makeTeam({ id: "t1" });
