@@ -39,9 +39,9 @@
 - [x] (Stretch) `manualChunks` `vendor` (react/react-dom/react-router/scheduler) in `vite.config.ts` — `I-Vendor`. (PR C — Vite 8/Rolldown only accepts the function form of `manualChunks`; used a regex over `node_modules` paths. Emits a 73.85 kB gz `vendor` chunk that immutable-caching keeps across deploys.)
 
 ### T1.5 · Overlap chunk download with idle time `[S]` — `I-Prefetch`, `I-JoinWarm`, `I-Suspense`
-- [ ] `JoinTeamPage`: `useEffect(() => { void import('./TeamGameplayPage') }, [])` to prefetch the gameplay chunk while the player types.
-- [ ] `JoinTeamPage` + ManagerCreate deep-link: `void getHealth().catch(()=>{})` on mount; button label → "Waking the server — up to 30s…" after ~2.5s pending.
-- [ ] `App.tsx`: replace `Suspense fallback={null}` with a tiny centered CSS logo-pulse.
+- [x] `JoinTeamPage`: `useEffect(() => { void import('./TeamGameplayPage') }, [])` to prefetch the gameplay chunk while the player types. (PR D — verified in a browser: the `TeamGameplayPage` JS+CSS chunks are fetched on the join page's mount, before any navigation. Vite dedupes with App.tsx's `React.lazy`.)
+- [x] `JoinTeamPage` + ManagerCreate deep-link: `void getHealth().catch(()=>{})` on mount; button label → "Waking the server — up to 30s…" after ~2.5s pending. (PR D — shared `hooks/useBackendWarmup.ts`: `usePrewarmBackend()` pings `/health` on mount; `useSlowPending(busy)` flips the submit label after 2.5s. Note: the preview-on-localhost verify logs 2 benign CORS errors from the ping since `localhost:<port>` isn't in the API's CORS allowlist — the prod origins are, so no error in the real game.)
+- [x] `App.tsx`: replace `Suspense fallback={null}` with a tiny centered CSS logo-pulse. (PR D — new `components/RouteFallback.tsx`: centered animated `<Logo>` with an opacity pulse, `prefers-reduced-motion`-aware, `role="status"`.)
 
 ### T1.6 · Disaster-recovery safety net `[M]` — `I-DR` (do this in Phase 1; it's the top production-readiness gap)
 - [ ] Add a scheduled `pg_dump` of `songs`/`genres`/`song_genres` committed to the repo (or pushed to object storage) — a GitHub Action on cron. **This is a `.github/workflows/` addition → flag with the maintainer before adding (CI rule).**

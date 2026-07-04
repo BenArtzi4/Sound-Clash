@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
+import { RouteFallback } from "./components/RouteFallback";
 import { ToastProvider } from "./context/ToastContext";
 import { HomePage } from "./pages/HomePage";
 import { JoinTeamPage } from "./pages/JoinTeamPage";
@@ -32,7 +33,7 @@ export function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <Suspense fallback={null}>
+        <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/how-to-play" element={<HowToPlayPage />} />

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,9 +16,10 @@ vi.mock("../lib/api", () => ({
   },
   listGenres: vi.fn(),
   createGame: vi.fn(),
+  getHealth: vi.fn(() => Promise.resolve({ status: "ok", version: "test", supabase: "ok" })),
 }));
 
-import { createGame, listGenres } from "../lib/api";
+import { createGame, getHealth, listGenres } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
 import { getManagerToken } from "../lib/managerToken";
 import { ManagerCreateGamePage } from "./ManagerCreateGamePage";
@@ -27,6 +28,7 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(listGenres).mockReset();
   vi.mocked(createGame).mockReset();
+  vi.mocked(getHealth).mockClear();
 });
 
 afterEach(() => {
@@ -136,5 +138,32 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => screen.getByRole("link", { name: /cancel/i }));
     fireEvent.click(screen.getByRole("link", { name: /cancel/i }));
     await waitFor(() => expect(screen.getByText("home page")).toBeInTheDocument());
+  });
+
+  it("pre-warms the backend on mount", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([]);
+    renderPage();
+    await waitFor(() => expect(getHealth).toHaveBeenCalledTimes(1));
+  });
+
+  it("switches the submit label to a waking-server hint after a slow pending create", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
+    // A create that never settles, so the slow-pending timer can fire.
+    vi.mocked(createGame).mockReturnValueOnce(new Promise(() => {}));
+    renderPage();
+    await waitFor(() => screen.getByText("Rock"));
+    fireEvent.click(screen.getByLabelText(/rock/i));
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole("button", { name: /create game/i }));
+      expect(screen.getByRole("button", { name: /creating/i })).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(2500);
+      });
+      expect(screen.getByRole("button", { name: /waking the server/i })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
