@@ -10,6 +10,10 @@
  * the app shell would risk serving a stale bundle in the middle of a live game.
  * So this worker caches NOTHING and never intercepts a request.
  *
+ * Asset caching is handled entirely at the HTTP layer instead (see
+ * public/_headers): content-hashed /assets/* are served immutable, while
+ * index.html and this worker stay no-cache so a new deploy is always picked up.
+ *
  *  - install:  skipWaiting() so a new deploy's worker activates immediately.
  *  - activate: delete any caches a previous version may have created (acts as a
  *              built-in kill-switch) and take control of open clients.
