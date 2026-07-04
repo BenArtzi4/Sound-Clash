@@ -256,6 +256,18 @@ export function useGameChannel(gameCode: string): {
         }
       });
 
+    // Paint an early snapshot immediately, in parallel with the WebSocket
+    // handshake, rather than waiting for the SUBSCRIBED callback: the three
+    // state GETs overlap the ~300-800ms Realtime connect (worse on mobile), so
+    // the BUZZ button renders a full round-trip sooner. This is a *pre-hydrate*
+    // (authoritative:false): it only renders an early snapshot. It does NOT
+    // open the event gate, so live events still queue for the authoritative
+    // SUBSCRIBED hydrate to drain ON TOP, and a pre-hydrate that resolves after
+    // that hydrate drops its now-stale snapshot instead of clobbering newer
+    // state. HYDRATE is idempotent, so when nothing changed in the handshake
+    // window the SUBSCRIBED re-hydrate forces no extra render.
+    void hydrate({ authoritative: false });
+
     // Periodic catch-up in case a Realtime event was dropped (see comment on
     // RESYNC_INTERVAL_MS). Idempotent — HYDRATE returns the same state ref
     // when nothing changed, so quiet ticks cost ~3 REST queries with zero
@@ -289,20 +301,32 @@ export function useGameChannel(gameCode: string): {
     if (!document.hidden) startResync();
     document.addEventListener("visibilitychange", onVisibilityChange);
 
-    async function hydrate() {
+    // An `authoritative` hydrate (the default: SUBSCRIBED, the 20s backstop, and
+    // the visibility resume) opens the event gate — it flips `hydrated` and
+    // drains the pending queue, so queued live events are applied ON TOP of the
+    // snapshot and can never be reverted by it. The mount pre-hydrate passes
+    // `authoritative: false`: it paints an early snapshot for a faster first
+    // render but keeps the gate closed (events stay queued for the SUBSCRIBED
+    // hydrate to drain), and if it resolves after an authoritative hydrate it
+    // drops its now-stale snapshot rather than clobbering newer state.
+    async function hydrate({ authoritative = true }: { authoritative?: boolean } = {}) {
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
           supabase.from("active_games").select("*").eq("game_code", gameCode).maybeSingle(),
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);
-        if (!cancelled) {
+        if (!cancelled && (authoritative || !hydrated)) {
           if (gameRes.error) throw gameRes.error;
           if (teamsRes.error) throw teamsRes.error;
           if (roundsRes.error) throw roundsRes.error;
           if (!gameRes.data) {
-            setStatus("gone");
-            dispatch({ type: "GAME_DELETED" });
+            // Only an authoritative hydrate acts on a missing row; a pre-hydrate
+            // stays silent so a transient miss can't briefly flash "gone".
+            if (authoritative) {
+              setStatus("gone");
+              dispatch({ type: "GAME_DELETED" });
+            }
           } else {
             dispatch({
               type: "HYDRATE",
@@ -313,15 +337,19 @@ export function useGameChannel(gameCode: string): {
           }
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
+        // A pre-hydrate failure is silent (the SUBSCRIBED / backstop hydrate
+        // retries); only an authoritative failure surfaces an error.
+        if (!cancelled && authoritative) setError(e instanceof Error ? e : new Error(String(e)));
       }
-      hydrated = true;
-      if (!cancelled) {
-        for (const action of pending) {
-          dispatch(action);
+      if (authoritative) {
+        hydrated = true;
+        if (!cancelled) {
+          for (const action of pending) {
+            dispatch(action);
+          }
         }
+        pending.length = 0;
       }
-      pending.length = 0;
     }
 
     return () => {

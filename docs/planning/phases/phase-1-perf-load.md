@@ -29,8 +29,8 @@
 - [x] Fix YouTube hints: drop `crossorigin` from `www.youtube.com`; add non-crossorigin `youtube-nocookie.com` and `s.ytimg.com`.
 
 ### T1.3 · Hydrate before subscribe `[S]` — `I-Hydrate`
-- [ ] `useGameChannel.ts`: fire `void hydrate()` immediately after building the channel; keep the SUBSCRIBED re-hydrate.
-- [ ] Confirm the pending-event queue still covers the gap (add/adjust `useGameChannel.test.ts`).
+- [x] `useGameChannel.ts`: fire `void hydrate()` immediately after building the channel; keep the SUBSCRIBED re-hydrate. (Implemented as a *non-authoritative* pre-hydrate so it paints early but never opens the event gate — the pending queue stays safe; see `realtime-design.md` §6.)
+- [x] Confirm the pending-event queue still covers the gap (add/adjust `useGameChannel.test.ts`). (2 new tests + existing queue test all green.)
 
 ### T1.4 · Trim the join-path bundle `[S→M]` — `I-Faro`, `I-Sentry`
 - [ ] Defer Faro: `initTelemetry()` behind `requestIdleCallback` on `load`; `Promise.all` the two dynamic imports.

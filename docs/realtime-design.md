@@ -156,6 +156,8 @@ channel.subscribe(async (status) => {
 
 The order matters: subscribe first, then fetch. If we fetched first then subscribed, events between fetch and subscribe would be lost.
 
+**Pre-hydrate for a faster first render.** In addition to the authoritative fetch above, the client fires one *pre-hydrate* fetch immediately on mount, in parallel with the WebSocket handshake, so the BUZZ button renders a full round-trip sooner instead of waiting the ~300-800ms for `SUBSCRIBED`. The pre-hydrate is deliberately *non-authoritative*: it only paints an early snapshot. It does **not** open the event gate (`hydrated` stays `false`, so live events keep queuing), and if it resolves after the authoritative `SUBSCRIBED` fetch it drops its now-stale snapshot instead of overwriting newer state. The `SUBSCRIBED` fetch (and the periodic backstop) remains the single source that opens the gate and drains the queued events — so the subscribe-first-then-fetch guarantee above is untouched: live events are always applied on top of the authoritative snapshot, never reverted by a hydrate. See `frontend/src/hooks/useGameChannel.ts`.
+
 ## 7. Reconnection
 
 `supabase-js` reconnects automatically with exponential backoff (1s, 2s, 4s, ..., capped). On reconnect, it re-establishes the WebSocket and resubscribes existing channels. Missed events during disconnect are NOT replayed; Realtime is not durable.
