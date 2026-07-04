@@ -4,3 +4,30 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.soundclash.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.grafana.net
+
+# Content-hashed build output. Vite writes a new filename whenever a chunk's
+# bytes change, so a cached copy can never be stale: cache it forever and skip
+# revalidation entirely. Previously these fell through to the platform default
+# (max-age=0, must-revalidate), costing a 304 round-trip per asset on every
+# load, including a player's mid-game refresh.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Un-hashed static assets: their URL is stable across deploys, so they can only
+# be busted by a new deploy, not a content hash. Cache for a day (a stale icon,
+# hero image, or manifest for under 24h is harmless, and index.html, which is
+# never cached, still picks up a fresh deploy immediately). sw.js is
+# deliberately NOT listed: it must always be fetched fresh so a new deploy's
+# worker activates (see public/sw.js).
+/icons/*
+  Cache-Control: public, max-age=86400
+/og-image.jpg
+  Cache-Control: public, max-age=86400
+/how-to-play-hero.*
+  Cache-Control: public, max-age=86400
+/manifest.webmanifest
+  Cache-Control: public, max-age=86400
+
+# index.html and every SPA route are intentionally left on the platform default
+# (max-age=0, must-revalidate): the HTML must revalidate on every load so a
+# deploy is picked up mid-session and never served stale over a live game.
