@@ -61,6 +61,8 @@ export default [
         HTMLInputElement: "readonly",
         KeyboardEvent: "readonly",
         Event: "readonly",
+        ErrorEvent: "readonly",
+        PromiseRejectionEvent: "readonly",
         AudioContext: "readonly",
         performance: "readonly",
         requestAnimationFrame: "readonly",
