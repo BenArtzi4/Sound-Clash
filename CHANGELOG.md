@@ -26,6 +26,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-07-04: **The "Host a game" genre picker no longer stalls behind a cold backend.** The genre list now loads directly from the database (which is always warm) instead of through the app server, whose free-tier container sleeps after ~15 min idle and could take several seconds to wake — previously making the genres take 5+ seconds to appear when hosting after a quiet spell. Creating the game itself still uses the app server (and is still pre-warmed on the home page).
 - 2026-06-25: Joining a game that has passed its 4-hour expiry (but hasn't been swept from the database yet) now returns a clear "game is gone" error instead of a misleading success that created a team about to be deleted.
 - 2026-06-25: The admin **Songs** delete confirmation no longer issues a duplicate delete on a fast double-click — which previously surfaced a spurious "Delete failed" toast even though the song had been removed.
 - 2026-06-24: The admin **Songs** list no longer caps at 1000. Once the catalog passed 1000 songs the page fetched only the first 1000 (by title) over the REST API and reported "1000" as the total; it now pages in the database (`range`) and reads the exact count, so the true total shows and every song is reachable. (Gameplay was never affected — song selection runs inside Postgres, not over the REST API.)

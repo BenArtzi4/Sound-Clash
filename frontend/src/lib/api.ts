@@ -1,4 +1,5 @@
 import { env } from "./env";
+import { supabase } from "./supabase";
 import { tracedFetch } from "./telemetry";
 import type {
   ApiErrorBody,
@@ -110,11 +111,17 @@ export function getHealth(): Promise<{
   return request("GET", "/health");
 }
 
-// Genres are static for the duration of a session, so we memoize the first
-// successful fetch. HomePage prefetches in the background while the user is
-// reading the landing copy, so by the time they click Host and reach
-// ManagerCreateGamePage the list is already in memory and the form renders
-// without waiting on the Render-hosted backend.
+// Genres are a small, static, anon-readable catalog table, so we fetch them
+// DIRECTLY from Supabase (Postgres in Frankfurt, always warm) rather than
+// through the Render-hosted `/genres` endpoint. Render's free tier cold-starts
+// 2-30s, and the "Host a game" form blocks on this list — a cold backend made
+// the genre picker take >5s to appear. Supabase returns the same rows in
+// ~150ms whether or not Render is awake. This is the same reasoning that keeps
+// the buzzer and the hydrate off Render: no cold start in a user-perceived
+// path. The result is memoized for the session, and HomePage prefetches it in
+// the background so the picker is usually already in memory by the time the
+// host clicks through. (The `/genres` REST endpoint still exists for smoke
+// tests and any external caller; the browser just no longer depends on it.)
 let cachedGenres: Genre[] | null = null;
 let inflightGenres: Promise<Genre[]> | null = null;
 
@@ -123,7 +130,9 @@ export function listGenres(): Promise<Genre[]> {
   if (inflightGenres) return inflightGenres;
   inflightGenres = (async () => {
     try {
-      const result = await request<Genre[]>("GET", "/genres");
+      const { data, error } = await supabase.from("genres").select("id,name,slug").order("name");
+      if (error) throw new Error(error.message);
+      const result = (data ?? []) as Genre[];
       cachedGenres = result;
       return result;
     } finally {

@@ -55,6 +55,9 @@
 ### T1.8 · Measurement `[S]`
 - [ ] Capture join-to-playable before/after (Playwright MCP against prod, or Lighthouse): time from `/join/:code` navigation to BUZZ button interactive. Record numbers in the PR so the win is provable.
 
+### T1.9 · Genres direct from Supabase `[S]` — `I-GenreWarm` (surfaced in execution)
+- [x] Maintainer reported the "Host a game" genre picker taking >5s on a cold Render container. Root cause: `listGenres()` went through Render's `/genres` (2-30s cold start) even though `genres` is an anon-readable table. Fix: `listGenres()` now reads genres **directly from Supabase** (`from('genres').select('id,name,slug').order('name')`), same reasoning as keeping the buzzer off Render. Endpoint retained for smoke/external. (`fix/genres-direct-supabase`)
+
 ---
 
 ## Decisions touched
