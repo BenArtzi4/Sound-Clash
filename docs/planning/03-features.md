@@ -20,17 +20,19 @@ Tiers below are the recommended build order once Phases 1–4 (perf + resilience
 - **X-Extend · Token-gated "extend game" + expiry countdown.** `[M, high]` (see I-Expiry) new RPC bumping `expires_at`; the biggest resilience+feature two-fer for long parties.
 - **X-Recap · Shareable post-game recap card (PNG).** `[M, medium]` SongExport already gives an HTML list + YouTube playlist; nothing is shareable to a group chat. A canvas/SVG recap card on the end screen — podium, winner, round count, top songs — styled like the existing OG link-preview card (`tools/og-image`), downloadable/shareable. Drives organic reach.
 - **X-Practice · Practice / solo single-device mode.** `[M, medium]` No way to warm up before guests arrive. A single-device mode reusing the player + peek/select flow with zero teams and no buzzers (a zero-team game already starts rounds): the host flips songs and self-reveals. Low-risk, reuses existing machinery.
-- **X-Reclaim · Per-team reclaim token.** `[M, medium]` (fixes F-P2-1) Mirror `manager_token` for teams: join returns a team token; a refreshed/evicted player re-attaches instead of 409-ing. Keeps a team's score alive across eviction/device-swap. **Touches the join contract — coordinate with D-4** (per-team secret also closes the buzz-spoofing hole, so build them together).
+- ~~**X-Reclaim · Per-team reclaim token.**~~ **D-4 declined the token version.** Replaced by a lightweight **same-name reclaim** (Phase 5 T5.7): `join_team` returns the existing team row when the same name rejoins the same game, so a refreshed/evicted player re-attaches without a token. Keeps a team's score alive across eviction; consistent with accepting the buzz-spoofing tradeoff.
 
 ## Tier 3 — Medium impact, involves the DB / additive migration
 
 - **X-Streaks · Team streak "on fire" badge.** `[M, medium]` `game_round_attempts` already records every buzz outcome per team but the frontend never subscribes it. Add it as a 4th `postgres_changes` stream, derive consecutive-correct streaks, show a flame badge on the display. (Note: this re-introduces a subscriber for `game_round_attempts` — do it deliberately *after* I-AttemptsPub, re-adding the table to the publication as part of this feature.)
 - **X-GenreSpotlight · Per-round genre spotlight (+ optional roulette).** `[M, medium]` `select_next_song` already picks a random genre then song but discards which genre. Add the chosen genre name/slug to the `RETURNS TABLE` (purely additive `CREATE OR REPLACE`, PostgREST routing unchanged) so the display can announce "This round: 80s Rock." Roulette mode is a fun UI layer on top.
 
-## Tier 4 — Strategic (decisions, not quick wins) — see `05`
+## Tier 4 — Strategic — OUT OF SCOPE for now (resolved 2026-07-04)
 
-- **X-Win · Win conditions (target-score / round-limit with auto-end).** `[M, high — DECISION D-5]` Games have no finish line (`total_rounds` was dropped in mig 015). Optional win conditions set at create, mirroring the `selected_decades` additive pattern (mig 032): nullable `win_target_score` / `win_round_limit`; `select_next_song` (or a client check) ends the game when hit. **Game-rule change → decide first.**
-- **X-i18n · Hebrew (RTL) UI.** `[L, high — DECISION D-6]` ~half the catalog is Hebrew and the core audience is Israeli, yet the UI is English-only (roadmap lists i18n out-of-scope). A Hebrew RTL UI would widen the audience but touches all six pages, needs an RTL layout pass, and a translation workflow. **Strategic call.**
+These were deferred per the maintainer's call; kept here so the rationale isn't lost when they're revisited.
+
+- ~~**X-Win · Win conditions (target-score / round-limit).**~~ **D-5: out of scope for now.** Would be an optional additive setting (nullable `win_target_score`/`win_round_limit` mirroring `selected_decades`, mig 032), default off. Revisit later.
+- ~~**X-i18n · Hebrew (RTL) UI.**~~ **D-6: out of scope for now.** ~Half the catalog is Hebrew and the audience is largely Israeli, but a full RTL UI touches all six pages + a translation workflow. Revisit if growing the Hebrew audience becomes a goal.
 
 ---
 

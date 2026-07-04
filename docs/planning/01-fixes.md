@@ -74,7 +74,7 @@ Legend for the perf tag on latency-adjacent items: `buzz-latency` (moves the <20
 ### F-P2-1 · Lost localStorage orphans a player; `UNIQUE(game_code,name)` blocks rejoin `[bug]`
 - **Evidence:** `003_ephemeral_tables.sql` unique constraint; identity lives only in `game:<code>:team`.
 - **Failure:** evicted player can't re-attach to their score; same-name rejoin 409s ("team name already taken").
-- **Fix:** same-name reclaim within a game, or a per-team token (I-ReclaimToken in `03`). Effort M.
+- **Fix (decided):** D-4 declined per-team tokens, so the fix is a **simple same-name reclaim** — `join_team` returns the existing team row when the same name rejoins the same game (no token). Lands in Phase 5 T5.7. Effort S–M.
 
 ### F-P2-2 · Continue round has no pending flag (double-tap duplicate) `[ux]`
 - **Evidence:** `ManagerConsolePage.tsx:468-486` — `handleContinueRound` relies only on `continueInFlightRef` + `busy`, cleared in `finally` before the Realtime UPDATE clears `buzzed_team_id`; `continueDisabled = !lockedTeam` reads the stale lock.
@@ -90,9 +90,8 @@ Legend for the perf tag on latency-adjacent items: `buzz-latency` (moves the <20
 
 ---
 
-## Cross-references to decision-gated security fixes
-These are confirmed but need an architecture/infra call before code — see `05`:
-- **D-1** — `manager_token` leak (F-P0-1 fix).
-- **D-2** — Real-time answer leak: anon reads the current song's title/artist the instant the round starts.
-- **D-3** — Anon can enumerate every live game via one `select=*`; no rate limit on direct RPCs/Realtime.
-- **D-4** — `buzz_in` doesn't verify team ownership (buzz as any team).
+## Cross-references to security fixes (decisions resolved 2026-07-04 — see `05`)
+- **D-1 = A** — fix the `manager_token` leak by moving it to a secret table (F-P0-1). Phase 5 T5.5, do first.
+- **D-2 = accept** — real-time answer leak documented as a casual-play tradeoff. Phase 5 T5.8.
+- **D-3 = A** — Cloudflare edge + WAF for the direct-RPC/Realtime surface + enumeration. Phase 5 T5.6.
+- **D-4 = accept** — buzz-spoofing accepted + documented; F-P2-1 gets same-name reclaim instead. Phase 5 T5.7.
