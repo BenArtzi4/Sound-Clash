@@ -217,7 +217,7 @@ SET search_path = public;
 ```
 
 Token check (run before any other read/write):
-- Fetch `manager_token, ended_at` from `active_games` for the code. Missing row → `P0002 game_not_found`. Ended → `P0001 game_ended`. Mismatched or NULL token → `28000 manager_token_required`.
+- Fetch `ended_at` from `active_games` (LEFT JOIN `game_secrets` for `manager_token`) for the code. Since migration 034 the token lives in `game_secrets`, not `active_games`. Missing game row → `P0002 game_not_found`. Ended → `P0001 game_ended`. Mismatched or NULL token → `28000 manager_token_required`.
 
 Behavior:
 - Reads the current `buzzed_team_id` off `active_games`. If null → raises `P0001 no_buzz_to_score`.
@@ -264,7 +264,7 @@ SET search_path = public;
 ```
 
 Behavior:
-- Validates `p_manager_token` against `active_games.manager_token` (same error matrix as `award_attempt`: `game_not_found` / `game_ended` / `manager_token_required`).
+- Validates `p_manager_token` against `game_secrets.manager_token` (LEFT JOIN from `active_games`; migration 034 moved the token off `active_games`). Same error matrix as `award_attempt`: `game_not_found` / `game_ended` / `manager_token_required`.
 - Then: `UPDATE active_games SET buzzed_team_id = NULL, locked_at = NULL WHERE game_code = p_game_code`. That's the entire post-check body.
 - No-op (post-check) if no buzz is held; never raises a "nothing to release" error.
 
