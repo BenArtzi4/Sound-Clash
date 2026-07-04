@@ -63,6 +63,12 @@
 ## Decisions touched
 - None block Phase 1. T1.4's `VITE_FARO_URL` unset and T1.6's new CI workflow are **flag-before-doing** (ops/CI), not full decisions — mention in the PR and get a thumbs-up.
 
+### Maintainer decisions (resolved 2026-07-04, mid-execution)
+- **T1.4 Faro (`VITE_FARO_URL`)** — maintainer deferred to judgment. **Resolved:** in PR C, (a) **remove** `VITE_FARO_URL` from committed `frontend/.env.production` so the Faro chunk (~59KB gz, and per #145 sends nothing useful) never downloads, AND (b) defer `initTelemetry()` behind `requestIdleCallback` regardless (belt-and-suspenders + correct pattern). **Flag in the PR:** if prod still loads Faro after deploy, Cloudflare Pages also sets the var as a build env and the maintainer must clear it in the dashboard (I can't inspect it). Keep Sentry (errors-only) but lazy-load it.
+- **T1.6 DR backup workflow** — **APPROVED.** Add the scheduled `pg_dump` GitHub Action for `songs`/`genres`/`song_genres` + CI drift-guard + refresh the S3 fallback CSV + fix `runbook.md:278`. Flag the exact schedule/secrets in the PR (new `.github/workflows/` file).
+- **T1.7 Grafana alerts** — maintainer-only (Grafana Cloud dashboard work; no code). Hand the exact alert definitions to the maintainer to create.
+- **Merge flow** — maintainer authorized me to merge green+verified PRs (standalone `gh pr merge <n> --squash`).
+
 ## Exit gate (Phase 1)
 - [ ] `npm run lint && typecheck && test:run` green; new/updated `useGameChannel.test.ts` covers early-hydrate.
 - [ ] `curl -I` confirms immutable caching on `/assets/*`, `no-cache` on `index.html`.
