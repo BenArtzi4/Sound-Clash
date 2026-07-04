@@ -64,7 +64,16 @@ def _insert_game_blocking(
     rows = resp.data or []
     if not rows:
         raise NotFoundError("game insert returned no row")
-    return dict(rows[0])
+    game = dict(rows[0])
+    # Migration 034 moved manager_token off active_games into the anon-invisible
+    # game_secrets table; the AFTER INSERT trigger provisioned the secret in the
+    # same transaction. Read it back to return to the host.
+    secret = client.table("game_secrets").select("manager_token").eq("game_code", code).execute()
+    srows = secret.data or []
+    if not srows:
+        raise NotFoundError("manager secret was not provisioned")
+    game["manager_token"] = srows[0]["manager_token"]
+    return game
 
 
 def _fetch_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:

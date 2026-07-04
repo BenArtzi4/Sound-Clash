@@ -25,7 +25,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 | Credential | Header | Scope | Lifetime |
 |---|---|---|---|
-| **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `release_buzz_lock` / `select_next_song` via token-gated direct RPC; bonus / end / kick a team via REST) | Generated server-side at `POST /games`; lives 4h with the row; auto-expires when `cleanup_expired_games` deletes the game |
+| **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `release_buzz_lock` / `select_next_song` / `peek_next_song` via token-gated direct RPC; bonus / end / kick a team via REST) | Minted by an `AFTER INSERT` trigger into `game_secrets` (mig 034), read back by `POST /games`; lives 4h, cascade-deleted when `cleanup_expired_games` removes the game |
 | **admin password** | `X-Admin-Password` | Song catalog only (`/admin/songs/*` CRUD + bulk import) | Single env var on FastAPI; rotated by changing the env and restarting |
 
 `POST /games` is **public** (rate-limited 10/min/IP). The browser keeps the returned manager token in `localStorage` under `game:<code>:manager-token` and presents it on subsequent host calls. Players who happen to know the game code cannot manage it because they don't have the token. Hosting requires no signup, login, or persistent identity.
@@ -40,11 +40,12 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `active_games`  | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_teams`    | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_rounds`   | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
+| `game_secrets` *(mig 034)*        | ❌ (**host credential**) | ❌ | ❌ | ❌ |
 | `game_history` *(mig 033)*        | ❌ (operator-only) | ❌ | ❌ | ❌ |
 | `game_history_teams` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 | `game_history_songs` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 
-`service_role` bypasses all RLS. The durable `game_history*` tables (mig 033) are the **only** tables `anon` cannot read: they have RLS enabled with no read policy and no anon `GRANT`, so the game history is operator-only (read via the service role / Supabase SQL editor). The host-facing "export songs" feature reads the live ephemeral tables in the host's own session, not these.
+`service_role` bypasses all RLS. The tables `anon` cannot read are `game_secrets` (mig 034) and the durable `game_history*` tables (mig 033): each has RLS enabled with no read policy and no anon `GRANT`. **`game_secrets` holds the per-game `manager_token`** — it was moved off `active_games` (mig 034) precisely because `active_games` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate. `game_secrets` is also deliberately **not** in the Realtime publication. The host-facing "export songs" feature reads the live ephemeral tables in the host's own session, not these.
 
 | RPC function | anon EXECUTE | service_role EXECUTE |
 |---|---|---|
@@ -185,7 +186,7 @@ What secrets exist, where they live, who sees them:
 | `SUPABASE_ANON_KEY`, `SUPABASE_URL` | Frontend bundle, GitHub secrets, Render env, Cloudflare Pages env | Everyone (intentional) |
 | `SUPABASE_SERVICE_ROLE_KEY` | GitHub secrets, Render env | Server-only |
 | `ADMIN_PASSWORD` | GitHub secrets, Render env | Server + the catalog operator (gates `/admin/songs/*` only) |
-| `manager_token` (per game) | `active_games.manager_token` (uuid); host's `localStorage` | Whoever holds the host browser session for that game |
+| `manager_token` (per game) | `game_secrets.manager_token` (uuid, anon-invisible; mig 034); host's `localStorage` | Whoever holds the host browser session for that game |
 | `RENDER_DEPLOY_HOOK` | GitHub secrets | CI only |
 | `CF_API_TOKEN` | GitHub secrets | CI only |
 | Postgres direct connection string | Supabase dashboard, **never** in repo | Operator only (rare use) |

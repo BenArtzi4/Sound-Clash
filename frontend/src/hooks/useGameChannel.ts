@@ -24,6 +24,17 @@ export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting
 // true safety net, not the primary sync path.
 const RESYNC_INTERVAL_MS = 20_000;
 
+// Explicit column list for the active_games hydrate — every field the reducer
+// reads, and nothing else. Deliberately NOT `select("*")`: the per-game
+// manager_token used to live on this row, and any anon client (every player)
+// hydrating with `*` would read the host's credential. Migration 034 moved the
+// token into a separate anon-invisible table (game_secrets), so `*` is safe
+// now too, but naming the columns keeps the host credential off this
+// anon-readable, Realtime-published row for good. Mirrors the ActiveGame type.
+const ACTIVE_GAME_COLUMNS =
+  "game_code,status,selected_genres,selected_decades,round_number," +
+  "current_song_id,current_round_id,buzzed_team_id,locked_at,started_at,ended_at,expires_at";
+
 function activeGameEqual(a: ActiveGame, b: ActiveGame): boolean {
   if (
     a.game_code !== b.game_code ||
@@ -312,7 +323,11 @@ export function useGameChannel(gameCode: string): {
     async function hydrate({ authoritative = true }: { authoritative?: boolean } = {}) {
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
-          supabase.from("active_games").select("*").eq("game_code", gameCode).maybeSingle(),
+          supabase
+            .from("active_games")
+            .select(ACTIVE_GAME_COLUMNS)
+            .eq("game_code", gameCode)
+            .maybeSingle(),
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);
@@ -330,7 +345,9 @@ export function useGameChannel(gameCode: string): {
           } else {
             dispatch({
               type: "HYDRATE",
-              game: gameRes.data as ActiveGame,
+              // Cast via unknown: a non-literal select() string makes
+              // supabase-js infer GenericStringError rather than a row shape.
+              game: gameRes.data as unknown as ActiveGame,
               teams: (teamsRes.data ?? []) as Team[],
               rounds: (roundsRes.data ?? []) as GameRound[],
             });

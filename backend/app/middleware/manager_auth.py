@@ -3,8 +3,9 @@
 Hosting a game does not require the global ADMIN_PASSWORD: the host's browser
 receives a ``manager_token`` (uuid) from ``POST /games`` and presents it as
 ``X-Manager-Token`` on every manager-only endpoint. We compare it
-constant-time against the row in ``active_games``. Players who happen to know
-the game code still cannot manage the game.
+constant-time against the row in ``game_secrets`` (migration 034 moved the
+token off ``active_games``, which anon can read, into a table anon cannot).
+Players who happen to know the game code still cannot manage the game.
 
 The 4xx response message is intentionally generic so a caller cannot
 distinguish "no token" from "wrong token". 404/410 are pre-checks: we want
@@ -26,16 +27,17 @@ from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 
 
 def _fetch_token_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:
-    resp = (
-        client.table("active_games")
-        .select("manager_token,ended_at")
-        .eq("game_code", code)
-        .execute()
-    )
-    rows = resp.data or []
+    game = client.table("active_games").select("ended_at").eq("game_code", code).execute()
+    rows = game.data or []
     if not rows:
         raise NotFoundError(f"game {code} not found")
-    return dict(rows[0])
+    # The manager token lives in game_secrets (migration 034), a table anon
+    # cannot read; the service-role client used here can. A missing secret row
+    # leaves the token None, which fails the constant-time compare below closed.
+    secret = client.table("game_secrets").select("manager_token").eq("game_code", code).execute()
+    srows = secret.data or []
+    token = srows[0].get("manager_token") if srows else None
+    return {"manager_token": token, "ended_at": rows[0].get("ended_at")}
 
 
 async def require_manager_token(

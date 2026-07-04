@@ -81,19 +81,22 @@ async def insert_game(
     game_code: str | None = None,
 ) -> tuple[str, UUID]:
     code = game_code or random_game_code()
-    row = await db.fetchrow(
+    await db.execute(
         """
         INSERT INTO active_games (game_code, status, selected_genres, expires_at)
         VALUES ($1, $2, $3::uuid[], now() + ($4 || ' hours')::interval)
-        RETURNING manager_token
         """,
         code,
         status,
         selected_genres or [],
         str(expires_in_hours),
     )
-    assert row is not None
-    token: UUID = row["manager_token"]
+    # Migration 034 moved manager_token off active_games into game_secrets,
+    # auto-provisioned by the AFTER INSERT trigger. Read it back for the caller.
+    token: UUID | None = await db.fetchval(
+        "SELECT manager_token FROM game_secrets WHERE game_code = $1", code
+    )
+    assert token is not None
     return code, token
 
 

@@ -47,13 +47,14 @@ async def fetch_manager_token(
     conn: asyncpg.Connection,
     game_code: str,
 ) -> uuid.UUID:
-    """Return the per-game manager_token assigned by ``DEFAULT gen_random_uuid()``
-    in migration 012. Tests for token-gated RPCs (``award_attempt``,
-    ``release_buzz_lock`` as of migration 021) need this to pass as the
-    p_manager_token argument.
+    """Return the per-game manager_token. Migration 034 moved it off
+    active_games into the anon-invisible ``game_secrets`` table (auto-provisioned
+    by an AFTER INSERT trigger on active_games). Tests for token-gated RPCs
+    (``award_attempt``, ``release_buzz_lock``, ``select_next_song``,
+    ``peek_next_song``) need this to pass as the p_manager_token argument.
     """
     token = await conn.fetchval(
-        "SELECT manager_token FROM active_games WHERE game_code = $1", game_code
+        "SELECT manager_token FROM game_secrets WHERE game_code = $1", game_code
     )
     assert token is not None
     return token

@@ -68,6 +68,7 @@
 - **T1.6 DR backup workflow** — **APPROVED.** Add the scheduled `pg_dump` GitHub Action for `songs`/`genres`/`song_genres` + CI drift-guard + refresh the S3 fallback CSV + fix `runbook.md:278`. Flag the exact schedule/secrets in the PR (new `.github/workflows/` file).
 - **T1.7 Grafana alerts** — maintainer-only (Grafana Cloud dashboard work; no code). Hand the exact alert definitions to the maintainer to create.
 - **Merge flow** — maintainer authorized me to merge green+verified PRs (standalone `gh pr merge <n> --squash`).
+- **D-1 (PR E) — manager_token → `game_secrets`** — DONE in code (migration 034 + backend + `useGameChannel` explicit select + docs). Migration `034_game_secrets.sql` creates the anon-invisible `game_secrets` table (not in the Realtime publication), an `AFTER INSERT` trigger provisions the token, the four token RPCs `LEFT JOIN` it, and `active_games.manager_token` is dropped. Validated against a fresh testcontainer (152 tests/db + 80 backend + buzz-race + new `test_game_secrets.py`, all green) and idempotent (re-apply clean). **Prod apply is maintainer-gated:** after merge + go-ahead, and ideally during a quiet moment (no active game) since the new backend expects `game_secrets`. Apply with `supabase link --project-ref jvfddxuaqcsrguibkymp && supabase db query --linked -f db/migrations/034_game_secrets.sql`. Full prod verification folds into the T1.8 exit-gate game.
 
 ## Exit gate (Phase 1)
 - [ ] `npm run lint && typecheck && test:run` green; new/updated `useGameChannel.test.ts` covers early-hydrate.
