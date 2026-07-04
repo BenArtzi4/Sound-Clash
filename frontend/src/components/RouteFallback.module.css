@@ -1,0 +1,27 @@
+.fallback {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl, 2rem);
+}
+
+.pulse {
+  animation: route-fallback-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes route-fallback-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
