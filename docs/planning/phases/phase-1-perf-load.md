@@ -19,14 +19,14 @@
 ## Tasks
 
 ### T1.1 · Immutable + tiered HTTP caching `[S]` — `I-Cache`
-- [ ] `frontend/public/_headers`: add `/assets/*` → `Cache-Control: public, max-age=31536000, immutable`.
-- [ ] Add `/icons/*`, `og-image.jpg`, `how-to-play-hero.*`, `manifest.webmanifest` → `max-age=86400`.
-- [ ] Verify locally (`curl -I`) that hashed assets get `immutable` and `index.html` stays `no-cache`.
-- [ ] Keep `sw.js` cache-nothing; update its comment to note caching is handled at the HTTP layer now (T-DeadCode-adjacent).
+- [x] `frontend/public/_headers`: add `/assets/*` → `Cache-Control: public, max-age=31536000, immutable`.
+- [x] Add `/icons/*`, `og-image.jpg`, `how-to-play-hero.*`, `manifest.webmanifest` → `max-age=86400`.
+- [x] Verify locally (`curl -I` against `wrangler pages dev dist`) that hashed assets get `immutable` and `index.html` stays `no-cache`.
+- [x] Keep `sw.js` cache-nothing; update its comment to note caching is handled at the HTTP layer now (T-DeadCode-adjacent).
 
 ### T1.2 · Resource hints `[S]` — `I-Preconnect`
-- [ ] `frontend/index.html`: `preconnect` + `dns-prefetch` for the Supabase project host and `api.soundclash.org` (both `crossorigin` — supabase-js uses CORS fetch + WS).
-- [ ] Fix YouTube hints: drop `crossorigin` from `www.youtube.com`; add non-crossorigin `youtube-nocookie.com` and `s.ytimg.com`.
+- [x] `frontend/index.html`: `preconnect` + `dns-prefetch` for the Supabase project host and `api.soundclash.org` (both `crossorigin` — supabase-js uses CORS fetch + WS).
+- [x] Fix YouTube hints: drop `crossorigin` from `www.youtube.com`; add non-crossorigin `youtube-nocookie.com` and `s.ytimg.com`.
 
 ### T1.3 · Hydrate before subscribe `[S]` — `I-Hydrate`
 - [ ] `useGameChannel.ts`: fire `void hydrate()` immediately after building the channel; keep the SUBSCRIBED re-hydrate.

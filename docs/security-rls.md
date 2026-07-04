@@ -223,7 +223,7 @@ async def create_game(...):
 
 ## 7. CSP and HTTP Headers
 
-Frontend served by Cloudflare Pages. Configure via `_headers` file:
+Frontend served by Cloudflare Pages. Configure via `frontend/public/_headers`:
 
 ```
 /*
@@ -231,13 +231,24 @@ Frontend served by Cloudflare Pages. Configure via `_headers` file:
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.soundclash.org https://o*.ingest.sentry.io
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.soundclash.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.grafana.net
+
+# content-hashed build output: cache forever, never revalidate
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# un-hashed static (each of /icons/*, /og-image.jpg, /how-to-play-hero.*,
+# /manifest.webmanifest is its own block): cache a day
+/icons/*
+  Cache-Control: public, max-age=86400
 ```
 
 Notes:
 - `'unsafe-inline'` for scripts is needed by Vite's runtime + YouTube IFrame Player. Tighten in a future hardening pass with hashes.
 - `frame-src` lists both `https://www.youtube.com` and `https://www.youtube-nocookie.com`. The IFrame Player runs in privacy-enhanced mode (`host: "https://www.youtube-nocookie.com"`) to suppress the doubleclick conversion-tracking pixels; the `youtube.com` entry remains because the IFrame API JS itself still loads from there.
-- `connect-src` allows Supabase (REST + Realtime), backend API, and Sentry ingest only.
+- `connect-src` allows Supabase (REST + Realtime), backend API, Sentry ingest (both `*.ingest.sentry.io` and the EU `*.ingest.de.sentry.io` region), and Grafana Faro (`*.grafana.net`).
+- **Caching:** content-hashed `/assets/*` are served `immutable` (a fresh hash on every change makes revalidation pointless, so the browser never re-checks them); the un-hashed static assets (`/icons/*`, `/og-image.jpg`, `/how-to-play-hero.*`, `/manifest.webmanifest`) get `max-age=86400`; and `index.html`, every SPA route, and `sw.js` are deliberately left on the platform default (`max-age=0, must-revalidate`) so a new deploy is always picked up and never served stale over a live game.
+- **Resource hints:** `index.html` `preconnect`s the Supabase project host and `api.soundclash.org` (both `crossorigin`, since supabase-js and the REST wrapper use CORS) plus the YouTube origins (`www.youtube.com`, `www.youtube-nocookie.com`, non-`crossorigin`), warming DNS+TLS before the join hydrate / buzz RPC / first song.
 
 Backend (FastAPI) sets:
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (Render terminates TLS; HSTS still useful)

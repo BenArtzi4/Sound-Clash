@@ -16,13 +16,30 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 
+    <!-- Warm the two origins EVERY player hits before they can buzz: the
+         Supabase project (join hydrate GETs, the Realtime WebSocket, the buzz
+         RPC) and our FastAPI backend (the join POST). Both are reached over
+         CORS (supabase-js fetch + WS, our fetch wrapper), so preconnect
+         crossorigin. This is the highest-value hint — it overlaps DNS+TLS+TCP
+         setup with bundle download and parse. -->
+    <link rel="preconnect" href="https://jvfddxuaqcsrguibkymp.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://api.soundclash.org" crossorigin />
+    <link rel="dns-prefetch" href="https://jvfddxuaqcsrguibkymp.supabase.co" />
+    <link rel="dns-prefetch" href="https://api.soundclash.org" />
+
     <!-- Warm DNS/TLS to YouTube before the IFrame Player mounts on the first
-         round. The script itself is still injected by YouTubePlayer.tsx; we
-         just shave the connection setup off the user-perceived song-start
-         latency. -->
-    <link rel="preconnect" href="https://www.youtube.com" crossorigin />
-    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+         round (host + display only; the script is still injected by
+         YouTubePlayer.tsx). These are non-CORS subresources/embeds: the
+         iframe_api script (www.youtube.com), the embed iframe + widget
+         postMessage (www.youtube-nocookie.com), the widget JS (s.ytimg.com),
+         and thumbnails (i.ytimg.com). preconnect WITHOUT crossorigin — a
+         crossorigin socket would sit unused since none of these consumers send
+         CORS credentials (the old crossorigin youtube preconnect was dead). -->
+    <link rel="preconnect" href="https://www.youtube.com" />
+    <link rel="preconnect" href="https://www.youtube-nocookie.com" />
     <link rel="dns-prefetch" href="https://www.youtube.com" />
+    <link rel="dns-prefetch" href="https://www.youtube-nocookie.com" />
+    <link rel="dns-prefetch" href="https://s.ytimg.com" />
     <link rel="dns-prefetch" href="https://i.ytimg.com" />
 
     <meta property="og:type" content="website" />

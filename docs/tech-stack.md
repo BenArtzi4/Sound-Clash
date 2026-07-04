@@ -127,7 +127,7 @@ Pick the region closest to the primary user geography. For an Israel-based maint
 - Output directory: `frontend/dist`.
 - Environment variables (set in Cloudflare dashboard): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`.
 - Custom domain: `soundclash.org` (apex via Cloudflare DNS CNAME flattening).
-- `_headers` file in repo defines CSP and security headers (see `security-rls.md` §7).
+- `_headers` file in repo defines CSP, security headers, and static-asset caching (immutable content-hashed `/assets/*`; see `security-rls.md` §7).
 
 ## 5. DNS: Cloudflare
 
