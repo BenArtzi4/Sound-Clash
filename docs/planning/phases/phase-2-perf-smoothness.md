@@ -1,5 +1,10 @@
 # Phase 2 — Performance: Perceived Smoothness & Buttons
 
+## ▶ Kickoff
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Fully autonomous — no decisions.
+**PR split:** (A) provisional buzz-lock from the RPC result [`useBuzzer.ts`, `TeamGameplayPage.tsx` + tests]; (B) instant press feedback + composited animations [`BuzzButton.module.css`, `styles.css`, `DisplayPage.module.css`]; (C) no-layout-shift banners + reserved status strip [`ManagerConsolePage`]; (D) drop the silent `busy` gate + `pendingContinue` [`ManagerConsolePage` + test]; (E) admin stale-while-revalidate + small copy/loading fixes.
+**Parallel-friendly:** can run in a separate git worktree alongside Phase 1 (minimal file overlap: Phase 2 = components/CSS/hooks; Phase 1 = config/index.html/main.tsx). **Workflow:** only the end-of-phase gate audit.
+
 **Goal:** every tap acknowledges within one frame; nothing on screen jumps, janks, or silently ignores a press. This is the "no lag" the maintainer is asking for, at the level a hand on a phone actually feels it.
 
 **Why:** the buzz *number* is network-bound, but the buzz *feeling* is UI-bound — and this phase owns the feeling. All frontend, low-risk, autonomous.

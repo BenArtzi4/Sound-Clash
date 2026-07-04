@@ -2,6 +2,18 @@
 
 This sequences the backlog (`../01`–`../04`) into ordered phases. Each phase file lists tasks → subtasks and a **per-phase Full-Game Exit Gate**. Read [../execution-playbook.md](../execution-playbook.md) for the session/git/gate mechanics first.
 
+## ▶ How to start a phase (short prompt)
+
+Paste this into a fresh session, swapping the phase number/file:
+
+> **Start Phase 1 of the Sound Clash plan. Follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-1-perf-load.md`.**
+
+The [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) carries everything reusable — model policy, the per-PR branch→CI→merge loop, the merge authorization, flag-before-doing, and the exit gate. Each phase file's own `## ▶ Kickoff` block carries the model, the PR split, and the phase-specific flags. That's all a session needs.
+
+Phase-file quick reference for the paste:
+- Phase 1 → `phase-1-perf-load.md`  ·  Phase 2 → `phase-2-perf-smoothness.md`  ·  Phase 3 → `phase-3-perf-backend-realtime.md`  ·  Phase 4 → `phase-4-resilience.md`
+- Phase 5 → `phase-5-security.md`  ·  Phase 6 → `phase-6-correctness-docs.md`  ·  Phase 7 → `phase-7-tech-debt.md`  ·  Phase 8 → `phase-8-features.md`
+
 ## Ordering logic
 
 Performance and smoothness come first because they are the stated goal and are almost entirely **low-risk, autonomous, frontend/config** work — fast wins that make the app *feel* production-ready immediately. Resilience follows. Correctness/docs and tech-debt interleave as steady cleanup. Security and Features carry the big decisions (`../05`) and are gated on your calls, though each has autonomous sub-items that can proceed.

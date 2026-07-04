@@ -1,5 +1,9 @@
 # Phase 8 — Features
 
+## ▶ Kickoff
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). One session/PR per feature; each ships a CHANGELOG entry + a test + passes the full-game gate.
+**Build order:** Tier-1 first (X-Skip, X-Presets, X-SFX, X-AutoRelease, X-DarkRoom), then Tier-2/3. **D-9 = small optimized assets in-repo** (confirm each binary commit). **Out of scope:** D-5 (win conditions) and D-6 (Hebrew i18n). **Parallel-friendly:** independent features can run as separate worktree sessions.
+
 **Goal:** add the party-night capabilities that make people want to run Sound Clash again — after the app is fast, smooth, and resilient (Phases 1–4) so features land on a solid base.
 
 **Scope (resolved 2026-07-04):** D-5 (win conditions) and D-6 (Hebrew i18n) are **out of scope for now** — dropped from this phase. D-4 (per-team tokens) was **declined**, so X-Reclaim becomes a lightweight same-name reclaim (moved to Phase 5 T5.7). D-9 (binary assets) proceeds with per-commit confirmation. Tier-1 features are autonomous.

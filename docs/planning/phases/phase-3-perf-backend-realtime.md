@@ -1,5 +1,10 @@
 # Phase 3 — Performance: Backend-path & Realtime Economics
 
+## ▶ Kickoff
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). **Touches PL/pgSQL — the buzz-race test is the hard gate after every RPC edit.** One idempotent migration per change; update `rpc-functions.md` + `data-model.md` in the same PR.
+**PR split:** (A) drop the dead `game_rounds` UPDATE from `buzz_in`; (B) collapse `award_attempt` writes + `RETURNING`; (C) drop `game_round_attempts` from the Realtime publication + add its RLS; (D) trim the 20s resync + teardown-on-`gone`; (E) keep-warm timing + the T-KeepWarm decision.
+**Measure:** Realtime message count for a scripted 6-team/5-round game before/after. **Workflow:** only the gate audit.
+
 **Goal:** remove every wasted write, event, and query on the hot path — halving buzz-path Realtime fan-out and cutting per-click DB work — without touching the atomic buzz core's correctness.
 
 **Why:** free-tier quotas and per-client re-render cost scale with events. These are pure-waste removals with high leverage. **Careful:** touches PL/pgSQL — gated by the buzz-race test every step.

@@ -1,5 +1,9 @@
 # Phase 6 — Correctness & Docs/Data-Model Hygiene
 
+## ▶ Kickoff
+**Model:** Opus 4.8 to apply. **USE A WORKFLOW for the 76-item docs-drift sweep** (T6.1) — one agent per doc: diff doc-vs-code, produce exact edits, verify against migrations/routers; consolidate into 1–2 PRs. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) for each PR.
+**Single-session PRs:** T6.2 (drop `total_rounds`) and T6.3 (`UNIQUE(youtube_id)` after a dedup pass — **D-8 = youtube_id now**, ISRC later). Migrations idempotent; verify no orphaned `song_genres` after dedup. **Gate:** dedup + `total_rounds` drop must not affect song selection (no repeats within a game).
+
 **Goal:** make the effective schema, the RPC signatures, and every spec doc agree with the running code. Docs are the authoritative spec here — every drift is a bug by the repo's own rule.
 
 **Why:** 76 docs-drift findings is the single largest category. Left alone, the spec actively misleads future work (and security reasoning — `data-model.md` currently *under*states the anon surface). Steady autonomous cleanup; interleaves with any phase.

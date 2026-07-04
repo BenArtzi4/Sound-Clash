@@ -1,5 +1,10 @@
 # Phase 5 — Security & Abuse Hardening
 
+## ▶ Kickoff
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). **Decisions resolved:** D-1 = secret table (**do first**; may ship in Phase 1), D-3 = Cloudflare edge + WAF (**infra/DNS, mostly outside git — plan as an ops hand-off**), D-4 = accept + same-name reclaim, D-2 = accept + document.
+**PR/task order:** T5.1 CSV guard, T5.2 team-name guard, T5.3 attempts RLS (may be done in Phase 3), T5.5 token relocation (critical), T5.7 same-name reclaim + document spoofing, T5.8 document answer-leak; T5.6 Cloudflare = ops task with the maintainer.
+**Workflow:** run the **ultracode security re-verify** (adversarial abuse hunt) against the patched code at the gate to confirm D-1 is closed and accepted risks are documented.
+
 **Goal:** close the one critical hole (`manager_token` leak) and decide the realistic posture for the rest, appropriate to a free party game with no PII beyond team names.
 
 **Decisions resolved (2026-07-04):** D-1 → **A** (secret table), D-3 → **A** (Cloudflare edge + WAF), D-4 → **accept** (no per-team tokens), D-2 → **accept + document**. D-1 is the one true critical — ship it first, ideally alongside Phase 1. The autonomous sub-items below can proceed anytime.

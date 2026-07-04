@@ -1,5 +1,10 @@
 # Phase 4 — Resilience: Mid-Game Failure Modes
 
+## ▶ Kickoff
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Autonomous. One session/PR per fix (they're independent).
+**Notes:** T4.8 adds a token-gated `extend_game` RPC (note in PR + doc it); T4.10 (host recovery link) coordinates with the D-1 relocated token — sequence D-1 first.
+**Gate:** beyond the standard full-game gate, run a deliberate **"adverse" game** hitting ≥3 failure paths (kill a video → Skip; background the host tab → resume; drop the socket → reconnect with no lost events). **Workflow:** optional, only for bulk e2e-spec generation of the failure scenarios (else single-session).
+
 **Goal:** a real party survives what actually goes wrong — a dead video, a locked phone, a dropped connection, a 4h overrun, a lost credential — without the room going silent or a screen going blank.
 
 **Why:** "production-perfect" means graceful under failure, not just fast when everything's fine. All autonomous except I-Expiry's new RPC (trivial, token-gated) and the X-Recovery surface choice.

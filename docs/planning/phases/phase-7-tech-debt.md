@@ -1,5 +1,9 @@
 # Phase 7 — Tech-debt & Test Hardening
 
+## ▶ Kickoff
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Refactors are single-session, guarded by the existing tests. **USE A WORKFLOW for T7.5 test generation** (one agent per scenario — RLS-fix, cascade-delete, preloadError, failed-hydrate, expiry — then consolidate).
+**Notes:** **D-7 = scoring authority in DB** (careful yes; own PR behind the buzz-race gate; optionally fold into Phase 3 T3.2 to touch `award_attempt` once). **Flag before doing:** the CI items T-RLSCI, T-BundleBudget, T-e2eGate. Dependabot PRs (#133/#114/#147/#148): open/update — **maintainer merges those**.
+
 **Goal:** remove the footguns and blind spots that make future work risky — the god component, the client-controlled scoring, the flaky RLS test, the missing bundle discipline — so the app stays production-perfect as it grows.
 
 **Why:** none is user-visible, but each removes a class of future bug. Autonomous except D-7 (scoring authority) and the CI-touching items (flag per repo rule).

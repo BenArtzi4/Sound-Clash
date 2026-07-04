@@ -1,5 +1,11 @@
 # Phase 1 — Performance: Load & Time-to-Playable
 
+## ▶ Kickoff
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). **Also ship the D-1 fix** (move `manager_token` to a secret table) this phase — it's the one critical item.
+**Do T1.8 baseline FIRST** (measure join-to-playable on prod) so the wins are provable.
+**PR split:** (A) HTTP caching + resource hints [`_headers`, `index.html`]; (B) hydrate-before-subscribe [`useGameChannel.ts` + test]; (C) bundle trim — defer Faro, lazy Sentry, vendor chunk [`main.tsx`, `telemetry.ts`, `vite.config.ts`]; (D) prefetch + join prewarm + Suspense spinner [`JoinTeamPage.tsx`, `App.tsx`]; (E) D-1 token secret table [migration + backend + hook + `security-rls.md`/`data-model.md`].
+**Flag first:** T1.6 (new `.github/workflows/` DR job + S3 CSV refresh) and T1.7 (Grafana alerts + unset `VITE_FARO_URL` on Cloudflare). **Workflow ok for:** the T1.8 baseline probe and the end-of-phase verification/gate audit.
+
 **Goal:** the person who scans the QR reaches a usable BUZZ button as fast as physically possible, and every repeat load is near-instant. All low-risk, autonomous, frontend/config.
 
 **Why first:** biggest *felt* speed win, zero architecture risk, no decisions required. Sets the "fast" baseline before everything else.
