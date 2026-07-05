@@ -44,9 +44,9 @@
 - [x] `App.tsx`: replace `Suspense fallback={null}` with a tiny centered CSS logo-pulse. (PR D — new `components/RouteFallback.tsx`: centered animated `<Logo>` with an opacity pulse, `prefers-reduced-motion`-aware, `role="status"`.)
 
 ### T1.6 · Disaster-recovery safety net `[M]` — `I-DR` (do this in Phase 1; it's the top production-readiness gap)
-- [ ] Add a scheduled `pg_dump` of `songs`/`genres`/`song_genres` committed to the repo (or pushed to object storage) — a GitHub Action on cron. **This is a `.github/workflows/` addition → flag with the maintainer before adding (CI rule).**
-- [ ] CI drift-guard: assert prod row-count/hash vs the committed dump; warn on drift.
-- [ ] Refresh the S3 fallback CSV; correct `docs/runbook.md:278` (T-DocRunbook).
+- [x] Add a scheduled `pg_dump` of `songs`/`genres`/`song_genres` committed to the repo (or pushed to object storage) — a GitHub Action on cron. **This is a `.github/workflows/` addition → flag with the maintainer before adding (CI rule).** (Maintainer pre-approved the design. `.github/workflows/catalog-backup.yml`: weekly Mon 04:17 UTC + dispatch; deterministic CSV dump via `psql \copy … ORDER BY <pk>` to `db/backups/`; reuses the `prod` environment's `SUPABASE_DATABASE_URL`; opens/updates one PR on the `automated/catalog-backup` branch; never pushes `main`.)
+- [x] CI drift-guard: assert prod row-count/hash vs the committed dump; warn on drift. (Same workflow: `git diff` of the fresh dump vs the committed CSVs → `::warning::` (never fails) + refresh PR on drift; a min-row guard refuses to open a catalog-shrinking PR from a partial read.)
+- [x] Refresh the S3 fallback CSV; correct `docs/runbook.md:278` (T-DocRunbook). (The S3 bucket is gone (2026-05-07 teardown) → replaced with a committed dump + `db/backups/restore.sql`. `runbook.md` line 278, §6 table + recovery scenarios, and §7 maintenance rows all updated.)
 
 ### T1.7 · Observability alerts `[S]` — `I-Alert` (cheap insurance, no code)
 - [ ] Grafana alert: Realtime concurrent connections approaching ~200 free-tier cap.
