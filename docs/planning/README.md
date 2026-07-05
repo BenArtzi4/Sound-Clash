@@ -28,7 +28,7 @@ The maintainer's stated goal: make the game **load fast, respond instantly, and 
 
 ## Status snapshot
 
-_Updated: 2026-07-05 — Phase 1 ✅ complete (PRs #150–#157; D-1 live; full-game exit gate passed on prod). Two maintainer follow-ups pending (DR-backup secret, Grafana alerts). Phase 2 next._
+_Updated: 2026-07-05 — Phase 2 code ✅ merged + deployed (PRs #159–#163). Automated exit gate green on prod (frontend suite 367, e2e 28 on the local stack, backend smoke, and a driven three-tab prod game: create→join→buzz→score→next→end→export, Hebrew rendering, no app-console errors). Final maintainer phone/TV feel-check pending. Phase 1 ✅ (PRs #150–#158)._
 
 **Decisions resolved:** D-1 → move token to a secret table; D-3 → Cloudflare edge + WAF; D-4 → accept buzz-spoofing (no per-team tokens; same-name reclaim instead); D-5 & D-6 (win conditions, Hebrew i18n) → out of scope for now; D-2/D-7/D-8/D-9 → proceed on recommendations.
 
@@ -36,7 +36,7 @@ _Updated: 2026-07-05 — Phase 1 ✅ complete (PRs #150–#157; D-1 live; full-g
 |---|---|---|
 | — | Planning + review | ✅ done (this directory) |
 | 1 | Performance: load & time-to-playable | ✅ done (PRs #150–#157; D-1 live; exit gate passed 2026-07-05) |
-| 2 | Performance: perceived smoothness & buttons | ⏳ ready (autonomous) |
+| 2 | Performance: perceived smoothness & buttons | ✅ merged + deployed (PRs #159–#163; automated exit gate green; maintainer phone feel-check pending) |
 | 3 | Performance: backend-path & Realtime economics | ⏳ ready (autonomous, touches RPCs) |
 | 4 | Resilience: mid-game failure modes | ⏳ ready (autonomous) |
 | 5 | Security & abuse hardening | ⏳ ready — decisions resolved; D-1 first |
@@ -44,7 +44,7 @@ _Updated: 2026-07-05 — Phase 1 ✅ complete (PRs #150–#157; D-1 live; full-g
 | 7 | Tech-debt & test hardening | ⏳ ready (autonomous) |
 | 8 | Features | ⏳ ready (Tier-1/2/3 in scope; Tier-4 deferred) |
 
-**Next action:** execute Phase 2 (perceived smoothness & buttons). Phase 1 shipped as PRs #150–#157 with D-1 (token → `game_secrets`) live in prod; two maintainer follow-ups remain (the `SUPABASE_DATABASE_URL` secret to activate the catalog-backup automation, and the Grafana/Supabase Realtime alerts). Recommended order from here: 2 → 3 → 4, interleaving 6/7; 5 and 8 proceed per the resolved decisions.
+**Next action:** Phase 2 (perceived smoothness & buttons) is code-complete — PRs #159–#163 merged and deployed to prod, automated exit gate green. It closes once the maintainer does the on-phone/TV feel-check (buzz feels instant from a second device, manager clicks feel immediate, no visible jank). One item was deferred: `I-NextMeta` (peek RPC carries no title/artist → belongs to Phase 3). Recommended order from here: 3 → 4, interleaving 6/7; 5 and 8 proceed per the resolved decisions. Carryover maintainer follow-ups from Phase 1 remain (Grafana/Supabase Realtime alerts; optional DB-password/`sb_secret_` rotation).
 
 ## The one rule
 
