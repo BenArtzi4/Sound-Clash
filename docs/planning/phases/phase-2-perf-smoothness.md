@@ -17,37 +17,37 @@
 
 ## Tasks
 
-### T2.1 · Provisional buzz-lock from the RPC result `[M]` — `I-BuzzLock` (headline)
-- [ ] `useBuzzer.ts`: stop discarding `BuzzResult`; set optimistic `lockedByMe` / `locked-other` state from `{locked, locked_team_id}` the instant the RPC resolves.
-- [ ] `TeamGameplayPage.tsx`: drive the button tone from that provisional state, reconciled by the Realtime UPDATE; rollback on RPC error.
-- [ ] Add a transient "BUZZED!" tone at `pointerdown` (before the RPC).
-- [ ] Tests: `useBuzzer.test.ts` win/lose/error paths; ensure Realtime still corrects a wrong optimistic guess.
+### T2.1 · Provisional buzz-lock from the RPC result `[M]` — `I-BuzzLock` (headline) — ✅ PR #159
+- [x] `useBuzzer.ts`: stop discarding `BuzzResult`; set optimistic `lockedByMe` / `locked-other` state from `{locked, locked_team_id}` the instant the RPC resolves.
+- [x] `TeamGameplayPage.tsx`: drive the button tone from that provisional state (via the hook's effective `lockedTeamId`), reconciled by the Realtime UPDATE; rollback on RPC error.
+- [x] Add a transient "BUZZED!" tone (`pending`) while the RPC is in flight (fires off the pointerdown press).
+- [x] Tests: `useBuzzer.test.ts` win/lose/error paths + Realtime overriding a wrong optimistic guess; `TeamGameplayPage.test.tsx` winner/locked-other tone from the RPC alone.
 
-### T2.2 · Instant press-in, eased release `[S]` — `I-PressFeedback`
-- [ ] `BuzzButton.module.css` + `.btn` (`styles.css`) + `.scoreBtn`: `transition-duration: 0ms` on `:active`/`.pressed`; keep ease on the base rule for release.
+### T2.2 · Instant press-in, eased release `[S]` — `I-PressFeedback` — ✅ PR #160
+- [x] `BuzzButton.module.css` + `.btn` (`styles.css`) + `.scoreBtn`: `transition-duration: 0ms` on `:active`/`.pressed`; keep ease on the base rule for release.
 
-### T2.3 · Composite the infinite animations `[S]` — `I-Anim`
-- [ ] Body `bg-drift`: move to a `position:fixed; inset:0; z-index:-1` layer animated with `transform`, or gate behind `@media (pointer: fine)` + honor `prefers-reduced-motion`.
-- [ ] `BuzzButton` pulse: `::after` ring animated with `transform: scale()` + `opacity` instead of `box-shadow` spread; drop/reduce the team-pill `backdrop-filter`.
-- [ ] Display timer fill: `transform: scaleX(var(--pct))` + `transform-origin:left` instead of animating `width`.
+### T2.3 · Composite the infinite animations `[S]` — `I-Anim` — ✅ PR #160
+- [x] Body `bg-drift`: gated behind `@media (pointer: fine)` (+ `prefers-reduced-motion` already honored globally), so the repaint-heavy `background-position` drift never runs on a phone.
+- [x] `BuzzButton` pulse: `::after` ring animated with `transform: scale()` + `opacity` instead of `box-shadow` spread; dropped the team-pill `backdrop-filter`.
+- [x] Display timer fill: `transform: scaleX(var(--timer-scale))` + `transform-origin:left` instead of animating `width`.
 
-### T2.4 · No layout shift on buzz `[S]` — `I-NoShift`
-- [ ] Manager: give `lockedBanner` a permanent fixed-height slot (visibility toggle, not conditional mount) so scoring buttons never move. Combine into a **reserved status strip** ("Waiting for a buzz…" / "<Team> buzzed — score it:").
-- [ ] Display: reserve the countdown row's height permanently (visibility toggle) so the scoreboard stops jumping on the TV.
+### T2.4 · No layout shift on buzz `[S]` — `I-NoShift` — ✅ PR #161
+- [x] Manager: reserved fixed-height status strip (always mounted during play, visibility/text toggle) — "Waiting for a buzz…" / "<Team> buzzed in — score it:" — so scoring buttons never move. (Kept the "buzzed in" wording so the e2e/unit status assertions stay green.)
+- [x] Display: reserve the countdown row's height for the whole playing phase (`.timerSlot`) so the scoreboard stops jumping on the TV.
 
-### T2.5 · Kill the silent dropped-click `[S]` — F-P1-8, F-P2-2
-- [ ] `ManagerConsolePage.tsx`: remove the shared `busy` gate from the hot scoring/advance handlers (keep each per-action `inFlightRef`); keep `busy` only on End/Bonus.
-- [ ] Add `pendingContinue` round-scoped flag mirroring `pendingWrong`, included in `continueDisabled`.
-- [ ] Update `ManagerConsolePage.test.tsx` for rapid distinct actions no longer being dropped.
+### T2.5 · Kill the silent dropped-click `[S]` — F-P1-8, F-P2-2 — ✅ PR #162
+- [x] `ManagerConsolePage.tsx`: removed the shared `busy` gate from the hot scoring/advance handlers (each keeps its per-action `inFlightRef`); `busy` now gates only End/Bonus.
+- [x] Added `pendingContinue` round-scoped flag mirroring `pendingWrong`, included in `continueDisabled`.
+- [x] `ManagerConsolePage.test.tsx`: rapid distinct actions (Correct Song then Wrong) both fire; Continue no-flash handoff.
 
-### T2.6 · Smaller smoothness wins `[S]`
-- [ ] `I-Admin`: stale-while-revalidate the admin table (dim + `aria-busy`, skeleton only on empty).
-- [ ] `I-NextMeta`: on the Next-round fast path, render the peeked song's metadata from `preloadRef` immediately (don't wait for the RPC).
-- [ ] "Start game" disabled state: label "Loading player…" while `!player.ready` so it reads as progress (`ManagerConsolePage`).
-- [ ] Player reconnect copy: "CONNECTING…" vs the wrong "WAITING for the game to start"; "RECONNECTING…" on Realtime drop (`I-Reconnect`, shared with Phase 4).
+### T2.6 · Smaller smoothness wins `[S]` — ✅ PR #163 (I-NextMeta deferred)
+- [x] `I-Admin`: stale-while-revalidate the admin table (dim + `aria-busy`, skeleton only on empty).
+- [ ] `I-NextMeta`: **deferred to Phase 3.** `peek_next_song` (mig 029) returns only `{song_id, youtube_id, start_time}` — no title/artist — so rendering the peeked metadata instantly is not frontend-only; it needs the peek RPC to carry the metadata (a DB/RPC change, and Phase 3 is the RPC phase). The frontend-only workaround (an extra `songs` fetch wired into the fragile double-buffer preload path) isn't worth the risk for a ~150ms cosmetic gap.
+- [x] "Start game" disabled state: label "Loading player…" while `!player.ready` so it reads as progress (`ManagerConsolePage`).
+- [x] Player reconnect copy: "CONNECTING…" vs the wrong "WAITING for the game to start"; "RECONNECTING…" on Realtime drop before the game starts (`I-Reconnect`, shared with Phase 4).
 
-### T2.7 · (optional) BuzzButton render isolation `[M/low]` — `I-TeamRender`
-- [ ] After Phase 3's `I-Buzz1UPDATE` lands, memoize BuzzButton on a narrow `game.status`/lock slice so ROUND_CHANGE events don't re-render it.
+### T2.7 · (optional) BuzzButton render isolation `[M/low]` — `I-TeamRender` — deferred
+- [ ] After Phase 3's `I-Buzz1UPDATE` lands, memoize BuzzButton on a narrow `game.status`/lock slice so ROUND_CHANGE events don't re-render it. (Explicitly gated on Phase 3; not in Phase 2 scope.)
 
 ---
 
