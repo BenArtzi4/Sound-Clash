@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
@@ -63,6 +63,15 @@ export function TeamGameplayPage() {
       navigate("/", { replace: true });
     }
   }, [hydratedOnce, stored, state, status, gameCode, navigate]);
+
+  // Stable handler so the memoized BuzzButton (I-TeamRender) isn't re-rendered
+  // by a new inline arrow on every parent render. buzzer.buzz is itself a
+  // useCallback, so this only changes when the buzz identity legitimately does
+  // (round number / lock / playing state) — not on unrelated ROUND_CHANGEs.
+  // (Hoisted to a local: depending on `buzzer` directly would churn every
+  // render — useBuzzer returns a fresh object — and defeat the memo.)
+  const buzzAction = buzzer.buzz;
+  const handleBuzz = useCallback(() => void buzzAction(), [buzzAction]);
 
   if (!stored) return null;
 
@@ -149,7 +158,7 @@ export function TeamGameplayPage() {
           label={buzz.label}
           subtitle={buzz.subtitle}
           tone={buzz.tone}
-          onBuzz={() => void buzzer.buzz()}
+          onBuzz={handleBuzz}
         />
       </div>
 

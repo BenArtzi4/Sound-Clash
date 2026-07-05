@@ -4,6 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { BuzzButton } from "./BuzzButton";
 
 describe("BuzzButton", () => {
+  it("is wrapped in React.memo so unrelated parent re-renders skip it (I-TeamRender)", () => {
+    // TeamGameplayPage re-renders on every ROUND_CHANGE; the buzzer's props are
+    // primitives + a stabilized onBuzz, so memo's shallow compare short-circuits
+    // a re-render of the latency-critical button. Guard against someone
+    // unwrapping the memo.
+    expect((BuzzButton as unknown as { $$typeof?: symbol }).$$typeof).toBe(
+      Symbol.for("react.memo"),
+    );
+  });
+
   it("renders the label and subtitle", () => {
     render(
       <BuzzButton
