@@ -28,14 +28,14 @@ The maintainer's stated goal: make the game **load fast, respond instantly, and 
 
 ## Status snapshot
 
-_Updated: 2026-07-04 — planning complete; all 9 big-change decisions resolved (§05). Ready to execute._
+_Updated: 2026-07-05 — Phase 1 ✅ complete (PRs #150–#157; D-1 live; full-game exit gate passed on prod). Two maintainer follow-ups pending (DR-backup secret, Grafana alerts). Phase 2 next._
 
 **Decisions resolved:** D-1 → move token to a secret table; D-3 → Cloudflare edge + WAF; D-4 → accept buzz-spoofing (no per-team tokens; same-name reclaim instead); D-5 & D-6 (win conditions, Hebrew i18n) → out of scope for now; D-2/D-7/D-8/D-9 → proceed on recommendations.
 
 | Phase | Theme | State |
 |---|---|---|
 | — | Planning + review | ✅ done (this directory) |
-| 1 | Performance: load & time-to-playable | ⏳ ready to start (autonomous) |
+| 1 | Performance: load & time-to-playable | ✅ done (PRs #150–#157; D-1 live; exit gate passed 2026-07-05) |
 | 2 | Performance: perceived smoothness & buttons | ⏳ ready (autonomous) |
 | 3 | Performance: backend-path & Realtime economics | ⏳ ready (autonomous, touches RPCs) |
 | 4 | Resilience: mid-game failure modes | ⏳ ready (autonomous) |
@@ -44,7 +44,7 @@ _Updated: 2026-07-04 — planning complete; all 9 big-change decisions resolved 
 | 7 | Tech-debt & test hardening | ⏳ ready (autonomous) |
 | 8 | Features | ⏳ ready (Tier-1/2/3 in scope; Tier-4 deferred) |
 
-**Next action:** execute Phase 1 (load) — and ship D-1 (token secret table) early alongside it as the one critical fix. Recommended order: 1 → 2 → 3 → 4, interleaving 6/7; 5 and 8 proceed per the resolved decisions.
+**Next action:** execute Phase 2 (perceived smoothness & buttons). Phase 1 shipped as PRs #150–#157 with D-1 (token → `game_secrets`) live in prod; two maintainer follow-ups remain (the `SUPABASE_DATABASE_URL` secret to activate the catalog-backup automation, and the Grafana/Supabase Realtime alerts). Recommended order from here: 2 → 3 → 4, interleaving 6/7; 5 and 8 proceed per the resolved decisions.
 
 ## The one rule
 

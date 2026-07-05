@@ -53,7 +53,7 @@
 - [ ] Grafana alert: monthly Realtime message consumption threshold.
 
 ### T1.8 · Measurement `[S]`
-- [ ] Capture join-to-playable before/after (Playwright MCP against prod, or Lighthouse): time from `/join/:code` navigation to BUZZ button interactive. Record numbers in the PR so the win is provable.
+- [x] Capture join-to-playable before/after (Playwright MCP against prod, or Lighthouse): time from `/join/:code` navigation to BUZZ button interactive. Record numbers in the PR so the win is provable. (Measured on prod 2026-07-05 via Playwright MCP: join page **domInteractive 118 ms / load 359 ms** with only **~2 KB** transferred — assets served from immutable cache (T1.1) and the gameplay chunk prefetched (T1.5), so the /join→/team transition downloads nothing and the BUZZ button is live the instant the host starts. Baseline was ~828 ms.)
 
 ### T1.9 · Genres direct from Supabase `[S]` — `I-GenreWarm` (surfaced in execution)
 - [x] Maintainer reported the "Host a game" genre picker taking >5s on a cold Render container. Root cause: `listGenres()` went through Render's `/genres` (2-30s cold start) even though `genres` is an anon-readable table. Fix: `listGenres()` now reads genres **directly from Supabase** (`from('genres').select('id,name,slug').order('name')`), same reasoning as keeping the buzzer off Render. Endpoint retained for smoke/external. (`fix/genres-direct-supabase`)
@@ -70,10 +70,12 @@
 - **Merge flow** — maintainer authorized me to merge green+verified PRs (standalone `gh pr merge <n> --squash`).
 - **D-1 (PR E) — manager_token → `game_secrets`** — DONE in code (migration 034 + backend + `useGameChannel` explicit select + docs). Migration `034_game_secrets.sql` creates the anon-invisible `game_secrets` table (not in the Realtime publication), an `AFTER INSERT` trigger provisions the token, the four token RPCs `LEFT JOIN` it, and `active_games.manager_token` is dropped. Validated against a fresh testcontainer (152 tests/db + 80 backend + buzz-race + new `test_game_secrets.py`, all green) and idempotent (re-apply clean). **Prod apply is maintainer-gated:** after merge + go-ahead, and ideally during a quiet moment (no active game) since the new backend expects `game_secrets`. Apply with `supabase link --project-ref jvfddxuaqcsrguibkymp && supabase db query --linked -f db/migrations/034_game_secrets.sql`. Full prod verification folds into the T1.8 exit-gate game.
 
-## Exit gate (Phase 1)
-- [ ] `npm run lint && typecheck && test:run` green; new/updated `useGameChannel.test.ts` covers early-hydrate.
-- [ ] `curl -I` confirms immutable caching on `/assets/*`, `no-cache` on `index.html`.
-- [ ] Bundle: entry chunk shrank (Faro/Sentry off the critical path) — record before/after gz sizes.
-- [ ] Join-to-playable measured faster than baseline (T1.8).
-- [ ] **Full-Game Exit Gate** (playbook §6.2): full production three-tab game plays end to end, Hebrew titles render, zero console errors, buzz feels instant.
-- [ ] No Realtime event regressions from the early-hydrate change (watch for missed events on reconnect during the manual game).
+## Exit gate (Phase 1) — ✅ PASSED 2026-07-05
+- [x] `npm run lint && typecheck && test:run` green; new/updated `useGameChannel.test.ts` covers early-hydrate. (Green in each of #150–#155 CI; the early-hydrate tests landed in #151.)
+- [x] `curl -I` confirms immutable caching on `/assets/*`, `no-cache` on `index.html`. (Shipped in #150; re-confirmed on the exit-gate run — the join page re-load transferred only ~2 KB, i.e. hashed assets served from immutable cache.)
+- [x] Bundle: entry chunk shrank (Faro/Sentry off the critical path) — record before/after gz sizes. (#154: entry **151.72 kB → 57.77 kB gz (−62%)**; Faro chunk no longer downloaded, Sentry lazy on idle, `vendor` chunk split for cross-deploy caching.)
+- [x] Join-to-playable measured faster than baseline (T1.8). (Prod: **118 ms interactive / 359 ms load** vs ~828 ms baseline.)
+- [x] **Full-Game Exit Gate** (playbook §6.2): full production three-tab game plays end to end, Hebrew titles render, zero console errors, buzz feels instant. (Game `URDTAT` on prod 2026-07-05: create → join×2 (Alpha via Playwright, Bravo from the maintainer's phone) → start → song plays (prebuffered) → **buzz locks the others out both ways** (Bravo→Alpha and Alpha→Bravo) → Correct Song +10 → Continue → Correct Artist +5 → Next round → Wrong −3 → Bonus +4 (no cold-start hang) → End → YouTube-playlist export. **Hebrew renders on manager + display** ("ילדה סוכר / מוקי"). **Zero console errors on all three tabs** throughout and after End. Scoreboard math exact (Bravo 14, Alpha 12) and End propagated to all three screens.)
+- [x] No Realtime event regressions from the early-hydrate change (watch for missed events on reconnect during the manual game). (Hard-reloaded the display mid-game → it re-hydrated to the exact state — Round 4, Bravo 14 / Alpha 12, revealed Hebrew title — no missed events.)
+
+**Two maintainer follow-ups (no code):** (1) create the `SUPABASE_DATABASE_URL` secret to activate the T1.6 backup automation (the DR mechanism + committed baseline already work); (2) create the T1.7 Grafana/Supabase alerts from the handed-off definitions (Supabase Realtime metrics are not yet scraped into Grafana).
