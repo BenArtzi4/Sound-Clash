@@ -269,7 +269,11 @@ export function useGameChannel(gameCode: string): {
         },
       )
       .subscribe((subStatus) => {
-        if (cancelled) return;
+        // Ignore channel-status callbacks once we've deliberately torn down on
+        // 'gone': removeChannel() fires a CLOSED callback, and letting it run
+        // would flip status "gone" -> "idle" and replace the "game has ended"
+        // banner with a stuck "Connecting…" state.
+        if (cancelled || goneTornDown) return;
         if (subStatus === "SUBSCRIBED") {
           setStatus("subscribed");
           void hydrate();
