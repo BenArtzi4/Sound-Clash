@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
@@ -159,6 +159,22 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     if (b.score !== a.score) return b.score - a.score;
     return a.joined_at.localeCompare(b.joined_at);
   });
+
+  // Auto-fit the scoreboard to a non-scrolling TV/projector frame (B-1). Past
+  // ~8 teams a single 1080p column pushes the lower ranks and the QR footer off
+  // the fold, and a projector can't scroll. So we flow the standings into two
+  // balanced columns (rank order stays column-major: 1..k down the left, k+1..n
+  // down the right — the CSS grid fills column 1 for --rows rows, then column 2)
+  // and pick a density tier from how many rows land in the tallest column. The
+  // tier drives a fixed, legible per-row height plus matching font/gaps/QR size
+  // in DisplayPage.module.css, sized so every row + the QR fit the frame from 2
+  // up to 20 teams. Only two columns are ever used; beyond 20 teams rows would
+  // start to clip (the frame stays put — it never scrolls).
+  const teamCount = teams.length;
+  const scoreColumns = teamCount > 8 ? 2 : 1;
+  const rowsPerColumn = Math.max(1, Math.ceil(teamCount / scoreColumns));
+  const density = rowsPerColumn <= 5 ? "normal" : rowsPerColumn <= 8 ? "compact" : "dense";
+  const qrSize = density === "dense" ? 132 : density === "compact" ? 160 : 176;
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
   const round = state.currentRound;
   const titleClaimedById = round?.title_claimed_by ?? null;
@@ -191,7 +207,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const timerActive = game.status === "playing" && lockedTeam != null && lockedAt != null;
 
   return (
-    <main className={styles.shell}>
+    <main className={styles.shell} data-density={density}>
       <div className={styles.pointStack} aria-live="polite">
         {pointEvents.map((ev) => (
           <PointChange
@@ -302,20 +318,29 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
             <p className={styles.emptyBoardHint}>Scan the code below or enter it on your phone.</p>
           </div>
         ) : (
-          <ol className={styles.bigList}>
-            {teams.map((t, i) => (
-              <li
-                key={t.id}
-                data-team-id={t.id}
-                className={`${styles.bigRow} ${
-                  t.id === game.buzzed_team_id ? styles.bigRowBuzzed : ""
-                }`}
-              >
-                <span className={styles.bigRank}>{i + 1}</span>
-                <span className={styles.bigName}>{t.name}</span>
-                <span className={styles.bigScore}>{t.score}</span>
-              </li>
-            ))}
+          <ol className={styles.bigList} style={{ "--rows": rowsPerColumn } as CSSProperties}>
+            {teams.map((t, i) => {
+              // Podium colors for the top three — but only once a team has
+              // actually scored, so the board doesn't hand out medals while
+              // everyone is still tied at 0 at the start of the game.
+              const medal =
+                t.score > 0 && i < 3
+                  ? [styles.bigRowGold, styles.bigRowSilver, styles.bigRowBronze][i]
+                  : "";
+              return (
+                <li
+                  key={t.id}
+                  data-team-id={t.id}
+                  className={`${styles.bigRow} ${medal} ${
+                    t.id === game.buzzed_team_id ? styles.bigRowBuzzed : ""
+                  }`}
+                >
+                  <span className={styles.bigRank}>{i + 1}</span>
+                  <span className={styles.bigName}>{t.name}</span>
+                  <span className={styles.bigScore}>{t.score}</span>
+                </li>
+              );
+            })}
           </ol>
         )}
       </div>
@@ -327,7 +352,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         <QRPanel
           gameCode={gameCode}
           joinUrl={`${window.location.origin}/join/${gameCode}`}
-          size={200}
+          size={qrSize}
         />
       </footer>
     </main>

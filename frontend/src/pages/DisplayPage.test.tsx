@@ -315,3 +315,80 @@ describe("DisplayPage board", () => {
     expect(screen.queryByText("He's a Pirate")).not.toBeInTheDocument();
   });
 });
+
+describe("DisplayPage scoreboard layout", () => {
+  function makeTeams(specs: Array<{ name: string; score: number }>) {
+    return specs.map((s, i) =>
+      makeTeam({
+        id: `t${i + 1}`,
+        name: s.name,
+        score: s.score,
+        joined_at: `2026-05-05T12:00:${String(i).padStart(2, "0")}.000Z`,
+      }),
+    );
+  }
+
+  async function renderBoard(teams: ReturnType<typeof makeTeams>) {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams,
+      rounds: [],
+    });
+    const utils = renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    return utils;
+  }
+
+  it("keeps a small board in one normal-density column", async () => {
+    const { container } = await renderBoard(
+      makeTeams([
+        { name: "Aa", score: 30 },
+        { name: "Bb", score: 20 },
+        { name: "Cc", score: 0 },
+      ]),
+    );
+    expect(container.querySelector("main")).toHaveAttribute("data-density", "normal");
+    expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
+      "3",
+    );
+  });
+
+  it("splits into two compact columns around a dozen teams", async () => {
+    const { container } = await renderBoard(
+      makeTeams(Array.from({ length: 12 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),
+    );
+    // 12 teams -> two columns -> six rows per column -> "compact".
+    expect(container.querySelector("main")).toHaveAttribute("data-density", "compact");
+    expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
+      "6",
+    );
+  });
+
+  it("tightens to a dense two-column layout at 18 teams", async () => {
+    const { container } = await renderBoard(
+      makeTeams(Array.from({ length: 18 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),
+    );
+    // 18 teams -> two columns -> nine rows per column -> "dense".
+    expect(container.querySelector("main")).toHaveAttribute("data-density", "dense");
+    expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
+      "9",
+    );
+  });
+
+  it("orders teams by score so the podium is the top three scorers", async () => {
+    const { container } = await renderBoard(
+      makeTeams([
+        { name: "Low", score: 5 },
+        { name: "High", score: 40 },
+        { name: "Mid", score: 20 },
+        { name: "Zero", score: 0 },
+      ]),
+    );
+    const names = [...container.querySelectorAll("li[data-team-id] span:first-child + span")].map(
+      (el) => el.textContent,
+    );
+    expect(names).toEqual(["High", "Mid", "Low", "Zero"]);
+  });
+});
