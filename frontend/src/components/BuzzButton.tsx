@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import styles from "./BuzzButton.module.css";
 
-export type BuzzTone = "idle" | "locked-other" | "winner" | "waiting";
+export type BuzzTone = "idle" | "locked-other" | "winner" | "waiting" | "pending";
 
 interface Props {
   disabled: boolean;

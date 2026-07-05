@@ -100,6 +100,8 @@ describe("BuzzButton", () => {
     expect(screen.getByTestId("buzz")).toHaveAttribute("data-tone", "winner");
     rerender(<BuzzButton disabled isBuzzing={false} tone="waiting" onBuzz={() => {}} />);
     expect(screen.getByTestId("buzz")).toHaveAttribute("data-tone", "waiting");
+    rerender(<BuzzButton disabled={false} isBuzzing tone="pending" onBuzz={() => {}} />);
+    expect(screen.getByTestId("buzz")).toHaveAttribute("data-tone", "pending");
     rerender(<BuzzButton disabled={false} isBuzzing={false} onBuzz={() => {}} />);
     expect(screen.getByTestId("buzz")).toHaveAttribute("data-tone", "idle");
   });

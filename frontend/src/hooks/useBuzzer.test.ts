@@ -92,6 +92,72 @@ describe("useBuzzer", () => {
     expect(result.current.error).not.toBeNull();
   });
 
+  it("paints an optimistic winner lock the instant buzz_in resolves", async () => {
+    // buzz_in RETURNS (locked, locked_team_id, locked_at) as a one-row array.
+    setRpcResponse({
+      data: [{ locked: true, locked_team_id: "team-1", locked_at: "2026-05-05T12:00:00Z" }],
+      error: null,
+    });
+    const state = buildState();
+    const { result } = renderHook(() => useBuzzer("ABCDEF", "team-1", state));
+    expect(result.current.isLocked).toBe(false);
+    await act(async () => {
+      await result.current.buzz();
+    });
+    // No Realtime UPDATE has landed (state prop unchanged), yet the button is
+    // already locked to us from the RPC result alone.
+    expect(result.current.isLocked).toBe(true);
+    expect(result.current.lockedByMe).toBe(true);
+    expect(result.current.lockedTeamId).toBe("team-1");
+  });
+
+  it("paints an optimistic locked-other lock when we lose the race", async () => {
+    setRpcResponse({
+      data: [{ locked: false, locked_team_id: "team-2", locked_at: "2026-05-05T12:00:00Z" }],
+      error: null,
+    });
+    const state = buildState();
+    const { result } = renderHook(() => useBuzzer("ABCDEF", "team-1", state));
+    await act(async () => {
+      await result.current.buzz();
+    });
+    expect(result.current.isLocked).toBe(true);
+    expect(result.current.lockedByMe).toBe(false);
+    expect(result.current.lockedTeamId).toBe("team-2");
+  });
+
+  it("rolls the optimistic lock back when the RPC errors", async () => {
+    setRpcResponse({ data: null, error: { message: "boom" } });
+    const state = buildState();
+    const { result } = renderHook(() => useBuzzer("ABCDEF", "team-1", state));
+    await act(async () => {
+      await result.current.buzz();
+    });
+    expect(result.current.error).not.toBeNull();
+    // No provisional lock is left behind, so the player can retry.
+    expect(result.current.isLocked).toBe(false);
+    expect(result.current.lockedTeamId).toBeNull();
+  });
+
+  it("lets the Realtime lock override a wrong optimistic guess", async () => {
+    setRpcResponse({
+      data: [{ locked: true, locked_team_id: "team-1", locked_at: "2026-05-05T12:00:00Z" }],
+      error: null,
+    });
+    const { result, rerender } = renderHook(({ gs }) => useBuzzer("ABCDEF", "team-1", gs), {
+      initialProps: { gs: buildState() },
+    });
+    await act(async () => {
+      await result.current.buzz();
+    });
+    expect(result.current.lockedByMe).toBe(true);
+    // The authoritative Realtime UPDATE says team-2 actually holds the lock.
+    // The provisional guess must be dropped and the DB truth win.
+    rerender({ gs: buildState({ buzzedTeamId: "team-2" }) });
+    expect(result.current.lockedByMe).toBe(false);
+    expect(result.current.lockedTeamId).toBe("team-2");
+  });
+
   it("reports state correctly when gameState is null", async () => {
     const { result } = renderHook(() => useBuzzer("ABCDEF", "team-1", null));
     expect(result.current.isLocked).toBe(false);
