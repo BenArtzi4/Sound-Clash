@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { memo, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import styles from "./BuzzButton.module.css";
 
 export type BuzzTone = "idle" | "locked-other" | "winner" | "waiting" | "pending";
@@ -12,7 +12,12 @@ interface Props {
   onBuzz: () => void;
 }
 
-export function BuzzButton({
+// Memoized (I-TeamRender): TeamGameplayPage re-renders on every ROUND_CHANGE
+// (title/artist claims, free_guess toggles) that doesn't affect the buzzer.
+// All props here are primitives except onBuzz, which the page stabilizes with
+// useCallback, so React.memo's shallow compare skips a re-render of the
+// latency-critical BUZZ button on those unrelated round updates.
+export const BuzzButton = memo(function BuzzButton({
   disabled,
   isBuzzing,
   label = "BUZZ",
@@ -94,4 +99,4 @@ export function BuzzButton({
       ) : null}
     </button>
   );
-}
+});
