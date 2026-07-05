@@ -364,6 +364,8 @@
 
 .scoreBtn:not(:disabled):active {
   transform: scale(0.98);
+  /* Instant press-in; release eases back via the base .scoreBtn transition. */
+  transition-duration: 0ms;
 }
 
 .scoreLabel {

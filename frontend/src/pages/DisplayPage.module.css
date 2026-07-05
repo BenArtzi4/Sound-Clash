@@ -200,11 +200,13 @@
 
 .timerFill {
   height: 100%;
-  width: var(--timer-pct);
+  width: 100%;
+  transform-origin: left;
+  transform: scaleX(var(--timer-scale, 1));
   background: var(--color-warning);
   border-radius: 999px;
   transition:
-    width 950ms linear,
+    transform 950ms linear,
     background 200ms ease;
 }
 

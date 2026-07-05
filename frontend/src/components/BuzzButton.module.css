@@ -23,29 +23,44 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  box-shadow:
-    0 10px 40px rgba(16, 185, 129, 0.4),
-    0 0 0 0 rgba(16, 185, 129, 0.7);
+  box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4);
   transition:
     box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
     filter 200ms ease,
     background 200ms ease;
-  animation: buzz-pulse 2s infinite;
+}
+
+/* Composited "live" pulse: a ring on ::after that scales + fades via transform
+   and opacity (GPU-composited, one layer) instead of animating box-shadow
+   spread on the button itself, which repainted the whole button every frame —
+   contention on the buzz path exactly when the phone should feel snappiest. */
+.button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 3px solid rgba(16, 185, 129, 0.6);
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+  animation: buzz-pulse 2s ease-out infinite;
 }
 
 .button:hover:not(:disabled) {
   filter: brightness(1.06);
-  box-shadow:
-    0 15px 50px rgba(16, 185, 129, 0.5),
-    0 0 0 0 rgba(16, 185, 129, 0.7);
+  box-shadow: 0 15px 50px rgba(16, 185, 129, 0.5);
 }
 
+/* Press-in is instant (transition-duration:0ms while :active/.pressed);
+   releasing reverts to the base rule's eased transition — a hand on a phone
+   feels the press register on the same frame, then settle smoothly. */
 .button:active:not(:disabled),
 .pressed {
   filter: brightness(0.94);
   box-shadow:
     inset 0 0 0 6px rgba(255, 255, 255, 0.18),
     0 5px 20px rgba(16, 185, 129, 0.55);
+  transition-duration: 0ms;
 }
 
 .button:focus-visible {
@@ -61,8 +76,14 @@
   background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
   color: #f9fafb;
   box-shadow: 0 6px 18px rgba(75, 85, 99, 0.3);
-  animation: none;
   opacity: 1;
+}
+
+/* No idle pulse once the button is locked out (winner / locked-other /
+   waiting) — the tone colour carries the state instead. */
+.button:disabled::after {
+  animation: none;
+  opacity: 0;
 }
 
 .toneLockedOther:disabled {
@@ -130,15 +151,12 @@
 }
 
 @keyframes buzz-pulse {
-  0%,
-  100% {
-    box-shadow:
-      0 10px 40px rgba(16, 185, 129, 0.4),
-      0 0 0 0 rgba(16, 185, 129, 0.7);
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
   }
-  50% {
-    box-shadow:
-      0 10px 40px rgba(16, 185, 129, 0.4),
-      0 0 0 18px rgba(16, 185, 129, 0);
+  100% {
+    transform: scale(1.06);
+    opacity: 0;
   }
 }
