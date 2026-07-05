@@ -22,6 +22,9 @@ vi.mock("../lib/api", () => ({
   },
   awardBonus: vi.fn(),
   endGame: vi.fn(),
+  // useKeepBackendWarm pings this immediately on mount (T3.5); mock it so the
+  // console's keep-warm ping is a no-op in tests.
+  getHealth: vi.fn(() => Promise.resolve({ status: "ok", version: "test", supabase: "ok" })),
 }));
 
 vi.mock("../hooks/useManagerActions", () => ({
