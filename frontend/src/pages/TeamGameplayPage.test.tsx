@@ -17,6 +17,7 @@ import {
   makeTeam,
   resetSupabaseMock,
   setHydrate,
+  setRpcResponse,
   supabaseMock,
 } from "../test/supabaseMock";
 import { TeamGameplayPage } from "./TeamGameplayPage";
@@ -262,6 +263,63 @@ describe("TeamGameplayPage", () => {
     });
     const pill = await screen.findByTestId("point-change");
     expect(pill).toHaveTextContent("-3");
+  });
+
+  it("flips to the winner tone from the buzz_in result before any Realtime echo", async () => {
+    // No Realtime UPDATE is fired here: the winner tone must come purely from
+    // the optimistic provisional lock the buzz_in RPC returns.
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [makeTeam({ id: "team-1", name: "Alice" })],
+      rounds: [],
+    });
+    setRpcResponse({
+      data: [{ locked: true, locked_team_id: "team-1", locked_at: "2026-05-05T12:00:00Z" }],
+      error: null,
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const buzz = screen.getByTestId("buzz");
+    await waitFor(() => expect(buzz).toBeEnabled());
+    await act(async () => {
+      buzz.click();
+    });
+    await waitFor(() => expect(buzz).toHaveAttribute("data-tone", "winner"));
+    expect(buzz).toHaveTextContent(/you buzzed/i);
+  });
+
+  it("flips to locked-other from the buzz_in result when another team wins the race", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [makeTeam({ id: "team-1", name: "Alice" }), makeTeam({ id: "team-2", name: "Bob" })],
+      rounds: [],
+    });
+    // buzz_in reports the lock belongs to team-2 (we lost the race).
+    setRpcResponse({
+      data: [{ locked: false, locked_team_id: "team-2", locked_at: "2026-05-05T12:00:00Z" }],
+      error: null,
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const buzz = screen.getByTestId("buzz");
+    await waitFor(() => expect(buzz).toBeEnabled());
+    await act(async () => {
+      buzz.click();
+    });
+    await waitFor(() => expect(buzz).toHaveAttribute("data-tone", "locked-other"));
+    expect(buzz).toHaveTextContent(/Bob got it first/i);
   });
 
   it("renders the rpc-mock click without error", async () => {

@@ -87,8 +87,11 @@ export function TeamGameplayPage() {
 
   const game = state?.game;
   const lockedByMe = buzzer.lockedByMe;
-  const lockedTeam =
-    game?.buzzed_team_id != null ? (state?.teams.get(game.buzzed_team_id) ?? null) : null;
+  // Resolve the locking team from the hook's effective lock (provisional RPC
+  // result OR the authoritative Realtime lock), so "SOMEONE ELSE BUZZED"
+  // appears the instant buzz_in returns, not a fan-out later.
+  const lockedTeamId = buzzer.lockedTeamId;
+  const lockedTeam = lockedTeamId != null ? (state?.teams.get(lockedTeamId) ?? null) : null;
 
   const buzzDisabled =
     !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
@@ -102,6 +105,10 @@ export function TeamGameplayPage() {
           label: "SOMEONE ELSE BUZZED",
           subtitle: `${lockedTeam.name} got it first`,
         };
+      // Transient acknowledgment between the press and the RPC resolving: the
+      // press already fired buzz_in, so confirm it immediately rather than
+      // leaving the button reading "BUZZ" for the round-trip.
+      if (buzzer.isBuzzing) return { tone: "pending", label: "BUZZED!" };
       return { tone: "idle", label: "BUZZ" };
     }
     return { tone: "waiting", label: "WAITING", subtitle: "for the game to start" };
