@@ -105,7 +105,7 @@ CREATE TABLE game_rounds (
   round_number    integer NOT NULL,
   song_id         uuid REFERENCES songs(id) ON DELETE SET NULL,
   started_at      timestamptz NOT NULL DEFAULT now(),
-  buzzed_team_id  uuid REFERENCES game_teams(id) ON DELETE SET NULL,
+  buzzed_team_id  uuid REFERENCES game_teams(id) ON DELETE SET NULL,   -- vestigial since mig 035 (no longer written); see §4
   title_points       integer NOT NULL DEFAULT 0,
   artist_points      integer NOT NULL DEFAULT 0,
   wrong_buzz_penalty integer NOT NULL DEFAULT 0,
@@ -262,7 +262,11 @@ Default `started_at + 4 hours`. Read-only after game creation. The pg_cron sweep
 
 ### `active_games.buzzed_team_id` and `locked_at`
 
-These two columns implement the buzzer lock. Both are NULL when no team holds the buzz. Set together by the `buzz_in` RPC. Cleared together by `start_round`, `award_attempt`, and `end_round`.
+These two columns implement the buzzer lock. Both are NULL when no team holds the buzz. Set together by the `buzz_in` RPC. Cleared together by `start_round`, `award_attempt`, and `end_round`. This is the **only** buzzer lock the running system reads (the UI pages and `award_attempt` all read it here).
+
+### `game_rounds.buzzed_team_id` — vestigial (mig 035)
+
+Migration 011 had `buzz_in` mirror the winning team onto `game_rounds.buzzed_team_id` so the since-retired `award_points` could credit the score by reading it back. `award_points` was replaced by `award_attempt` (mig 016), which reads the lock off `active_games` instead, so nothing has read this column since. Migration 035 dropped the mirror-write from `buzz_in` — it was pure Realtime waste (`game_rounds` is published with REPLICA IDENTITY FULL, so the write fanned a no-op `ROUND_CHANGE` out to every client on **every buzz**). The column is retained as a nullable field (no destructive schema change) but is now always NULL in the running system; the only remaining reference is the frontend `roundEqual()` comparison, which is inert against a perpetually-NULL value.
 
 ### `game_secrets.manager_token`
 
