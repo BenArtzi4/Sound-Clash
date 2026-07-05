@@ -352,9 +352,12 @@ CREATE OR REPLACE FUNCTION peek_next_song(
   p_game_code      text,
   p_manager_token  uuid
 ) RETURNS TABLE(
-  song_id     uuid,
-  youtube_id  text,
-  start_time  integer
+  song_id       uuid,
+  youtube_id    text,
+  start_time    integer,
+  song_title    text,     -- migration 038 (I-NextMeta)
+  song_artist   text,     -- migration 038 (I-NextMeta)
+  is_soundtrack boolean   -- migration 038 (I-NextMeta); computed, same as select_next_song
 ) LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public;
@@ -364,12 +367,13 @@ Behavior:
 - Token + game-state gate runs first, **identical** to `select_next_song`: raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) / `no_genres_selected` (`22023`) before returning any candidate.
 - Runs the **same** unplayed-song random picker as `select_next_song`'s random path (exclude already-played, bucket by selected genre, random genre then random song) — including the decade filter (migration 032), kept in lockstep so a peeked candidate is never one the eventual commit would reject.
 - **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
+- **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "nothing to prebuffer"; the real `no_more_songs` still surfaces from the eventual `select_next_song` commit.
 - On the actual "Next round" click the browser commits the peeked song via `select_next_song(..., p_song_id => <peeked id>)` (manual-pick path), so the buffered video and the started round can never disagree.
 
 ### Idempotency
 
-Idempotent and side-effect-free (read-only `CREATE OR REPLACE`; no overload clash since the name is new in migration 029).
+Idempotent and side-effect-free (read-only). Migration 038 added the metadata columns, which changes the return type, so that migration `DROP`s then re-`CREATE`s the function (a bare `CREATE OR REPLACE` cannot change a function's return type) and re-`GRANT`s EXECUTE.
 
 ### Callers
 

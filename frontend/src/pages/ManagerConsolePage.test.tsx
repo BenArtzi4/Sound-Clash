@@ -152,7 +152,7 @@ import { awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { peekNextSongDirect } from "../hooks/usePeekNextSong";
-import type { ActiveGame, GameRound } from "../lib/types";
+import type { ActiveGame, GameRound, SelectSongResponse } from "../lib/types";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
@@ -1603,6 +1603,9 @@ describe("ManagerConsolePage", () => {
       song_id: "song-2",
       youtube_id: "vid2bbbbbbb",
       start_time: 30,
+      title: "Song Two",
+      artist: "Artist Two",
+      is_soundtrack: false,
     });
     vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r2",
@@ -1638,6 +1641,39 @@ describe("ManagerConsolePage", () => {
         expect.objectContaining({ preloaded: true, songId: "song-2" }),
       ),
     );
+  });
+
+  it("renders the peeked song's metadata in-gesture on the fast path (I-NextMeta)", async () => {
+    await setupPlayingRoundWithBothPlayersReady();
+    // The card starts on the current round's song ("First").
+    expect(screen.getByText("First")).toBeInTheDocument();
+
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-2",
+      youtube_id: "vid2bbbbbbb",
+      start_time: 30,
+      title: "Peeked Title",
+      artist: "Peeked Artist",
+      is_soundtrack: false,
+    });
+    // Freeze select_next_song so the card stays at its in-gesture state (the
+    // peeked metadata) and the RPC's authoritative reconciliation never runs.
+    vi.mocked(selectNextSongDirect).mockReturnValueOnce(new Promise<SelectSongResponse>(() => {}));
+
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 30));
+
+    // Tapping Next round updates the card to the new song's title/artist
+    // immediately, from the peeked row (mig 038) — BEFORE select_next_song
+    // resolves. Previously the card kept showing the previous song's name.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("start-round"));
+    });
+    expect(screen.getByText("Peeked Title")).toBeInTheDocument();
+    expect(screen.getByText("Peeked Artist")).toBeInTheDocument();
+    expect(screen.queryByText("First")).not.toBeInTheDocument();
   });
 
   it("falls back to a cold random pick when the pool is empty at peek time", async () => {
@@ -1689,6 +1725,9 @@ describe("ManagerConsolePage", () => {
       song_id: "song-1",
       youtube_id: "vid1aaaaaaa",
       start_time: 12,
+      title: "Song One",
+      artist: "Artist One",
+      is_soundtrack: false,
     });
     vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r1",
@@ -1744,6 +1783,9 @@ describe("ManagerConsolePage", () => {
       song_id: "song-2",
       youtube_id: "vid2bbbbbbb",
       start_time: 0,
+      title: "Song Two",
+      artist: "Artist Two",
+      is_soundtrack: false,
     });
     const { RpcError } = await import("../hooks/useManagerActions");
     vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("network down"));

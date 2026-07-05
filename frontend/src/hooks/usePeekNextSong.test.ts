@@ -18,13 +18,29 @@ beforeEach(() => {
 describe("peekNextSongDirect", () => {
   it("calls peek_next_song with the game code and manager token", async () => {
     setRpcResponse({
-      data: [{ song_id: "s-1", youtube_id: "abcdefghijk", start_time: 12 }],
+      data: [
+        {
+          song_id: "s-1",
+          youtube_id: "abcdefghijk",
+          start_time: 12,
+          song_title: "Peeked Title",
+          song_artist: "Peeked Artist",
+          is_soundtrack: false,
+        },
+      ],
       error: null,
     });
 
     const result = await peekNextSongDirect("ABCDEF", TOKEN);
 
-    expect(result).toEqual({ song_id: "s-1", youtube_id: "abcdefghijk", start_time: 12 });
+    expect(result).toEqual({
+      song_id: "s-1",
+      youtube_id: "abcdefghijk",
+      start_time: 12,
+      title: "Peeked Title",
+      artist: "Peeked Artist",
+      is_soundtrack: false,
+    });
     expect(supabaseMock.rpc).toHaveBeenCalledWith("peek_next_song", {
       p_game_code: "ABCDEF",
       p_manager_token: TOKEN,

@@ -29,8 +29,13 @@
 -- surfaces from the eventual select_next_song commit. Raising here would spam
 -- the host with a spurious error mid-round.
 --
--- Idempotent: brand-new function name, so a plain CREATE OR REPLACE is
--- re-runnable with no overload clash and no DROP needed.
+-- Idempotent: the defensive `DROP FUNCTION IF EXISTS` below makes this
+-- re-runnable even after a later migration changes peek_next_song's RETURNS
+-- shape (migration 038 adds song_title/song_artist/is_soundtrack). Without the
+-- drop, re-applying this migration would fail with 42P13 "cannot change return
+-- type of existing function" once 038 had run. Mirrors how the establishing
+-- select_next_song migration (022) drops-first for the same reason.
+DROP FUNCTION IF EXISTS peek_next_song(text, uuid);
 
 CREATE OR REPLACE FUNCTION peek_next_song(
   p_game_code      text,

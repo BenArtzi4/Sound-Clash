@@ -68,6 +68,14 @@ export function ManagerConsolePage() {
   const preloadRef = useRef<PeekedSong | null>(null);
   const preloadInFlightRef = useRef(false);
   const preloadEpochRef = useRef(0);
+  // I-NextMeta: on the Next-round fast path we optimistically render the peeked
+  // song's metadata BEFORE the round advances server-side. That makes
+  // `currentSong.id` briefly lead `currentRound.song_id`; this ref holds the
+  // optimistically-committed id so the mid-round song-resolver effect below
+  // doesn't mistake the lead for staleness and refetch (and reload) the PREVIOUS
+  // song over the freshly-promoted player. Cleared when the round catches up or
+  // the commit fails.
+  const optimisticSongIdRef = useRef<string | null>(null);
   // Song-start measurement: the handle is opened on a "Next round" click and
   // resolved when the player reaches PLAYING (or the timeout fires). It crosses
   // the click handler → loadVideoById → YouTubePlayer.onPlaying boundary, so it
@@ -154,6 +162,9 @@ export function ManagerConsolePage() {
     setPendingArtist(null);
     setPendingWrong(null);
     setPendingContinue(null);
+    // The round advanced (or reset): any optimistic Next-round prediction has
+    // now either landed or is moot, so drop the suppression id.
+    optimisticSongIdRef.current = null;
   }, [currentRoundId]);
 
   // Wrong and Continue both release the buzz lock, so a follow-up buzz in the
@@ -181,6 +192,11 @@ export function ManagerConsolePage() {
   useEffect(() => {
     if (!currentRoundSongId) return;
     if (currentSong && currentSong.id === currentRoundSongId) return;
+    // I-NextMeta: currentSong is the optimistically-committed next song, ahead of
+    // the round that hasn't advanced yet — NOT a stale leftover. Don't refetch
+    // the old round's song (which would also reload it over the promoted player);
+    // the round will catch up momentarily and the RPC reconciles the metadata.
+    if (currentSong && currentSong.id === optimisticSongIdRef.current) return;
     let cancelled = false;
     void (async () => {
       const { data, error } = await supabase
@@ -560,6 +576,21 @@ export function ManagerConsolePage() {
       activeKeyRef.current = nextKey;
       setActiveKey(nextKey);
       committedPreloaded = true;
+      // I-NextMeta: the prebuffered audio is already playing, so render the new
+      // song's card in-gesture from the peeked metadata (mig 038) instead of
+      // leaving the PREVIOUS title up until select_next_song resolves ~150ms
+      // later. Record the id first so the song-resolver effect treats this as an
+      // optimistic lead (not staleness) and doesn't reload the old song. The
+      // RPC's authoritative row reconciles the card below (same values).
+      optimisticSongIdRef.current = preloaded.song_id;
+      setCurrentSong({
+        id: preloaded.song_id,
+        title: preloaded.title,
+        artist: preloaded.artist,
+        youtube_id: preloaded.youtube_id,
+        start_time: preloaded.start_time,
+        is_soundtrack: preloaded.is_soundtrack,
+      });
     }
 
     try {
@@ -601,7 +632,10 @@ export function ManagerConsolePage() {
       // We already promoted + started the prebuffered song in-gesture, but the
       // round failed to advance server-side. Stop it so the room isn't left
       // hearing a song no round backs; the host can simply retry Next round.
+      // Drop the optimistic id so the song-resolver restores the actual current
+      // round's song (the advance never happened).
       if (committedPreloaded) activePlayer()?.stop();
+      optimisticSongIdRef.current = null;
       reportError(err);
     } finally {
       nextRoundInFlightRef.current = false;
