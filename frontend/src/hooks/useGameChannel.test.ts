@@ -563,6 +563,34 @@ describe("useGameChannel - subscription", () => {
     }
   });
 
+  it("stays 'gone' after teardown even when the channel then reports CLOSED", async () => {
+    const game = makeActiveGame();
+    setHydrate({ game, teams: [], rounds: [] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    // Game deleted -> status "gone" + teardownLive() (which removeChannel()s).
+    act(() => {
+      fireGame(
+        makePayload<ActiveGame>("active_games", "DELETE", {
+          old: { game_code: "ABCDEF" },
+        }),
+      );
+    });
+    await waitFor(() => expect(result.current.status).toBe("gone"));
+
+    // The real Supabase client fires a CLOSED channel-status callback when the
+    // channel is removed. It must NOT flip "gone" back to "idle" — doing so
+    // replaced the "game has ended" banner with a stuck "Connecting…" state for
+    // every client of a swept game (regression from the teardown-on-gone change).
+    await act(async () => {
+      await fireStatus("CLOSED");
+    });
+    expect(result.current.status).toBe("gone");
+  });
+
   it("flips to reconnecting on CHANNEL_ERROR", async () => {
     const { result } = renderHook(() => useGameChannel("ABCDEF"));
     await act(async () => {
