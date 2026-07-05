@@ -85,30 +85,33 @@ export function ManagerConsolePage() {
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
 
-  // Optimistic "we just clicked this" markers for the three scoring buttons,
+  // Optimistic "we just clicked this" markers for the per-round action buttons,
   // each holding the round id the click happened on. They bridge the ~50-
-  // 100ms gap between the award_attempt RPC returning and the Realtime
-  // UPDATE on game_rounds (title_claimed_by / artist_claimed_by) or
-  // active_games (buzzed_team_id) arriving -- without them the disabled
-  // prop momentarily flips back to false (since `busy` cleared but the
-  // semantic gate hadn't tightened yet), which the user sees as a "double
-  // flash" on the button. The flag is naturally self-clearing on round
-  // change (stale id won't equal the new round.id) and gets reset by the
-  // effect below for tidiness. Cleared in each handler's catch on failure
-  // so a transient RPC error doesn't leave the button permanently disabled.
+  // 100ms gap between the RPC returning and the Realtime UPDATE on game_rounds
+  // (title_claimed_by / artist_claimed_by) or active_games (buzzed_team_id)
+  // arriving -- keeping the button disabled across that gap so it doesn't flash
+  // enabled in the window. The flag is naturally self-clearing on round change
+  // (stale id won't equal the new round.id) and gets reset by the effects
+  // below for tidiness. Cleared in each handler's catch on failure so a
+  // transient RPC error doesn't leave the button permanently disabled.
+  // pendingContinue mirrors pendingWrong: Continue releases the buzz lock, so
+  // it stays disabled until the Realtime UPDATE clears buzzed_team_id.
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
   const [pendingArtist, setPendingArtist] = useState<string | null>(null);
   const [pendingWrong, setPendingWrong] = useState<string | null>(null);
+  const [pendingContinue, setPendingContinue] = useState<string | null>(null);
 
-  // Synchronous in-flight locks per action. useState (`busy`) is captured in
-  // the handler closure at render time, so two clicks fired in the same
-  // React tick both read `busy=false` and both proceed -- React's batching
-  // hides the first setBusy(true) from the second handler. useRef.current
-  // mutates synchronously, so the second click sees `true` and bails. Cheap
-  // belt-and-suspenders alongside the existing `busy` early-return; matters
-  // most for handleNextRound, where a duplicate fire would insert an orphan
-  // game_rounds row (the other actions are idempotent via the SQL function's
-  // already-claimed / no-buzz-to-score branches).
+  // Synchronous in-flight locks, one PER ACTION. These are the sole guard
+  // against a same-action double-fire now that the shared `busy` gate is off
+  // the hot handlers (removing it is what stops a *distinct* second click --
+  // e.g. Correct Song then quickly Wrong -- from being silently dropped inside
+  // the first action's window; see F-P1-8 / F-P2-2). useState can't do this
+  // job: `busy` is captured in the closure at render time, so two clicks in
+  // one React tick both read the stale value; useRef.current mutates
+  // synchronously, so the second same-action click sees `true` and bails.
+  // Matters most for handleNextRound, where a duplicate fire would insert an
+  // orphan game_rounds row (the other actions are idempotent via the SQL
+  // function's already-claimed / no-buzz-to-score branches).
   const titleInFlightRef = useRef(false);
   const artistInFlightRef = useRef(false);
   const wrongInFlightRef = useRef(false);
@@ -150,16 +153,18 @@ export function ManagerConsolePage() {
     setPendingTitle(null);
     setPendingArtist(null);
     setPendingWrong(null);
+    setPendingContinue(null);
   }, [currentRoundId]);
 
-  // Wrong releases the buzz lock, so a follow-up buzz in the same round
-  // must re-enable the Wrong button. `pendingWrong` only bridges the gap
-  // between the RPC returning and the Realtime UPDATE on buzzed_team_id;
-  // once that UPDATE has landed (lock cleared) the flag has done its job
-  // and has to drop or the next buzz's Wrong click stays blocked.
+  // Wrong and Continue both release the buzz lock, so a follow-up buzz in the
+  // same round must re-enable their buttons. `pendingWrong` / `pendingContinue`
+  // only bridge the gap between the RPC returning and the Realtime UPDATE on
+  // buzzed_team_id; once that UPDATE has landed (lock cleared) the flags have
+  // done their job and must drop or the next buzz's click stays blocked.
   useEffect(() => {
     if (state?.game.buzzed_team_id == null) {
       setPendingWrong(null);
+      setPendingContinue(null);
     }
   }, [state?.game.buzzed_team_id]);
 
@@ -370,7 +375,7 @@ export function ManagerConsolePage() {
 
   async function handleCorrectTitle() {
     if (titleInFlightRef.current) return;
-    if (!state?.currentRound || busy || !managerToken) return;
+    if (!state?.currentRound || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
     titleInFlightRef.current = true;
     const roundId = state.currentRound.id;
@@ -381,7 +386,6 @@ export function ManagerConsolePage() {
     // (after which the semantic gate takes over) -- no enable/disable
     // flicker in the gap.
     setPendingTitle(roundId);
-    setBusy(true);
     markScoreStart(gameCode, roundId, "title");
     try {
       await applyAttempt(roundId, {
@@ -394,21 +398,19 @@ export function ManagerConsolePage() {
       setPendingTitle(null);
       reportError(err);
     } finally {
-      setBusy(false);
       titleInFlightRef.current = false;
     }
   }
 
   async function handleCorrectArtist() {
     if (artistInFlightRef.current) return;
-    if (!state?.currentRound || busy || !managerToken) return;
+    if (!state?.currentRound || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
     artistInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     if (teamName) toast(`+5 to ${teamName}`, { variant: "success" });
     setPendingArtist(roundId);
-    setBusy(true);
     markScoreStart(gameCode, roundId, "artist");
     try {
       await applyAttempt(roundId, {
@@ -421,7 +423,6 @@ export function ManagerConsolePage() {
       setPendingArtist(null);
       reportError(err);
     } finally {
-      setBusy(false);
       artistInFlightRef.current = false;
     }
   }
@@ -436,7 +437,7 @@ export function ManagerConsolePage() {
   // mirroring how a regular round behaves once both title + artist are claimed.
   async function handleCorrectSoundtrack() {
     if (titleInFlightRef.current || artistInFlightRef.current) return;
-    if (!state?.currentRound || busy || !managerToken) return;
+    if (!state?.currentRound || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
     titleInFlightRef.current = true;
     artistInFlightRef.current = true;
@@ -445,7 +446,6 @@ export function ManagerConsolePage() {
     if (teamName) toast(`+15 to ${teamName}`, { variant: "success" });
     setPendingTitle(roundId);
     setPendingArtist(roundId);
-    setBusy(true);
     markScoreStart(gameCode, roundId, "soundtrack");
     try {
       await applyAttempt(roundId, {
@@ -459,7 +459,6 @@ export function ManagerConsolePage() {
       setPendingArtist(null);
       reportError(err);
     } finally {
-      setBusy(false);
       titleInFlightRef.current = false;
       artistInFlightRef.current = false;
     }
@@ -467,20 +466,22 @@ export function ManagerConsolePage() {
 
   async function handleContinueRound() {
     if (continueInFlightRef.current) return;
-    if (busy || !managerToken) return;
+    if (!managerToken) return;
     continueInFlightRef.current = true;
     // Optimistic toast fires before the RPC so the click feels instant; the
     // Realtime UPDATE on active_games.buzzed_team_id is still the source of
     // truth for re-arming the buzzers.
     toast("Round continued", { variant: "info" });
-    setBusy(true);
+    // Keep Continue disabled until the lock actually clears via Realtime, the
+    // same handoff pendingWrong uses -- no enable/disable flash in the gap.
+    setPendingContinue(state?.currentRound?.id ?? null);
     try {
       await releaseBuzzLockDirect(gameCode, managerToken);
       activePlayer()?.play();
     } catch (err) {
+      setPendingContinue(null);
       reportError(err);
     } finally {
-      setBusy(false);
       continueInFlightRef.current = false;
     }
   }
@@ -497,7 +498,7 @@ export function ManagerConsolePage() {
   // song paused with the lock still held -- the manager can simply retry.
   async function handleWrong() {
     if (wrongInFlightRef.current) return;
-    if (!state?.currentRound || busy || !managerToken) return;
+    if (!state?.currentRound || !managerToken) return;
     if (!state.game.buzzed_team_id) return;
     wrongInFlightRef.current = true;
     const roundId = state.currentRound.id;
@@ -505,7 +506,6 @@ export function ManagerConsolePage() {
     const freeGuess = state.currentRound.free_guess_active;
     if (teamName && !freeGuess) toast(`-3 to ${teamName}`, { variant: "info" });
     setPendingWrong(roundId);
-    setBusy(true);
     try {
       await applyAttempt(roundId, {
         title_correct: false,
@@ -517,14 +517,13 @@ export function ManagerConsolePage() {
       setPendingWrong(null);
       reportError(err);
     } finally {
-      setBusy(false);
       wrongInFlightRef.current = false;
     }
   }
 
   async function handleNextRound() {
     if (nextRoundInFlightRef.current) return;
-    if (busy || !managerToken) return;
+    if (!managerToken) return;
     nextRoundInFlightRef.current = true;
     // Bump the preload epoch so any in-flight peek is discarded rather than
     // buffering into a player we're about to repurpose.
@@ -535,7 +534,6 @@ export function ManagerConsolePage() {
     songStartRef.current = songStart;
     // Optimistic toast confirms the click immediately.
     toast("Loading next round...", { variant: "info" });
-    setBusy(true);
     // Snapshot + clear the prebuffered song now so a late preload can't reuse it.
     const preloaded = preloadRef.current;
     preloadRef.current = null;
@@ -606,7 +604,6 @@ export function ManagerConsolePage() {
       if (committedPreloaded) activePlayer()?.stop();
       reportError(err);
     } finally {
-      setBusy(false);
       nextRoundInFlightRef.current = false;
     }
   }
@@ -732,16 +729,16 @@ export function ManagerConsolePage() {
 
   const statusClass = game.status === "playing" ? styles.statusPlaying : styles.statusWaiting;
 
-  // Disabled props deliberately do NOT read `busy`: a click-driven busy
-  // toggle creates a visible disable->enable->disable flash between the
-  // RPC returning (~150ms) and the Realtime UPDATE landing (~200-300ms).
-  // The scoring buttons use a pending-flag handoff (set on click, cleared
-  // automatically when the round changes) so they stay disabled across
-  // that gap. Continue / Next round just trust their semantic gate
-  // (lockedTeam / player.ready) and rely on the handler-side `busy`
-  // early-return to no-op rapid double-clicks. End game and Bonus still
-  // gate on busy because they fire less often and the flash is
-  // imperceptible there.
+  // Disabled props deliberately do NOT read `busy`: a shared click-driven busy
+  // toggle both created a visible disable->enable->disable flash AND silently
+  // dropped a *distinct* second click that landed inside the first action's
+  // window (Correct Song then quickly Wrong -- F-P1-8 / F-P2-2). Each per-round
+  // action instead uses its own pending-flag handoff (set on click, cleared
+  // when the round changes or the lock clears) so it stays disabled across the
+  // RPC->Realtime gap without blocking a different action; a same-action
+  // double-fire is caught synchronously by that action's inFlightRef. End game
+  // and Bonus still gate on `busy` because they fire at most once or twice per
+  // game and any flash there is imperceptible.
   const isSoundtrackRound = currentSong?.is_soundtrack === true;
   // Soundtrack rounds ask players to name the film/show, which is stored in
   // `artist`; that's the answer the host judges and the only text the display
@@ -768,7 +765,7 @@ export function ManagerConsolePage() {
     pendingTitle === round?.id ||
     pendingArtist === round?.id;
   const wrongActionDisabled = !lockedTeam || pendingWrong === round?.id;
-  const continueDisabled = !lockedTeam;
+  const continueDisabled = !lockedTeam || pendingContinue === round?.id;
   const nextRoundDisabled = !player.ready;
   // Bonus is independent of buzz state — it stays actionable as long as the
   // page isn't mid-request. (It must NOT be wrapped in an aria-disabled
