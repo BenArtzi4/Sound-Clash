@@ -1,0 +1,9 @@
+# Ad-hoc / dated local dumps (e.g. songs-20260531.csv) stay local-only.
+# The canonical disaster-recovery dump IS tracked: it is refreshed weekly by
+# .github/workflows/catalog-backup.yml and restored via restore.sql.
+*
+!.gitignore
+!genres.csv
+!songs.csv
+!song_genres.csv
+!restore.sql

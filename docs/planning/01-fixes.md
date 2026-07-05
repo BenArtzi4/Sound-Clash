@@ -17,11 +17,17 @@ Legend for the perf tag on latency-adjacent items: `buzz-latency` (moves the <20
 - **Evidence:** `docs/runbook.md:278` claims regenerable from `s3://…/songs.csv` (601 rows); `db/seed/songs.sql` has 7; prod ~1025; Supabase free tier = 1-day backup, no PITR.
 - **Failure:** a bad migration / accidental DELETE / project loss not caught within 24h permanently destroys hundreds of hours of curation.
 - **Fix:** scheduled `pg_dump` of `songs`/`genres`/`song_genres` committed to the repo (or pushed to object storage) + a CI drift-guard asserting prod row-count/hash vs the committed dump; refresh the S3 CSV; correct the runbook. Autonomous. Effort M. (See also I-DR in `02`.)
+- **RESOLVED 2026-07-05 (T1.6):** `.github/workflows/catalog-backup.yml` dumps the three catalog tables to deterministic CSVs in `db/backups/` weekly (Mon 04:17 UTC) + on dispatch, warns-not-fails on drift, and opens/updates one PR; `db/backups/restore.sql` is an idempotent, Hebrew-safe restore (verified on a local stack: wipe→restore→re-restore = 11/1028/1035, 0-row second pass). The dead `s3://…/songs.csv` fallback is documented as gone in `runbook.md` §6 / line 278.
 
 ### F-P0-3 · Deploy-during-game blanks the screen `[bug, medium→P0 because it hits live players on every deploy]`
 - **Evidence:** `_redirects` = `/* /index.html 200`; a stale chunk URL returns `index.html` as `200 text/html`; `vite:preloadError` has zero handlers and there is no ErrorBoundary (`App.tsx`). Confirmed live: old `/assets/index-*.js` returns 200 HTML.
 - **Failure:** a player who loaded the app before a deploy, then navigates (join → `/team/:code`), triggers a failed dynamic import → blank white screen mid-party. Every Cloudflare Pages deploy is a live-game landmine.
 - **Fix:** `window.addEventListener('vite:preloadError', () => location.reload())` with a sessionStorage guard against reload loops; add a route-level ErrorBoundary with a reload CTA. Autonomous. Effort S.
+
+### F-P0-4 · D-1 rollout deploy-before-migrate gap took prod hosting down `[ops, RESOLVED 2026-07-05]`
+- **Evidence:** PR #156 merged the backend change that hard-requires the `game_secrets` table (`backend/app/routers/games.py:71-74` raises `"manager secret was not provisioned"` when the table/row is absent) and Render auto-deployed it, but migration 034 had not yet been applied to prod. Prod probe: `POST /games` → 500; `select to_regclass('public.game_secrets')` → `null`.
+- **Failure:** every host who tried to create a game on soundclash.org got a 500 — hosting was fully down. Detected by running `tests/smoke/post_deploy.sh` at the start of Phase 1 closeout.
+- **Fix (applied 2026-07-05):** applied `db/migrations/034_game_secrets.sql` to prod via `supabase db query --linked -f`; verified `game_secrets` exists, `active_games.manager_token` dropped, `game_secrets` absent from the Realtime publication, re-applied for idempotency, smoke green. **Lesson:** a backend change that hard-requires a new table/column must have its prod migration applied **before or atomically with** the deploy, never after. Recorded in `.claude/rules/lessons-learned.md`.
 
 ---
 

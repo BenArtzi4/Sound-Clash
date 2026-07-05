@@ -1,0 +1,98 @@
+name: Catalog Backup
+
+# Disaster-recovery safety net for the durable song catalog (genres, songs,
+# song_genres) -- see docs/planning/01-fixes.md F-P0-2 and docs/runbook.md §6.
+#
+# Weekly (Mon 04:17 UTC) and on manual dispatch, this dumps the three catalog
+# tables from PROD to deterministic CSVs under db/backups/. It never writes to
+# main: if the fresh dump differs from the committed one (i.e. the catalog
+# drifted), it force-updates a single long-lived branch and opens/updates one
+# PR for a human to merge. A green run with no PR means prod matches the
+# committed dump. Restore with db/backups/restore.sql (idempotent).
+#
+# Reuses the prod GitHub environment's SUPABASE_DATABASE_URL secret (same one
+# db-migrate.yml uses). This is a new workflow -- flagged with the maintainer.
+
+on:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays 04:17 UTC
+  workflow_dispatch:
+
+# Needed to push the backup branch and open the PR. The dump never touches main.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: catalog-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump catalog + open drift PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: prod
+    env:
+      BRANCH: automated/catalog-backup
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Dump catalog to deterministic CSVs
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          PGTZ: UTC # deterministic timestamptz rendering
+          PGCLIENTENCODING: UTF8 # Hebrew titles are UTF-8
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::SUPABASE_DATABASE_URL not set for the prod environment"
+            exit 1
+          fi
+          dump() {
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+              -c "\copy ($1) TO STDOUT WITH (FORMAT csv, HEADER true)" > "db/backups/$2.csv"
+          }
+          dump "SELECT * FROM genres ORDER BY id"                     genres
+          dump "SELECT * FROM songs ORDER BY id"                      songs
+          dump "SELECT * FROM song_genres ORDER BY song_id, genre_id" song_genres
+          g=$(( $(wc -l < db/backups/genres.csv) - 1 ))
+          s=$(( $(wc -l < db/backups/songs.csv) - 1 ))
+          sg=$(( $(wc -l < db/backups/song_genres.csv) - 1 ))
+          echo "Dumped: genres=$g songs=$s song_genres=$sg"
+          # Guard: a partial/empty read must never propose a catalog-shrinking PR.
+          if [ "$g" -lt 5 ] || [ "$s" -lt 100 ] || [ "$sg" -lt 100 ]; then
+            echo "::error::Implausibly small dump (genres=$g songs=$s song_genres=$sg); refusing to open a catalog-shrinking PR. Check prod."
+            exit 1
+          fi
+
+      - name: Detect drift vs committed dump
+        id: drift
+        run: |
+          if git diff --quiet -- db/backups/genres.csv db/backups/songs.csv db/backups/song_genres.csv; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No catalog drift -- the committed dump matches production."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Catalog drift detected -- production differs from the committed dump. Opening/updating the backup PR."
+            git diff --stat -- db/backups/
+          fi
+
+      - name: Open or update the backup PR
+        if: steps.drift.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add db/backups/genres.csv db/backups/songs.csv db/backups/song_genres.csv
+          git commit -m "chore(backup): refresh song catalog dump ($(date -u +%F))"
+          git push --force origin "$BRANCH"
+          if [ "$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')" = "0" ]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore(backup): refresh song catalog dump" \
+              --body-file .github/catalog-backup-pr-body.md
+          fi
