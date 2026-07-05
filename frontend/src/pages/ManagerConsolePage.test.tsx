@@ -990,7 +990,9 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(btn).toBeEnabled());
   });
 
-  it("Continue round does not depend on busy (no flash); auto-disables when lock clears", async () => {
+  it("Continue stays disabled through the RPC -> Realtime handoff (no flash)", async () => {
+    // pendingContinue mirrors pendingWrong: after the click Continue must stay
+    // disabled until Realtime clears the buzz lock, with no enable-in-between.
     setHydrate({
       game: makeActiveGame({
         status: "playing",
@@ -1013,15 +1015,99 @@ describe("ManagerConsolePage", () => {
     const continueBtn = screen.getByTestId("continue-round");
     expect(continueBtn).toBeEnabled();
     fireEvent.click(continueBtn);
-    // Mid-RPC: the button is still enabled. The previous implementation
-    // would have shown disabled here (busy=true) -- now we drop busy from
-    // the gate and rely solely on the semantic state.
-    expect(continueBtn).toBeEnabled();
+    // pendingContinue flips the disabled prop synchronously.
+    expect(continueBtn).toBeDisabled();
     await act(async () => {
       resolveRpc(undefined);
     });
-    // After Realtime clears buzzed_team_id, the semantic gate takes over.
-    expect(continueBtn).toBeEnabled(); // still enabled (state hasn't flowed)
+    // RPC resolved but the lock hasn't cleared over Realtime yet -- still
+    // disabled (this is where the old busy toggle would have flashed enabled).
+    expect(continueBtn).toBeDisabled();
+    // Realtime clears the buzz lock; the semantic gate (!lockedTeam) now keeps
+    // Continue disabled (nothing left to continue).
+    await act(async () => {
+      fireGame(
+        makePayload<ActiveGame>("active_games", "UPDATE", {
+          new: makeActiveGame({
+            status: "playing",
+            buzzed_team_id: null,
+            current_round_id: "r1",
+          }),
+          old: makeActiveGame({
+            status: "playing",
+            buzzed_team_id: "t1",
+            current_round_id: "r1",
+          }),
+        }),
+      );
+    });
+    expect(continueBtn).toBeDisabled();
+  });
+
+  it("rapid Correct Song then Wrong both fire — no silent busy drop (F-P1-8/F-P2-2)", async () => {
+    // Regression: the shared `busy` gate dropped a distinct second click that
+    // landed inside the first action's window. With busy off the hot handlers,
+    // both distinct actions must fire.
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let resolve1!: (v: never) => void;
+    let resolve2!: (v: never) => void;
+    vi.mocked(awardAttemptDirect)
+      .mockReturnValueOnce(
+        new Promise((res) => {
+          resolve1 = res as (v: never) => void;
+        }) as never,
+      )
+      .mockReturnValueOnce(
+        new Promise((res) => {
+          resolve2 = res as (v: never) => void;
+        }) as never,
+      );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Correct Song, then immediately Wrong -- distinct actions, first RPC still
+    // in flight.
+    fireEvent.click(screen.getByTestId("score-title"));
+    fireEvent.click(screen.getByTestId("score-wrong"));
+    expect(awardAttemptDirect).toHaveBeenCalledTimes(2);
+    expect(awardAttemptDirect).toHaveBeenNthCalledWith(1, "ABCDEF", TOKEN, "r1", {
+      title_correct: true,
+      artist_correct: false,
+      wrong_buzz: false,
+    });
+    expect(awardAttemptDirect).toHaveBeenNthCalledWith(2, "ABCDEF", TOKEN, "r1", {
+      title_correct: false,
+      artist_correct: false,
+      wrong_buzz: true,
+    });
+    // Let both awaits settle so no state updates land after the test.
+    await act(async () => {
+      resolve1({
+        round_id: "r1",
+        team_id: "t1",
+        points_awarded: 10,
+        team_total_score: 10,
+        title_claimed_by: "t1",
+        artist_claimed_by: null,
+      } as never);
+      resolve2({
+        round_id: "r1",
+        team_id: "t1",
+        points_awarded: -3,
+        team_total_score: 7,
+        title_claimed_by: "t1",
+        artist_claimed_by: null,
+      } as never);
+    });
   });
 
   // ---- synchronous double-click guard: useRef in-flight locks ----
