@@ -259,7 +259,7 @@ Songs are durable; they should never be deleted en masse. Loss is an incident.
 
 | Data | Backup mechanism | Retention |
 |---|---|---|
-| Songs catalog (`songs`, `genres`, `song_genres`) | Supabase daily backup (free tier) | 1 day |
+| Songs catalog (`songs`, `genres`, `song_genres`) | (1) weekly deterministic CSV dump committed to `db/backups/` by `.github/workflows/catalog-backup.yml`; (2) Supabase daily backup (free tier) | (1) indefinite (git history); (2) 1 day |
 | Active game data | Not backed up (ephemeral) | n/a |
 | Source code | GitHub | indefinite |
 | Configuration (env vars, secrets) | Manually documented in 1Password / Bitwarden / wherever | indefinite |
@@ -269,13 +269,13 @@ Songs are durable; they should never be deleted en masse. Loss is an incident.
 | Scenario | Recovery |
 |---|---|
 | Bad migration drops a column | Restore from Supabase backup (lose <1 day of data). |
-| Bad code deletes all songs | Same. |
+| Bad code deletes all songs | `psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/backups/restore.sql` (run from repo root; idempotent, refills from the committed dump). Or restore from the Supabase daily backup. |
 | Render service deleted | Re-create from Dockerfile + env vars. ~10 min. |
 | Cloudflare Pages project deleted | Re-create, link to GitHub repo. Auto-deploys latest main. ~10 min. |
-| Supabase project deleted | Re-create. Apply all migrations from `db/migrations/`. Re-import songs. ~1 hour. |
+| Supabase project deleted | Re-create. Apply all migrations from `db/migrations/`, then `db/backups/restore.sql` to reload the catalog. ~1 hour. |
 | Domain expires | Re-register; update DNS. |
 
-The system is designed to be **rebuildable from source**: if everything except the GitHub repo is gone, you can reconstruct in under an hour. The songs catalog is the only critical persistent state, and it's regenerable from the legacy CSV (`s3://soundclash-songs-data/songs.csv`) if you keep that file as belt-and-suspenders.
+The system is designed to be **rebuildable from source**: if everything except the GitHub repo is gone, you can reconstruct in under an hour. The songs catalog is the only critical persistent state, and it lives in the repo itself — `.github/workflows/catalog-backup.yml` commits a weekly deterministic CSV dump of `songs`/`genres`/`song_genres` to `db/backups/`, and `db/backups/restore.sql` reloads it idempotently (run from the repo root: `psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/backups/restore.sql`). The same workflow warns (never fails) when prod drifts from the committed dump and opens a refresh PR. (A legacy `s3://soundclash-songs-data/songs.csv` fallback was referenced here previously; that bucket was deleted in the 2026-05-07 AWS teardown and is gone — the committed dump replaces it.)
 
 ## 7. Routine Maintenance
 
@@ -283,11 +283,12 @@ The system is designed to be **rebuildable from source**: if everything except t
 |---|---|
 | Weekly | Glance at Sentry dashboard for new error trends |
 | Weekly | Glance at Supabase Realtime peers/msgs charts |
+| Weekly | If `catalog-backup.yml` opened a PR (prod catalog drifted from the committed dump), review & merge it |
 | Monthly | Review free-tier utilization (`free-tier-budget.md` thresholds) |
 | Monthly | Review Render bandwidth + service hours |
 | Monthly | Update dependencies (Dependabot PRs): merge if green |
 | Quarterly | Test rollback procedure (§2) on staging; actually do it |
-| Quarterly | Test backup restore (§6) on a preview project |
+| Quarterly | Test backup restore (§6): run `db/backups/restore.sql` against a scratch/preview DB and confirm catalog row counts |
 | Annually | Rotate `ADMIN_PASSWORD` (§3.1) |
 | Annually | Rotate Supabase service-role key (§3.2) |
 
