@@ -77,7 +77,18 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  animation: bg-drift 32s ease-in-out infinite alternate;
+}
+
+/* The background drift animates `background-position` on a `background-attachment:
+   fixed` gradient, which forces a full-viewport repaint every frame. That is a
+   cost worth paying for the ambient motion on a desktop, but on a phone (coarse
+   pointer) it competes with the buzz button's own paint for no felt benefit —
+   so we run it only where a fine pointer is present. `prefers-reduced-motion`
+   (handled globally below) still overrides this for anyone who opts out. */
+@media (pointer: fine) {
+  body {
+    animation: bg-drift 32s ease-in-out infinite alternate;
+  }
 }
 
 @keyframes bg-drift {
@@ -200,6 +211,8 @@ textarea:disabled {
 
 .btn:active:not(:disabled) {
   transform: translateY(1px);
+  /* Instant press-in; release eases back via the base .btn transition. */
+  transition-duration: 0ms;
 }
 
 .btn:disabled {
