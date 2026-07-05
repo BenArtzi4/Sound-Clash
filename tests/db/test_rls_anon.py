@@ -30,6 +30,73 @@ HISTORY_TABLES = (
 )
 
 
+async def _seed_attempt_row(db: asyncpg.Connection) -> None:
+    """Insert one game_round_attempts row via service_role, so the update/delete
+    denial tests have a row to (fail to) touch."""
+    game_code = await create_test_game(db)
+    team_id = await create_test_team(db, game_code)
+    song_id = await create_test_song(db)
+    round_id = await db.fetchval(
+        "INSERT INTO game_rounds (game_code, round_number, song_id) "
+        "VALUES ($1, 1, $2) RETURNING id",
+        game_code,
+        song_id,
+    )
+    await db.execute(
+        "INSERT INTO game_round_attempts (round_id, game_code, team_id, outcome, points_delta) "
+        "VALUES ($1, $2, $3, 'wrong', -3)",
+        round_id,
+        game_code,
+        team_id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_anon_cannot_read_attempts(anon_conn: asyncpg.Connection) -> None:
+    """game_round_attempts is analytics-only: removed from the Realtime publication
+    (mig 037) and RLS-locked with no anon grant, so anon SELECT is denied outright
+    -- in contrast to the ephemeral game tables it can read freely. The
+    award_attempt RPC still inserts rows as the table owner (SECURITY DEFINER)."""
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.execute("SELECT * FROM game_round_attempts")
+
+
+@pytest.mark.asyncio
+async def test_anon_cannot_insert_attempts(anon_conn: asyncpg.Connection) -> None:
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.execute(
+            "INSERT INTO game_round_attempts "
+            "(round_id, game_code, team_id, outcome, points_delta) "
+            "VALUES (gen_random_uuid(), 'ZZZZZZ', gen_random_uuid(), 'wrong', -3)"
+        )
+
+
+@pytest.mark.asyncio
+async def test_anon_cannot_update_attempts(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    await _seed_attempt_row(db)
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.execute("UPDATE game_round_attempts SET points_delta = 0")
+
+
+@pytest.mark.asyncio
+async def test_anon_cannot_delete_attempts(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    await _seed_attempt_row(db)
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.execute("DELETE FROM game_round_attempts")
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("table", HISTORY_TABLES)
 async def test_anon_cannot_read_history(
