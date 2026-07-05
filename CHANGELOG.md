@@ -6,6 +6,10 @@ This project does not currently cut versioned releases; every change lands direc
 
 ## [Unreleased]
 
+### Added
+
+- 2026-07-05: **The big-screen scoreboard now highlights the podium.** The top three teams get gold, silver, and bronze rows — each with a 🥇/🥈/🥉 medal — so the leaders pop at a glance from across the room. Medals only appear once a team has actually scored, so nobody is crowned while everyone is still tied at 0. Display only.
+
 ### Changed
 
 - 2026-07-05: **The next song's name appears the instant you advance.** On the host console's fast path (where the upcoming song is already prebuffered), tapping **Next round** now updates the round card to the new song's title/artist immediately — the audio already started instantly, but the card used to keep showing the *previous* song's name for the ~150ms until the server responded. Now the name and the sound land together.
@@ -33,6 +37,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-07-05: **The big-screen scoreboard now fits every team on a 1080p TV/projector, up to 20 teams.** During a live round with ~8+ teams the standings used to run off the bottom of the screen — on a 10-team game a projector showed only ranks 1–3, with the rest of the teams and the "Scan to join" QR code below the fold where a TV can't scroll. The display now sizes itself to the screen: it splits into two balanced columns and tightens the rows as more teams join, so all teams (and the QR code) stay on screen and readable at a glance, from 2 up to 20 teams. Phones/tablets viewing the display are unaffected.
 - 2026-07-05: **Players and the display correctly show "game has ended" when a game expires, instead of getting stuck on "Connecting…".** After the recent Realtime cleanup, once a game was swept (its 4-hour lifetime elapsed) any still-open team/host/display screen fell back to a stuck "Connecting…" state instead of the "this game has ended or expired" banner. They now show the ended banner as intended.
 - 2026-07-05: **Rapid, distinct host taps no longer get silently dropped.** Tapping one scoring button and then quickly a *different* one (e.g. **Correct Song** then **Wrong**) could previously drop the second tap if it landed while the first was still committing — the host had to notice nothing happened and tap again. Each button now guards only its own action, so two distinct taps always both register. (A same-button double-tap is still de-duplicated, as before.) The host's **Continue** button also no longer briefly flickers enabled right after you tap it.
 - 2026-07-04: **The "Host a game" genre picker no longer stalls behind a cold backend.** The genre list now loads directly from the database (which is always warm) instead of through the app server, whose free-tier container sleeps after ~15 min idle and could take several seconds to wake — previously making the genres take 5+ seconds to appear when hosting after a quiet spell. Creating the game itself still uses the app server (and is still pre-warmed on the home page).
