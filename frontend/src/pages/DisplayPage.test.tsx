@@ -350,9 +350,9 @@ describe("DisplayPage scoreboard layout", () => {
       ]),
     );
     expect(container.querySelector("main")).toHaveAttribute("data-density", "normal");
-    expect(
-      (container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows"),
-    ).toBe("3");
+    expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
+      "3",
+    );
   });
 
   it("splits into two compact columns around a dozen teams", async () => {
@@ -361,9 +361,9 @@ describe("DisplayPage scoreboard layout", () => {
     );
     // 12 teams -> two columns -> six rows per column -> "compact".
     expect(container.querySelector("main")).toHaveAttribute("data-density", "compact");
-    expect(
-      (container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows"),
-    ).toBe("6");
+    expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
+      "6",
+    );
   });
 
   it("tightens to a dense two-column layout at 18 teams", async () => {
@@ -372,9 +372,9 @@ describe("DisplayPage scoreboard layout", () => {
     );
     // 18 teams -> two columns -> nine rows per column -> "dense".
     expect(container.querySelector("main")).toHaveAttribute("data-density", "dense");
-    expect(
-      (container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows"),
-    ).toBe("9");
+    expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
+      "9",
+    );
   });
 
   it("orders teams by score so the podium is the top three scorers", async () => {
