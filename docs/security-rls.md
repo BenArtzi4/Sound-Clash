@@ -40,12 +40,13 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `active_games`  | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_teams`    | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_rounds`   | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
+| `game_round_attempts` *(mig 037)* | ❌ (analytics-only) | ❌ | ❌ | ❌ |
 | `game_secrets` *(mig 034)*        | ❌ (**host credential**) | ❌ | ❌ | ❌ |
 | `game_history` *(mig 033)*        | ❌ (operator-only) | ❌ | ❌ | ❌ |
 | `game_history_teams` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 | `game_history_songs` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 
-`service_role` bypasses all RLS. The tables `anon` cannot read are `game_secrets` (mig 034) and the durable `game_history*` tables (mig 033): each has RLS enabled with no read policy and no anon `GRANT`. **`game_secrets` holds the per-game `manager_token`** — it was moved off `active_games` (mig 034) precisely because `active_games` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate. `game_secrets` is also deliberately **not** in the Realtime publication. The host-facing "export songs" feature reads the live ephemeral tables in the host's own session, not these.
+`service_role` bypasses all RLS. The tables `anon` cannot read are `game_secrets` (mig 034), the durable `game_history*` tables (mig 033), and `game_round_attempts` (mig 037 — the per-buzz analytics log; the app never reads it and it's not in the Realtime publication, so it's locked to operators/service-role): each has RLS enabled with no read policy and no anon `GRANT`. **`game_secrets` holds the per-game `manager_token`** — it was moved off `active_games` (mig 034) precisely because `active_games` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate. `game_secrets` is also deliberately **not** in the Realtime publication. The host-facing "export songs" feature reads the live ephemeral tables in the host's own session, not these.
 
 | RPC function | anon EXECUTE | service_role EXECUTE |
 |---|---|---|
@@ -89,6 +90,11 @@ CREATE POLICY "anon_read_game_rounds"  ON game_rounds  FOR SELECT TO anon USING 
 ALTER TABLE game_history       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_history_teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_history_songs ENABLE ROW LEVEL SECURITY;
+
+-- Per-buzz analytics log (mig 016): same operator-only posture as of mig 037.
+-- RLS on with no policy; award_attempt inserts rows as the table owner (SECURITY
+-- DEFINER), so the deny-all policy never blocks the game.
+ALTER TABLE game_round_attempts ENABLE ROW LEVEL SECURITY;
 ```
 
 No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all writes are denied by default. No policy at all is created for the `game_history*` tables → anon reads are denied too.
@@ -117,12 +123,17 @@ GRANT SELECT, INSERT, UPDATE, DELETE
   ON game_history, game_history_teams, game_history_songs
   TO service_role;
 
+-- Per-buzz analytics log (mig 037): service_role read/insert only.
+GRANT SELECT, INSERT ON game_round_attempts TO service_role;
+
 -- Defense in depth: hosted Supabase auto-grants base privileges on every new
 -- public table to anon/authenticated. RLS-with-no-policy already denies anon
 -- every row, but we ALSO revoke the base privilege so anon gets a hard
 -- permission-denied rather than an RLS-empty result -- the privacy boundary
--- doesn't rest on RLS alone. No-op on a bare-Postgres stack.
-REVOKE ALL ON game_history, game_history_teams, game_history_songs
+-- doesn't rest on RLS alone. No-op on a bare-Postgres stack. game_round_attempts
+-- (mig 037) is added here: mig 016 created it with NO RLS, so on hosted Supabase
+-- anon could read/write it directly until this revoke landed.
+REVOKE ALL ON game_history, game_history_teams, game_history_songs, game_round_attempts
   FROM anon, authenticated;
 ```
 
@@ -158,6 +169,8 @@ For Sound Clash, `anon` can SELECT any game row → anon receives every game's e
 - Events contain no sensitive data (just team names and scores).
 
 If we ever add per-user scoping, RLS policies become more restrictive and Realtime auto-respects them.
+
+**Publication membership.** Only the three tables the frontend actually subscribes to — `active_games`, `game_teams`, `game_rounds` — are in the `supabase_realtime` publication. `game_secrets` (mig 034) and `game_round_attempts` (mig 037) are deliberately **out** of it: the former is a secret, the latter is an analytics log with no subscriber, so publishing it only burned Realtime quota (a full row WAL-decoded and broadcast on every scored buzz, for nobody). A future streaks feature would re-add `game_round_attempts` to the publication as part of that work.
 
 ## 4. Threat Model
 

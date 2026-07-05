@@ -24,7 +24,7 @@ Tiers below are the recommended build order once Phases 1–4 (perf + resilience
 
 ## Tier 3 — Medium impact, involves the DB / additive migration
 
-- **X-Streaks · Team streak "on fire" badge.** `[M, medium]` `game_round_attempts` already records every buzz outcome per team but the frontend never subscribes it. Add it as a 4th `postgres_changes` stream, derive consecutive-correct streaks, show a flame badge on the display. (Note: this re-introduces a subscriber for `game_round_attempts` — do it deliberately *after* I-AttemptsPub, re-adding the table to the publication as part of this feature.)
+- **X-Streaks · Team streak "on fire" badge.** `[M, medium]` `game_round_attempts` already records every buzz outcome per team but the frontend never subscribes it. Add it as a 4th `postgres_changes` stream, derive consecutive-correct streaks, show a flame badge on the display. (Note: this re-introduces a subscriber for `game_round_attempts` — do it deliberately *after* I-AttemptsPub. Migration 037 removed the table from the `supabase_realtime` publication and RLS-locked it (analytics-only, zero subscribers); this feature must re-add it to the publication **and** grant/loosen anon read via a new migration, as a deliberate part of the work.)
 - **X-GenreSpotlight · Per-round genre spotlight (+ optional roulette).** `[M, medium]` `select_next_song` already picks a random genre then song but discards which genre. Add the chosen genre name/slug to the `RETURNS TABLE` (purely additive `CREATE OR REPLACE`, PostgREST routing unchanged) so the display can announce "This round: 80s Rock." Roulette mode is a fun UI layer on top.
 
 ## Tier 4 — Strategic — OUT OF SCOPE for now (resolved 2026-07-04)

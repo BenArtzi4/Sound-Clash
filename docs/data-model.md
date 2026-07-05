@@ -286,13 +286,15 @@ Each round records `title_claimed_by`, `artist_claimed_by` (uuid refs to the tea
 
 ### `game_round_attempts`
 
-One row per `award_attempt` call: `(round_id, game_code, team_id, outcome, points_delta, created_at)`. `outcome` is one of `'title' | 'artist' | 'title_artist' | 'wrong'`. Insert-only; cascade-deletes with the round. Used to reconstruct per-buzz round detail (e.g. for a future "round breakdown" UI).
+One row per `award_attempt` call: `(round_id, game_code, team_id, outcome, points_delta, created_at)`. `outcome` is one of `'title' | 'artist' | 'title_artist' | 'wrong'`. Insert-only; cascade-deletes with the round. Used to reconstruct per-buzz round detail (e.g. for a future "round breakdown" or streaks UI).
+
+**Access (mig 037):** analytics-only. The app never reads this table, so it is **operator-only** — RLS enabled with no policy + no anon `GRANT` (same posture as `game_secrets` / `game_history*`) — and it is **not** in the `supabase_realtime` publication. Migration 016 originally published it (`REPLICA IDENTITY FULL`) and left it without RLS; mig 037 removed it from the publication (it had zero subscribers, so every scored buzz was WAL-decoded and broadcast for nothing) and locked it down. `award_attempt` still inserts rows because it runs SECURITY DEFINER as the table owner, bypassing RLS/GRANTs. A future streaks feature re-adds it to the publication deliberately.
 
 The 014 migration dropped `source_points` and `timeout_penalty` columns. The 016 migration retired the one-shot `award_points` model in favour of multi-buzz `award_attempt` + explicit `end_round`.
 
 ## 5. Row-Level Security (summary)
 
-Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the `buzz_in` RPC (the only function `anon` is granted EXECUTE on). The durable history tables (`game_history*`, mig 033) are the exception: RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
+Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the `buzz_in` RPC (the only function `anon` is granted EXECUTE on). The exceptions are the durable history tables (`game_history*`, mig 033), the secret table (`game_secrets`, mig 034), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
 
 Full policy DDL and threat model: see **`security-rls.md`**.
 
@@ -338,7 +340,10 @@ db/migrations/
 ├── 017_free_guess_flag.sql   -- per-round free-guess flag; waives -3 after first correct
 │   … 018–032: manager-token RPCs, browser-direct RPC migration, soundtrack/decade filters, etc.
 ├── 033_game_history.sql      -- durable game-history archive: game_history*, archive_game(); end_game + cleanup sweep into it
-└── 034_game_secrets.sql      -- move manager_token off active_games into anon-invisible game_secrets (D-1 leak fix)
+├── 034_game_secrets.sql      -- move manager_token off active_games into anon-invisible game_secrets (D-1 leak fix)
+├── 035_buzz_in_drop_round_update.sql   -- drop the dead game_rounds.buzzed_team_id mirror-write from buzz_in
+├── 036_award_attempt_collapse_writes.sql -- collapse award_attempt's per-round writes into one UPDATE...RETURNING
+└── 037_lock_down_game_round_attempts.sql -- remove game_round_attempts from the Realtime publication + enable RLS
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
