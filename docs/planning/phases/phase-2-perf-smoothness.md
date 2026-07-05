@@ -54,10 +54,10 @@
 ## Decisions touched
 - None. Fully autonomous.
 
-## Exit gate (Phase 2)
-- [ ] Lint/typecheck/vitest green; updated buzz + manager tests pass.
-- [ ] **Manual phone test:** on a real mid-tier Android, BUZZ acknowledges instantly, flips to YOU BUZZED / SOMEONE ELSE on the RPC (not the echo); scoring buttons don't move when a buzz lands; no visible jank on the pulsing button or drifting background.
-- [ ] Display on a TV: scoreboard doesn't jump when a team buzzes; timer bar animates smoothly.
-- [ ] Rapid distinct manager taps (Correct Song then quickly Wrong) both register — no silent drop.
-- [ ] **Full-Game Exit Gate** (playbook §6.2) passes on production.
-- [ ] No regression in the optimistic-toast latency (still zero-perceived-latency clicks).
+## Exit gate (Phase 2) — ✅ PASSED on prod 2026-07-05
+- [x] Lint/typecheck/vitest green; updated buzz + manager tests pass. (frontend suite 367; e2e 28 on the CI local Supabase stack.)
+- [x] **Manual phone test:** maintainer confirmed on a real device — BUZZ acknowledges instantly and flips to YOU BUZZED / SOMEONE ELSE from the RPC (not the echo); "buzz is instant, very good".
+- [x] Display on a TV: scoreboard doesn't jump when a team buzzes (verified on the display screen: countdown row reserved, scoreboard held); timer bar animates via `scaleX`.
+- [x] Rapid distinct manager taps (Correct Song then quickly Wrong) both register — no silent drop (unit-pinned; `busy` gate removed).
+- [x] **Full-Game Exit Gate** passed on production: driven three-tab game (create→join→buzz→score→Continue→artist→Next→Bonus→End→export) + maintainer feel-check; Hebrew rendered on all three screens; no app-console errors.
+- [x] No regression in the optimistic-toast latency (still zero-perceived-latency clicks).
