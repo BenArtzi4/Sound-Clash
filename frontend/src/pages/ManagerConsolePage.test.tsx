@@ -374,6 +374,26 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByTestId("score-wrong")).toBeEnabled();
   });
 
+  it("shows the reserved status strip idle copy while playing with no buzz", async () => {
+    // The strip is always mounted during play (fixed height) so the scoring
+    // buttons don't move when a buzz lands; when nobody is buzzed it reads the
+    // idle prompt rather than being absent.
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: null,
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByText(/waiting for a buzz/i)).toBeInTheDocument();
+  });
+
   it("Correct Song fires awardAttemptDirect with title_correct=true and toasts +10 immediately", async () => {
     setHydrate({
       game: makeActiveGame({

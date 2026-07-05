@@ -178,6 +178,17 @@
   border-color: var(--color-border-strong);
 }
 
+/* Fixed-height reservation for the countdown so the scoreboard never jumps
+   when a buzz lands and the timer mounts. Sized comfortably above the rendered
+   .timer height (padding + the 2rem value line + border); a couple px of extra
+   whitespace is invisible on a TV, an undershoot would reintroduce the jump. */
+.timerSlot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 88px;
+}
+
 .timer {
   --timer-pct: 100%;
   display: flex;
