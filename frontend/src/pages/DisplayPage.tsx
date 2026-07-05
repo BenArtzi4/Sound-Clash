@@ -75,6 +75,18 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const { state, status } = useGameChannel(gameCode);
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  // Track the frame height so the QR footer can shrink on short / OS-scaled
+  // laptop displays instead of starving the scoreboard (the CSS grid already
+  // shrinks the rows to fit, but a 220px QR block on a 720px frame left the
+  // standings almost no room).
+  const [viewportHeight, setViewportHeight] = useState(
+    typeof window !== "undefined" ? window.innerHeight : 1080,
+  );
+  useEffect(() => {
+    const onResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const prevScoresRef = useRef<Record<string, number>>({});
   const eventSeqRef = useRef(0);
 
@@ -174,7 +186,18 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const scoreColumns = teamCount > 8 ? 2 : 1;
   const rowsPerColumn = Math.max(1, Math.ceil(teamCount / scoreColumns));
   const density = rowsPerColumn <= 5 ? "normal" : rowsPerColumn <= 8 ? "compact" : "dense";
-  const qrSize = density === "dense" ? 132 : density === "compact" ? 160 : 176;
+  // QR shrinks on shorter (often OS-scaled) laptop frames so the footer doesn't
+  // starve the scoreboard; on a tall projector it stays large and scannable.
+  const qrSize =
+    viewportHeight < 700
+      ? 96
+      : viewportHeight < 820
+        ? 118
+        : viewportHeight < 950
+          ? 140
+          : density === "dense"
+            ? 148
+            : 172;
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
   const round = state.currentRound;
   const titleClaimedById = round?.title_claimed_by ?? null;
