@@ -855,10 +855,27 @@ export function ManagerConsolePage() {
             </div>
           ) : null}
 
-          {lockedTeam ? (
-            <div className={styles.lockedBanner} role="status" aria-live="polite">
-              <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in. Score the
-              answer:
+          {/* Reserved status strip: during play this is always mounted at a
+              fixed height, so the scoring buttons never shift when a buzz
+              lands (previously a conditionally-mounted banner pushed the row
+              down). Locked and idle share the same box metrics; only the
+              colour + text change. Keep the "buzzed in" wording so the status
+              stays greppable for the e2e/unit assertions. */}
+          {game.status === "playing" ? (
+            <div
+              className={`${styles.statusStrip} ${
+                lockedTeam ? styles.statusStripLocked : styles.statusStripWaiting
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              {lockedTeam ? (
+                <>
+                  <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score it:
+                </>
+              ) : (
+                "Waiting for a buzz…"
+              )}
             </div>
           ) : null}
 

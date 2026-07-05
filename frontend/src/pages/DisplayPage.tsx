@@ -284,8 +284,15 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         </div>
       ) : null}
 
-      {timerActive && lockedAt ? (
-        <RoundCountdown lockedAt={lockedAt} durationSec={ANSWER_DURATION_SEC} styles={styles} />
+      {/* Reserve the countdown row's height for the whole playing phase so the
+          scoreboard below doesn't jump down the moment a team buzzes and the
+          timer appears. The timer itself only renders while a buzz is held. */}
+      {game.status === "playing" ? (
+        <div className={styles.timerSlot}>
+          {timerActive && lockedAt ? (
+            <RoundCountdown lockedAt={lockedAt} durationSec={ANSWER_DURATION_SEC} styles={styles} />
+          ) : null}
+        </div>
       ) : null}
 
       <div className={styles.scores}>

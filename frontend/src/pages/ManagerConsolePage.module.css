@@ -235,15 +235,36 @@
   }
 }
 
-.lockedBanner {
-  padding: 0.85rem 1.1rem;
+/* Reserved status strip. Always mounted during play at a fixed min-height so
+   the scoring buttons below never move when a buzz lands. The locked and
+   waiting variants share identical box metrics (padding, min-height, border
+   width) — only the colour changes — so the strip's height is constant across
+   the transition. */
+.statusStrip {
+  display: flex;
+  align-items: center;
+  min-height: 3.25rem;
+  padding: 0.75rem 1.1rem;
+  border: 2px solid transparent;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(251, 191, 36, 0.08) 100%);
-  border: 2px solid var(--color-warning);
-  font-weight: 600;
-  color: #92400e;
   font-size: 1rem;
+  font-weight: 600;
   margin-bottom: 0.85rem;
+  transition:
+    background 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+
+.statusStripLocked {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(251, 191, 36, 0.08) 100%);
+  border-color: var(--color-warning);
+  color: #92400e;
+}
+
+.statusStripWaiting {
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--color-text-mute);
 }
 
 .lockedTeam {
