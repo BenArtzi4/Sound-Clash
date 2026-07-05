@@ -57,6 +57,14 @@
   background: var(--color-card);
 }
 
+/* Dim the existing rows while a refetch is in flight (stale-while-revalidate)
+   instead of replacing them with skeletons — the table stays readable and
+   doesn't flash empty on every filter/page change. */
+.tableStale {
+  opacity: 0.5;
+  transition: opacity 150ms ease;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

@@ -372,8 +372,14 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
         />
       ) : null}
 
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
+      <div className={styles.tableWrap} aria-busy={loading}>
+        {/* Stale-while-revalidate: on a filter/page change we keep the current
+            rows on screen (dimmed) while refetching, instead of blanking the
+            whole table back to skeletons. Skeletons show only on the very first
+            load, when there are no rows to keep. */}
+        <table
+          className={`${styles.table} ${loading && songs.length > 0 ? styles.tableStale : ""}`}
+        >
           <thead>
             <tr>
               <th>Title</th>
@@ -386,7 +392,7 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && songs.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={`s-${i}`}>
                   <td>
@@ -471,7 +477,7 @@ function SongsConsole({ pw, onAuthFail, onSignOut }: SongsConsoleProps) {
         </table>
       </div>
 
-      {!loading && total > 0 ? (
+      {total > 0 ? (
         <div className={styles.pagination}>
           <button
             type="button"

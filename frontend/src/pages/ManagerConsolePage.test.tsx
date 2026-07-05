@@ -249,12 +249,15 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    const startBtn = screen.getByRole("button", { name: /start game/i });
+    const startBtn = screen.getByTestId("start-round");
     expect(startBtn).toBeDisabled();
+    // While the player is still constructing, the button reads as progress.
+    expect(startBtn).toHaveTextContent(/loading player/i);
     act(() => {
       onReadyHandler?.();
     });
     await waitFor(() => expect(startBtn).toBeEnabled());
+    expect(startBtn).toHaveTextContent(/start game/i);
   });
 
   it("calls selectNextSongDirect with the manager token when Start is pressed", async () => {
