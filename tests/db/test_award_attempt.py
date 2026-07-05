@@ -368,6 +368,75 @@ async def test_award_attempt_free_guess_reactivates_on_subsequent_correct(
     assert rows[0]["points_delta"] == 0
 
 
+# ----- migration 036: collapse writes into one combined UPDATE ---------------
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_combined_update_preserves_unset_columns(
+    db: asyncpg.Connection,
+) -> None:
+    """Migration 036 folds the per-token writes into one CASE-based UPDATE. A
+    title-only attempt must set title_claimed_by/title_points + free_guess_active
+    while leaving the artist columns and wrong_buzz_penalty untouched; a later
+    wrong on the same round must flip free_guess_active off and stamp the penalty
+    while KEEPING the earlier title claim."""
+    game_code = await create_test_game(db, status="playing")
+    t1 = await create_test_team(db, game_code, name="T1")
+    t2 = await create_test_team(db, game_code, name="T2")
+    round_id = await _start_round_and_buzz(db, game_code, t1)
+
+    await _attempt(db, game_code, round_id, 10, 0, 0)
+    row = await db.fetchrow(
+        "SELECT title_claimed_by, title_points, artist_claimed_by, artist_points, "
+        "wrong_buzz_penalty, free_guess_active FROM game_rounds WHERE id = $1",
+        round_id,
+    )
+    assert row["title_claimed_by"] == t1
+    assert row["title_points"] == 10
+    assert row["artist_claimed_by"] is None      # untouched by a title-only attempt
+    assert row["artist_points"] == 0
+    assert row["wrong_buzz_penalty"] == 0
+    assert row["free_guess_active"] is True       # armed by the correct attempt
+
+    # A wrong on the same round: penalty is waived (free-guess), free_guess flips
+    # off, and the earlier title claim is preserved (CASE ELSE keeps it).
+    await _force_buzz(db, game_code, round_id, t2)
+    await _attempt(db, game_code, round_id, 0, 0, 3)
+    row2 = await db.fetchrow(
+        "SELECT title_claimed_by, wrong_buzz_penalty, free_guess_active "
+        "FROM game_rounds WHERE id = $1",
+        round_id,
+    )
+    assert row2["title_claimed_by"] == t1         # unchanged
+    assert row2["wrong_buzz_penalty"] == 3
+    assert row2["free_guess_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_award_attempt_noop_continue_writes_nothing_to_round(
+    db: asyncpg.Connection,
+) -> None:
+    """A no-toggle, no-wrong call with free_guess already false must not write
+    game_rounds at all (mig 036): the round row is byte-identical afterwards, so
+    no redundant ROUND_CHANGE is fanned out."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+    round_id = await _start_round_and_buzz(db, game_code, team_id)
+
+    before = await db.fetchrow(
+        "SELECT title_claimed_by, artist_claimed_by, title_points, artist_points, "
+        "wrong_buzz_penalty, free_guess_active FROM game_rounds WHERE id = $1",
+        round_id,
+    )
+    await _attempt(db, game_code, round_id, 0, 0, 0)
+    after = await db.fetchrow(
+        "SELECT title_claimed_by, artist_claimed_by, title_points, artist_points, "
+        "wrong_buzz_penalty, free_guess_active FROM game_rounds WHERE id = $1",
+        round_id,
+    )
+    assert dict(before) == dict(after)
+
+
 # ----- migration 018: split scoring from buzz-lock release ------------------
 
 
