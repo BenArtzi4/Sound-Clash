@@ -7,7 +7,7 @@ vi.mock("../lib/supabase", async () => {
 });
 
 import type { ActiveGame, GameRound, Team } from "../lib/types";
-import { gameReducer, useGameChannel } from "./useGameChannel";
+import { gameReducer, RESYNC_INTERVAL_MS, useGameChannel } from "./useGameChannel";
 import {
   channelMock,
   fireGame,
@@ -529,6 +529,40 @@ describe("useGameChannel - subscription", () => {
     await waitFor(() => expect(result.current.status).toBe("gone"));
   });
 
+  it("tears down the resync interval + channel once the game is gone", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const game = makeActiveGame();
+      setHydrate({ game, teams: [], rounds: [] });
+      renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const callsBeforeGone = supabaseMock.from.mock.calls.length;
+      supabaseMock.removeChannel.mockClear();
+
+      // Game row deleted -> status gone -> the live plumbing is torn down.
+      act(() => {
+        fireGame(
+          makePayload<ActiveGame>("active_games", "DELETE", {
+            old: { game_code: "ABCDEF" },
+          }),
+        );
+      });
+      expect(supabaseMock.removeChannel).toHaveBeenCalled();
+
+      // Advancing well past the backstop interval must NOT trigger any further
+      // hydrate: the interval was cleared on teardown, so an overnight display
+      // on an ended game stops polling instead of hitting the DB forever.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RESYNC_INTERVAL_MS * 2 + 1000);
+      });
+      expect(supabaseMock.from.mock.calls.length).toBe(callsBeforeGone);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("flips to reconnecting on CHANNEL_ERROR", async () => {
     const { result } = renderHook(() => useGameChannel("ABCDEF"));
     await act(async () => {
@@ -596,10 +630,10 @@ describe("useGameChannel - subscription", () => {
         await fireSubscribed();
       });
       const callsAfterInit = supabaseMock.from.mock.calls.length;
-      // Tick past one resync interval (20s); the inner setInterval callback
-      // should fire and run hydrate() once.
+      // Tick past one resync interval; the inner setInterval callback should
+      // fire and run hydrate() once.
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(20_500);
+        await vi.advanceTimersByTimeAsync(RESYNC_INTERVAL_MS + 500);
       });
       // Each hydrate hits the three ephemeral tables.
       expect(supabaseMock.from.mock.calls.length).toBe(callsAfterInit + 3);

@@ -17,12 +17,17 @@ export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting
 // drops a postgres_changes event (flaky networks, a missed heartbeat that
 // silently re-joins, the free tier under load) — and a missed "a team buzzed"
 // event would strand the manager with greyed-out scoring buttons until the
-// next state change. So every 20 seconds we re-hydrate from the tables; the
+// next state change. So on a cadence we re-hydrate from the tables; the
 // reducer's HYDRATE skips the dispatch when nothing material changed, so a
-// quiet round costs ~3 REST queries per 20s with zero re-renders. Migrations
-// 009/010 fixed the original Realtime-event-loss bugs, so the resync is now a
-// true safety net, not the primary sync path.
-const RESYNC_INTERVAL_MS = 20_000;
+// quiet round costs ~3 REST queries per tick with zero re-renders.
+//
+// Migrations 009/010 fixed the original Realtime-event-loss bugs, so the resync
+// is a true safety net, not the primary sync path. It was 20s; at 60s it does
+// ~3× fewer backstop queries per visible client (a 6-team game drops from
+// ~1.2 to ~0.4 q/s) while still catching a genuinely dropped event within a
+// minute — comfortably faster than a human notices a stuck button. Exported so
+// the test can advance fake timers by exactly one interval.
+export const RESYNC_INTERVAL_MS = 60_000;
 
 // Explicit column list for the active_games hydrate — every field the reducer
 // reads, and nothing else. Deliberately NOT `select("*")`: the per-game
@@ -184,6 +189,12 @@ export function useGameChannel(gameCode: string): {
     if (!gameCode) return;
     let cancelled = false;
     let hydrated = false;
+    // Set once the game is permanently gone (row deleted / missing). Stops the
+    // backstop interval and tears the channel down so a display left open all
+    // night on an ended game doesn't keep polling + holding a subscription
+    // forever. Distinct from `cancelled` (which is unmount) — the component
+    // stays mounted showing the "ended" screen, we just stop the live plumbing.
+    let goneTornDown = false;
     // Realtime events that arrive between SUBSCRIBED and HYDRATE land on
     // state===null and are dropped by the reducer's null guards. Queue them
     // here and replay after HYDRATE; gameReducer is idempotent so replay is safe.
@@ -226,7 +237,10 @@ export function useGameChannel(gameCode: string): {
             }
           }
           dispatchOrQueue({ type: "GAME_CHANGE", payload: typed });
-          if (typed.eventType === "DELETE") setStatus("gone");
+          if (typed.eventType === "DELETE") {
+            setStatus("gone");
+            teardownLive();
+          }
         },
       )
       .on(
@@ -296,12 +310,24 @@ export function useGameChannel(gameCode: string): {
         resyncId = null;
       }
     }
+    // The game is permanently gone: stop the backstop and drop the Realtime
+    // channel so we don't poll + hold a subscription for a game that no longer
+    // exists (an overnight display on an ended game was doing exactly that).
+    // Idempotent; the effect cleanup also removes the channel (harmless twice).
+    function teardownLive(): void {
+      if (goneTornDown) return;
+      goneTornDown = true;
+      stopResync();
+      void supabase.removeChannel(
+        channel as unknown as Parameters<typeof supabase.removeChannel>[0],
+      );
+    }
     // Pause the backstop on background tabs (display in another window, a
     // player who switched to another app). When the tab becomes visible
     // again we hydrate once immediately then resume the interval — so the
     // user never sees a stale snapshot when they return.
     function onVisibilityChange(): void {
-      if (cancelled) return;
+      if (cancelled || goneTornDown) return;
       if (document.hidden) {
         stopResync();
       } else {
@@ -341,6 +367,7 @@ export function useGameChannel(gameCode: string): {
             if (authoritative) {
               setStatus("gone");
               dispatch({ type: "GAME_DELETED" });
+              teardownLive();
             }
           } else {
             dispatch({
