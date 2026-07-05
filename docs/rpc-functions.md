@@ -2,7 +2,7 @@
 
 The eleven PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), and `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), and `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out).
 
 ## 0. Conventions
 
@@ -17,6 +17,11 @@ Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db
 The hot path. Called by browsers via PostgREST. <100ms RTT.
 
 ```sql
+-- Current body as of migration 035. Earlier (mig 011) the function also
+-- mirror-wrote game_rounds.buzzed_team_id for the since-retired award_points;
+-- that write was pure Realtime waste (game_rounds is published with REPLICA
+-- IDENTITY FULL, so it broadcast a no-op ROUND_CHANGE to every client on every
+-- buzz) and is dropped. Nothing reads game_rounds.buzzed_team_id now.
 CREATE OR REPLACE FUNCTION buzz_in(
   p_game_code char(6),
   p_team_id   uuid
@@ -27,30 +32,20 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_round_id  uuid;
   v_locked_at timestamptz;
 BEGIN
-  -- Atomic conditional UPDATE on active_games. RETURNING captures the
-  -- current_round_id so we can mirror the lock onto game_rounds, and
-  -- the resulting locked_at for the function's return value.
+  -- Atomic conditional UPDATE on active_games. Only the first concurrent caller
+  -- to satisfy buzzed_team_id IS NULL wins. RETURNING captures the resulting
+  -- locked_at for the function's return value.
   UPDATE active_games ag
      SET buzzed_team_id = p_team_id,
          locked_at      = now()
    WHERE ag.game_code = p_game_code
      AND ag.status = 'playing'
      AND ag.buzzed_team_id IS NULL
-  RETURNING ag.current_round_id, ag.locked_at INTO v_round_id, v_locked_at;
+  RETURNING ag.locked_at INTO v_locked_at;
 
   IF FOUND THEN
-    -- Mirror the lock onto the round so award_points can credit the
-    -- team. active_games.buzzed_team_id is reset to NULL after each
-    -- round; game_rounds.buzzed_team_id is the durable record.
-    IF v_round_id IS NOT NULL THEN
-      UPDATE game_rounds
-         SET buzzed_team_id = p_team_id
-       WHERE id = v_round_id;
-    END IF;
-
     RETURN QUERY SELECT true, p_team_id, v_locked_at;
   ELSE
     -- Lock already held or game not playable; return current state so
@@ -65,6 +60,8 @@ END $$;
 REVOKE ALL ON FUNCTION buzz_in(char, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
 ```
+
+The lock lives **only** on `active_games` (`buzzed_team_id` + `locked_at`). `game_rounds.buzzed_team_id` is a vestigial nullable column, no longer written by any function (see `data-model.md §4`).
 
 ### Race correctness
 
