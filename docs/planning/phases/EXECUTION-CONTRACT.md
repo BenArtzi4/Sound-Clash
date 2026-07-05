@@ -2,7 +2,7 @@
 
 This is the phase-agnostic kickoff. **To start a phase, paste a short prompt like:**
 
-> Start Phase 1 of the Sound Clash plan. Follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-1-perf-load.md`.
+> Start Phase 4 of the Sound Clash plan. Follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-4-resilience.md`.
 
 Everything below applies to **every** phase. The phase file supplies the tasks, the PR split (its `## ▶ Kickoff` block), and the phase-specific exit-gate bullets.
 

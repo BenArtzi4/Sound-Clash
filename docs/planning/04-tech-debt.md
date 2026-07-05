@@ -2,6 +2,8 @@
 
 Steady autonomous cleanup that makes the app easier to keep production-perfect. None is user-visible on its own (so most carry no CHANGELOG entry), but several remove real footguns. Effort S/M/L.
 
+> **Resolved items removed 2026-07-05:** T-KeepWarm (Phase 3 T3.5 — kept as documented visibility-aware fallback), T-DocRunbook (Phase 1 T1.6 — DR section corrected), T-AttemptsRLS (Phase 3 T3.3 / mig 037 — RLS on + anon revoked). Detail in git history.
+
 ---
 
 ## A. Code quality & simplification
@@ -11,7 +13,6 @@ Steady autonomous cleanup that makes the app easier to keep production-perfect. 
 - **T-Admin · Split `AdminSongsPage.tsx` (633 lines).** `[M/low]` Extract `SongTable`, `SongEditForm`, `useAdminSongs`. Also cleanly fixes the page-index clamp (prior finding) and enables I-Admin.
 - **T-SongFetch · De-duplicate the song-fetch block.** `[S]` The identical `as unknown as` cast is copy-pasted across DisplayPage and ManagerConsolePage. Add `fetchSongWithSoundtrack(songId)` to `lib/soundtrack.ts`; both pages call it. Consolidates the select string + cast to one tested spot.
 - **T-RpcError · Uniform RPC error shape.** `[S]` `useBuzzer` throws the raw PostgREST error while sibling hooks wrap `RpcError`, so shared error-branching/telemetry can't treat buzz uniformly. Add a `throwOnRpcError()` helper all five direct-RPC sites use.
-- **T-KeepWarm · Resolve the keep-warm redundancy.** `[S]` The cron-job.org keepalive already keeps Render warm 24/7, so the in-app 10-min pinger adds no warmth — it's a redundant second source of truth (and confuses future latency work). Decide: delete it and rely on the cron, or demote to a documented fallback with the immediate+visibility pings (I-Warm). Pick one and document why.
 - **T-Deps · Audit the 4 `react-hooks/exhaustive-deps` disables.** `[S]` `SongExport.tsx:90`, `DisplayPage.tsx:112`, `ManagerConsolePage.tsx:141,205` — the effects most prone to stale-closure bugs (song reload, prebuffer). Add explicit deps or ref-reads with a one-line reason each.
 
 ## B. Dead code & repo hygiene
@@ -41,11 +42,9 @@ Docs are the authoritative spec; these are bugs by the repo's own rule. Batch in
 - **T-DocRPC · `rpc-functions.md` caller matrix.** `[S]` Omits `peek_next_song`; §8 denies the in-body auth that five functions actually perform; documents removed REST endpoints.
 - **T-DocContracts · `api-contracts.md` status codes & anon surface.** `[S]` Claims already-ended game returns 409 on /bonus,/end (code returns 410 Gone); "only `buzz_in` exposed to anon"; documents removed `select-song`/`attempt`/`end-round`.
 - **T-DocGameRules · `game-rules.md` state table attributes host transitions to "(admin auth)"** — pre-open-hosting; it's `manager_token` now.
-- **T-DocRunbook · Correct the stale DR claim** (regenerable-from-CSV) — pairs with I-DR.
 - **T-Roadmap · Reconcile roadmap "Out of Scope."** Game history archive shipped (mig 033) despite being listed out-of-scope; song export shipped. Update the list.
 
 ## F. Schema hygiene
 
 - **T-YoutubeUnique · `UNIQUE` on `songs.youtube_id`.** `[M]` The de-facto natural key has no constraint; all dedup is race-prone app-side check-then-insert. Requires a one-time dedup pass on prod's ~1025 rows first, then add the unique index. Relates to **#146 (ISRC dedup)** — decide whether ISRC supersedes this (D-8). Makes the invariant structural.
 - **T-TotalRounds · Drop the orphan `active_games.total_rounds`.** `[S]` Mig 015 promised the drop; it never landed. No code reads it. Drop it and sync data-model.md.
-- **T-AttemptsRLS · Enable RLS + revoke anon on `game_round_attempts`.** `[S]` Mig 016 created it with no RLS/policy/revoke; on hosted Supabase anon can read/write it directly. Add `ENABLE ROW LEVEL SECURITY` + revoke, matching the other tables. (Security-adjacent but low blast radius — scores live elsewhere.)
