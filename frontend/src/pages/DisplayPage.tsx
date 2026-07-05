@@ -319,19 +319,28 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           </div>
         ) : (
           <ol className={styles.bigList} style={{ "--rows": rowsPerColumn } as CSSProperties}>
-            {teams.map((t, i) => (
-              <li
-                key={t.id}
-                data-team-id={t.id}
-                className={`${styles.bigRow} ${
-                  t.id === game.buzzed_team_id ? styles.bigRowBuzzed : ""
-                }`}
-              >
-                <span className={styles.bigRank}>{i + 1}</span>
-                <span className={styles.bigName}>{t.name}</span>
-                <span className={styles.bigScore}>{t.score}</span>
-              </li>
-            ))}
+            {teams.map((t, i) => {
+              // Podium colors for the top three — but only once a team has
+              // actually scored, so the board doesn't hand out medals while
+              // everyone is still tied at 0 at the start of the game.
+              const medal =
+                t.score > 0 && i < 3
+                  ? [styles.bigRowGold, styles.bigRowSilver, styles.bigRowBronze][i]
+                  : "";
+              return (
+                <li
+                  key={t.id}
+                  data-team-id={t.id}
+                  className={`${styles.bigRow} ${medal} ${
+                    t.id === game.buzzed_team_id ? styles.bigRowBuzzed : ""
+                  }`}
+                >
+                  <span className={styles.bigRank}>{i + 1}</span>
+                  <span className={styles.bigName}>{t.name}</span>
+                  <span className={styles.bigScore}>{t.score}</span>
+                </li>
+              );
+            })}
           </ol>
         )}
       </div>

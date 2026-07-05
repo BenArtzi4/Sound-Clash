@@ -280,6 +280,57 @@
     box-shadow 250ms ease;
 }
 
+/* Podium colors for the top three teams (display only). Declared BEFORE the
+   .bigRowBuzzed rules so a live buzz still takes over the row's highlight, and
+   only applied once a team has scored (see DisplayPage.tsx). Border stays 1px
+   (recolored) so medal rows don't shift against the rest of the column. */
+.bigRowGold {
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.4) 0%, #ffffff 72%);
+  border-color: #eab308;
+  box-shadow: 0 6px 20px rgba(234, 179, 8, 0.28);
+}
+
+.bigRowSilver {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.4) 0%, #ffffff 72%);
+  border-color: #94a3b8;
+}
+
+.bigRowBronze {
+  background: linear-gradient(90deg, rgba(205, 127, 50, 0.34) 0%, #ffffff 72%);
+  border-color: #c2703a;
+}
+
+.bigRowGold .bigRank,
+.bigRowSilver .bigRank,
+.bigRowBronze .bigRank {
+  font-weight: 900;
+}
+
+.bigRowGold .bigRank {
+  color: #a16207;
+}
+
+.bigRowSilver .bigRank {
+  color: #475569;
+}
+
+.bigRowBronze .bigRank {
+  color: #9a3412;
+}
+
+/* Medal emblem in front of the rank number — instantly legible across a room. */
+.bigRowGold .bigRank::before {
+  content: "🥇 ";
+}
+
+.bigRowSilver .bigRank::before {
+  content: "🥈 ";
+}
+
+.bigRowBronze .bigRank::before {
+  content: "🥉 ";
+}
+
 .bigRowBuzzed {
   border-color: var(--color-warning);
   background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, #ffffff 80%);

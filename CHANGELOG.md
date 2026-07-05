@@ -6,6 +6,10 @@ This project does not currently cut versioned releases; every change lands direc
 
 ## [Unreleased]
 
+### Added
+
+- 2026-07-05: **The big-screen scoreboard now highlights the podium.** The top three teams get gold, silver, and bronze rows — each with a 🥇/🥈/🥉 medal — so the leaders pop at a glance from across the room. Medals only appear once a team has actually scored, so nobody is crowned while everyone is still tied at 0. Display only.
+
 ### Changed
 
 - 2026-07-05: **The next song's name appears the instant you advance.** On the host console's fast path (where the upcoming song is already prebuffered), tapping **Next round** now updates the round card to the new song's title/artist immediately — the audio already started instantly, but the card used to keep showing the *previous* song's name for the ~150ms until the server responded. Now the name and the sound land together.
