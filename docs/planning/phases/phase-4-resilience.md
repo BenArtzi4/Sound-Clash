@@ -17,7 +17,13 @@
 
 ## Tasks
 
+### T4.0 · Deploy-safe chunk loading (do first) `[S]` — F-P0-3 (orphaned P0)
+- [ ] `window.addEventListener('vite:preloadError', …)` → `location.reload()` once, guarded by a `sessionStorage` flag against reload loops (a stale content-hashed chunk 200s as `index.html` after a Cloudflare deploy → failed dynamic import → blank white screen mid-party; routes are `React.lazy`, so join → `/team/:code` is the classic trigger).
+- [ ] Add a route-level `ErrorBoundary` (App has none) with a "reload" CTA as the backstop.
+- [ ] Test (T-DeployTest): simulate a failed dynamic import → reload. This removes the "never deploy during a game" operational caveat entirely — **highest-value single fix for a live party**.
+
 ### T4.1 · Dead-video handling + Skip `[S–M]` — F-P1-4, `I-Skip`, X-Skip
+> Note: the persistent inline "Video unavailable" state is already shipped (`YouTubePlayer.tsx`); what remains is the one-tap **Skip song** button + the errored-`youtube_id` blocklist.
 - [ ] Persistent inline "Video unavailable" state on the manager when the live player errors (don't rely on the auto-dismiss toast).
 - [ ] One-tap **Skip song** button → `select_next_song`, not counting the dead song against anything meaningful.
 - [ ] Blocklist the errored `youtube_id` for the game so peek/select can't re-pick it (client-side exclude set passed to peek; or a small server-side exclusion).

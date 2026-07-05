@@ -14,6 +14,7 @@ The maintainer's stated goal: make the game **load fast, respond instantly, and 
 
 | File | What it holds |
 |---|---|
+| [NEXT-SESSION.md](NEXT-SESSION.md) | **Start here** — ready-to-paste handoff for the next session (current state + Phase 4 plan + env traps) |
 | [execution-playbook.md](execution-playbook.md) | **Process**: session protocol, git/PR mechanics, when to use ultracode workflows, the exit-gate definitions |
 | [00-current-state.md](00-current-state.md) | How the whole system works today + the review's headline conclusions |
 | [01-fixes.md](01-fixes.md) | Confirmed bugs, ranked P0/P1/P2, with evidence + fix sketch |
@@ -44,7 +45,7 @@ _Updated: 2026-07-05 — Phase 3 ✅ COMPLETE (PRs #166–#173; migrations 035�
 | 7 | Tech-debt & test hardening | ⏳ ready (autonomous) |
 | 8 | Features | ⏳ ready (Tier-1/2/3 in scope; Tier-4 deferred) |
 
-**Next action:** execute **Phase 4** (resilience: mid-game failure modes — autonomous). Phase 3 (backend-path & Realtime economics) shipped as PRs #166–#173 with migrations 035–038 applied + verified on prod, and passed its Full-Game Exit Gate on prod; the item deferred from Phase 2, `I-NextMeta` (peek RPC now returns title/artist/is_soundtrack, rendered in-gesture on the Next-round fast path), landed in PR #172. Recommended order from here: 4, interleaving 6/7; 5 and 8 proceed per the resolved decisions. Carryover maintainer follow-ups from Phase 1 remain (Grafana/Supabase Realtime alerts; optional DB-password/`sb_secret_` rotation).
+**Next action:** execute **Phase 4** (resilience: mid-game failure modes — autonomous). Phase 3 (backend-path & Realtime economics) shipped as PRs #166–#173 with migrations 035–038 applied + verified on prod, and passed its Full-Game Exit Gate on prod; the item deferred from Phase 2, `I-NextMeta` (peek RPC now returns title/artist/is_soundtrack, rendered in-gesture on the Next-round fast path), landed in PR #172. Recommended order from here: 4, interleaving 6/7; 5 and 8 proceed per the resolved decisions. Carryover maintainer follow-ups from Phase 1 remain (Grafana/Supabase Realtime alerts; optional DB-password/`sb_secret_` rotation). **See [NEXT-SESSION.md](NEXT-SESSION.md) for the ready-to-paste kickoff** — start with **T4.0 / F-P0-3** (the lone open P0: deploy-during-game blanks the screen).
 
 ## The one rule
 
