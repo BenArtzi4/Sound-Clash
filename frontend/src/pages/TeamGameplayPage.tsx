@@ -111,6 +111,11 @@ export function TeamGameplayPage() {
       if (buzzer.isBuzzing) return { tone: "pending", label: "BUZZED!" };
       return { tone: "idle", label: "BUZZ" };
     }
+    // Game not playing yet — distinguish "still connecting" from "connected but
+    // the host hasn't started" so the wait reads as progress, not a stall.
+    if (status === "reconnecting")
+      return { tone: "waiting", label: "RECONNECTING…", subtitle: "hold tight" };
+    if (!state || status === "connecting") return { tone: "waiting", label: "CONNECTING…" };
     return { tone: "waiting", label: "WAITING", subtitle: "for the game to start" };
   })();
 

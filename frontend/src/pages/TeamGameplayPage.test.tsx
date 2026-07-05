@@ -9,6 +9,7 @@ vi.mock("../lib/supabase", async () => {
 
 import { _resetServerTime } from "../hooks/useServerTime";
 import {
+  fireStatus,
   fireSubscribed,
   fireTeam,
   makeActiveGame,
@@ -263,6 +264,40 @@ describe("TeamGameplayPage", () => {
     });
     const pill = await screen.findByTestId("point-change");
     expect(pill).toHaveTextContent("-3");
+  });
+
+  it("reads CONNECTING… before the channel subscribes", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    // No fireSubscribed: the channel is still connecting, so the button reads
+    // as progress rather than the wrong "WAITING for the game to start".
+    renderAt("/team/ABCDEF");
+    await waitFor(() => expect(screen.getByTestId("buzz")).toHaveTextContent(/connecting/i));
+  });
+
+  it("reads RECONNECTING… when the channel drops before the game starts", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "waiting" }),
+      teams: [makeTeam({ id: "team-1", name: "Alice" })],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const buzz = screen.getByTestId("buzz");
+    await waitFor(() => expect(buzz).toHaveTextContent(/waiting/i));
+    // Realtime drops before the host has started the game.
+    await act(async () => {
+      await fireStatus("CHANNEL_ERROR");
+    });
+    expect(buzz).toHaveTextContent(/reconnecting/i);
   });
 
   it("flips to the winner tone from the buzz_in result before any Realtime echo", async () => {
