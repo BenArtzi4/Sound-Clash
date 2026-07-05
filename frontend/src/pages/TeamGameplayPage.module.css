@@ -43,8 +43,10 @@
   align-items: center;
   gap: 0.45rem;
   padding: 0.3rem 0.7rem;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(6px);
+  /* No backdrop-filter: blur() here — it forces a compositing layer that reads
+     back the pixels behind it every frame, one of the most expensive effects on
+     mobile. A slightly more opaque flat fill keeps the name legible for free. */
+  background: rgba(15, 23, 42, 0.62);
   border-radius: var(--radius-pill);
   pointer-events: none;
   max-width: calc(100vw - 1.2rem);

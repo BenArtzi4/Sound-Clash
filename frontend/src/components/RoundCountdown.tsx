@@ -29,7 +29,12 @@ export function RoundCountdown({ lockedAt, durationSec, styles, withSrAnnouncer 
   return (
     <div
       className={`${styles.timer} ${remainingSec <= 5 ? styles.timerLow : ""}`}
-      style={{ "--timer-pct": `${timerPct}%` } as CSSProperties}
+      // `--timer-pct` (percentage) still drives the manager ring's conic-gradient;
+      // `--timer-scale` (0-1) drives the display fill via transform: scaleX so the
+      // bar animates on the compositor instead of relaying out its `width`.
+      style={
+        { "--timer-pct": `${timerPct}%`, "--timer-scale": `${timerPct / 100}` } as CSSProperties
+      }
       role="timer"
       aria-label="Time remaining"
     >
