@@ -100,6 +100,16 @@ Free, no quotas relevant to this project.
 | Cron jobs | 50 | Use 1 |
 | Min interval | 1 minute | We use 14 min |
 
+This 24/7 cron is the **primary** Render keepalive. The frontend `useKeepBackendWarm`
+hook (manager console only, while a game is `waiting`/`playing`) is a deliberate
+**visibility-aware fallback** on top of it (T-KeepWarm decision, Phase 3): it pings
+`/health` immediately on mount, on `visibilitychange → visible`, and every 10 min.
+The mount + on-visible pings cover the two cases the cron cannot: a host who
+deep-links straight into `/manager/game/<code>`, and a phone whose background timers
+were frozen while asleep and returns to a possibly-cold dyno right at Bonus/End.
+`/health` is unlimited + unauthenticated (§6), so the handful of extra GETs per game
+is free; if the cron is ever paused/misconfigured this is the safety net.
+
 ### 2.8 Domain (paid; not free)
 
 `soundclash.org` registration ~$10–15 / yr. The only non-free cost.
