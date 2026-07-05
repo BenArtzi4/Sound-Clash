@@ -24,12 +24,21 @@ export interface PeekedSong {
   song_id: string;
   youtube_id: string;
   start_time: number;
+  // Metadata (migration 038) so the Next-round fast path can render the new
+  // song's card in-gesture (I-NextMeta) instead of showing the previous title
+  // until select_next_song resolves.
+  title: string;
+  artist: string;
+  is_soundtrack: boolean;
 }
 
 interface PeekNextSongRow {
   song_id: string;
   youtube_id: string;
   start_time: number;
+  song_title: string;
+  song_artist: string;
+  is_soundtrack: boolean;
 }
 
 export async function peekNextSongDirect(
@@ -53,5 +62,8 @@ export async function peekNextSongDirect(
     song_id: row.song_id,
     youtube_id: row.youtube_id,
     start_time: row.start_time,
+    title: row.song_title,
+    artist: row.song_artist,
+    is_soundtrack: row.is_soundtrack,
   };
 }

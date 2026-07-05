@@ -127,6 +127,36 @@ async def test_peek_returns_an_unplayed_song_in_selected_genres(
 
 
 @pytest.mark.asyncio
+async def test_peek_returns_song_metadata(db: asyncpg.Connection) -> None:
+    """Migration 038: peek also returns song_title / song_artist / is_soundtrack
+    (computed the same way select_next_song computes it) so the manager fast path
+    can render the new song's card in-gesture instead of showing the old title
+    until the RPC resolves."""
+    game_code = await create_test_game(db, status="playing")
+    rock = (await _genre_ids(db, "rock"))[0]
+    await _set_selected_genres(db, game_code, [rock])
+    sid = await create_test_song(
+        db, title="My Song", artist="My Artist", youtube_id=uuid.uuid4().hex[:11]
+    )
+    await _attach_song_to_genre(db, sid, rock)
+    token = await fetch_manager_token(db, game_code)
+
+    rows = await db.fetch(
+        "SELECT song_id, youtube_id, start_time, song_title, song_artist, is_soundtrack "
+        "FROM peek_next_song($1, $2)",
+        game_code,
+        token,
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["song_id"] == sid
+    assert row["song_title"] == "My Song"
+    assert row["song_artist"] == "My Artist"
+    # A plain rock song is not a soundtrack; the flag is computed, not stored.
+    assert row["is_soundtrack"] is False
+
+
+@pytest.mark.asyncio
 async def test_peek_does_not_advance_the_round(db: asyncpg.Connection) -> None:
     """The whole point: peeking must be a no-op on game state. No round row is
     inserted, round_number stays put, and active_games is untouched."""
