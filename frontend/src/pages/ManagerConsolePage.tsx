@@ -772,7 +772,14 @@ export function ManagerConsolePage() {
   // group, or screen readers + Playwright's toBeEnabled() treat it as
   // disabled whenever no team has buzzed.)
   const bonusDisabled = busy;
-  const nextRoundLabel = game.status === "waiting" ? "Start game" : "Next round";
+  // While the YouTube player is still constructing, the Start/Next button is
+  // disabled; label it as progress ("Loading player…") rather than leaving it
+  // reading "Start game" so it doesn't look like a dead button.
+  const nextRoundLabel = !player.ready
+    ? "Loading player…"
+    : game.status === "waiting"
+      ? "Start game"
+      : "Next round";
 
   return (
     <main className={styles.shell}>
