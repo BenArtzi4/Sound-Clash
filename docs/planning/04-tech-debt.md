@@ -26,7 +26,7 @@ Steady autonomous cleanup that makes the app easier to keep production-perfect. 
 - **T-RLSCI · Isolated CI job for the RLS suite.** `[S]` Run `test_rls_anon.py` + `test_rls_function_grants.py` as their own fresh-container job so the security matrix has a deterministic green/red signal instead of being folded into a 200-test run where its flake is ignored. **CI change → flag per repo rules.**
 - **T-ScoringTest · Bind toasts to scoring constants in a test.** `[S]` No test asserts the "+10"/"−3" toast strings derive from `TITLE_POINTS`/`WRONG_BUZZ_PENALTY` (the test hardcodes "+10" independently). One test importing the constants catches drift — pairs with T-Scoring.
 - **T-CascadeTest · Pin the Realtime cascade-delete UX.** `[S]` No test exercises the `game_teams`-before-`active_games` delete ordering that routes players to Home instead of the expiry screen (F-P1-2). A reducer/e2e case locks in the intended "ended/expired" UX.
-- **T-DeployTest · e2e for deploy-during-game / preloadError.** `[S]` Guard F-P0-3 with a test that simulates a failed dynamic import → reload.
+- **T-DeployTest · deploy-during-game / preloadError test.** `[S]` ✅ (PR #185) — done at the vitest layer (the right layer for this deterministic single-client behavior): `preloadError.test.ts` dispatches `vite:preloadError` and asserts auto-reload + budget record, per-incident cap → defer, later-deploy budget reset, storage-unavailable → defer, and idempotent install; `ErrorBoundary.test.tsx` asserts a thrown child → reload CTA → hard reload (+ our specific diagnostic log).
 
 ## D. CI & bundle discipline
 
