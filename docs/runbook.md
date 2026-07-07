@@ -43,6 +43,21 @@ Pages auto-deploys on `main` push. The workflow runs `vitest`, builds, and uploa
 
 Preview deploys: every PR gets a unique URL (`<branch>.sound-clash.pages.dev`). Test there before merging.
 
+**Deploying during a live game is safe** (as of F-P0-3 / Phase 4 T4.0). A deploy
+replaces the content-hashed `/assets/*` chunks, so a browser that loaded the app
+before the deploy holds stale chunk URLs; when it navigates to a lazy route the
+dynamic import fails. The app now handles this: `frontend/src/lib/preloadError.ts`
+listens for Vite's `vite:preloadError` and auto-reloads to pull the fresh
+`index.html` + new hashes. A reload BUDGET persisted in `sessionStorage` (one
+auto-reload per incident, reset after a 5-min window so later deploys still
+recover) makes it loop-proof even if a reload can't fix it (broken deploy /
+offline) or `sessionStorage` is unavailable — in those cases it stops
+auto-reloading and the app-level `ErrorBoundary`
+(`frontend/src/components/ErrorBoundary.tsx`) shows a manual "Reload" backstop.
+Players auto-recover on their next navigation — no blank screens. (There is
+still one exception: an anon-key/URL rotation, §3.3, changes config that a
+running session can't pick up without a refresh.)
+
 ### 1.3 Database migrations
 
 Migrations are NOT auto-applied. They run on manual dispatch:

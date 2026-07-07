@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { installPreloadErrorHandler } from "./lib/preloadError";
 import { installErrorBuffer, loadSentry } from "./lib/sentry";
 import { initTelemetry } from "./lib/telemetry";
 import "./styles.css";
@@ -10,6 +11,11 @@ import "./styles.css";
 // keep it off the critical render path and the buzzer path; loadSentry() drains
 // anything buffered here. No-op when VITE_SENTRY_DSN is unset (dev, tests).
 installErrorBuffer();
+
+// Recover from a stale lazy-route chunk after a mid-game deploy: reload so a
+// fresh index.html pulls the new content-hashes, instead of a blank screen.
+// Cheap (one window listener); the app-level ErrorBoundary is the backstop.
+installPreloadErrorHandler();
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("#root element not found");
