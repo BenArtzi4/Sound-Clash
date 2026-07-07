@@ -1,10 +1,10 @@
 # Next session — start here
 
-_Last updated: 2026-07-07 — after Phase 3 + the pre-event 10-team validation & display fixes (B-1/B-2) shipped._
+_Last updated: 2026-07-07 — mid-Phase-4: T4.0 (deploy-safe chunks, PR #185) and T4.2 (resume-on-visible, PR #187) shipped; T4.1 de-scoped (PR #186); **T4.3 is next**._
 
 ## Short prompt to paste into the fresh session
 
-> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then start Phase 4: follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-4-resilience.md`. Recall the `project_phase3_handoff` memory. Read `.claude/rules/lessons-learned.md` before running anything.**
+> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then continue Phase 4 starting at T4.3: follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-4-resilience.md`. Recall the `project_phase3_handoff` memory. Read `.claude/rules/lessons-learned.md` before running anything. Work the tasks one at a time — they cluster on a few shared files; put the parallelism inside each task (fan-out review/verify), not across tasks. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
 
 That's all the maintainer needs to paste. The rest of this file is the context the session should load.
 
@@ -12,21 +12,31 @@ That's all the maintainer needs to paste. The rest of this file is the context t
 
 ## Where things stand (2026-07-07)
 
-- **Phases 1, 2, 3 are ✅ complete and live on prod** (`https://www.soundclash.org`). PRs #150–#174 merged; DB migrations through **038** applied + verified on prod (`jvfddxuaqcsrguibkymp`). `main` HEAD = `22fe0a8`.
+- **Phases 1, 2, 3 are ✅ complete and live on prod** (`https://www.soundclash.org`). PRs #150–#174 merged; DB migrations through **038** applied + verified on prod (`jvfddxuaqcsrguibkymp`). `main` HEAD after the Phase-4 work below = `6e0481f`.
+- **Phase 4 in progress (all frontend-only, no migrations, Cloudflare auto-deploys from `main`):** ✅ **T4.0** deploy-safe chunk loading (PR #185 — `vite:preloadError` budget-guarded auto-reload + app-level `ErrorBoundary`; removed the "never deploy during a live game" caveat). ⏭️ **T4.1 de-scoped** (PR #186 — no Skip button: existing **Next round** already moves past a dead video, and the `youtube_id` blocklist is redundant since select/peek exclude already-played songs). ✅ **T4.2** resume-on-visible (PR #187 — `useResumeOnVisible` + `YouTubePlayer.resumeIfPaused()`, resumes a song the browser paused on tab-background/phone-lock, guarded off during a buzz). Both shipped features were validated by a fan-out adversarial review + a focused verifier before merge.
 - The app **works end-to-end on prod** — a full three-tab game was driven on 2026-07-05 (create→join×2→start→buzz-lock→Correct Song→Continue→artist→Next round→Bonus→End→export; Hebrew rendered; zero app console errors; buzz round-trip 154/222 ms).
 - **Pre-event validation done (10-team / 40-person):** driven both live-on-prod (2026-07-05) and as a reproducible DB-verified 10-team/30-round e2e (`tests/e2e/ten_teams_thirty_rounds.spec.ts`, 2026-07-06). Every scoring path, the concurrent buzz race, kick, podium, and `game_history` archive were correct. Two **display-scaling** bugs were found and fixed: **B-1** (scoreboard overflowed a 1080p TV at 8+ teams → auto-fit 100dvh frame, PR #176) and **B-2** (scoreboard clipped rows on short/OS-scaled laptops → elastic rows, PR #178). The event-blocker log lives in `playtest/BLOCKERS.md` (untracked, local): **no open blockers remain.**
-- **Phases 4–8 are 0% started.** Recommended order: **Phase 4 (resilience)** → then interleave 6/7 while 5/8 unblock.
+- **Phase 4 partway (T4.0 + T4.2 shipped, T4.1 de-scoped); Phases 5–8 not started.** After Phase 4, interleave 6/7 while 5/8 unblock.
 
-## What to do next — Phase 4 (resilience: mid-game failure modes)
+## What to do next — Phase 4, from T4.3 (resilience: mid-game failure modes)
 
-Follow `phase-4-resilience.md`. It's autonomous, one session/PR per fix. **Do these two first — they're the highest value for a real party and both small:**
+Follow `phase-4-resilience.md`. Autonomous, one PR per fix. **Do them one at a time, not in parallel** — most remaining tasks edit the same few files, so parallel branches would just conflict and need serial rebasing:
 
-1. **T4.0 · F-P0-3 deploy-safe chunk loading `[S]` — the one still-open P0.** Add a `vite:preloadError → location.reload()` handler (sessionStorage-guarded against loops) + a route-level `ErrorBoundary`. Without it, any Cloudflare deploy *during a live game* can blank a player's screen on navigation (routes are `React.lazy`). This removes the "never deploy during a game" operational caveat entirely.
-2. **T4.1 · Dead-video Skip `[S–M]`.** The persistent "Video unavailable" state already ships; add the one-tap **Skip song** button + blocklist the errored `youtube_id`. Most likely in-game hiccup today (host currently has to press Next round to move past a dead video).
+- `ManagerConsolePage.tsx` → T4.5, T4.6, T4.7, T4.10 · `useGameChannel.ts` → T4.3, T4.4, T4.11 · `DisplayPage.tsx` → T4.7, T4.8 · `TeamGameplayPage.tsx` → T4.4, T4.9.
 
-Then the rest of Phase 4 (T4.2–T4.11): resume-after-phone-lock, hydrate/queue robustness, graceful expiry (F-P1-2 team-page root-cause refactor), next-round failure recovery, bonus-toast honesty, metadata retry, expiry countdown + `extend_game` RPC, reconnecting states, host-recovery QR, final-board-survives-delete.
+Put the parallelism **inside** each task (fan-out the adversarial review + verify on the finished diff), not across tasks. You may **batch same-file small fixes** into one PR (e.g. T4.5 + T4.6 are both tiny `ManagerConsolePage` changes) to cut PR count.
 
-**Phase 4 exit gate** adds, beyond the standard full-game gate, a deliberate **"adverse" game** hitting ≥3 failure paths (kill a video → Skip; background the host tab → resume; drop the socket → reconnect with no lost events).
+**Suggested order (value + file affinity):**
+1. **T4.3 · Hydrate/queue robustness `[S]`** (F-P1-1, `useGameChannel.ts`). A transient blip at subscribe-time flips `hydrated=true` anyway, so later live events are silently dropped → player stuck frozen until refresh. Only set `hydrated=true` on a successful snapshot; keep queuing on failure; cap the pending array (~500). **Highest-value remaining bug.**
+2. **T4.4 · Graceful expiry/team page `[S]`** (F-P1-2 / `I-GoneDerive`, `useGameChannel.ts` + `TeamGameplayPage.tsx`) — pairs with T4.3's hook work. Derive "gone" from `active_games` absence; treat a missing team as a kick only while `state.game` is present.
+3. **T4.5 + T4.6 (batch) `[M+S]`** (`ManagerConsolePage.tsx`): next-round failure recovery (F-P1-3 — revert the double-buffer swap if `select_next_song` fails so the room isn't silenced) + bonus-toast honesty (F-P1-5 — confirm the +4 only after the Render call resolves).
+4. **T4.7 · Song-metadata retry `[S]`** (F-P1-7, `DisplayPage.tsx` + `ManagerConsolePage.tsx`) — bounded backoff on the per-round `songs` fetch.
+5. **T4.8 · Expiry countdown + `extend_game` RPC `[M]`** (`I-Expiry`) — the one task with a **new migration** (token-gated `extend_game`, additive; apply to prod after merge per lessons-learned F-P0-4). Update `rpc-functions.md`/`security-rls.md`.
+6. **T4.9 · Reconnecting states `[S]`** (`I-Reconnect`) — **check first: the CONNECTING/RECONNECTING copy may already have shipped** (2026-07-05 changelog); confirm what's left before implementing.
+7. **T4.10 · Host recovery QR `[M]`** (F-P1-6, `ManagerConsolePage.tsx`) — re-openable link/QR embedding the `manager_token` (token already lives in `game_secrets` per D-1, so the link carries the value).
+8. **T4.11 · (optional) Final board survives delete `[M]`** (`I-FinalBoard`).
+
+**Phase 4 exit gate** adds, beyond the standard full-game gate, a deliberate **"adverse" game** hitting ≥3 failure paths (kill a video → Next round; background the host tab → auto-resume [T4.2, done]; drop the socket → reconnect with no lost events [needs T4.3]).
 
 ## The per-PR loop (from EXECUTION-CONTRACT.md — don't skip)
 
