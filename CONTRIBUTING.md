@@ -5,7 +5,7 @@ Thanks for your interest. This is a small project; the contribution bar is "is i
 ## Before you start
 
 1. Read [`docs/architecture.md`](docs/architecture.md) (one page).
-2. Skim [`docs/roadmap.md`](docs/roadmap.md) to know what phase the project is in.
+2. Skim [`docs/planning/README.md`](docs/planning/README.md) to know where the project stands and what's being worked on.
 3. Check [open issues](https://github.com/BenArtzi4/Sound-Clash/issues): pick one or open a new one to discuss before doing significant work.
 4. For substantive changes, open the issue first. Code without a discussed direction may be closed without merge.
 

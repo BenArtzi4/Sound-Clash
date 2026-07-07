@@ -10,7 +10,7 @@ Tiers below are the recommended build order once Phases 1–4 (perf + resilience
 
 - **X-SFX · Sound effects on the display (buzz / correct / wrong).** `[S, high]` The TV is the room's shared speaker but is silent between clips. DisplayPage already detects the exact events — `buzzed_team_id` going non-null (`:162`) and per-team score deltas (`:115`). Add short buzzer/ding/fail cues. **Binary-asset decision** (short audio files) — needs your sign-off on where they live per repo rules. Big crowd-energy lift for near-zero code.
 - **X-Presets · One-tap curated presets on the create screen.** `[S, high]` Hosts hand-pick genres+decades every game. A preset row — "80s Party", "Israeli Classics", "Movie Night", "Everything" — is frontend-only: a hardcoded `{label, genreSlugs[], decades[]}` list resolved against already-loaded genres. Speeds setup, drives replay.
-- **X-Skip · Host "Skip song" button.** `[S, high]` Also the fix for dead videos (F-P1-4). A one-tap skip that advances to a fresh pick without the current song counting — invaluable when a video is broken, boring, or too obscure. Reuses `select_next_song`; blocklist the skipped id for the game.
+- ~~**X-Skip · Host "Skip song" button.**~~ **Declined 2026-07-07 (Phase 4 T4.1, PR #186).** The existing **Next round** button already moves past a dead/boring song, the persistent "Video unavailable" state ships, and select/peek exclude already-played songs, so the blocklist is redundant. Don't rebuild this; revisit only if a real re-pick of an errored video is ever observed.
 - **X-AutoRelease · Auto lock-release when the answer countdown expires.** `[S, high]` The display already shows a 10s answer countdown (`ANSWER_DURATION_SEC`) with no teeth. When `locked_at + 10s` elapses with no verdict, auto-fire `release_buzz_lock` to re-arm buzzers. Keeps rounds moving without host babysitting. (Make it an opt-in host toggle so it doesn't surprise.)
 - **X-DarkRoom · Dark-room projector theme for the display.** `[S, medium]` Parties are dim; the display is on a TV. A high-contrast oversized "dark room" theme (near-black bg, glowing large scores) as a toggle or via `prefers-color-scheme`. Frontend-only CSS variant.
 
@@ -35,6 +35,10 @@ These were deferred per the maintainer's call; kept here so the rationale isn't 
 - ~~**X-i18n · Hebrew (RTL) UI.**~~ **D-6: out of scope for now.** ~Half the catalog is Hebrew and the audience is largely Israeli, but a full RTL UI touches all six pages + a translation workflow. Revisit if growing the Hebrew audience becomes a goal.
 
 ---
+
+## Content (maintainer-led, not a phase task)
+
+- **C-Catalog · Finish the song-curation batch: Hebrew + soundtrack genres.** The global-genre expansion shipped; Hebrew and soundtrack genres still need their ~25 net-new songs/genre pass. Runbook: `tools/song-curation/PLAYBOOK.md`. The maintainer has **uncommitted in-flight tooling work** there (adding per-song `release_year` capture to review.js/verify.py + a new add-songs.html) — agents must not touch those files; the maintainer lands them when ready. Tracked here so the work is visible in the plan; previously it lived only in the tool's own playbook.
 
 ## Notes for whoever builds these
 - Anything storing new durable data (recap assets, sound files, team tokens) must respect the ephemerality model and the binary-asset rule (ask before committing audio/images).

@@ -16,8 +16,8 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 10. **[free-tier-budget.md](free-tier-budget.md)**: quota analysis; how many games/month before any service runs out.
 11. **[local-development.md](local-development.md)**: how to run the stack on your laptop.
 12. **[runbook.md](runbook.md)**: day-2+ operations: deploy, rollback, secrets, incidents.
-13. **[roadmap.md](roadmap.md)**: eight-phase migration plan with exit criteria.
-14. **[tasks.md](tasks.md)**: granular checkboxed task list grouped by area.
+13. **[planning/](planning/README.md)**: the improvement plan — current status, backlog, and the phased execution roadmap. (The original build roadmap/tasks shipped 100% and were removed in 2026-07; they live in git history.)
+14. **[pre-event-checklist.md](pre-event-checklist.md)**: how to validate the live game end-to-end before hosting a big event.
 15. **[tooling.md](tooling.md)**: every tool that touches the repo: GitHub Actions workflows, CodeQL, Dependabot, Codecov, pre-commit, deploy automation, monitoring.
 16. **[diagrams/](diagrams/)**: visual architecture diagrams (Mermaid in Markdown + standalone HTML mirrors). [`internal.md`](diagrams/internal.md) for what's inside the game; [`external.md`](diagrams/external.md) for the third-party services around it.
 
@@ -31,9 +31,9 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 
 ### "I'm about to start implementing"
 1. `architecture.md`
-2. `roadmap.md` (find your phase)
+2. `planning/README.md` (current status) → `planning/NEXT-SESSION.md` (what's next)
 3. `local-development.md` (set up dev env)
-4. `tasks.md` (find your tickets)
+4. `planning/phases/EXECUTION-CONTRACT.md` (the process) + the active phase file (your tickets)
 5. Open the doc each task links to (`rpc-functions.md`, `api-contracts.md`, etc.) as you go.
 
 ### "I just need to know how to run it locally"
@@ -46,7 +46,7 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 
 ### "I want to know what's NOT in scope"
 - `architecture.md` §10; pointer index of what each doc doesn't cover
-- `roadmap.md` "Out of Scope" section
+- `planning/05-decisions-needed.md` (deferred: win conditions, Hebrew i18n) and `planning/03-features.md` Tier 4
 - `game-rules.md` §13 (NOT a game rule)
 - Each doc has a "doesn't cover" or "out of scope" section near the end
 
@@ -89,7 +89,7 @@ Out-of-date docs are worse than missing ones.
 | `free-tier-budget.md` | Quota analysis + alert thresholds |
 | `local-development.md` | Dev setup + troubleshooting |
 | `runbook.md` | Operational procedures |
-| `roadmap.md` | 8-phase migration plan |
-| `tasks.md` | Granular task checklist |
+| `planning/` | Improvement plan: status, backlog, phased roadmap |
+| `pre-event-checklist.md` | Pre-event end-to-end validation checklist |
 | `tooling.md` | Dev/CI tooling reference; workflows, bots, deploy automation |
 | `diagrams/` | Architecture diagrams (Mermaid `.md` + standalone `.html`) |
