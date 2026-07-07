@@ -5,15 +5,13 @@ Ranked P0 (fix now / production risk) → P1 (real user-facing bug) → P2 (edge
 Legend for the perf tag on latency-adjacent items: `buzz-latency` (moves the <200ms number), `load` (time-to-playable), `smoothness` (perceived responsiveness).
 
 > **Resolved items removed 2026-07-05** (shipped in Phases 1–3; detail in git history / `CHANGELOG.md`): F-P0-1 (manager_token leak → `game_secrets`, mig 034), F-P0-2 (catalog DR backup), F-P0-4 (deploy-before-migrate outage), F-P1-8 (busy flag dropped clicks), F-P2-2 (Continue pending flag), F-P2-3 (keep-warm immediate ping). IDs are intentionally not reused.
+> **Resolved 2026-07-07** (Phase 4): F-P0-3 (deploy-during-game blank screen → `vite:preloadError` budget-guarded auto-reload + app-level `ErrorBoundary`; runbook §1.2; PR #185).
 
 ---
 
 ## P0 — Production risk
 
-### F-P0-3 · Deploy-during-game blanks the screen `[bug, P0 — hits live players on every deploy]` — ✅ RESOLVED (Phase 4 T4.0, PR #185)
-- **Evidence:** `_redirects` = `/* /index.html 200`; a stale content-hashed chunk URL returns `index.html` as `200 text/html`; `vite:preloadError` has zero handlers and there is no ErrorBoundary (`App.tsx`); routes are `React.lazy` (`App.tsx`). Confirmed live: old `/assets/index-*.js` returns 200 HTML.
-- **Failure:** a player who loaded the app before a deploy, then navigates (join → `/team/:code`), triggers a failed dynamic import → blank white screen mid-party. Every Cloudflare Pages deploy is a live-game landmine.
-- **Fix (shipped):** `frontend/src/lib/preloadError.ts` handles `vite:preloadError` → auto-reloads, guarded by a `sessionStorage` reload BUDGET (one auto-reload per incident, reset after a 5-min window). The budget is loop-proof regardless of reload-cycle timing, and when the reload can't recover (broken deploy / offline) or `sessionStorage` is unavailable it stops auto-reloading and defers to the app-level `frontend/src/components/ErrorBoundary.tsx` manual-reload CTA. Tests: `preloadError.test.ts` + `ErrorBoundary.test.tsx` (T-DeployTest). Runbook §1.2 updated: **deploying during a live game is now safe.**
+_None open._ (F-P0-3 shipped 2026-07-07 — Phase 4 T4.0, PR #185.)
 
 ---
 
