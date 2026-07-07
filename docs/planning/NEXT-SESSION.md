@@ -1,6 +1,6 @@
 # Next session — start here
 
-_Last updated: 2026-07-05, after Phase 3 shipped._
+_Last updated: 2026-07-07 — after Phase 3 + the pre-event 10-team validation & display fixes (B-1/B-2) shipped._
 
 ## Short prompt to paste into the fresh session
 
@@ -10,10 +10,11 @@ That's all the maintainer needs to paste. The rest of this file is the context t
 
 ---
 
-## Where things stand (2026-07-05)
+## Where things stand (2026-07-07)
 
-- **Phases 1, 2, 3 are ✅ complete and live on prod** (`https://www.soundclash.org`). PRs #150–#174 merged; DB migrations through **038** applied + verified on prod (`jvfddxuaqcsrguibkymp`). `main` is clean.
+- **Phases 1, 2, 3 are ✅ complete and live on prod** (`https://www.soundclash.org`). PRs #150–#174 merged; DB migrations through **038** applied + verified on prod (`jvfddxuaqcsrguibkymp`). `main` HEAD = `22fe0a8`.
 - The app **works end-to-end on prod** — a full three-tab game was driven on 2026-07-05 (create→join×2→start→buzz-lock→Correct Song→Continue→artist→Next round→Bonus→End→export; Hebrew rendered; zero app console errors; buzz round-trip 154/222 ms).
+- **Pre-event validation done (10-team / 40-person):** driven both live-on-prod (2026-07-05) and as a reproducible DB-verified 10-team/30-round e2e (`tests/e2e/ten_teams_thirty_rounds.spec.ts`, 2026-07-06). Every scoring path, the concurrent buzz race, kick, podium, and `game_history` archive were correct. Two **display-scaling** bugs were found and fixed: **B-1** (scoreboard overflowed a 1080p TV at 8+ teams → auto-fit 100dvh frame, PR #176) and **B-2** (scoreboard clipped rows on short/OS-scaled laptops → elastic rows, PR #178). The event-blocker log lives in `playtest/BLOCKERS.md` (untracked, local): **no open blockers remain.**
 - **Phases 4–8 are 0% started.** Recommended order: **Phase 4 (resilience)** → then interleave 6/7 while 5/8 unblock.
 
 ## What to do next — Phase 4 (resilience: mid-game failure modes)
@@ -56,7 +57,7 @@ Buzzer hot path is a Postgres PL/pgSQL function called direct from the browser; 
 - **T1.7 — Grafana alerts** on Realtime concurrent connections (~200 free-tier cap) + monthly message quota. Needs Grafana dashboard access. (Also I-Alert in `02`.)
 - **D-3 — Cloudflare edge + WAF** (Phase 5 T5.6) — infra/ops, not git.
 - **Optional** DB-password / `sb_secret_` rotation (Phase 1 follow-up).
-- **4 open Dependabot PRs** (#133 checkout v7, #114 codecov v7, #147 @playwright/test, #148 @types/node) — maintainer merges; Claude only opens/updates.
+- **4 open Dependabot PRs** (#133 checkout v7, #114 codecov v7, #147 @playwright/test, #182 @types/node) — maintainer merges; Claude only opens/updates.
 
 ## Key references
 
