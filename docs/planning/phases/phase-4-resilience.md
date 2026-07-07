@@ -17,16 +17,12 @@
 
 ## Tasks
 
-### T4.0 · Deploy-safe chunk loading (do first) `[S]` — F-P0-3 (orphaned P0) ✅ (PR #185)
-- [x] `window.addEventListener('vite:preloadError', …)` → `location.reload()`, guarded by a `sessionStorage` budget against reload loops (a stale content-hashed chunk 200s as `index.html` after a Cloudflare deploy → failed dynamic import → blank white screen mid-party; routes are `React.lazy`, so join → `/team/:code` is the classic trigger). → `frontend/src/lib/preloadError.ts` (bounded reload count per incident, reset after a 5-min window — loop-proof regardless of reload-cycle timing; and when `sessionStorage` is unavailable it does NOT auto-reload, deferring to the ErrorBoundary CTA, since a budget that can't survive the reload can't guarantee loop-freedom).
-- [x] Add an app-level `ErrorBoundary` (App has none) with a "reload" CTA as the backstop. → `frontend/src/components/ErrorBoundary.tsx`, wraps the whole tree in `App.tsx`.
-- [x] Test (T-DeployTest): simulate a failed dynamic import → reload. → `preloadError.test.ts` (dispatch `vite:preloadError` → reload + record budget, per-incident cap → defer, later-deploy budget reset, storage-unavailable → defer, idempotent install) + `ErrorBoundary.test.tsx` (throw → CTA → hard reload; asserts our specific diagnostic log). This removes the "never deploy during a game" operational caveat entirely — **highest-value single fix for a live party**.
+### T4.0 · Deploy-safe chunk loading — F-P0-3 ✅ SHIPPED (PR #185, 2026-07-07)
+Vite `vite:preloadError` → budget-guarded auto-reload (`frontend/src/lib/preloadError.ts`) + app-level `ErrorBoundary` backstop (`frontend/src/components/ErrorBoundary.tsx`, wraps `App.tsx`). Removes the "never deploy during a live game" caveat (runbook §1.2). Tests in `preloadError.test.ts` + `ErrorBoundary.test.tsx`.
 
-### T4.1 · Dead-video handling + Skip `[S–M]` — F-P1-4, `I-Skip`, X-Skip
-> Note: the persistent inline "Video unavailable" state is already shipped (`YouTubePlayer.tsx`); what remains is the one-tap **Skip song** button + the errored-`youtube_id` blocklist.
-- [ ] Persistent inline "Video unavailable" state on the manager when the live player errors (don't rely on the auto-dismiss toast).
-- [ ] One-tap **Skip song** button → `select_next_song`, not counting the dead song against anything meaningful.
-- [ ] Blocklist the errored `youtube_id` for the game so peek/select can't re-pick it (client-side exclude set passed to peek; or a small server-side exclusion).
+### T4.1 · Dead-video handling — F-P1-4 — ✅ effectively already covered (no new button)
+> Decided 2026-07-07: **do not add a Skip button.** The host already skips a dead video with the existing **Next round** button, and the live/prebuffer error already shows a persistent "Video unavailable" state + a "click Next round" toast (`YouTubePlayer.tsx` / `ManagerConsolePage.tsx:189,359`). A dead song shown in a round is marked *played*, and `select_next_song` / `peek_next_song` both exclude already-played songs (`rpc-functions.md:368`), so it can't be re-picked; the catalog also dedups `youtube_id`. The originally-planned `youtube_id` blocklist is therefore redundant in practice.
+- [ ] (optional, low value) Only if a real re-pick is ever observed: add the errored `youtube_id` to the peek/select client-side exclude set (covers the narrow not-yet-played-duplicate case). Skip unless it proves needed.
 
 ### T4.2 · Recover a paused song after host phone lock `[S–M]` — `I-Resume`
 - [ ] On `visibilitychange → visible` with `game.status==='playing'` and no buzz, auto-resume playback; or add a plain play/pause toggle on the manager.
