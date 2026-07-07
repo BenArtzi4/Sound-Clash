@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RouteFallback } from "./components/RouteFallback";
 import { ToastProvider } from "./context/ToastContext";
 import { HomePage } from "./pages/HomePage";
@@ -31,24 +32,29 @@ const DisplayPage = lazy(() =>
 
 export function App() {
   return (
-    <BrowserRouter>
-      <ToastProvider>
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/how-to-play" element={<HowToPlayPage />} />
-            <Route path="/join" element={<JoinTeamPage />} />
-            <Route path="/join/:gameCode" element={<JoinTeamPage />} />
-            <Route path="/team/:gameCode" element={<TeamGameplayPage />} />
-            <Route path="/manager/create" element={<ManagerCreateGamePage />} />
-            <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
-            <Route path="/admin/songs" element={<AdminSongsPage />} />
-            <Route path="/display" element={<DisplayPage />} />
-            <Route path="/display/:gameCode" element={<DisplayPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </ToastProvider>
-    </BrowserRouter>
+    // ErrorBoundary is the outermost wrapper so a failed lazy-route chunk import
+    // after a mid-game deploy (or any render crash) shows a "Reload" screen
+    // instead of a blank page. See lib/preloadError.ts for the auto-reload path.
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ToastProvider>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/how-to-play" element={<HowToPlayPage />} />
+              <Route path="/join" element={<JoinTeamPage />} />
+              <Route path="/join/:gameCode" element={<JoinTeamPage />} />
+              <Route path="/team/:gameCode" element={<TeamGameplayPage />} />
+              <Route path="/manager/create" element={<ManagerCreateGamePage />} />
+              <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
+              <Route path="/admin/songs" element={<AdminSongsPage />} />
+              <Route path="/display" element={<DisplayPage />} />
+              <Route path="/display/:gameCode" element={<DisplayPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ToastProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

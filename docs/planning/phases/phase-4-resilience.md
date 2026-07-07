@@ -17,10 +17,10 @@
 
 ## Tasks
 
-### T4.0 · Deploy-safe chunk loading (do first) `[S]` — F-P0-3 (orphaned P0)
-- [ ] `window.addEventListener('vite:preloadError', …)` → `location.reload()` once, guarded by a `sessionStorage` flag against reload loops (a stale content-hashed chunk 200s as `index.html` after a Cloudflare deploy → failed dynamic import → blank white screen mid-party; routes are `React.lazy`, so join → `/team/:code` is the classic trigger).
-- [ ] Add a route-level `ErrorBoundary` (App has none) with a "reload" CTA as the backstop.
-- [ ] Test (T-DeployTest): simulate a failed dynamic import → reload. This removes the "never deploy during a game" operational caveat entirely — **highest-value single fix for a live party**.
+### T4.0 · Deploy-safe chunk loading (do first) `[S]` — F-P0-3 (orphaned P0) ✅ (PR #185)
+- [x] `window.addEventListener('vite:preloadError', …)` → `location.reload()`, guarded by a `sessionStorage` budget against reload loops (a stale content-hashed chunk 200s as `index.html` after a Cloudflare deploy → failed dynamic import → blank white screen mid-party; routes are `React.lazy`, so join → `/team/:code` is the classic trigger). → `frontend/src/lib/preloadError.ts` (bounded reload count per incident, reset after a 5-min window — loop-proof regardless of reload-cycle timing; and when `sessionStorage` is unavailable it does NOT auto-reload, deferring to the ErrorBoundary CTA, since a budget that can't survive the reload can't guarantee loop-freedom).
+- [x] Add an app-level `ErrorBoundary` (App has none) with a "reload" CTA as the backstop. → `frontend/src/components/ErrorBoundary.tsx`, wraps the whole tree in `App.tsx`.
+- [x] Test (T-DeployTest): simulate a failed dynamic import → reload. → `preloadError.test.ts` (dispatch `vite:preloadError` → reload + record budget, per-incident cap → defer, later-deploy budget reset, storage-unavailable → defer, idempotent install) + `ErrorBoundary.test.tsx` (throw → CTA → hard reload; asserts our specific diagnostic log). This removes the "never deploy during a game" operational caveat entirely — **highest-value single fix for a live party**.
 
 ### T4.1 · Dead-video handling + Skip `[S–M]` — F-P1-4, `I-Skip`, X-Skip
 > Note: the persistent inline "Video unavailable" state is already shipped (`YouTubePlayer.tsx`); what remains is the one-tap **Skip song** button + the errored-`youtube_id` blocklist.
