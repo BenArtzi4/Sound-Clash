@@ -24,8 +24,8 @@ Vite `vite:preloadError` → budget-guarded auto-reload (`frontend/src/lib/prelo
 > Decided 2026-07-07: **do not add a Skip button.** The host already skips a dead video with the existing **Next round** button, and the live/prebuffer error already shows a persistent "Video unavailable" state + a "click Next round" toast (`YouTubePlayer.tsx` / `ManagerConsolePage.tsx:189,359`). A dead song shown in a round is marked *played*, and `select_next_song` / `peek_next_song` both exclude already-played songs (`rpc-functions.md:368`), so it can't be re-picked; the catalog also dedups `youtube_id`. The originally-planned `youtube_id` blocklist is therefore redundant in practice.
 - [ ] (optional, low value) Only if a real re-pick is ever observed: add the errored `youtube_id` to the peek/select client-side exclude set (covers the narrow not-yet-played-duplicate case). Skip unless it proves needed.
 
-### T4.2 · Recover a paused song after host phone lock `[S–M]` — `I-Resume`
-- [ ] On `visibilitychange → visible` with `game.status==='playing'` and no buzz, auto-resume playback; or add a plain play/pause toggle on the manager.
+### T4.2 · Recover a paused song after host phone lock — `I-Resume` ✅ SHIPPED (PR #187, 2026-07-07)
+- [x] On `visibilitychange → visible` with `game.status==='playing'` and no buzz, auto-resume playback (chose the zero-button option per maintainer's button-averse preference). → `frontend/src/hooks/useResumeOnVisible.ts` (latest-ref `visibilitychange` listener) wired in `ManagerConsolePage.tsx`; resumes via a new `YouTubePlayer` `resumeIfPaused()` handle that plays **only** from a genuine PAUSED state (never replays an ENDED clip). Guard skips resume while a buzz holds the scoring pause. Best-effort on strict mobile autoplay. Tests: `useResumeOnVisible.test.ts`, `YouTubePlayer.test.tsx` (resumeIfPaused), `ManagerConsolePage.test.tsx` (resume on visible / not during a buzz).
 
 ### T4.3 · Hydrate/queue robustness `[S]` — F-P1-1, `I-QueueDrain`
 - [ ] Only set `hydrated = true` on a successful snapshot; keep queuing on failure; cap the pending array (~500).

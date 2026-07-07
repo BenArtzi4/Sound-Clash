@@ -17,6 +17,11 @@ export interface YouTubePlayerHandle {
   commitPrebuffered: (startSeconds?: number) => void;
   pause: () => void;
   play: () => void;
+  // Resume playback ONLY if the player is currently paused (YT state 2). Used to
+  // recover after the host's tab was backgrounded / phone locked, which pauses
+  // the video. A no-op while playing/buffering and — crucially — when the clip
+  // has ENDED, so a finished song is never silently replayed (a spoiler).
+  resumeIfPaused: () => void;
   stop: () => void;
 }
 
@@ -74,6 +79,7 @@ interface YTStateChangeEvent {
 // the import surface flat.
 const YT_STATE_ENDED = 0;
 const YT_STATE_PLAYING = 1;
+const YT_STATE_PAUSED = 2;
 // getPlayerState poll cadence + cap for the PLAYING fallback (~6s).
 const PLAY_POLL_MS = 250;
 const PLAY_POLL_MAX_TICKS = 24;
@@ -358,6 +364,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       },
       pause: () => playerRef.current?.pauseVideo(),
       play: () => playerRef.current?.playVideo(),
+      resumeIfPaused: () => {
+        // Only resume from a genuine PAUSED state so a finished (ENDED) clip is
+        // never replayed and a live/buffering/idle player is left untouched.
+        if (playerRef.current?.getPlayerState() === YT_STATE_PAUSED) {
+          playerRef.current.playVideo();
+        }
+      },
       stop: () => {
         setEnded(true);
         playerRef.current?.stopVideo();
