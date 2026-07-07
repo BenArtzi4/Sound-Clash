@@ -113,6 +113,29 @@ describe("YouTubePlayer", () => {
     expect(lastPlayer?.stopVideo).toHaveBeenCalled();
   });
 
+  it("resumeIfPaused resumes only when paused (state 2), never when playing or ended", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container } = render(<YouTubePlayer ref={ref} noCover />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastPlayer).not.toBeNull());
+
+    // Playing (1): no resume — nothing to do.
+    lastPlayer?.getPlayerState.mockReturnValue(1);
+    act(() => ref.current?.resumeIfPaused());
+    expect(lastPlayer?.playVideo).not.toHaveBeenCalled();
+
+    // Ended (0): no resume — a finished clip must not be replayed (spoiler).
+    lastPlayer?.getPlayerState.mockReturnValue(0);
+    act(() => ref.current?.resumeIfPaused());
+    expect(lastPlayer?.playVideo).not.toHaveBeenCalled();
+
+    // Paused (2): resume — the tab was backgrounded / phone locked.
+    lastPlayer?.getPlayerState.mockReturnValue(2);
+    act(() => ref.current?.resumeIfPaused());
+    expect(lastPlayer?.playVideo).toHaveBeenCalledTimes(1);
+  });
+
   it("calls onReady when the YT player fires onReady", async () => {
     installFakeYT();
     const onReady = vi.fn();

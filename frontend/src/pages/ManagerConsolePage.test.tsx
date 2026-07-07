@@ -82,6 +82,7 @@ interface MockHandle {
   commitPrebuffered: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
   play: ReturnType<typeof vi.fn>;
+  resumeIfPaused: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 }
 
@@ -92,6 +93,7 @@ function makeMockHandle(): MockHandle {
     commitPrebuffered: vi.fn(),
     pause: vi.fn(),
     play: vi.fn(),
+    resumeIfPaused: vi.fn(),
     stop: vi.fn(),
   };
 }
@@ -240,6 +242,57 @@ describe("ManagerConsolePage", () => {
     });
     expect(screen.getAllByText("ABCDEF").length).toBeGreaterThan(0);
     expect(screen.getByText(/round 0$/i)).toBeInTheDocument();
+  });
+
+  function setVisibility(vis: "visible" | "hidden"): void {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => vis });
+  }
+  function fireVisibilityChange(): void {
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+  }
+
+  it("resumes the live player when the tab becomes visible during play with no buzz", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [makeTeam({ id: "t1", name: "Team 1" })],
+      rounds: [makeRound({ round_number: 1 })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    setVisibility("visible");
+    fireVisibilityChange();
+
+    expect(handle(0).resumeIfPaused).toHaveBeenCalled();
+    // Flush any trailing async (keep-warm ping) inside act so its state settle
+    // isn't reported as an un-acted update after the test returns.
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
+  it("does not resume on tab focus while a buzz is being scored", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1, buzzed_team_id: "t1" }),
+      teams: [makeTeam({ id: "t1", name: "Team 1" })],
+      rounds: [makeRound({ round_number: 1 })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    setVisibility("visible");
+    fireVisibilityChange();
+
+    expect(handle(0).resumeIfPaused).not.toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
   });
 
   it("disables Start until player is ready", async () => {

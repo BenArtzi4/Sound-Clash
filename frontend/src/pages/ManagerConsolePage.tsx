@@ -10,6 +10,7 @@ import { useToast } from "../context/useToast";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { usePlayerReady } from "../hooks/usePlayerReady";
+import { useResumeOnVisible } from "../hooks/useResumeOnVisible";
 import { ApiError, awardBonus, endGame } from "../lib/api";
 import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
@@ -134,6 +135,17 @@ export function ManagerConsolePage() {
       activePlayer()?.pause();
     }
   }, [state?.game.buzzed_team_id]);
+
+  // Recover a song the browser paused when the host backgrounded the tab / locked
+  // their phone: when the tab becomes visible again, resume the live player — but
+  // only while a song should actually be audible (game in progress, no buzz
+  // holding the scoring pause). resumeIfPaused is itself a no-op unless the
+  // player is genuinely paused, so an ended/idle player is never nudged and a
+  // finished clip is never replayed. Best-effort on strict mobile autoplay.
+  useResumeOnVisible(
+    () => state?.game.status === "playing" && state?.game.buzzed_team_id == null,
+    () => activePlayer()?.resumeIfPaused(),
+  );
 
   // Warm up the FIRST song during the pre-game "waiting" screen. Mobile
   // browsers block unmuted playback that resumes after an `await`, so if the
