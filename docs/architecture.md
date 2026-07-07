@@ -142,7 +142,6 @@ Total possible spend if everything is upgraded: ~$58/mo. Still cheap relative to
 - Day-to-day ops → **`runbook.md`**
 - Local dev setup → **`local-development.md`**
 - Capacity planning → **`free-tier-budget.md`**
-- Phased migration plan → **`roadmap.md`**
-- Granular task list → **`tasks.md`**
+- Improvement plan & what's next → **`planning/README.md`**
 
 This file is the entry point. Read it first; follow the links for depth.
