@@ -22,7 +22,7 @@ Sound Clash is a real-time multiplayer music-trivia buzzer game, live at `https:
 
 **React + Vite SPA under `frontend/src/`**: anon-key Supabase client (`lib/supabase.ts`), three-table Realtime subscription with idempotent reducer (`hooks/useGameChannel.ts`), browser-direct PostgREST RPCs (`hooks/useBuzzer.ts`, `hooks/useManagerActions.ts`, `hooks/useSelectNextSong.ts`), `usePlayerReady` / `useServerTime` helpers, the `BuzzButton` / `Scoreboard` / `YouTubePlayer` components, the six pages (Home, JoinTeam, TeamGameplay, ManagerCreateGame, ManagerConsole, Display), per-game manager-token storage (`lib/managerToken.ts`, localStorage), the typed REST wrapper in `lib/api.ts` for the remaining FastAPI calls, and the `_headers` CSP + `_redirects` SPA-routing files plus the PWA assets (`manifest.webmanifest`, the cache-nothing `sw.js` registered from `main.tsx`, and `icons/`) in `frontend/public/`. The manager scoring buttons (Correct Song / Correct Artist / Wrong) and the Next Round / Start Game button all fire an optimistic toast before awaiting the RPC, so click-to-feedback latency is effectively zero. `frontend/index.html` ships `<link rel="preconnect">` hints to `www.youtube.com` and `i.ytimg.com` so DNS/TLS to YouTube is warm by the time the player mounts.
 
-**CI gates**: buzz race test (10 concurrent calls → 1 winner, 100×) is the headline DB-side gate; backend gate is line coverage ≥ 90% on `backend/app/`; frontend gate is `vitest run --coverage` plus a Playwright multi-context smoke and a manual three-tab smoke. Phases are tracked in `docs/roadmap.md`; never assume a feature exists in code just because docs describe it.
+**CI gates**: buzz race test (10 concurrent calls → 1 winner, 100×) is the headline DB-side gate; backend gate is line coverage ≥ 90% on `backend/app/`; frontend gate is `vitest run --coverage` plus a Playwright multi-context smoke and a manual three-tab smoke. The improvement plan and its phases are tracked in `docs/planning/`; never assume a feature exists in code just because docs describe it.
 
 ## Architecture: the one thing to understand first
 
@@ -79,7 +79,7 @@ E2E (`cd tests/e2e`, one-time `npm install && npx playwright install`):
 
 ## Conventions enforced by CI
 
-- Backend: `ruff check`, `ruff format --check`, `mypy app`, `pytest --cov-fail-under=<phase threshold>` (currently 0; ratchets up at phase boundaries; see `docs/testing-strategy.md` §5).
+- Backend: `ruff check`, `ruff format --check`, `mypy app`, `pytest --cov-fail-under=90` (line coverage on `backend/app/`; see `docs/testing-strategy.md` §5).
 - Banned in `app/`: `# pragma: no cover`. Banned in `frontend/src/`: `it.skip` / `test.skip`.
 - Frontend: `eslint`, `tsc --noEmit`, `vitest run --coverage`. No state-management libraries (React state + Supabase Realtime only). No CSS-in-JS. `any` requires a `// reason` comment.
 - Migrations rerun by CI to verify idempotency. Schema/RPC/RLS changes must update `docs/data-model.md` / `docs/rpc-functions.md` / `docs/security-rls.md` in the same PR.
@@ -94,4 +94,4 @@ E2E (`cd tests/e2e`, one-time `npm install && npx playwright install`):
 - `docs/security-rls.md`: auth, RLS, threat model.
 - `docs/local-development.md`: full dev setup + Windows notes + troubleshooting.
 - `docs/testing-strategy.md`: what to test, where, and the CI gates.
-- `docs/roadmap.md`: phase boundaries and exit criteria.
+- `docs/planning/README.md`: the improvement plan — current status, backlog, phased roadmap ([NEXT-SESSION.md](docs/planning/NEXT-SESSION.md) is the live handoff).

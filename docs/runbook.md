@@ -2,7 +2,7 @@
 
 How to operate the live system. This is for the on-call human (probably you): what to do, in what order, when something breaks or needs to change.
 
-For *building* the system, see `roadmap.md` and `tasks.md`. For *quotas*, see `free-tier-budget.md`. This doc is for *day 2+ operations*.
+For *what's being built next*, see `planning/README.md`. For *quotas*, see `free-tier-budget.md`. This doc is for *day 2+ operations*.
 
 ## 0. Where Things Live (single source of truth)
 
@@ -240,7 +240,7 @@ Symptoms: `SELECT count(*) FROM songs` is 0 or much smaller than expected.
 
 Triage:
 1. Check Supabase backup tab. Restore from latest snapshot.
-2. If no usable backup, re-run data migration from legacy AWS RDS (`scripts/import-songs.py`).
+2. If no usable backup, restore from the committed catalog dump: `db/backups/restore.sql` (§6 — `catalog-backup.yml` keeps it current weekly).
 3. Investigate: did someone accidentally drop the table? Check `pg_audit` if enabled.
 
 Songs are durable; they should never be deleted en masse. Loss is an incident.

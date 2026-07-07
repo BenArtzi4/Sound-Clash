@@ -1,6 +1,6 @@
 # Current State — How Sound Clash Works & What the Review Found
 
-_Snapshot: 2026-07-04. Evidence base: 11 subsystem maps + cross-cutting hunts over the repo at commit `1bbd344`._
+_Snapshot: 2026-07-04. Evidence base: 11 subsystem maps + cross-cutting hunts over the repo at commit `1bbd344`. This is a dated review snapshot — themes 1–3 below have since been addressed by Phases 1–3 (see [README.md](README.md) for live status); the architecture description remains accurate._
 
 ## 1. The system in one screen
 
@@ -18,7 +18,7 @@ Sound Clash is a live real-time music-trivia buzzer game at `https://www.soundcl
 - **Data:** ephemeral tables (`active_games`, `game_teams`, `game_rounds`, `game_round_attempts`) auto-delete 4h after game start via `pg_cron`. Durable: `songs` (~1025), `genres`, `song_genres`, and a `game_history` archive (mig 033). Audio is YouTube-only (IFrame player; catalog stores `youtube_id` + `start_time` + `release_year`).
 - **Hosting:** Supabase (Frankfurt), Render (US-West, free), Cloudflare Pages, cron-job.org keepalive every 14 min, Grafana Cloud (Faro + OTel) + Sentry for observability.
 
-**Frontend:** React 18 + Vite SPA. `useGameChannel` runs one Realtime subscription over three tables with an idempotent reducer + a 20s REST re-sync backstop. Direct-RPC hooks (`useBuzzer`, `useManagerActions`, `useSelectNextSong`, `usePeekNextSong`). Six pages + admin. `ManagerConsolePage` is the hot seat: two YouTube players (live + hidden prebuffer), optimistic scoring toasts, next-round double-buffer swap.
+**Frontend:** React 18 + Vite SPA. `useGameChannel` runs one Realtime subscription over three tables with an idempotent reducer + a 60s REST re-sync backstop (trimmed from 20s in Phase 3). Direct-RPC hooks (`useBuzzer`, `useManagerActions`, `useSelectNextSong`, `usePeekNextSong`). Six pages + admin. `ManagerConsolePage` is the hot seat: two YouTube players (live + hidden prebuffer), optimistic scoring toasts, next-round double-buffer swap.
 
 **Scoring:** +10 title, +5 artist, +15 soundtrack (derived from genre membership), −3 wrong, +4 bonus, a free-guess sweetener after a correct answer, two tokens (title+artist) per song, multi-buzz rounds.
 

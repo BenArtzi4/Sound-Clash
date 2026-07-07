@@ -1,71 +1,58 @@
 # Phase 4 — Resilience: Mid-Game Failure Modes
 
 ## ▶ Kickoff
-**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Autonomous. One session/PR per fix (they're independent).
-**Notes:** T4.8 adds a token-gated `extend_game` RPC (note in PR + doc it); T4.10 (host recovery link) coordinates with the D-1 relocated token — sequence D-1 first.
-**Gate:** beyond the standard full-game gate, run a deliberate **"adverse" game** hitting ≥3 failure paths (kill a video → Skip; background the host tab → resume; drop the socket → reconnect with no lost events). **Workflow:** optional, only for bulk e2e-spec generation of the failure scenarios (else single-session).
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Autonomous. Work the tasks **one at a time, serially** — they cluster on a few shared files; batch tiny same-file tasks (e.g. T4.5+T4.6) into one PR.
+**Notes:** T4.8 adds a token-gated `extend_game` RPC — the phase's only migration (additive; note it in the PR + update `rpc-functions.md`/`security-rls.md`/`data-model.md`).
+**Gate:** beyond the standard full-game gate, run a deliberate **"adverse" game** hitting ≥3 failure paths (kill a video → Next round recovers; background the host tab → auto-resume [T4.2 ✅]; drop the socket → reconnect with no lost events [needs T4.3]).
 
 **Goal:** a real party survives what actually goes wrong — a dead video, a locked phone, a dropped connection, a 4h overrun, a lost credential — without the room going silent or a screen going blank.
 
-**Why:** "production-perfect" means graceful under failure, not just fast when everything's fine. All autonomous except I-Expiry's new RPC (trivial, token-gated) and the X-Recovery surface choice.
-
-**Backlog refs:** `02-improvements.md §D` + F-P1-1/2/3/4/5/7 from `01`.
-
-**Session shape:** one session per fix (they're independent). Good candidates for a small workflow only if generating the matching e2e specs in bulk (Phase 7 territory).
+**Backlog refs:** `02-improvements.md §D` + F-P1-1/2/3/5/7 from `01`.
 
 ---
 
-## Tasks
+## Shipped / closed (verified against code 2026-07-07)
 
-### T4.0 · Deploy-safe chunk loading — F-P0-3 ✅ SHIPPED (PR #185, 2026-07-07)
-Vite `vite:preloadError` → budget-guarded auto-reload (`frontend/src/lib/preloadError.ts`) + app-level `ErrorBoundary` backstop (`frontend/src/components/ErrorBoundary.tsx`, wraps `App.tsx`). Removes the "never deploy during a live game" caveat (runbook §1.2). Tests in `preloadError.test.ts` + `ErrorBoundary.test.tsx`.
+- **T4.0 · Deploy-safe chunk loading (F-P0-3)** ✅ PR #185 — `vite:preloadError` budget-guarded auto-reload (`lib/preloadError.ts`) + app-level `ErrorBoundary`. Removed the "never deploy during a live game" caveat.
+- **T4.1 · Dead-video Skip button** ❌ de-scoped, PR #186 — **Next round** already moves past a dead video; persistent "Video unavailable" state ships; select/peek exclude played songs, so the blocklist is redundant. Revisit only if a real re-pick is ever observed.
+- **T4.2 · Resume a paused song on tab-return (I-Resume)** ✅ PR #187 — `useResumeOnVisible` + `YouTubePlayer.resumeIfPaused()` (plays only from PAUSED, never replays ENDED; skips while a buzz holds the scoring pause).
+- **T4.9 · Connecting/reconnecting states (I-Reconnect)** ✅ already shipped in Phase 2 (PR #163) — `TeamGameplayPage` distinguishes "CONNECTING…" from "RECONNECTING…" (`useGameChannel` `ChannelStatus` includes `reconnecting`). Nothing left to build.
 
-### T4.1 · Dead-video handling — F-P1-4 — ✅ effectively already covered (no new button)
-> Decided 2026-07-07: **do not add a Skip button.** The host already skips a dead video with the existing **Next round** button, and the live/prebuffer error already shows a persistent "Video unavailable" state + a "click Next round" toast (`YouTubePlayer.tsx` / `ManagerConsolePage.tsx:189,359`). A dead song shown in a round is marked *played*, and `select_next_song` / `peek_next_song` both exclude already-played songs (`rpc-functions.md:368`), so it can't be re-picked; the catalog also dedups `youtube_id`. The originally-planned `youtube_id` blocklist is therefore redundant in practice.
-- [ ] (optional, low value) Only if a real re-pick is ever observed: add the errored `youtube_id` to the peek/select client-side exclude set (covers the narrow not-yet-played-duplicate case). Skip unless it proves needed.
+## Open tasks (in recommended order — value + file affinity)
 
-### T4.2 · Recover a paused song after host phone lock — `I-Resume` ✅ SHIPPED (PR #187, 2026-07-07)
-- [x] On `visibilitychange → visible` with `game.status==='playing'` and no buzz, auto-resume playback (chose the zero-button option per maintainer's button-averse preference). → `frontend/src/hooks/useResumeOnVisible.ts` (latest-ref `visibilitychange` listener) wired in `ManagerConsolePage.tsx`; resumes via a new `YouTubePlayer` `resumeIfPaused()` handle that plays **only** from a genuine PAUSED state (never replays an ENDED clip). Guard skips resume while a buzz holds the scoring pause. Best-effort on strict mobile autoplay. Tests: `useResumeOnVisible.test.ts`, `YouTubePlayer.test.tsx` (resumeIfPaused), `ManagerConsolePage.test.tsx` (resume on visible / not during a buzz).
+### T4.3 · Hydrate/queue robustness `[S]` — F-P1-1, `I-QueueDrain` · **NEXT**
+`useGameChannel.ts` — a failed snapshot on SUBSCRIBED still flips `hydrated = true` (line ~392, outside the success path), so later live events dispatch against `state === null` and are silently discarded until a manual refresh.
+- [ ] Only set `hydrated = true` on a successful snapshot; keep queuing on failure; cap the pending array (~500 — today unbounded). On cap overflow, trigger a fresh authoritative hydrate/resync instead of silently discarding — silent drop is the very bug this task fixes.
+- [ ] Tests: failed-first-hydrate then a live event is not dropped; cap overflow resyncs rather than drops.
 
-### T4.3 · Hydrate/queue robustness `[S]` — F-P1-1, `I-QueueDrain`
-- [ ] Only set `hydrated = true` on a successful snapshot; keep queuing on failure; cap the pending array (~500).
-- [ ] Test: failed-first-hydrate then a live event is not dropped.
+### T4.4 · Graceful expiry/teardown `[S]` — F-P1-2, `I-GoneDerive` (partial: gone-derivation already in `useGameChannel`)
+- [ ] Team-page guard for the cascade ordering (`game_teams` deletes **before** `active_games` at expiry, so the kick redirect still wins today — `TeamGameplayPage.tsx:61`).
+- [ ] T-CascadeTest: pin the teams-before-game delete ordering (the general "gone" banner is already covered by `expiration.spec.ts`).
 
-### T4.4 · Graceful expiry/teardown `[S]` — F-P1-2, `I-GoneDerive`
-- [ ] Derive "gone" from `active_games` absence / `status==='gone'`; treat missing team as a kick only while `state.game` is present.
-- [ ] Test the cascade-delete ordering (T-CascadeTest).
+### T4.5 · Next-round failure recovery `[M]` — F-P1-3, `I-NextRecover` (partial: catch already stops the promoted player)
+- [ ] Remember pre-swap state; on `select_next_song` failure revert `activeKeyRef`/`activeKey` and reload the current round's song; only commit the swap after the RPC confirms (keep mobile-autoplay-in-gesture).
 
-### T4.5 · Next-round failure recovery `[M]` — F-P1-3, `I-NextRecover`
-- [ ] Remember pre-swap state; on `select_next_song` failure revert `activeKeyRef`/`activeKey` and reload the current round's song; only commit the swap after the RPC confirms.
-
-### T4.6 · Bonus toast honesty `[S]` — F-P1-5
+### T4.6 · Bonus toast honesty `[S]` — F-P1-5 (batch with T4.5 — same file)
 - [ ] For the Render-routed bonus, confirm only after the call resolves (or reconcile from the Realtime score delta) — no optimistic +4.
 
 ### T4.7 · Song-metadata retry `[S]` — F-P1-7
-- [ ] Bounded backoff retry on the per-round `songs` fetch (display reveal + manager refresh), or key the effect on a retry counter.
+- [ ] Bounded backoff retry on the per-round `songs` fetch (`DisplayPage.tsx` + `ManagerConsolePage.tsx`), or key the effect on a retry counter.
 
-### T4.8 · Expiry countdown + extend `[M]` — `I-Expiry`, X-Extend
-- [ ] Render a subtle countdown from `state.game.expires_at`; warning banner in the last ~20 min (account for lobby time since `expires_at` is from creation).
-- [ ] New token-gated `extend_game(p_game_code, p_manager_token)` RPC that bumps `expires_at`; host "keep playing" button.
-- [ ] Doc the RPC in `rpc-functions.md`; tests for token gating + the bump.
-
-### T4.9 · Reconnecting/connecting states `[S]` — `I-Reconnect`
-- [ ] Distinguish "CONNECTING…" (initial) from "RECONNECTING…" (Realtime drop) on the team page; small hint so the greyed BUZZ reads as transient.
+### T4.8 · Expiry countdown + extend `[M]` — `I-Expiry`, X-Extend (the one task with a migration)
+- [ ] Subtle countdown from `state.game.expires_at`; warning banner in the last ~20 min (expires_at counts from *creation* — lobby time eats into it).
+- [ ] New token-gated `extend_game(p_game_code, p_manager_token)` RPC bumping `expires_at`; host "keep playing" affordance (confirm the surface — maintainer is button-averse).
+- [ ] Doc the RPC in `rpc-functions.md`/`security-rls.md`/`data-model.md`; tests for token gating + the bump. Apply to prod before/with the deploy (lessons-learned F-P0-4).
 
 ### T4.10 · Host recovery affordance `[M]` — F-P1-6, X-Recovery
-- [ ] A re-openable host link/QR in the console embedding the `manager_token`, so a wiped-localStorage host re-authenticates. (Coordinate with D-1: if the token moves to a separate table, the recovery link still works — it carries the token value, not the row.)
+- [ ] A re-openable host link/QR in the console embedding the `manager_token`, so a wiped-localStorage host re-authenticates (token lives in `game_secrets` per D-1; the link carries the value).
 
 ### T4.11 · (optional) Final board survives delete `[M]` — `I-FinalBoard`
-- [ ] Render the final scoreboard from last-known state on End/expiry (and/or an admin-gated `game_history` read).
+- [ ] Render the final scoreboard from last-known state on End/expiry (and/or an admin-gated `game_history` read). Today `GAME_DELETED` nukes state to null and shows "This game no longer exists."
 
 ---
 
-## Decisions touched
-- **T4.8** adds a small token-gated RPC — autonomous (consistent with the existing model), but note it in the PR.
-- **T4.10** coordinates with **D-1** (token relocation). Sequence D-1 first if chosen.
-
 ## Exit gate (Phase 4)
-- [ ] Simulate each failure and confirm graceful recovery: kill a video mid-round (Skip works), background the host tab (song resumes), drop the Realtime socket (reconnect + no lost events), force a `select_next_song` failure (room isn't silenced), let a game near expiry (warning shows, extend works).
+- [ ] Simulate each failure and confirm graceful recovery: kill a video mid-round (Next round recovers), background the host tab (song resumes — done), drop the Realtime socket (reconnect + no lost events), force a `select_next_song` failure (room isn't silenced), let a game near expiry (warning shows, extend works).
 - [ ] New e2e/reducer tests for cascade-delete UX, failed-hydrate, and expiry.
 - [ ] `tests/db` green incl. the new `extend_game`.
 - [ ] **Full-Game Exit Gate** passes; additionally run a deliberate "adverse" game touching at least 3 failure paths.

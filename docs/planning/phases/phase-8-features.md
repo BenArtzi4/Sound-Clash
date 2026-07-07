@@ -2,7 +2,7 @@
 
 ## ▶ Kickoff
 **Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). One session/PR per feature; each ships a CHANGELOG entry + a test + passes the full-game gate.
-**Build order:** Tier-1 first (X-Skip, X-Presets, X-SFX, X-AutoRelease, X-DarkRoom), then Tier-2/3. **D-9 = small optimized assets in-repo** (confirm each binary commit). **Out of scope:** D-5 (win conditions) and D-6 (Hebrew i18n). **Parallel-friendly:** independent features can run as separate worktree sessions.
+**Build order:** Tier-1 first (X-Presets, X-SFX, X-AutoRelease, X-DarkRoom — X-Skip was declined in Phase 4), then Tier-2/3. **D-9 = small optimized assets in-repo** (confirm each binary commit). **Out of scope:** D-5 (win conditions) and D-6 (Hebrew i18n). **Parallel-friendly:** independent features can run as separate worktree sessions.
 
 **Goal:** add the party-night capabilities that make people want to run Sound Clash again — after the app is fast, smooth, and resilient (Phases 1–4) so features land on a solid base.
 
@@ -17,7 +17,7 @@
 ## Build order
 
 ### Tier 1 — ship first (high impact, cheap)
-- [ ] **X-Skip** — host Skip-song button (also lands as F-P1-4 in Phase 4; if Phase 4 ran, this is done). `[S]`
+- ~~**X-Skip** — host Skip-song button~~ — **declined in Phase 4 T4.1 (PR #186)**: Next round + the persistent "Video unavailable" state already cover dead videos; don't rebuild. `[—]`
 - [ ] **X-Presets** — one-tap genre/decade presets on create. `[S]` frontend-only.
 - [ ] **X-SFX** — display sound effects (buzz/correct/wrong). `[S]` **D-9** (audio assets).
 - [ ] **X-AutoRelease** — auto lock-release on countdown expiry (opt-in host toggle). `[S]`

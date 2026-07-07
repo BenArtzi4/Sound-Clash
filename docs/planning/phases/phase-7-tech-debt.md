@@ -1,8 +1,8 @@
 # Phase 7 — Tech-debt & Test Hardening
 
 ## ▶ Kickoff
-**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Refactors are single-session, guarded by the existing tests. **USE A WORKFLOW for T7.5 test generation** (one agent per scenario — RLS-fix, cascade-delete, preloadError, failed-hydrate, expiry — then consolidate).
-**Notes:** **D-7 = scoring authority in DB** (careful yes; own PR behind the buzz-race gate; optionally fold into Phase 3 T3.2 to touch `award_attempt` once). **Flag before doing:** the CI items T-RLSCI, T-BundleBudget, T-e2eGate. Dependabot PRs (#133/#114/#147/#148): open/update — **maintainer merges those**.
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Refactors are single-session, guarded by the existing tests. A workflow for T7.5 test generation is optional (one agent per scenario — RLS-fix, cascade-delete, failed-hydrate, expiry — then consolidate); the list shrank enough that a single session also works.
+**Notes:** **D-7 = scoring authority in DB** (careful yes; own PR behind the buzz-race gate). **Flag before doing:** the CI items T-RLSCI, T-BundleBudget, T-e2eGate. Dependabot PRs (#133/#114/#147/#182): open/update — **maintainer merges those**.
 
 **Goal:** remove the footguns and blind spots that make future work risky — the god component, the client-controlled scoring, the flaky RLS test, the missing bundle discipline — so the app stays production-perfect as it grows.
 
@@ -16,10 +16,10 @@
 
 ## Tasks
 
-### T7.1 · Scoring single source of truth `[M]` — T-Scoring, **D-7**
-- [ ] Refactor `award_attempt` to take booleans + read `songs.is_soundtrack`, compute + cap points server-side.
+### T7.1 · Scoring single source of truth `[M]` — T-Scoring, **D-7 = yes, careful**
+- [ ] Refactor `award_attempt` to take booleans + derive soundtrack-ness from genre membership server-side (mig 028 pattern — there is **no** `is_soundtrack` column; it was dropped in mig 025), compute + cap points in the DB.
 - [ ] Expose the 5 UI constants from one shared module the toasts import; add the value-cross-check test (T-ScoringTest).
-- [ ] Behind the buzz-race + full-game gate; own PR. Decide D-7 first (recommend yes; optionally pull into Phase 3 to touch `award_attempt` once).
+- [ ] Behind the buzz-race + full-game gate; own PR.
 
 ### T7.2 · Decompose the god components `[M]` — T-Manager, T-Admin
 - [ ] Extract `useSongPrebuffer` + `useScoring` from `ManagerConsolePage`; leave it as layout+wiring. Existing ~48-case test guards it.
@@ -28,23 +28,22 @@
 ### T7.3 · Small quality cleanups `[S]`
 - [ ] `T-SongFetch`: `fetchSongWithSoundtrack()` in `lib/soundtrack.ts`; both pages call it.
 - [ ] `T-RpcError`: `throwOnRpcError()` helper for uniform RPC error shape across all five direct-RPC sites.
-- [ ] `T-Deps`: document/fix the 4 `exhaustive-deps` disables.
-- [ ] `T-KeepWarm`: implement the keep-warm decision from Phase 3.
+- [ ] `T-Deps`: document/fix the 4 `exhaustive-deps` disables (`SongExport.tsx:90`, `DisplayPage.tsx:124`, `ManagerConsolePage.tsx:164,238`).
+- ~~`T-KeepWarm`~~ ✅ already implemented (`useKeepBackendWarm.ts`, wired in `ManagerConsolePage`).
 
 ### T7.4 · Dead code + hygiene `[S]` — T-DeadCode, T-Lockfile
-- [ ] One sweep: delete `Scoreboard.{tsx,test.tsx,module.css}` + CLAUDE.md mention; remove `create-page-after-fix.png` at repo root; audit `screenshots/` + `.playwright-mcp/` tracking.
+- [ ] One sweep: delete `Scoreboard.{tsx,test.tsx,module.css}` + CLAUDE.md mention; remove `create-page-after-fix.png` at repo root. (`screenshots/`/`.playwright-mcp/` verified untracked.)
 - [ ] Un-ignore `frontend/package-lock.json` after re-verifying the npm-10 runner bug is gone (deploy reproducibility). **Verify before flipping.**
 
-### T7.5 · Test hardening `[M — workflow]` — T-RLSFix, T-CascadeTest, T-DeployTest
-- [ ] Proper RLS fixture fix: dedicated non-superuser `LOGIN` role + `current_user` assertion; extend to `game_round_attempts` + `game_history*`.
-- [ ] e2e/reducer tests for: cascade-delete UX, deploy-during-game preloadError→reload, failed-hydrate, expiry warning.
-- [ ] (workflow) generate the DB-race + e2e specs in parallel, then consolidate.
+### T7.5 · Test hardening `[M]` — T-RLSFix, T-CascadeTest
+- [ ] Proper RLS fixture fix: dedicated non-superuser `LOGIN` role + `current_user` assertion (`tests/db/conftest.py:124` still uses `SET ROLE anon`). The table-coverage extension already shipped.
+- [ ] e2e/reducer tests for: cascade-delete ordering (T4.4), failed-hydrate (T4.3), expiry warning (T4.8). (`preloadError` deploy-path tests already exist from T4.0.)
 
 ### T7.6 · CI discipline `[S — flag CI changes]`
 - [ ] `T-RLSCI`: isolated CI job for the RLS suite (deterministic green/red).
 - [ ] `T-BundleBudget`: post-build bundle-size assert / visualizer in PR.
-- [ ] `T-e2eGate`: decide whether e2e gates PRs; confirm coverage ratchet isn't stuck at 0.
-- [ ] `T-Dependabot`: review + open/update the 4 dependabot PRs (#133, #114, #147, #148). **Maintainer merges.**
+- [ ] `T-e2eGate`: decide whether e2e gates PRs (today it runs only on push-to-main / `run-e2e` label; backend coverage gate is already at 90).
+- [ ] `T-Dependabot`: review + open/update the open dependabot PRs (#133, #114, #147, #182). **Maintainer merges.**
 
 ---
 

@@ -33,4 +33,4 @@ The Playwright spec derives `API_URL` from `BASE_URL` if not set (`https://sound
 
 ## When to run
 
-See `docs/phase7-cutover-checklist.md` steps 6 (preview) and 8 (post-DNS-cutover). After Phase 7 ships, run both scripts after every backend or frontend deploy that touches user-visible behaviour.
+After every backend or frontend deploy that touches user-visible behaviour, and after applying any prod migration (see `docs/runbook.md`). For pre-event validation, see `docs/pre-event-checklist.md`.

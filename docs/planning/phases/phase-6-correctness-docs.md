@@ -1,49 +1,40 @@
 # Phase 6 — Correctness & Docs/Data-Model Hygiene
 
 ## ▶ Kickoff
-**Model:** Opus 4.8 to apply. **USE A WORKFLOW for the 76-item docs-drift sweep** (T6.1) — one agent per doc: diff doc-vs-code, produce exact edits, verify against migrations/routers; consolidate into 1–2 PRs. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) for each PR.
-**Single-session PRs:** T6.2 (drop `total_rounds`) and T6.3 (`UNIQUE(youtube_id)` after a dedup pass — **D-8 = youtube_id now**, ISRC later). Migrations idempotent; verify no orphaned `song_genres` after dedup. **Gate:** dedup + `total_rounds` drop must not affect song selection (no repeats within a game).
+**Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md).
+**Scope re-verified 2026-07-07:** the original "76-item docs-drift sweep" had no backing item list, and most named drifts were already fixed by the Phase 1–3 doc syncs (`rpc-functions.md` done; the 409-vs-410 contracts claim turned out false; runbook + roadmap items closed in the planning reorg). **T6.1 is now a single-session sync of ~4 residual drifts — no workflow needed.** T6.2/T6.3 are separate single-session migration PRs (**D-8 = youtube_id now**, ISRC later). Migrations idempotent; verify no orphaned `song_genres` after dedup.
+**Gate:** dedup + `total_rounds` drop must not affect song selection (no repeats within a game).
 
-**Goal:** make the effective schema, the RPC signatures, and every spec doc agree with the running code. Docs are the authoritative spec here — every drift is a bug by the repo's own rule.
-
-**Why:** 76 docs-drift findings is the single largest category. Left alone, the spec actively misleads future work (and security reasoning — `data-model.md` currently *under*states the anon surface). Steady autonomous cleanup; interleaves with any phase.
+**Goal:** make the effective schema, the RPC signatures, and every spec doc agree with the running code. Docs are the authoritative spec — every drift is a bug by the repo's own rule.
 
 **Backlog refs:** `04-tech-debt.md §E` + `§F` (schema hygiene), D-8.
-
-**Session shape:** **ultracode workflow** — 76 items across 7 docs is exactly "N independent instances of the same shape." Fan out one agent per doc to diff doc-vs-code and produce the exact edits, verify each against migrations/routers, then a single consolidation PR. The schema migrations are separate single-sessions.
 
 ---
 
 ## Tasks
 
-### T6.1 · Docs-drift sweep `[M — workflow]`
-- [ ] `data-model.md`: regenerate the DDL from migrations 001–033 (add `game_round_attempts` + indexes, the three `game_history` tables, `total_rounds`; fix "six tables"→ten; fix §5/§6 anon-EXECUTE list + `award_attempt` signature + callers). (T-DocDataModel)
-- [ ] `rpc-functions.md`: add `peek_next_song`; fix §8 auth claims; remove references to deleted REST endpoints. (T-DocRPC)
-- [ ] `api-contracts.md`: fix 409-vs-410 status codes; correct the anon-exposed-functions claim; drop removed endpoints. (T-DocContracts)
-- [ ] `game-rules.md`: replace "(admin auth)" host transitions with the `manager_token` model. (T-DocGameRules)
-- [ ] `runbook.md`: correct the stale DR claim (pairs with I-DR). (T-DocRunbook)
-- [ ] `roadmap.md`: reconcile "Out of Scope" (game history + song export shipped). (T-Roadmap)
-- [ ] Sweep the smaller drifts surfaced in the map corpus (CLAUDE.md Scoreboard mention, etc.).
+### T6.1 · Residual docs-drift sync `[S — one PR]`
+- [ ] `data-model.md`: intro "Six tables" → ten; §5/§6 "only `buzz_in` is anon-EXECUTE" → the five anon-callable RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`). (The `game_round_attempts`/history-table omissions are already fixed.) (T-DocDataModel)
+- [ ] `api-contracts.md`: fix "Only one function is exposed to anon" (~line 329); drop the removed `select-song`/`attempt`/`end-round` from the X-Manager-Token list (~line 71). Do **not** "fix" the 409s — code really returns 409 for already-ended /bonus,/end. (T-DocContracts)
+- [ ] `game-rules.md`: replace the "(admin auth)" host transitions with the `manager_token` model. (T-DocGameRules)
+- [ ] Spot-sweep: grep the four synced docs for other pre-open-hosting or pre-direct-RPC phrasing while in there.
 
 ### T6.2 · Drop the orphan `total_rounds` column `[S]` — T-TotalRounds
-- [ ] Migration `DROP COLUMN IF EXISTS active_games.total_rounds` (mig 015 promised it); sync `data-model.md`.
-- [ ] Confirm no code path reads/writes it (backend + frontend grep).
+- [ ] Migration `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it; only relaxed NOT NULL). Confirm no code path reads/writes it (verified none as of 2026-07-07); sync `data-model.md`.
 
 ### T6.3 · `UNIQUE(songs.youtube_id)` `[M]` — T-YoutubeUnique, **D-8**
-- [ ] One-time dedup pass on prod's ~1025 rows (identify + merge duplicate `youtube_id`s, repoint `song_genres`).
-- [ ] Add the unique index migration.
-- [ ] Decide D-8 (this now; ISRC later) before starting.
-
-### T6.4 · `game_round_attempts` / `game_history` RLS tests `[S]` — extends T-RLSFix
-- [ ] Add RLS coverage for the four tables the suite currently omits (may be done in Phase 3/5).
+- [ ] One-time dedup pass on prod's catalog (identify + merge duplicate `youtube_id`s, repoint `song_genres` — the known Avicii "Wake Me Up" double-upload is a same-song-different-video case, not a `youtube_id` dupe).
+- [ ] Add the unique index migration (idempotent).
 
 ---
 
-## Decisions touched
-- **D-8** (youtube_id-unique vs ISRC) gates T6.3. Recommendation: youtube_id now.
+## Removed (verified done, 2026-07-07)
+- ~~T-DocRPC~~ — `peek_next_song` documented, §8 in-body auth acknowledged, removed endpoints reframed.
+- ~~T-DocRunbook~~ — DR section corrected in Phase 1; the stale legacy-AWS-fallback line was removed in the planning reorg.
+- ~~T-Roadmap~~ — the historical `docs/roadmap.md` was removed in the planning reorg.
+- ~~T6.4 RLS coverage~~ — `test_rls_anon.py` already covers `game_round_attempts` + the three `game_history` tables (the separate **fixture** fix remains Phase 7 T7.5).
 
 ## Exit gate (Phase 6)
 - [ ] Every doc in `docs/` that describes schema/RPC/auth matches the code (spot-check each changed section against the cited migration/router).
 - [ ] Migrations idempotent (CI applies twice); no dedup regression (row counts sane, no orphaned `song_genres`).
-- [ ] `data-model.md` DDL is regenerable-from-migrations (note the method in the doc).
 - [ ] **Full-Game Exit Gate** — the dedup + `total_rounds` drop don't affect song selection or gameplay (song pick still works, no repeats within a game).
