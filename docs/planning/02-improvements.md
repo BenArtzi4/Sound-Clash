@@ -15,7 +15,7 @@ Improvements to *existing* behavior. This is where the north star lives: **fast 
 Make a real party survive the things that go wrong. (Several of these are also bugs in `01`; here they're framed as the resilience posture.)
 
 - **I-Expiry · Expiry countdown + token-gated extend RPC.** `[M]` `state.game.expires_at` is already synced. Render a subtle countdown that becomes a warning banner in the last ~20 min; add a token-gated `extend_game` RPC that pushes `expires_at` forward. Removes the abrupt 4h party-death. Note `expires_at` counts from *creation*, so lobby time eats into it — factor into the warning.
-- **I-GoneDerive · Cascade-ordering guard on the team page.** `[S]` (see F-P1-2) the "gone" derivation from `active_games` is already in `useGameChannel`; what remains is the team-page guard for the teams-deleted-before-game ordering + the T-CascadeTest.
+- **I-GoneDerive · Cascade-ordering guard on the team page.** ✅ shipped 2026-07-08 (PR #192, T4.4) — the team page distinguishes the expiry cascade from a kick via `expires_at` on the server-offset clock; T-CascadeTest pins the ordering.
 - **I-NextRecover · Revert the double-buffer on Next-round failure.** `[M]` (see F-P1-3) the catch already stops the promoted player and clears the optimistic ref; it still doesn't revert the `activeKey` swap or defer the swap to after the RPC confirms.
 - **I-FinalBoard · Host-visible final board that survives the abrupt delete.** `[M]` When a game ends/expires the host loses the live board (`game_history` has no UI). Render the final scoreboard from last-known state (and/or an admin-gated `game_history` read).
 

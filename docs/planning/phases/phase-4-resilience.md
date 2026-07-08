@@ -18,14 +18,11 @@
 - **T4.2 · Resume a paused song on tab-return (I-Resume)** ✅ PR #187 — `useResumeOnVisible` + `YouTubePlayer.resumeIfPaused()` (plays only from PAUSED, never replays ENDED; skips while a buzz holds the scoring pause).
 - **T4.9 · Connecting/reconnecting states (I-Reconnect)** ✅ already shipped in Phase 2 (PR #163) — `TeamGameplayPage` distinguishes "CONNECTING…" from "RECONNECTING…" (`useGameChannel` `ChannelStatus` includes `reconnecting`). Nothing left to build.
 - **T4.3 · Hydrate/queue robustness (F-P1-1, I-QueueDrain)** ✅ PR #190 — the event gate opens only on a snapshot that actually committed (failed hydrate keeps events queuing for the next authoritative attempt; success also clears the stale `error`); pending queue capped at `MAX_PENDING_EVENTS = 500` with overflow triggering one fresh resync (never a silent drop); the authoritative gone path closes the queue. Tests: failed-hydrate-then-replay + overflow-resync; `realtime-design.md` §6 updated.
+- **T4.4 · Graceful expiry/teardown (F-P1-2, I-GoneDerive)** ✅ PR #192 — the team page distinguishes the expiry sweep's cascade (team row deleted while the game row is still present but ended/`expires_at` passed, judged on the `serverTimeNow()` offset clock) from a genuine kick: banner in place instead of a silent Home bounce; a kick from a live game still redirects. T-CascadeTest pins the teams-before-game ordering (3 vitest cases) and `expiration.spec.ts` now requires the banner (no redirect tolerance). Docs synced: `realtime-design.md` §7, `game-rules.md` §7/§10, `testing-strategy.md`.
 
 ## Open tasks (in recommended order — value + file affinity)
 
-### T4.4 · Graceful expiry/teardown `[S]` — F-P1-2, `I-GoneDerive` (partial: gone-derivation already in `useGameChannel`) · **NEXT**
-- [ ] Team-page guard for the cascade ordering (`game_teams` deletes **before** `active_games` at expiry, so the kick redirect still wins today — `TeamGameplayPage.tsx:61`).
-- [ ] T-CascadeTest: pin the teams-before-game delete ordering (the general "gone" banner is already covered by `expiration.spec.ts`).
-
-### T4.5 · Next-round failure recovery `[M]` — F-P1-3, `I-NextRecover` (partial: catch already stops the promoted player)
+### T4.5 · Next-round failure recovery `[M]` — F-P1-3, `I-NextRecover` (partial: catch already stops the promoted player) · **NEXT** (batch with T4.6 — same file)
 - [ ] Remember pre-swap state; on `select_next_song` failure revert `activeKeyRef`/`activeKey` and reload the current round's song; only commit the swap after the RPC confirms (keep mobile-autoplay-in-gesture).
 
 ### T4.6 · Bonus toast honesty `[S]` — F-P1-5 (batch with T4.5 — same file)

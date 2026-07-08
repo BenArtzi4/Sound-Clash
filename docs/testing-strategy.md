@@ -130,7 +130,7 @@ Playwright with multi-browser-context. Runs against a dedicated `Sound-Clash-Pre
 | `buzzer_race.spec.ts` | manager + 2 teams + display; both teams click within 5ms; deterministic winner; all contexts agree |
 | `full_game.spec.ts` | 3-round happy path with score accumulation |
 | `reconnection.spec.ts` | team disconnects mid-game; reload; state restored; can buzz |
-| `expiration.spec.ts` | game with expires_at in past; cron runs; all clients redirect to "expired" page |
+| `expiration.spec.ts` | game with expires_at in past; cron runs; all clients show the "ended or expired" banner in place (the team page must NOT redirect home — expiry is teardown, not a kick) |
 | `admin_songs_crud.spec.ts` | create/edit/delete song via admin API + bulk-import idempotency (UI deferred; see roadmap) |
 | `kick_team.spec.ts` | manager kicks team; team's tab redirects |
 | `mobile_team.spec.ts` | iPhone viewport; buzzer reachable + tappable |

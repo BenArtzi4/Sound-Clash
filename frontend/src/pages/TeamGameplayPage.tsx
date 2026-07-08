@@ -5,12 +5,25 @@ import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { useGameChannel } from "../hooks/useGameChannel";
+import { serverTimeNow } from "../hooks/useServerTime";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
+import type { ActiveGame } from "../lib/types";
 import styles from "./TeamGameplayPage.module.css";
 
 interface PointEvent {
   id: string;
   delta: number;
+}
+
+// The 4h expiry sweep (cleanup_expired_games) cascade-deletes game_teams a
+// beat before active_games, so our team's DELETE arrives while the game row is
+// still present — indistinguishable from a kick by row absence alone. The
+// sweep only touches games whose expires_at has passed, so the clock is the
+// discriminator (server-offset clock; falls back to the device clock until the
+// first Realtime event is observed).
+function isExpired(game: ActiveGame): boolean {
+  const expiresAt = Date.parse(game.expires_at);
+  return Number.isFinite(expiresAt) && serverTimeNow().getTime() >= expiresAt;
 }
 
 export function TeamGameplayPage() {
@@ -51,7 +64,9 @@ export function TeamGameplayPage() {
   }, [state, stored]);
 
   // After hydrate, if our team isn't in the room, we've been kicked or the
-  // game is gone. Clean up storage and bounce home.
+  // game is being torn down. Either way the stored identity is dead; only a
+  // genuine kick (game still alive) bounces home — expiry/end teardown stays
+  // on the page so the banner or podium renders instead of a silent redirect.
   useEffect(() => {
     if (!hydratedOnce || !stored) return;
     if (status === "gone") {
@@ -60,6 +75,10 @@ export function TeamGameplayPage() {
     }
     if (state && !state.teams.has(stored.id)) {
       clearStoredTeam(gameCode);
+      // Teardown, not a kick: the game-row DELETE lands a beat later and flips
+      // status to "gone" (backstopped by the resync hydrate if that event is
+      // ever dropped).
+      if (state.game.status === "ended" || isExpired(state.game)) return;
       navigate("/", { replace: true });
     }
   }, [hydratedOnce, stored, state, status, gameCode, navigate]);
@@ -75,7 +94,17 @@ export function TeamGameplayPage() {
 
   if (!stored) return null;
 
-  if (status === "gone") {
+  // Our team row was cascade-deleted by the expiry sweep while the game row is
+  // still present: paint the banner now rather than flashing the buzz UI for
+  // the beat until the game-row DELETE flips status to "gone". (An ended game
+  // keeps rendering the podium below instead.)
+  const removedByExpiry =
+    state !== null &&
+    !state.teams.has(stored.id) &&
+    state.game.status !== "ended" &&
+    isExpired(state.game);
+
+  if (status === "gone" || removedByExpiry) {
     return (
       <main className={styles.shell}>
         <div className={styles.statusEnded}>This game has ended or expired.</div>
