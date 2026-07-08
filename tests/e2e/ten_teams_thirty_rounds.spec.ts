@@ -23,7 +23,11 @@
 // run; against the tiny CI seed the game is capped at the available pool (same
 // approach as four_teams_twenty_rounds / soundtrack_playthrough) so it never
 // hits `no_more_songs`. When the pool caps the run short of a scenario's round,
-// that scenario is skipped and logged (no silent truncation).
+// that scenario is skipped and logged (no silent truncation), and the coverage
+// guard at the end only requires the paths whose scheduled round actually ran.
+// Rounds 1-7 cover all seven round-consuming paths (+ the round-2 bonus
+// overlay) so even the 7-song CI seed exercises every scoring path; the
+// kick-seeding round and the volume rounds come after.
 //
 // Robustness: the manager console serialises every scoring/advance action behind
 // a `busy` flag and each handler early-returns while it's set, so a click fired
@@ -55,7 +59,7 @@ import { countSongsInGenreSlugs } from "./fixtures/supabase-admin";
 const TARGET_ROUNDS = 30;
 const TEAM_COUNT = 10;
 const BONUS_TEAM = "Team08"; // receives the +4 host bonus
-const KICK_TEAM = "Team10"; // scored in R6, then kicked after R8
+const KICK_TEAM = "Team10"; // scored in R8, then kicked after R8
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -284,11 +288,14 @@ test("10 teams, up to 30 rounds: every scoring path, live scores, podium & archi
       case 5:
         return { type: "wrong", a: "Team05", b: "Team06" };
       case 6:
-        return { type: "song", a: KICK_TEAM }; // give the sacrificial team a score
+        // noscore sits inside rounds 1-7 so the capped CI pool still covers it.
+        return { type: "noscore", a: "Team07" };
       case 7:
         return { type: "race" };
       case 8:
-        return { type: "noscore", a: "Team07" };
+        // Give the sacrificial team a score just before the R8 kick overlay;
+        // only matters when TOTAL > 8, so it lives outside the 1-7 core.
+        return { type: "song", a: KICK_TEAM };
       default: {
         // Volume rounds 9..TOTAL: even -> feed the leader (+15), odd -> cycle a
         // list that repeats every path (incl. split/wrong/race) on other teams.
@@ -394,7 +401,7 @@ test("10 teams, up to 30 rounds: every scoring path, live scores, podium & archi
     }
 
     // --- Kick overlay: after round 8 advances (no active buzz), remove the
-    //     sacrificial team that scored in R6. Standings for everyone else must
+    //     sacrificial team that scored in R8. Standings for everyone else must
     //     be untouched. ---
     if (r === 8 && TOTAL > 8) {
       paths.add("kick-midgame");
@@ -501,18 +508,22 @@ test("10 teams, up to 30 rounds: every scoring path, live scores, podium & archi
   expect(ghsRows.length).toBe(TOTAL);
   expect(new Set(ghsRows.map((r) => r.round_number)).size).toBe(TOTAL);
 
-  // ---- Coverage guard: every scoring path we scheduled actually ran ----
-  const wantPaths = [
-    "song+10",
-    "artist+5",
-    "both+15",
-    "multibuzz-split",
-    "wrong-then-win",
-    "continue-noscore",
-    "concurrent-race",
-    "bonus+4",
+  // ---- Coverage guard: every scoring path whose scheduled round actually ran ----
+  // The pool can cap TOTAL below a path's round (skipped + logged above); a
+  // skipped path must not fail the guard. Each entry is [path, first round
+  // that schedules it]; kick-midgame already keys off TOTAL below.
+  const wantPaths: Array<[string, number]> = [
+    ["song+10", 1],
+    ["artist+5", 2],
+    ["bonus+4", 2],
+    ["both+15", 3],
+    ["multibuzz-split", 4],
+    ["wrong-then-win", 5],
+    ["continue-noscore", 6],
+    ["concurrent-race", 7],
   ];
-  for (const p of wantPaths) {
+  for (const [p, firstRound] of wantPaths) {
+    if (TOTAL < firstRound) continue;
     expect(paths.has(p), `scoring path '${p}' should have been exercised`).toBe(true);
   }
   if (TOTAL > 8) expect(paths.has("kick-midgame")).toBe(true);
