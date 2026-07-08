@@ -1465,17 +1465,22 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByTestId("score-artist")).toBeDisabled();
   });
 
-  it("Bonus opens a team picker and posts to awardBonus", async () => {
+  it("Bonus posts to awardBonus and confirms the +4 only after the call resolves (T4.6)", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
       teams: [makeTeam({ id: "t1", name: "Alice" }), makeTeam({ id: "t2", name: "Bob" })],
       rounds: [],
     });
-    vi.mocked(awardBonus).mockResolvedValueOnce({
-      team_id: "t2",
-      points_awarded: 4,
-      team_total_score: 4,
-    });
+    // Defer the Render call so we can probe the in-flight state: the bonus is
+    // the one Render-routed scoring call, and on a cold start it can hang for
+    // many seconds — the old optimistic "+4" toast lied during that window
+    // (F-P1-5).
+    let resolveBonus!: (v: never) => void;
+    vi.mocked(awardBonus).mockReturnValueOnce(
+      new Promise((res) => {
+        resolveBonus = res as (v: never) => void;
+      }) as never,
+    );
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -1483,9 +1488,21 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("score-bonus"));
     await waitFor(() => screen.getByTestId("bonus-team-t2"));
     fireEvent.click(screen.getByTestId("bonus-team-t2"));
+    // The click is acknowledged (neutral toast, busy gates Bonus + End game)
+    // but success is NOT claimed while the call is in flight.
+    expect(screen.getByText(/sending \+4 to Bob/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\+4 bonus to Bob/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("score-bonus")).toBeDisabled();
+    expect(screen.getByTestId("end-game")).toBeDisabled();
     await waitFor(() =>
       expect(awardBonus).toHaveBeenCalledWith("ABCDEF", TOKEN, { team_id: "t2" }),
     );
+    await act(async () => {
+      resolveBonus({ team_id: "t2", points_awarded: 4, team_total_score: 4 } as never);
+    });
+    // Only now does the success toast confirm the +4.
+    expect(screen.getByText(/\+4 bonus to Bob/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("score-bonus")).toBeEnabled());
   });
 
   it("Bonus picker can be toggled closed without picking a team", async () => {
@@ -1505,7 +1522,7 @@ describe("ManagerConsolePage", () => {
     expect(awardBonus).not.toHaveBeenCalled();
   });
 
-  it("Bonus surfaces an error toast when the API call fails", async () => {
+  it("Bonus surfaces an error toast and never claims success when the API call fails", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
       teams: [makeTeam({ id: "t1", name: "Alice" })],
@@ -1520,6 +1537,9 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => screen.getByTestId("bonus-team-t1"));
     fireEvent.click(screen.getByTestId("bonus-team-t1"));
     await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
+    // A failed bonus must not show the success toast (the old optimistic
+    // toast fired it before the call, so the host saw success + error stacked).
+    expect(screen.queryByText(/\+4 bonus to Alice/i)).not.toBeInTheDocument();
   });
 
   it("end game confirms, calls endGame, and clears the manager token", async () => {
@@ -1827,10 +1847,12 @@ describe("ManagerConsolePage", () => {
     );
   });
 
-  it("stops the just-started player if select_next_song fails after an in-gesture commit", async () => {
-    // If we begin playing the prebuffered song in-gesture but the round fails to
-    // advance server-side, we must stop playback so the room isn't left hearing a
-    // song no round backs.
+  it("rolls the whole swap back when select_next_song fails after an in-gesture commit (T4.5)", async () => {
+    // If we begin playing the prebuffered song in-gesture but the round fails
+    // to advance server-side, the optimistic swap must not stand: the promoted
+    // player is stopped, activeKey reverts to the pre-click player, the song
+    // card returns to the still-current round, that round's song is reloaded so
+    // the room isn't silent, and the peeked song goes back into the standby.
     await setupPlayingRoundWithBothPlayersReady();
     vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
       song_id: "song-2",
@@ -1847,11 +1869,71 @@ describe("ManagerConsolePage", () => {
       onPlayingHandlers[0]?.("statechange");
     });
     await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 0));
+    // Isolate the rollback's reload from the setup-time first-song load.
+    handle(0).loadVideoById.mockClear();
 
     fireEvent.click(screen.getByTestId("start-round"));
     // Promoted player (B, now active) is committed, then stopped when the RPC rejects.
     await waitFor(() => expect(handle(1).commitPrebuffered).toHaveBeenCalled());
     await waitFor(() => expect(handle(1).stop).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText(/network down/i)).toBeInTheDocument());
+    // activeKey reverted: player A's wrapper carries the active testId again.
+    const [firstPlayer] = screen.getAllByTestId(/^youtube-player/);
+    expect(firstPlayer).toHaveAttribute("data-testid", "youtube-player");
+    // The still-current round's song is reloaded into the restored live player...
+    expect(handle(0).loadVideoById).toHaveBeenCalledWith("vid1aaaaaaa", 0);
+    // ...and the card shows it again instead of the peeked next song.
+    expect(screen.getByText("First")).toBeInTheDocument();
+    expect(screen.queryByText("Song Two")).not.toBeInTheDocument();
+    // The peeked song is re-prebuffered into the standby for the retry.
+    expect(handle(1).prebuffer).toHaveBeenCalledTimes(2);
+    expect(handle(1).prebuffer).toHaveBeenLastCalledWith("vid2bbbbbbb", 0);
+  });
+
+  it("a retry after a failed Next round keeps the fast path with the same peeked song", async () => {
+    await setupPlayingRoundWithBothPlayersReady();
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-2",
+      youtube_id: "vid2bbbbbbb",
+      start_time: 0,
+      title: "Song Two",
+      artist: "Artist Two",
+      is_soundtrack: false,
+    });
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect)
+      .mockRejectedValueOnce(new RpcError("network down"))
+      .mockResolvedValueOnce({
+        round_id: "r2",
+        round_number: 2,
+        song: {
+          id: "song-2",
+          title: "Song Two",
+          artist: "Artist Two",
+          youtube_id: "vid2bbbbbbb",
+          start_time: 0,
+          is_soundtrack: false,
+        },
+      });
+
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 0));
+
+    // First click fails and rolls back (restoring the preload)...
+    fireEvent.click(screen.getByTestId("start-round"));
+    await waitFor(() => expect(screen.getByText(/network down/i)).toBeInTheDocument());
+    // ...so the retry commits the SAME prebuffered song in-gesture again.
+    fireEvent.click(screen.getByTestId("start-round"));
+    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledTimes(2));
+    expect(selectNextSongDirect).toHaveBeenNthCalledWith(1, "ABCDEF", TOKEN, "song-2");
+    expect(selectNextSongDirect).toHaveBeenNthCalledWith(2, "ABCDEF", TOKEN, "song-2");
+    expect(handle(1).commitPrebuffered).toHaveBeenCalledTimes(2);
+    await waitFor(() =>
+      expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
+        expect.objectContaining({ preloaded: true, songId: "song-2" }),
+      ),
+    );
   });
 });

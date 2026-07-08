@@ -6,7 +6,7 @@ Legend for the perf tag on latency-adjacent items: `buzz-latency` (moves the <20
 
 > **Resolved items removed 2026-07-05** (shipped in Phases 1–3; detail in git history / `CHANGELOG.md`): F-P0-1 (manager_token leak → `game_secrets`, mig 034), F-P0-2 (catalog DR backup), F-P0-4 (deploy-before-migrate outage), F-P1-8 (busy flag dropped clicks), F-P2-2 (Continue pending flag), F-P2-3 (keep-warm immediate ping). IDs are intentionally not reused.
 > **Resolved 2026-07-07** (Phase 4): F-P0-3 (deploy-during-game blank screen → `vite:preloadError` budget-guarded auto-reload + app-level `ErrorBoundary`; runbook §1.2; PR #185). F-P1-4 (dead-video Skip) was **de-scoped** (PR #186): the persistent "Video unavailable" state already ships, **Next round** already moves past a dead song, and select/peek exclude already-played songs — no Skip button, no blocklist.
-> **Resolved 2026-07-08** (Phase 4): F-P1-1 (failed hydrate silently dropped all live events → the event gate now opens only on a successful snapshot, events keep queuing on failure, and the queue is capped at 500 with an overflow-triggered resync; PR #190). F-P1-2 (players bounced to Home at the 4h sweep → the team page now tells the expiry cascade apart from a kick via `expires_at` on the server-offset clock and shows the "ended or expired" banner in place; kick-from-live-game still redirects; T-CascadeTest + tightened `expiration.spec.ts`; PR #192).
+> **Resolved 2026-07-08** (Phase 4): F-P1-1 (failed hydrate silently dropped all live events → the event gate now opens only on a successful snapshot, events keep queuing on failure, and the queue is capped at 500 with an overflow-triggered resync; PR #190). F-P1-2 (players bounced to Home at the 4h sweep → the team page now tells the expiry cascade apart from a kick via `expires_at` on the server-offset clock and shows the "ended or expired" banner in place; kick-from-live-game still redirects; T-CascadeTest + tightened `expiration.spec.ts`; PR #192). F-P1-3 (failed Next-round left the room in silence → the in-gesture double-buffer swap now rolls back fully on `select_next_song` failure: promoted player stopped, `activeKey` reverted, the still-current round's song reloaded, and the peeked song re-prebuffered so a retry keeps the fast path; PR #193). F-P1-5 (bonus optimistic toast could lie → "Sending +4…" info toast on click, success toast only after the Render call resolves, `busy`-gated in flight; PR #193).
 
 ---
 
@@ -17,16 +17,6 @@ _None open._ (F-P0-3 shipped 2026-07-07 — Phase 4 T4.0, PR #185.)
 ---
 
 ## P1 — Real user-facing bugs
-
-### F-P1-3 · Failed Next-round leaves the room in silence `[bug]` — Phase 4 T4.5
-- **Evidence:** `ManagerConsolePage.tsx` swaps the double-buffer (`commitPrebuffered` + `stop()`) **before** awaiting `select_next_song`; the catch stops both players, `activeKey` stays swapped, `currentSong` never updates.
-- **Failure:** if the RPC fails, both players are stopped, the card shows the prior song, the room goes silent with no auto-recovery.
-- **Fix:** remember pre-swap state; on failure revert `activeKeyRef`/`activeKey` and reload the still-current round's song; only swap after the RPC confirms (keeps mobile-autoplay-in-gesture). Autonomous. Effort M.
-
-### F-P1-5 · Bonus optimistic toast can lie on cold-start failure `[bug]` — Phase 4 T4.6
-- **Evidence:** `ManagerConsolePage.tsx` `handleBonus` fires the "+4" success toast *before* awaiting the Render-routed REST call.
-- **Failure:** on a Render cold start the room sees no +4 for up to 30s while the host believes it landed; on failure the host already saw success and the error toast stacks on top, easily missed → host and room disagree on the score.
-- **Fix:** for the Render-routed bonus, confirm only after the call resolves (or reconcile from the Realtime score delta). Autonomous. Effort S.
 
 ### F-P1-6 · `manager_token` loss mid-game orphans the game `[bug]` — Phase 4 T4.10
 - **Evidence:** `managerToken.ts` — single credential, issued once at create, no re-issue; every host action is token-gated.

@@ -1,10 +1,10 @@
 # Next session — start here
 
-_Last updated: 2026-07-08 (T4.4 shipped — PR #192). Mid-Phase-4; **T4.5+T4.6 (batch) is next**._
+_Last updated: 2026-07-08 (T4.5+T4.6 shipped — PR #193). Mid-Phase-4; **T4.7 is next**._
 
 ## Short prompt to paste into the fresh session
 
-> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then continue Phase 4 starting at T4.5+T4.6 (one PR, same file): follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-4-resilience.md`. Read `.claude/rules/lessons-learned.md` before running anything. Work the tasks one at a time — they cluster on a few shared files; put the parallelism inside each task (fan-out review/verify on the finished diff), not across tasks. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
+> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then continue Phase 4 starting at T4.7: follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-4-resilience.md`. Read `.claude/rules/lessons-learned.md` before running anything. Work the tasks one at a time — they cluster on a few shared files; put the parallelism inside each task (fan-out review/verify on the finished diff), not across tasks. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
 
 (Or just run the local **`/next-task`** skill — it encodes the same loop.)
 
@@ -13,19 +13,18 @@ _Last updated: 2026-07-08 (T4.4 shipped — PR #192). Mid-Phase-4; **T4.5+T4.6 (
 ## Where things stand (2026-07-08)
 
 - **Phases 1–3 ✅ complete and live on prod** (`https://www.soundclash.org`). PRs #150–#174 merged; DB migrations through **038** applied + verified on prod (`jvfddxuaqcsrguibkymp`).
-- **Phase 4 ⏳ in progress (frontend-only until T4.8's migration; Cloudflare auto-deploys from `main`):** ✅ T4.0 deploy-safe chunks (PR #185) · ✅ T4.2 resume-on-visible (PR #187) · ✅ T4.3 hydrate gate + queue cap (PR #190 — gate opens only on a successful snapshot; 500-event cap with overflow resync) · ✅ T4.4 expiry teardown ≠ kick (PR #192 — team page shows the "ended or expired" banner instead of a silent Home bounce when the sweep's cascade deletes the team row first; T-CascadeTest pins the ordering; `expiration.spec.ts` tightened) · ❌ T4.1 de-scoped (PR #186 — no Skip button; Next round + played-song exclusion cover dead videos) · ✅ T4.9 turned out **already shipped** in Phase 2 (PR #163 — CONNECTING…/RECONNECTING… states).
+- **Phase 4 ⏳ in progress (frontend-only until T4.8's migration; Cloudflare auto-deploys from `main`):** ✅ T4.0 deploy-safe chunks (PR #185) · ✅ T4.2 resume-on-visible (PR #187) · ✅ T4.3 hydrate gate + queue cap (PR #190 — gate opens only on a successful snapshot; 500-event cap with overflow resync) · ✅ T4.4 expiry teardown ≠ kick (PR #192 — team page shows the "ended or expired" banner instead of a silent Home bounce when the sweep's cascade deletes the team row first; T-CascadeTest pins the ordering; `expiration.spec.ts` tightened) · ✅ T4.5+T4.6 (PR #193 — failed `select_next_song` now rolls the whole in-gesture double-buffer swap back and reloads the still-current round's song, retry keeps the same-song fast path; bonus toast confirms only after the Render call resolves, "Sending +4…" info toast + `busy` gate in flight) · ❌ T4.1 de-scoped (PR #186 — no Skip button; Next round + played-song exclusion cover dead videos) · ✅ T4.9 turned out **already shipped** in Phase 2 (PR #163 — CONNECTING…/RECONNECTING… states).
 - **Pre-event validation done** (10-team live-prod pass 2026-07-05 + DB-verified 10-team/30-round e2e 2026-07-06); the two display-scaling bugs it found are fixed (PRs #176/#178). No open blockers. Reusable checklist: `docs/pre-event-checklist.md`.
 - **Phases 5–8 not started**, but re-verification shrank them: Phase 5's critical item (D-1) and T5.3 already shipped; Phase 6 is down to one doc-sync PR + two migrations; Phase 7 lost T-KeepWarm/T-DocRPC (done). Recommended order after Phase 4: **6 → 7 → 5 → 8** (see `phases/README.md`).
 
-## What to do next — Phase 4 from T4.5+T4.6 (recommended order)
+## What to do next — Phase 4 from T4.7 (recommended order)
 
-Follow `phase-4-resilience.md`. One PR per fix; **serial, not parallel** — the tasks cluster on `useGameChannel.ts`, `ManagerConsolePage.tsx`, `TeamGameplayPage.tsx`, `DisplayPage.tsx`. Batch tiny same-file fixes (T4.5+T4.6) into one PR.
+Follow `phase-4-resilience.md`. One PR per fix; **serial, not parallel** — the tasks cluster on `useGameChannel.ts`, `ManagerConsolePage.tsx`, `TeamGameplayPage.tsx`, `DisplayPage.tsx`.
 
-1. **T4.5 + T4.6 (batch) `[M+S]`** — `ManagerConsolePage.tsx`: revert the double-buffer swap when `select_next_song` fails (partial recovery exists; the `activeKey` revert doesn't) + confirm the +4 bonus toast only after the Render call resolves.
-2. **T4.7 · Song-metadata retry `[S]`** — bounded backoff on the per-round `songs` fetch (display + manager).
-3. **T4.8 · Expiry countdown + `extend_game` RPC `[M]`** — the one task with a **migration** (token-gated, additive). Update `rpc-functions.md`/`security-rls.md`/`data-model.md`; apply to prod before/with the deploy (lesson F-P0-4). Confirm the "keep playing" surface with the maintainer (button-averse).
-4. **T4.10 · Host recovery QR/link `[M]`** — re-openable host link embedding the `manager_token`.
-5. **T4.11 · (optional) Final board survives delete `[M]`.**
+1. **T4.7 · Song-metadata retry `[S]`** — bounded backoff on the per-round `songs` fetch (display + manager).
+2. **T4.8 · Expiry countdown + `extend_game` RPC `[M]`** — the one task with a **migration** (token-gated, additive). Update `rpc-functions.md`/`security-rls.md`/`data-model.md`; apply to prod before/with the deploy (lesson F-P0-4). Confirm the "keep playing" surface with the maintainer (button-averse).
+3. **T4.10 · Host recovery QR/link `[M]`** — re-openable host link embedding the `manager_token`.
+4. **T4.11 · (optional) Final board survives delete `[M]`.**
 
 **Phase 4 exit gate** adds a deliberate **"adverse" game** hitting ≥3 failure paths (dead video → Next round; host tab backgrounded → auto-resume [done]; socket drop → reconnect with no lost events [T4.3 ✅]).
 

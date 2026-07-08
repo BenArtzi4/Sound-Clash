@@ -565,6 +565,10 @@ export function ManagerConsolePage() {
     // Snapshot + clear the prebuffered song now so a late preload can't reuse it.
     const preloaded = preloadRef.current;
     preloadRef.current = null;
+    // Pre-swap snapshot for the rollback in the catch below: which player was
+    // live and which song card was up before the optimistic in-gesture swap.
+    const prevKey = activeKeyRef.current;
+    const prevSong = currentSong;
 
     // FAST PATH — start the prebuffered song *synchronously inside this tap*,
     // BEFORE awaiting the RPC. Mobile browsers only allow unmuted playback that
@@ -641,13 +645,25 @@ export function ManagerConsolePage() {
     } catch (err) {
       songStart.fail("select_next_song_failed");
       songStartRef.current = null;
-      // We already promoted + started the prebuffered song in-gesture, but the
-      // round failed to advance server-side. Stop it so the room isn't left
-      // hearing a song no round backs; the host can simply retry Next round.
-      // Drop the optimistic id so the song-resolver restores the actual current
-      // round's song (the advance never happened).
-      if (committedPreloaded) activePlayer()?.stop();
       optimisticSongIdRef.current = null;
+      // The round failed to advance server-side, so the optimistic in-gesture
+      // swap (which has to happen before the await for mobile autoplay) must
+      // not stand. Roll all of it back: silence the promoted player, restore
+      // the pre-click active player + song card, and reload the still-current
+      // round's song so the room isn't left in silence (best-effort on strict
+      // mobile autoplay — this load lands outside the gesture). The peeked
+      // song goes back into the standby buffer: the round never advanced, so
+      // it is still exactly what select_next_song would record, and a retry
+      // click keeps the in-gesture fast path.
+      if (committedPreloaded && preloaded) {
+        activePlayer()?.stop();
+        activeKeyRef.current = prevKey;
+        setActiveKey(prevKey);
+        setCurrentSong(prevSong);
+        if (prevSong) activePlayer()?.loadVideoById(prevSong.youtube_id, prevSong.start_time);
+        preloadRef.current = preloaded;
+        standbyPlayer()?.prebuffer(preloaded.youtube_id, preloaded.start_time);
+      }
       reportError(err);
     } finally {
       nextRoundInFlightRef.current = false;
@@ -655,17 +671,24 @@ export function ManagerConsolePage() {
   }
 
   async function handleBonus(teamId: string, teamName: string) {
-    if (!managerToken) return;
-    // Close the picker and toast immediately so the manager's UI feels
-    // instant. The team's new score arrives via Realtime once the backend
-    // commits; we don't gate the picker or other action buttons on the
-    // round-trip. If the API rejects (rare), surface an error toast then.
+    if (busy || !managerToken) return;
+    // Close the picker and acknowledge the click immediately, but do NOT
+    // claim success yet: the bonus is the one Render-routed scoring call, so
+    // on a cold start it can hang for many seconds or fail outright, and an
+    // optimistic "+4" here let the host believe a bonus landed that the room
+    // never saw (F-P1-5). The success toast waits for the call to resolve;
+    // `busy` keeps Bonus + End game gated while it's in flight (the per-round
+    // scoring buttons stay deliberately independent of it).
     setBonusOpen(false);
-    toast(`+4 bonus to ${teamName}`, { variant: "success" });
+    toast(`Sending +4 to ${teamName}...`, { variant: "info" });
+    setBusy(true);
     try {
       await awardBonus(gameCode, managerToken, { team_id: teamId });
+      toast(`+4 bonus to ${teamName}`, { variant: "success" });
     } catch (err) {
       reportError(err);
+    } finally {
+      setBusy(false);
     }
   }
 
