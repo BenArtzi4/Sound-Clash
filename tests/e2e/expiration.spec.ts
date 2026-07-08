@@ -42,25 +42,13 @@ test("expired game is swept; all clients surface the 'gone' banner", async ({ br
 
   // The cleanup deletes active_games; ON DELETE CASCADE prunes
   // game_teams. Logical replication can emit the parent or the child
-  // event first depending on transaction ordering, so the team page
-  // settles in one of two valid states:
-  //   - team row vanishes first: TeamGameplayPage's "kicked" path
-  //     (clearStoredTeam + navigate("/")) fires.
-  //   - active_games vanishes first: status="gone" renders the
-  //     "this game has ended or expired" banner.
-  // Manager/display have no team identity to lose; they always hit the
-  // "gone" banner.
-  await expect
-    .poll(
-      async () => {
-        const url = team.page.url();
-        if (/\/$/.test(url) && !/\/team\//.test(url)) return "redirected-home";
-        const banner = await team.page.getByText(/this game has ended or expired/i).count();
-        return banner > 0 ? "banner-shown" : "still-loading";
-      },
-      { timeout: 15_000 },
-    )
-    .not.toBe("still-loading");
+  // event first, but the team page must land on the banner either way
+  // (T4.4): a missing team row in a game whose expires_at has passed is
+  // teardown, not a kick, so the player is never silently bounced home.
+  await expect(team.page.getByText(/this game has ended or expired/i)).toBeVisible({
+    timeout: 15_000,
+  });
+  expect(team.page.url()).toContain("/team/");
 
   await expect(
     manager.page.getByText(/this game no longer exists/i),

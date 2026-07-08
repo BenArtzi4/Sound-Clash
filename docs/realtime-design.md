@@ -178,7 +178,7 @@ A team's identity = `{ game_team_id (uuid), game_code, name }`. Stored in `local
 localStorage.setItem(`game:${gameCode}:team`, JSON.stringify({ id, name }));
 ```
 
-On page reload, the team page reads `localStorage`, validates that the team still exists in `game_teams` (via SELECT), and resumes. If the team row was deleted (kicked or game expired), the page redirects to the join screen.
+On page reload, the team page reads `localStorage`, validates that the team still exists in `game_teams` (via SELECT), and resumes. If the team row was deleted, the page distinguishes **why** before acting: a missing row in a live game means the host kicked the team (clear storage, redirect home), but if the game has ended or its `expires_at` has passed it's the 4h sweep's teardown — `cleanup_expired_games` cascade-deletes `game_teams` a beat before `active_games`, so the team DELETE arrives while the game row is still present. In that case the page stays put and shows the "ended or expired" banner (or keeps the podium for an ended game) instead of misreading teardown as a kick; the game-row DELETE that follows flips the channel to `gone` (backstopped by the resync hydrate).
 
 ## 8. Time Synchronization
 
