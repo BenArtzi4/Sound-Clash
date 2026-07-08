@@ -3,7 +3,7 @@
 ## ▶ Kickoff
 **Model:** Opus 4.8. Follow [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md). Autonomous. Work the tasks **one at a time, serially** — they cluster on a few shared files; batch tiny same-file tasks (e.g. T4.5+T4.6) into one PR.
 **Notes:** T4.8 adds a token-gated `extend_game` RPC — the phase's only migration (additive; note it in the PR + update `rpc-functions.md`/`security-rls.md`/`data-model.md`).
-**Gate:** beyond the standard full-game gate, run a deliberate **"adverse" game** hitting ≥3 failure paths (kill a video → Next round recovers; background the host tab → auto-resume [T4.2 ✅]; drop the socket → reconnect with no lost events [needs T4.3]).
+**Gate:** beyond the standard full-game gate, run a deliberate **"adverse" game** hitting ≥3 failure paths (kill a video → Next round recovers; background the host tab → auto-resume [T4.2 ✅]; drop the socket → reconnect with no lost events [T4.3 ✅]).
 
 **Goal:** a real party survives what actually goes wrong — a dead video, a locked phone, a dropped connection, a 4h overrun, a lost credential — without the room going silent or a screen going blank.
 
@@ -17,15 +17,11 @@
 - **T4.1 · Dead-video Skip button** ❌ de-scoped, PR #186 — **Next round** already moves past a dead video; persistent "Video unavailable" state ships; select/peek exclude played songs, so the blocklist is redundant. Revisit only if a real re-pick is ever observed.
 - **T4.2 · Resume a paused song on tab-return (I-Resume)** ✅ PR #187 — `useResumeOnVisible` + `YouTubePlayer.resumeIfPaused()` (plays only from PAUSED, never replays ENDED; skips while a buzz holds the scoring pause).
 - **T4.9 · Connecting/reconnecting states (I-Reconnect)** ✅ already shipped in Phase 2 (PR #163) — `TeamGameplayPage` distinguishes "CONNECTING…" from "RECONNECTING…" (`useGameChannel` `ChannelStatus` includes `reconnecting`). Nothing left to build.
+- **T4.3 · Hydrate/queue robustness (F-P1-1, I-QueueDrain)** ✅ PR #190 — the event gate opens only on a snapshot that actually committed (failed hydrate keeps events queuing for the next authoritative attempt; success also clears the stale `error`); pending queue capped at `MAX_PENDING_EVENTS = 500` with overflow triggering one fresh resync (never a silent drop); the authoritative gone path closes the queue. Tests: failed-hydrate-then-replay + overflow-resync; `realtime-design.md` §6 updated.
 
 ## Open tasks (in recommended order — value + file affinity)
 
-### T4.3 · Hydrate/queue robustness `[S]` — F-P1-1, `I-QueueDrain` · **NEXT**
-`useGameChannel.ts` — a failed snapshot on SUBSCRIBED still flips `hydrated = true` (line ~392, outside the success path), so later live events dispatch against `state === null` and are silently discarded until a manual refresh.
-- [ ] Only set `hydrated = true` on a successful snapshot; keep queuing on failure; cap the pending array (~500 — today unbounded). On cap overflow, trigger a fresh authoritative hydrate/resync instead of silently discarding — silent drop is the very bug this task fixes.
-- [ ] Tests: failed-first-hydrate then a live event is not dropped; cap overflow resyncs rather than drops.
-
-### T4.4 · Graceful expiry/teardown `[S]` — F-P1-2, `I-GoneDerive` (partial: gone-derivation already in `useGameChannel`)
+### T4.4 · Graceful expiry/teardown `[S]` — F-P1-2, `I-GoneDerive` (partial: gone-derivation already in `useGameChannel`) · **NEXT**
 - [ ] Team-page guard for the cascade ordering (`game_teams` deletes **before** `active_games` at expiry, so the kick redirect still wins today — `TeamGameplayPage.tsx:61`).
 - [ ] T-CascadeTest: pin the teams-before-game delete ordering (the general "gone" banner is already covered by `expiration.spec.ts`).
 

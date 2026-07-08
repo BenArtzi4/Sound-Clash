@@ -8,6 +8,10 @@ interface State {
   listeners: Record<TableName, ChangeListener<unknown>[]>;
   subscribeCallbacks: Array<(status: string) => void | Promise<void>>;
   hydrate: { game: ActiveGame | null; teams: Team[]; rounds: GameRound[] };
+  // When set, the active_games hydrate read resolves with this error (the
+  // shape PostgREST returns on failure) so tests can exercise a failed
+  // snapshot. Cleared by setHydrateError(null) / resetSupabaseMock().
+  hydrateError: { message: string; code?: string } | null;
   rpcResponse: { data: unknown; error: { message: string; code?: string } | null };
   // Map of song id -> row used by from("songs").maybeSingle() lookups so the
   // manager-refresh code path (re-resolves currentRound.song_id back to a
@@ -29,6 +33,7 @@ const state: State = {
   listeners: { active_games: [], game_teams: [], game_rounds: [] },
   subscribeCallbacks: [],
   hydrate: { game: null, teams: [], rounds: [] },
+  hydrateError: null,
   rpcResponse: { data: [], error: null },
   songsById: {},
 };
@@ -72,6 +77,7 @@ function buildSelect(table: TableName | "songs") {
     order: vi.fn(() => builder),
     maybeSingle: vi.fn(async () => {
       if (table === "active_games") {
+        if (state.hydrateError) return { data: null, error: state.hydrateError };
         return { data: state.hydrate.game, error: null };
       }
       if (table === "songs" && pendingId !== null) {
@@ -128,6 +134,7 @@ export function resetSupabaseMock(): void {
   state.listeners = { active_games: [], game_teams: [], game_rounds: [] };
   state.subscribeCallbacks = [];
   state.hydrate = { game: null, teams: [], rounds: [] };
+  state.hydrateError = null;
   state.rpcResponse = { data: [], error: null };
   state.songsById = {};
   supabaseMock.channel.mockClear();
@@ -159,6 +166,10 @@ export function setHydrate(data: {
     teams: data.teams ?? state.hydrate.teams,
     rounds: data.rounds ?? state.hydrate.rounds,
   };
+}
+
+export function setHydrateError(error: { message: string; code?: string } | null): void {
+  state.hydrateError = error;
 }
 
 export function setRpcResponse(response: {
