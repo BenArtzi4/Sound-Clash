@@ -7,18 +7,25 @@ vi.mock("../lib/supabase", async () => {
 });
 
 import type { ActiveGame, GameRound, Team } from "../lib/types";
-import { gameReducer, RESYNC_INTERVAL_MS, useGameChannel } from "./useGameChannel";
+import {
+  gameReducer,
+  MAX_PENDING_EVENTS,
+  RESYNC_INTERVAL_MS,
+  useGameChannel,
+} from "./useGameChannel";
 import {
   channelMock,
   fireGame,
   fireStatus,
   fireSubscribed,
+  fireTeam,
   makeActiveGame,
   makePayload,
   makeRound,
   makeTeam,
   resetSupabaseMock,
   setHydrate,
+  setHydrateError,
   supabaseMock,
 } from "../test/supabaseMock";
 
@@ -646,6 +653,78 @@ describe("useGameChannel - subscription", () => {
     await waitFor(() => {
       expect(result.current.state?.game.status).toBe("playing");
     });
+  });
+
+  it("keeps queuing after a failed hydrate and replays on the next successful one", async () => {
+    const game = makeActiveGame({ status: "waiting" });
+    setHydrate({ game, teams: [], rounds: [] });
+    setHydrateError({ message: "fetch failed" });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+
+    // The SUBSCRIBED hydrate fails: the error surfaces but the event gate
+    // must stay closed (state stays null, events keep queuing).
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.state).toBeNull();
+
+    // A live event lands while state is still null. The old behavior flipped
+    // `hydrated` on the failure, so this dispatched against the reducer's
+    // null guards and vanished until a manual refresh (F-P1-1).
+    act(() => {
+      fireGame(
+        makePayload("active_games", "UPDATE", {
+          new: { ...game, status: "playing" },
+        }),
+      );
+    });
+    expect(result.current.state).toBeNull();
+
+    // The backend recovers and the next authoritative hydrate (re-SUBSCRIBED
+    // after a reconnect) succeeds: the queued event drains on top of the
+    // snapshot, and the stale error clears.
+    setHydrateError(null);
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(result.current.state?.game.status).toBe("playing"));
+    expect(result.current.error).toBeNull();
+  });
+
+  it("resyncs instead of silently dropping when the pending queue overflows", async () => {
+    const game = makeActiveGame({ status: "waiting" });
+    setHydrate({ game, teams: [makeTeam({ id: "t1", score: 0 })], rounds: [] });
+    setHydrateError({ message: "db down" });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(result.current.state).toBeNull();
+
+    // The DB recovers, but the next scheduled hydrate (60s backstop) hasn't
+    // fired yet while live events flood past the queue cap.
+    setHydrateError(null);
+    const callsBefore = supabaseMock.from.mock.calls.length;
+    await act(async () => {
+      for (let i = 1; i <= MAX_PENDING_EVENTS + 1; i++) {
+        fireTeam(
+          makePayload("game_teams", "UPDATE", {
+            new: makeTeam({ id: "t1", score: i }),
+          }),
+        );
+      }
+    });
+
+    // Overflow triggered exactly one fresh hydrate (3 table reads) — not one
+    // per overflowing event.
+    expect(supabaseMock.from.mock.calls.length).toBe(callsBefore + 3);
+    // Its snapshot plus the drained tail preserve the newest event: the final
+    // score is the last update, not the snapshot's 0 and not silently stale.
+    await waitFor(() => {
+      expect(result.current.state?.teams.get("t1")?.score).toBe(MAX_PENDING_EVENTS + 1);
+    });
+    expect(result.current.error).toBeNull();
   });
 
   it("re-runs hydrate every RESYNC_INTERVAL_MS as a Realtime backstop", async () => {

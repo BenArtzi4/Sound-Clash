@@ -6,6 +6,7 @@ Legend for the perf tag on latency-adjacent items: `buzz-latency` (moves the <20
 
 > **Resolved items removed 2026-07-05** (shipped in Phases 1–3; detail in git history / `CHANGELOG.md`): F-P0-1 (manager_token leak → `game_secrets`, mig 034), F-P0-2 (catalog DR backup), F-P0-4 (deploy-before-migrate outage), F-P1-8 (busy flag dropped clicks), F-P2-2 (Continue pending flag), F-P2-3 (keep-warm immediate ping). IDs are intentionally not reused.
 > **Resolved 2026-07-07** (Phase 4): F-P0-3 (deploy-during-game blank screen → `vite:preloadError` budget-guarded auto-reload + app-level `ErrorBoundary`; runbook §1.2; PR #185). F-P1-4 (dead-video Skip) was **de-scoped** (PR #186): the persistent "Video unavailable" state already ships, **Next round** already moves past a dead song, and select/peek exclude already-played songs — no Skip button, no blocklist.
+> **Resolved 2026-07-08** (Phase 4): F-P1-1 (failed hydrate silently dropped all live events → the event gate now opens only on a successful snapshot, events keep queuing on failure, and the queue is capped at 500 with an overflow-triggered resync; PR #190).
 
 ---
 
@@ -16,11 +17,6 @@ _None open._ (F-P0-3 shipped 2026-07-07 — Phase 4 T4.0, PR #185.)
 ---
 
 ## P1 — Real user-facing bugs
-
-### F-P1-1 · Failed initial hydrate silently drops all live events `[bug]` — Phase 4 T4.3
-- **Evidence:** `useGameChannel.ts:392` sets `hydrated = true` outside the try/catch, so a transient hydrate failure on SUBSCRIBED still flips the flag; subsequent events dispatch against `state === null` and hit the reducer's null-guards → discarded, not re-queued.
-- **Failure:** on a network blip at subscribe time the client is permanently stuck — buzzes/scores never appear until a manual refresh.
-- **Fix:** only set `hydrated = true` on success; keep queuing on failure; cap the pending array. Autonomous. Effort S.
 
 ### F-P1-2 · Team players ejected to Home (not "ended") on 4h cleanup `[bug]` — Phase 4 T4.4 · **PARTIAL**
 - **Evidence:** `TeamGameplayPage.tsx:61` redirect keys off `!state.teams.has(storedId)`; `cleanup_expired_games` cascade-deletes `game_teams` **before** `active_games`, so the team-DELETE arrives while the game row is still present → redirect to Home instead of the "game over" screen.

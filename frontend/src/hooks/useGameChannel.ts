@@ -29,6 +29,15 @@ export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting
 // the test can advance fake timers by exactly one interval.
 export const RESYNC_INTERVAL_MS = 60_000;
 
+// Ceiling on the pre-hydration event queue. The queue only grows while the
+// event gate is closed (no authoritative snapshot has succeeded yet), so
+// reaching the cap means hydrate has been failing for a long stretch while
+// events flood in. On overflow the backlog is dropped AND a fresh
+// authoritative hydrate is requested — its full snapshot supersedes every
+// dropped event, so unlike a plain discard nothing is lost. Exported for the
+// overflow test.
+export const MAX_PENDING_EVENTS = 500;
+
 // Explicit column list for the active_games hydrate — every field the reducer
 // reads, and nothing else. Deliberately NOT `select("*")`: the per-game
 // manager_token used to live on this row, and any anon client (every player)
@@ -197,7 +206,8 @@ export function useGameChannel(gameCode: string): {
     let goneTornDown = false;
     // Realtime events that arrive between SUBSCRIBED and HYDRATE land on
     // state===null and are dropped by the reducer's null guards. Queue them
-    // here and replay after HYDRATE; gameReducer is idempotent so replay is safe.
+    // here and replay after HYDRATE; gameReducer is idempotent so replay is
+    // safe. Capped at MAX_PENDING_EVENTS — see the constant's comment.
     const pending: GameAction[] = [];
     setStatus("connecting");
     setError(null);
@@ -205,6 +215,15 @@ export function useGameChannel(gameCode: string): {
     function dispatchOrQueue(action: GameAction): void {
       if (cancelled) return;
       if (!hydrated) {
+        if (pending.length >= MAX_PENDING_EVENTS) {
+          // Hydrate has been failing long enough for the queue to overflow.
+          // Dropping the backlog alone would be the same silent loss this
+          // queue exists to prevent, so also request a fresh snapshot: it
+          // supersedes every dropped event, and events arriving after its
+          // reads re-queue and drain on top of it as usual.
+          pending.length = 0;
+          void hydrate();
+        }
         pending.push(action);
         return;
       }
@@ -342,14 +361,21 @@ export function useGameChannel(gameCode: string): {
     if (!document.hidden) startResync();
     document.addEventListener("visibilitychange", onVisibilityChange);
 
-    // An `authoritative` hydrate (the default: SUBSCRIBED, the 20s backstop, and
-    // the visibility resume) opens the event gate — it flips `hydrated` and
-    // drains the pending queue, so queued live events are applied ON TOP of the
-    // snapshot and can never be reverted by it. The mount pre-hydrate passes
-    // `authoritative: false`: it paints an early snapshot for a faster first
-    // render but keeps the gate closed (events stay queued for the SUBSCRIBED
-    // hydrate to drain), and if it resolves after an authoritative hydrate it
-    // drops its now-stale snapshot rather than clobbering newer state.
+    // An `authoritative` hydrate (the default: SUBSCRIBED, the backstop, and
+    // the visibility resume) opens the event gate — on a snapshot that
+    // actually committed it flips `hydrated` and drains the pending queue, so
+    // queued live events are applied ON TOP of the snapshot and can never be
+    // reverted by it. A FAILED authoritative hydrate keeps the gate closed:
+    // events keep queuing for the next attempt (SUBSCRIBED after a reconnect,
+    // the backstop tick, the visibility resume, or a queue-overflow resync).
+    // Flipping the flag on failure — the old behavior — dispatched every
+    // subsequent live event against null state, where the reducer's null
+    // guards silently discarded them until a manual refresh (F-P1-1).
+    // The mount pre-hydrate passes `authoritative: false`: it paints an early
+    // snapshot for a faster first render but keeps the gate closed (events
+    // stay queued for the SUBSCRIBED hydrate to drain), and if it resolves
+    // after an authoritative hydrate it drops its now-stale snapshot rather
+    // than clobbering newer state.
     async function hydrate({ authoritative = true }: { authoritative?: boolean } = {}) {
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
@@ -372,6 +398,11 @@ export function useGameChannel(gameCode: string): {
               setStatus("gone");
               dispatch({ type: "GAME_DELETED" });
               teardownLive();
+              // The game is authoritatively gone and the channel is torn
+              // down: nothing further arrives, and the queued events describe
+              // a deleted game — close out the queue for good.
+              hydrated = true;
+              pending.length = 0;
             }
           } else {
             dispatch({
@@ -382,21 +413,21 @@ export function useGameChannel(gameCode: string): {
               teams: (teamsRes.data ?? []) as Team[],
               rounds: (roundsRes.data ?? []) as GameRound[],
             });
+            if (authoritative) {
+              hydrated = true;
+              setError(null);
+              for (const action of pending) {
+                dispatch(action);
+              }
+              pending.length = 0;
+            }
           }
         }
       } catch (e) {
         // A pre-hydrate failure is silent (the SUBSCRIBED / backstop hydrate
-        // retries); only an authoritative failure surfaces an error.
+        // retries); only an authoritative failure surfaces an error. Either
+        // way the gate stays closed so live events keep queuing.
         if (!cancelled && authoritative) setError(e instanceof Error ? e : new Error(String(e)));
-      }
-      if (authoritative) {
-        hydrated = true;
-        if (!cancelled) {
-          for (const action of pending) {
-            dispatch(action);
-          }
-        }
-        pending.length = 0;
       }
     }
 
