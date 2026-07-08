@@ -165,7 +165,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 - A team's identity is `{ game_team_id (uuid), game_code }`. Both are stored in `localStorage` on join.
 - On page reload or temporary disconnect, the page reads `localStorage`, re-subscribes to the Realtime channel, and resumes; no server-side state restoration needed.
-- If the team's row was deleted (e.g., game expired or the manager kicked them), the page redirects to the join screen with a message.
+- If the team's row was deleted, the page distinguishes why before acting: a kick from a live game clears the stored identity and redirects home, while a game that has ended or passed its `expires_at` (the expiry sweep cascade-deletes `game_teams` just before `active_games`) keeps the player on `/team/` and shows the "game has ended or expired" banner (or keeps the podium for an ended game).
 - No "reconnect grace period" is enforced. If a team disconnects, the game continues. They can rejoin while the game is `waiting` or `playing`.
 
 ## 8. Reconnection (manager)
@@ -192,7 +192,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 - `active_games.expires_at = started_at + interval '4 hours'` (fixed at game creation).
 - `pg_cron` runs `cleanup_expired_games()` hourly: `DELETE FROM active_games WHERE expires_at < now()`.
 - `game_teams` and `game_rounds` cascade-delete via FK.
-- **Mid-game truncation**: a marathon session running >4 hours from start will be deleted while still in `playing` state. The frontend handles this by detecting the row vanishing (Realtime DELETE event) and redirecting all clients to a "game expired" page. This is an accepted limitation; documented for users.
+- **Mid-game truncation**: a marathon session running >4 hours from start will be deleted while still in `playing` state. The frontend handles this by detecting the rows vanishing (Realtime DELETE events) and showing a "game has ended or expired" banner in place on every client — no navigation; the team page in particular distinguishes this teardown from a kick (see §7). This is an accepted limitation; documented for users.
 
 ## 11. Edge Cases & Open Questions
 
