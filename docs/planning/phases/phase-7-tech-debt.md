@@ -37,7 +37,7 @@
 
 ### T7.5 · Test hardening `[M]` — T-RLSFix, T-CascadeTest
 - [ ] Proper RLS fixture fix: dedicated non-superuser `LOGIN` role + `current_user` assertion (`tests/db/conftest.py:124` still uses `SET ROLE anon`). The table-coverage extension already shipped.
-- [ ] e2e/reducer tests for: cascade-delete ordering (T4.4), failed-hydrate (T4.3), expiry warning (T4.8). (`preloadError` deploy-path tests already exist from T4.0.)
+- [ ] e2e/reducer tests for: expiry warning (T4.8). (Cascade-delete ordering shipped with T4.4/PR #192, failed-hydrate with T4.3/PR #190, `preloadError` deploy-path tests with T4.0.)
 
 ### T7.6 · CI discipline `[S — flag CI changes]`
 - [ ] `T-RLSCI`: isolated CI job for the RLS suite (deterministic green/red).

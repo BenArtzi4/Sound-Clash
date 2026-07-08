@@ -8,7 +8,9 @@ vi.mock("../lib/supabase", async () => {
 });
 
 import { _resetServerTime } from "../hooks/useServerTime";
+import type { ActiveGame, Team } from "../lib/types";
 import {
+  fireGame,
   fireStatus,
   fireSubscribed,
   fireTeam,
@@ -153,7 +155,12 @@ describe("TeamGameplayPage", () => {
       JSON.stringify({ id: "team-1", name: "Alice" }),
     );
     setHydrate({
-      game: makeActiveGame({ status: "playing" }),
+      // Game still alive (expires_at in the future relative to the real
+      // clock — no Realtime event pins the server offset in this test): a
+      // missing team row on a live game is a kick, so the page bounces home.
+      // An expired game shows the ended banner instead; see the T-CascadeTest
+      // block below.
+      game: makeActiveGame({ status: "playing", expires_at: "2099-01-01T00:00:00.000Z" }),
       teams: [],
       rounds: [],
     });
@@ -378,6 +385,108 @@ describe("TeamGameplayPage", () => {
     expect(supabaseMock.rpc).toHaveBeenCalledWith("buzz_in", {
       p_game_code: "ABCDEF",
       p_team_id: "team-1",
+    });
+  });
+
+  // T-CascadeTest: cleanup_expired_games cascade-deletes game_teams a beat
+  // BEFORE active_games, so at expiry the team's DELETE arrives while the game
+  // row is still present — by row absence alone it looks exactly like a kick.
+  // These pin the ordering-sensitive distinction: expired game → banner,
+  // live game → kick redirect, ended game → podium stays.
+  //
+  // Clock note: the first fired Realtime event pins serverTimeNow() to its
+  // commit_timestamp (2026-05-05T12:00Z default), so expires_at values here are
+  // chosen relative to that pinned clock, not the real one.
+  describe("expiry teardown vs kick (T-CascadeTest)", () => {
+    it("shows the ended banner, not the Home redirect, when the expiry cascade deletes our team row before the game row", async () => {
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      // The sweep only deletes games whose expires_at has passed.
+      setHydrate({
+        game: makeActiveGame({ status: "playing", expires_at: "2026-05-05T11:00:00.000Z" }),
+        teams: [makeTeam({ id: "team-1", name: "Alice" })],
+        rounds: [],
+      });
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      await waitFor(() => expect(screen.getByTestId("buzz")).toBeEnabled());
+
+      // The cascade's first event: our game_teams row is deleted.
+      act(() => {
+        fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "team-1" } }));
+      });
+      expect(screen.getByText(/this game has ended or expired/i)).toBeInTheDocument();
+      expect(screen.queryByText("home page")).not.toBeInTheDocument();
+      expect(window.localStorage.getItem("game:ABCDEF:team")).toBeNull();
+
+      // The active_games DELETE lands a beat later: the banner persists.
+      act(() => {
+        fireGame(
+          makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }),
+        );
+      });
+      expect(screen.getByText(/this game has ended or expired/i)).toBeInTheDocument();
+      expect(screen.queryByText("home page")).not.toBeInTheDocument();
+    });
+
+    it("still bounces home when a live game kicks us mid-play", async () => {
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      // Default expires_at (16:00Z) is in the future relative to the pinned
+      // server clock (12:00Z): a genuine kick, not teardown.
+      setHydrate({
+        game: makeActiveGame({ status: "playing" }),
+        teams: [makeTeam({ id: "team-1", name: "Alice" })],
+        rounds: [],
+      });
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      await waitFor(() => expect(screen.getByTestId("buzz")).toBeEnabled());
+
+      act(() => {
+        fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "team-1" } }));
+      });
+      await waitFor(() => expect(screen.getByText("home page")).toBeInTheDocument());
+      expect(window.localStorage.getItem("game:ABCDEF:team")).toBeNull();
+    });
+
+    it("keeps the podium up when the post-end sweep deletes our team row", async () => {
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      setHydrate({
+        game: makeActiveGame({
+          status: "ended",
+          ended_at: "2026-05-05T13:00:00.000Z",
+          expires_at: "2026-05-05T11:00:00.000Z",
+        }),
+        teams: [
+          makeTeam({ id: "team-1", name: "Alice", score: 10 }),
+          makeTeam({ id: "team-2", name: "Bob", score: 3 }),
+        ],
+        rounds: [],
+      });
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
+
+      act(() => {
+        fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "team-1" } }));
+      });
+      expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
+      expect(screen.queryByText("home page")).not.toBeInTheDocument();
+      expect(window.localStorage.getItem("game:ABCDEF:team")).toBeNull();
     });
   });
 });
