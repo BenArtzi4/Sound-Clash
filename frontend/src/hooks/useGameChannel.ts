@@ -8,10 +8,20 @@ import type {
   PostgresChangePayload,
   Team,
 } from "../lib/types";
-import { observeServerTime } from "./useServerTime";
+import { observeServerTime, serverTimeNow } from "./useServerTime";
 import { log, recordFanout, resolveBuzzE2E, resolveScoreE2E } from "../lib/telemetry";
 
 export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting" | "gone";
+
+// The 4h expiry sweep (cleanup_expired_games) only touches games whose
+// expires_at has passed, so the clock discriminates its teardown from other
+// row changes (server-offset clock; falls back to the device clock until the
+// first Realtime event is observed). Shared by the team page's kick-vs-expiry
+// logic and the final-board snapshot below.
+export function isGameExpired(game: ActiveGame): boolean {
+  const expiresAt = Date.parse(game.expires_at);
+  return Number.isFinite(expiresAt) && serverTimeNow().getTime() >= expiresAt;
+}
 
 // Backstop re-fetch interval. Supabase Realtime over WebSocket occasionally
 // drops a postgres_changes event (flaky networks, a missed heartbeat that
@@ -189,10 +199,46 @@ export function useGameChannel(gameCode: string): {
   state: GameState | null;
   status: ChannelStatus;
   error: Error | null;
+  finalBoard: GameState | null;
 } {
   const [state, dispatch] = useReducer(gameReducer, null);
   const [status, setStatus] = useState<ChannelStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
+
+  // Last-known state worth rendering as a final scoreboard once the game rows
+  // are gone (I-FinalBoard). During live play every committed state refreshes
+  // it. The expiry sweep cascade-deletes game_teams/game_rounds BEFORE
+  // active_games, so the states committed mid-teardown shrink team by team; a
+  // snapshot taken then would wipe teams off the final board. Those shrinking
+  // updates are skipped — but only once the game is ended or expired, so a
+  // genuine kick from a live game still updates the snapshot (a kicked team
+  // doesn't resurface at game end), and scores earned in the
+  // overdue-but-unswept window (hourly sweep) keep flowing in via non-shrinking
+  // UPDATEs. Known gap: if the sweep's DELETEs drain in the same React batch as
+  // the first successful hydrate, no live state ever commits and the pages fall
+  // back to the plain "ended or expired" banner — same as before this snapshot
+  // existed.
+  //
+  // Held in state (not a ref) so consumers see it reactively; the functional
+  // updater returns the SAME reference on a teardown-shrink, so React skips the
+  // otherwise-extra render in exactly that case, and on quiet backstop ticks
+  // the effect doesn't run at all (the reducer returns the same `state` ref).
+  const [finalBoardState, setFinalBoardState] = useState<GameState | null>(null);
+  useEffect(() => {
+    if (!state) return;
+    setFinalBoardState((snap) => {
+      const teardownShrink =
+        snap !== null &&
+        snap.game.game_code === state.game.game_code &&
+        (state.game.status === "ended" || isGameExpired(state.game)) &&
+        (state.teams.size < snap.teams.size || state.rounds.length < snap.rounds.length);
+      return teardownShrink ? snap : state;
+    });
+  }, [state]);
+  // Guard against a stale snapshot when the same mounted hook is pointed at a
+  // different game code (the reducer state has the same lag until the new
+  // game's first HYDRATE lands; the snapshot must not outlive it either).
+  const finalBoard = finalBoardState?.game.game_code === gameCode ? finalBoardState : null;
 
   useEffect(() => {
     if (!gameCode) return;
@@ -441,5 +487,5 @@ export function useGameChannel(gameCode: string): {
     };
   }, [gameCode]);
 
-  return { state, status, error };
+  return { state, status, error, finalBoard };
 }

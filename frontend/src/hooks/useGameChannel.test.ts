@@ -6,6 +6,7 @@ vi.mock("../lib/supabase", async () => {
   return { supabase: mod.supabaseMock };
 });
 
+import { _resetServerTime } from "./useServerTime";
 import type { ActiveGame, GameRound, Team } from "../lib/types";
 import {
   gameReducer,
@@ -16,6 +17,7 @@ import {
 import {
   channelMock,
   fireGame,
+  fireRound,
   fireStatus,
   fireSubscribed,
   fireTeam,
@@ -31,6 +33,7 @@ import {
 
 beforeEach(() => {
   resetSupabaseMock();
+  _resetServerTime();
 });
 
 afterEach(() => {
@@ -747,6 +750,125 @@ describe("useGameChannel - subscription", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("exposes null finalBoard before any board has been seen", () => {
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    expect(result.current.finalBoard).toBeNull();
+  });
+
+  it("holds the last-known board as finalBoard after the game row is deleted", async () => {
+    const game = makeActiveGame({ status: "playing" });
+    setHydrate({
+      game,
+      teams: [makeTeam({ id: "t1", name: "Alice", score: 5 }), makeTeam({ id: "t2", score: 3 })],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-1" })],
+    });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    // The game row is deleted (End game, or the expiry sweep's final DELETE).
+    act(() => {
+      fireGame(makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }));
+    });
+
+    await waitFor(() => expect(result.current.status).toBe("gone"));
+    // Live state is gone, but the snapshot survives with the full board so the
+    // pages can still render the final scoreboard + song export.
+    expect(result.current.state).toBeNull();
+    expect(result.current.finalBoard?.teams.size).toBe(2);
+    expect(result.current.finalBoard?.teams.get("t1")?.score).toBe(5);
+    expect(result.current.finalBoard?.rounds.length).toBe(1);
+  });
+
+  it("keeps the full board in finalBoard when the expiry sweep shrinks an ended game before deleting it", async () => {
+    const game = makeActiveGame({ status: "ended", ended_at: "2026-05-05T13:00:00.000Z" });
+    setHydrate({
+      game,
+      teams: [makeTeam({ id: "t1", score: 10 }), makeTeam({ id: "t2", score: 4 })],
+      rounds: [makeRound({ id: "r1", round_number: 1 })],
+    });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(result.current.finalBoard?.teams.size).toBe(2);
+
+    // The sweep cascade-deletes a team row while the game (ended) row still
+    // exists. Live state shrinks; the snapshot must NOT follow it down.
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t2" } }));
+    });
+    expect(result.current.state?.teams.size).toBe(1);
+    expect(result.current.finalBoard?.teams.size).toBe(2);
+
+    // A round row cascade-deletes too — the snapshot keeps the full history.
+    act(() => {
+      fireRound(makePayload<GameRound>("game_rounds", "DELETE", { old: { id: "r1" } }));
+    });
+    expect(result.current.state?.rounds.length).toBe(0);
+    expect(result.current.finalBoard?.rounds.length).toBe(1);
+
+    // The game row DELETE lands last: still the full snapshot.
+    act(() => {
+      fireGame(makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }));
+    });
+    await waitFor(() => expect(result.current.status).toBe("gone"));
+    expect(result.current.finalBoard?.teams.size).toBe(2);
+    expect(result.current.finalBoard?.rounds.length).toBe(1);
+  });
+
+  it("keeps the full board when an expired-but-unended game is swept mid-play", async () => {
+    // The hourly sweep can tear down a game that overran without ever being
+    // ended. It's distinguished from a kick by the clock: expires_at has
+    // passed on the server-offset clock (pinned by the first fired event's
+    // commit_timestamp, 2026-05-05T12:00Z).
+    const game = makeActiveGame({ status: "playing", expires_at: "2026-05-05T11:00:00.000Z" });
+    setHydrate({
+      game,
+      teams: [makeTeam({ id: "t1", score: 7 }), makeTeam({ id: "t2", score: 2 })],
+      rounds: [],
+    });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t2" } }));
+    });
+    expect(result.current.state?.teams.size).toBe(1);
+    expect(result.current.finalBoard?.teams.size).toBe(2);
+  });
+
+  it("lets a genuine kick from a live game update the snapshot (kicked team does not resurface)", async () => {
+    // A live (not ended, not expired) game whose team row is deleted is a kick,
+    // not teardown — the kicked team should be gone from the final board too.
+    const game = makeActiveGame({ status: "playing" }); // default expires_at is far future
+    setHydrate({
+      game,
+      teams: [makeTeam({ id: "t1", score: 7 }), makeTeam({ id: "t2", score: 2 })],
+      rounds: [],
+    });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t2" } }));
+    });
+    expect(result.current.finalBoard?.teams.size).toBe(1);
+    expect(result.current.finalBoard?.teams.has("t2")).toBe(false);
+
+    // If the game is later deleted, the snapshot reflects the post-kick roster.
+    act(() => {
+      fireGame(makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }));
+    });
+    await waitFor(() => expect(result.current.status).toBe("gone"));
+    expect(result.current.finalBoard?.teams.size).toBe(1);
   });
 
   it("triggers an immediate hydrate when the tab becomes visible again", async () => {

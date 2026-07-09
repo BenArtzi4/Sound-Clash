@@ -160,13 +160,14 @@ import {
 import { _resetServerTime, observeServerTime } from "../hooks/useServerTime";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { peekNextSongDirect } from "../hooks/usePeekNextSong";
-import type { ActiveGame, GameRound, SelectSongResponse } from "../lib/types";
+import type { ActiveGame, GameRound, SelectSongResponse, Team } from "../lib/types";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
 import {
   fireGame,
   fireRound,
   fireSubscribed,
+  fireTeam,
   makeActiveGame,
   makePayload,
   makeRound,
@@ -1639,6 +1640,97 @@ describe("ManagerConsolePage", () => {
     expect(screen.queryByTestId("continue-round")).not.toBeInTheDocument();
     // The post-game song export lives alongside the scoreboard (host-only).
     expect(screen.getByTestId("export-download")).toBeInTheDocument();
+  });
+
+  // T4.11 / I-FinalBoard: when the game rows are deleted (End game, or the
+  // expiry sweep) the console keeps the podium + song export from the hook's
+  // last-known snapshot instead of the bare "no longer exists" message. The
+  // songs table is durable, so the export still resolves after the delete.
+  describe("final board survives delete (I-FinalBoard)", () => {
+    it("keeps the final scoreboard and song export from the snapshot after the game row is deleted", async () => {
+      setSongFetch({
+        id: "song-1",
+        title: "Bohemian Rhapsody",
+        artist: "Queen",
+        youtube_id: "fJ9rUzIMcZQ",
+      });
+      setHydrate({
+        game: makeActiveGame({ status: "playing", round_number: 1, current_round_id: "r1" }),
+        teams: [
+          makeTeam({ id: "t1", name: "Alice", score: 20 }),
+          makeTeam({ id: "t2", name: "Bob", score: 9 }),
+        ],
+        rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-1" })],
+      });
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+
+      act(() => {
+        fireGame(
+          makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }),
+        );
+      });
+
+      // Podium + both teams survive, with the softer "ended or expired" note
+      // (not the bare "This game no longer exists.").
+      expect(screen.getByText(/this game has ended or expired/i)).toBeInTheDocument();
+      expect(screen.queryByText(/this game no longer exists/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/final results/i)).toBeInTheDocument();
+      expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
+      // The song export still resolves the played song from the durable table.
+      expect(screen.getByRole("link", { name: /back to home/i })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByTestId("export-download")).toBeEnabled());
+    });
+
+    it("falls back to 'no longer exists' when the console opened onto an already-swept game", async () => {
+      setHydrate({ game: null, teams: [], rounds: [] });
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+      await waitFor(() =>
+        expect(screen.getByText(/this game no longer exists/i)).toBeInTheDocument(),
+      );
+      expect(screen.queryByText(/final results/i)).not.toBeInTheDocument();
+    });
+
+    it("holds the full board + export while the post-end sweep cascade-deletes rows", async () => {
+      setSongFetch({
+        id: "song-1",
+        title: "Bohemian Rhapsody",
+        artist: "Queen",
+        youtube_id: "fJ9rUzIMcZQ",
+      });
+      setHydrate({
+        game: makeActiveGame({ status: "ended", ended_at: "2026-05-05T13:00:00.000Z" }),
+        teams: [
+          makeTeam({ id: "t1", name: "Alice", score: 20 }),
+          makeTeam({ id: "t2", name: "Bob", score: 9 }),
+        ],
+        rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-1" })],
+      });
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+      expect(screen.getByText(/final results/i)).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByTestId("export-download")).toBeEnabled());
+
+      // The sweep prunes a team row (and later the round) before the game row.
+      act(() => {
+        fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t2" } }));
+      });
+      act(() => {
+        fireRound(makePayload<GameRound>("game_rounds", "DELETE", { old: { id: "r1" } }));
+      });
+
+      // Bob stays on the podium and the export stays populated (snapshot holds).
+      expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
+      expect(screen.getByTestId("export-download")).toBeEnabled();
+    });
   });
 
   it("rehydrates the current song after a manager refresh mid-round", async () => {
