@@ -78,9 +78,7 @@ async def test_anon_can_execute_release_buzz_lock_but_token_check_runs(
     anon_conn: asyncpg.Connection,
 ) -> None:
     with pytest.raises(asyncpg.PostgresError) as exc:
-        await anon_conn.execute(
-            "SELECT release_buzz_lock($1, $2)", "ABCDEF", uuid.uuid4()
-        )
+        await anon_conn.execute("SELECT release_buzz_lock($1, $2)", "ABCDEF", uuid.uuid4())
     assert not isinstance(exc.value, asyncpg.InsufficientPrivilegeError)
     assert exc.value.sqlstate in ("P0002", "28000")
 
