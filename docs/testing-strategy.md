@@ -120,7 +120,7 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 | `pages/DisplayScreen.test.tsx` | renders scoreboard; updates on team-score events |
 | `components/BuzzButton.test.tsx` | disabled while locked; disabled while disconnected; click fires buzz |
 | `components/Scoreboard.test.tsx` | sorts by score desc; ties shown together |
-| `lib/managerToken.test.ts` (covered inline by `pages/ManagerConsolePage.test.tsx` + `pages/ManagerCreateGamePage.test.tsx`) | localStorage round-trip; absent token → "not the host" branch |
+| `lib/managerToken.test.ts` (plus inline coverage in `pages/ManagerConsolePage.test.tsx` + `pages/ManagerCreateGamePage.test.tsx`) | localStorage round-trip; absent token → "not the host" branch; recovery-hash (`#mt=<uuid>`) parse/format — strict UUID shape, malformed variants rejected |
 
 ### 4.4 E2E tests: `tests/e2e/`
 
@@ -134,6 +134,7 @@ Playwright with multi-browser-context. Runs against a dedicated `Sound-Clash-Pre
 | `expiration.spec.ts` | game with expires_at in past; cron runs; all clients show the "ended or expired" banner in place (the team page must NOT redirect home — expiry is teardown, not a kick) |
 | `admin_songs_crud.spec.ts` | create/edit/delete song via admin API + bulk-import idempotency (UI deferred; see roadmap) |
 | `kick_team.spec.ts` | manager kicks team; team's tab redirects |
+| `host_recovery.spec.ts` | host wipes localStorage → locked out; the backup host link (`#mt=<token>`) re-authenticates, scrubs the fragment, re-persists the token, and the recovered console starts a round |
 | `mobile_team.spec.ts` | iPhone viewport; buzzer reachable + tappable |
 
 Multi-browser matrix: chromium + firefox + webkit. Each spec must pass in all three.
