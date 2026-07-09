@@ -33,33 +33,47 @@ export function ExpiryCountdown({ expiresAt, extendPending, onExtend }: Props) {
   }, []);
 
   const remainingMs = Date.parse(expiresAt) - now;
-
-  if (remainingMs > WARNING_WINDOW_MS) {
-    return (
-      <p className={styles.hint} data-testid="expiry-hint">
-        Ends at {formatEndTime(expiresAt)}
-      </p>
-    );
-  }
-
+  const warning = remainingMs <= WARNING_WINDOW_MS;
   const overdue = remainingMs <= 0;
+
+  // The per-second m:ss text must NOT sit in a live region (a polite region
+  // re-announces every mutation, so a screen-reader host would hear the
+  // countdown once a second for the whole window). Mirror RoundCountdown:
+  // the ticking value lives under role="timer" (implicit aria-live off), and
+  // a separate always-mounted visually-hidden announcer speaks ONCE when the
+  // warning state is entered (its text flips from empty to the sentence).
   return (
-    <div className={styles.warning} role="status" aria-live="polite" data-testid="expiry-banner">
-      <span className={styles.warningText}>
-        {overdue
-          ? "Game has passed its play window — it may close at any moment."
-          : `Game expires in ${formatRemaining(remainingMs)}`}
+    <>
+      <span className="visually-hidden" aria-live="polite" role="status">
+        {warning ? "The game is ending soon — use Keep playing to extend it." : ""}
       </span>
-      <button
-        type="button"
-        className={`btn ${styles.extendBtn}`}
-        onClick={onExtend}
-        disabled={extendPending}
-        data-testid="extend-game"
-      >
-        Keep playing +1h
-      </button>
-    </div>
+      {warning ? (
+        <div className={styles.warning} data-testid="expiry-banner">
+          <span
+            className={styles.warningText}
+            role="timer"
+            aria-label="Time until the game expires"
+          >
+            {overdue
+              ? "Game has passed its play window — it may close at any moment."
+              : `Game expires in ${formatRemaining(remainingMs)}`}
+          </span>
+          <button
+            type="button"
+            className={`btn ${styles.extendBtn}`}
+            onClick={onExtend}
+            disabled={extendPending}
+            data-testid="extend-game"
+          >
+            Keep playing +1h
+          </button>
+        </div>
+      ) : (
+        <p className={styles.hint} data-testid="expiry-hint">
+          Ends at {formatEndTime(expiresAt)}
+        </p>
+      )}
+    </>
   );
 }
 
