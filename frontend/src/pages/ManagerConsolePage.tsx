@@ -46,18 +46,31 @@ export function ManagerConsolePage() {
   const navigate = useNavigate();
   // Adopt a backup-host-link token (T4.10): /manager/game/<code>#mt=<token>
   // re-authenticates a host whose localStorage is gone (new device, cleared
-  // browser). Read synchronously so the very first render already holds the
-  // credential — no "not the host" flash. Persisting inside the memo is an
-  // idempotent write, safe under StrictMode's double-invoke; once the hash is
-  // scrubbed below, the memo re-runs and reads the same token back from
-  // storage.
+  // browser). Resolution order:
+  //   1. A token already stored for this game wins unconditionally — recovery
+  //      is for tokenless devices. The room knows the game code, so if the
+  //      hash won instead, any guest could craft a well-formed #mt= link that
+  //      silently clobbers the host's working credential (one-click lockout).
+  //   2. Otherwise a well-formed fragment is adopted: persisted for future
+  //      visits and mirrored in a ref so the credential survives the hash
+  //      scrub below even where localStorage writes are blocked (private
+  //      mode) — persistence is best-effort, the live session is not.
+  //   3. Otherwise fall back to that ref (an adoption earlier in this mount);
+  //      keyed by game code so a console-to-console navigation can't reuse it.
+  // Reading storage and the idempotent write inside the memo keep the very
+  // first render authenticated (no "not the host" flash); both are safe under
+  // StrictMode's double-invoke.
+  const adoptedTokenRef = useRef<{ gameCode: string; token: string } | null>(null);
   const managerToken = useMemo(() => {
+    const stored = getManagerToken(gameCode);
+    if (stored) return stored;
     const adopted = parseRecoveryHash(hash);
     if (adopted) {
+      adoptedTokenRef.current = { gameCode, token: adopted };
       setManagerToken(gameCode, adopted);
       return adopted;
     }
-    return getManagerToken(gameCode);
+    return adoptedTokenRef.current?.gameCode === gameCode ? adoptedTokenRef.current.token : null;
   }, [gameCode, hash]);
 
   // Scrub the adopted token out of the address bar and this history entry so

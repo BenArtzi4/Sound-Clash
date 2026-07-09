@@ -223,7 +223,7 @@ Cause: the per-game manager token isn't in the browser's localStorage under `gam
 
 Triage:
 1. Have the original host re-open the page in the browser they used to create the game. The token survives a hard refresh.
-2. If the host grabbed the console's **Backup host link** (the collapsed disclosure under the console header — QR + copyable `/manager/game/<code>#mt=<token>` URL) onto another device or a note beforehand, opening that link re-authenticates any browser: the console adopts the token from the URL fragment into localStorage and scrubs it from the address bar (T4.10).
+2. If the host grabbed the console's **Backup host link** (the collapsed disclosure under the console header — QR + copyable `/manager/game/<code>#mt=<token>` URL) onto another device or a note beforehand, opening that link re-authenticates any browser: the console adopts the token from the URL fragment into localStorage and scrubs it from the address bar (T4.10). Note the link is only consumed on a device with **no** stored token for that game — an already-stored credential wins (anti-clobber). In the vanishingly rare case a device holds a *stale wrong* token under the same code, clear the site's localStorage first, then open the link.
 3. If the original browser is gone **and** no backup link was saved, there is no self-service recovery: tokens are not stored server-side as anything but the row itself. Either create a new game, or —
 4. If you are debugging and have service-role access, read the token from the secrets table: `SELECT manager_token FROM game_secrets WHERE game_code = '<code>';` (migration 034 moved it off `active_games`), then hand the host `https://www.soundclash.org/manager/game/<code>#mt=<token>` to open. Debug-only escape hatch, not a normal flow.
 

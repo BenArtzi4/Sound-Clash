@@ -68,7 +68,7 @@ Games run for as many rounds as the host wants and end only when the host calls 
 }
 ```
 
-The `manager_token` is generated server-side (`gen_random_uuid()`) and is the host's credential for every other `/games/{code}/*` call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on `select-song`, `attempt`, `end-round`, `bonus`, `end`, and `kick-team`. The token never leaves the host's device.
+The `manager_token` is generated server-side (`gen_random_uuid()`, stored in `game_secrets`) and is the host's credential for every host-only call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on the remaining host-only REST endpoints (`bonus`, `end`, kick-team) and as the `p_manager_token` argument on the browser-direct RPCs (`award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`). The token stays on the host's device unless the host deliberately exports it via the console's **Backup host link** (`/manager/game/<code>#mt=<token>`, URL fragment — see `security-rls.md` §1), which is how a wiped or second browser recovers host access.
 
 Game-code generation: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O, 1/I/L, no lowercase). On collision (UNIQUE violation), retry up to 5 times then 500.
 

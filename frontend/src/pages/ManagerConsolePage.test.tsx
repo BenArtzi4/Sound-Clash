@@ -2134,10 +2134,44 @@ describe("ManagerConsolePage", () => {
       expect(screen.getByTestId("location-hash").textContent).toBe("#mt=not-a-uuid");
     });
 
-    it("a recovery hash overrides a stale stored token", () => {
-      // beforeEach stored TOKEN; the freshly-opened link's credential wins.
+    it("ignores the recovery hash when a token is already stored (no clobber), but still scrubs it", async () => {
+      // beforeEach stored TOKEN. Recovery is for tokenless devices: if the
+      // hash won here, any guest who knows the game code could craft a
+      // well-formed #mt= link that silently replaces the host's working
+      // credential and locks them out of their own game.
       renderConsoleWithHash(`#mt=${RECOVERY_UUID}`);
-      expect(getManagerToken("ABCDEF")).toBe(RECOVERY_UUID);
+      expect(getManagerToken("ABCDEF")).toBe(TOKEN);
+      // The tokened fragment still shouldn't linger in the address bar.
+      await waitFor(() => expect(screen.getByTestId("location-hash").textContent).toBe(""));
+    });
+
+    it("keeps the adopted session alive across the scrub when localStorage writes are blocked", async () => {
+      // Private-mode / storage-blocked browsers: setItem throws, so the
+      // adopted token never persists. The session must survive on the
+      // in-memory copy instead of bouncing to "not the host" after the
+      // scrub navigation re-runs the token lookup.
+      window.localStorage.clear();
+      // Spy on the Storage PROTOTYPE: jsdom's named-setter semantics turn a
+      // direct `localStorage.setItem = ...` assignment into a stored item
+      // instead of a method override, so an instance-level spy never fires.
+      const storageProto = Object.getPrototypeOf(window.localStorage) as {
+        setItem: (key: string, value: string) => void;
+      };
+      const setItemSpy = vi.spyOn(storageProto, "setItem").mockImplementation(() => {
+        throw new Error("storage blocked");
+      });
+      try {
+        renderConsoleWithHash(`#mt=${RECOVERY_UUID}`);
+        expect(screen.getByText(/connecting to game/i)).toBeInTheDocument();
+        // Wait for the scrub navigation to land...
+        await waitFor(() => expect(screen.getByTestId("location-hash").textContent).toBe(""));
+        // ...and the console is still authenticated from the in-memory copy.
+        expect(screen.queryByText(/you're not the host/i)).not.toBeInTheDocument();
+        expect(screen.getByText(/connecting to game/i)).toBeInTheDocument();
+        expect(getManagerToken("ABCDEF")).toBeNull();
+      } finally {
+        setItemSpy.mockRestore();
+      }
     });
 
     it("offers the backup host link with the tokened URL from the console", async () => {
