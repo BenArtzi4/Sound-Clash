@@ -7,7 +7,10 @@ vi.mock("../lib/supabase", async () => {
   return { supabase: mod.supabaseMock };
 });
 
+import { _resetServerTime } from "../hooks/useServerTime";
+import type { ActiveGame, Team } from "../lib/types";
 import {
+  fireGame,
   fireSubscribed,
   fireTeam,
   makeActiveGame,
@@ -23,6 +26,7 @@ import { DisplayPage } from "./DisplayPage";
 
 beforeEach(() => {
   resetSupabaseMock();
+  _resetServerTime();
 });
 
 afterEach(() => {
@@ -432,5 +436,69 @@ describe("DisplayPage scoreboard layout", () => {
       (el) => el.textContent,
     );
     expect(names).toEqual(["High", "Mid", "Low", "Zero"]);
+  });
+});
+
+// T4.11 / I-FinalBoard: the display keeps a readable final scoreboard under the
+// "gone" banner instead of collapsing to a bare line the moment the game rows
+// are deleted (End game or the expiry sweep).
+describe("DisplayPage final board (I-FinalBoard)", () => {
+  it("keeps the final scoreboard under the gone banner after the game row is deleted", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 3 }),
+      teams: [
+        makeTeam({ id: "t1", name: "Alice", score: 12 }),
+        makeTeam({ id: "t2", name: "Bob", score: 5 }),
+      ],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    act(() => {
+      fireGame(makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }));
+    });
+
+    expect(screen.getByText(/game has ended or expired/i)).toBeInTheDocument();
+    expect(screen.getByText(/final results/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
+  });
+
+  it("shows only the banner when the display opened onto an already-swept game", async () => {
+    setHydrate({ game: null, teams: [], rounds: [] });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(screen.getByText(/game has ended or expired/i)).toBeInTheDocument());
+    expect(screen.queryByText(/final results/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps every team on the podium while the post-end sweep deletes team rows", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "ended" }),
+      teams: [
+        makeTeam({ id: "t1", name: "Alice", score: 12 }),
+        makeTeam({ id: "t2", name: "Bob", score: 5 }),
+      ],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByText(/final results/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
+
+    // The sweep begins pruning team rows before the game row. The live board
+    // would lose Bob; the snapshot keeps the full podium.
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t2" } }));
+    });
+    expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
   });
 });

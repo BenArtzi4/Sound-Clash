@@ -165,7 +165,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 - A team's identity is `{ game_team_id (uuid), game_code }`. Both are stored in `localStorage` on join.
 - On page reload or temporary disconnect, the page reads `localStorage`, re-subscribes to the Realtime channel, and resumes; no server-side state restoration needed.
-- If the team's row was deleted, the page distinguishes why before acting: a kick from a live game clears the stored identity and redirects home, while a game that has ended or passed its `expires_at` (the expiry sweep cascade-deletes `game_teams` just before `active_games`) keeps the player on `/team/` and shows the "game has ended or expired" banner (or keeps the podium for an ended game).
+- If the team's row was deleted, the page distinguishes why before acting: a kick from a live game clears the stored identity and redirects home, while a game that has ended or passed its `expires_at` (the expiry sweep cascade-deletes `game_teams` just before `active_games`) keeps the player on `/team/` and shows the "game has ended or expired" banner **with the final scoreboard** rendered from the last-known state (T4.11 / I-FinalBoard) — the swept player still sees where everyone stood, not a bare line.
 - No "reconnect grace period" is enforced. If a team disconnects, the game continues. They can rejoin while the game is `waiting` or `playing`.
 
 ## 8. Reconnection (manager)
@@ -193,7 +193,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 - **Host extension (T4.8, migration 039)**: the manager console shows a subtle "Ends at HH:MM" hint that becomes a warning banner in the last ~20 minutes, with a **Keep playing +1h** action. Each press calls the token-gated `extend_game` RPC, which sets `expires_at = GREATEST(expires_at, now()) + 1 hour`. Repeat presses stack; an ended game can't be extended. The banner (and action) also covers a game that has overrun its `expires_at` but hasn't been swept yet.
 - `pg_cron` runs `cleanup_expired_games()` hourly: `DELETE FROM active_games WHERE expires_at < now()`.
 - `game_teams` and `game_rounds` cascade-delete via FK.
-- **Mid-game truncation**: a marathon session running >4 hours from start, whose host never extends, will be deleted while still in `playing` state. The frontend handles this by detecting the rows vanishing (Realtime DELETE events) and showing a "game has ended or expired" banner in place on every client — no navigation; the team page in particular distinguishes this teardown from a kick (see §7). This is an accepted limitation; documented for users.
+- **Mid-game truncation**: a marathon session running >4 hours from start, whose host never extends, will be deleted while still in `playing` state. The frontend handles this by detecting the rows vanishing (Realtime DELETE events) and showing a "game has ended or expired" banner in place on every client — no navigation; the team page in particular distinguishes this teardown from a kick (see §7). Every client also keeps the **final scoreboard** from its last-known snapshot under the banner (T4.11 / I-FinalBoard); the manager additionally keeps the song export, which still resolves because the `songs` catalog is durable. This is an accepted limitation; documented for users.
 
 ## 11. Edge Cases & Open Questions
 

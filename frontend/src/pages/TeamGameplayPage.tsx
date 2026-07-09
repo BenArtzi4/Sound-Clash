@@ -4,10 +4,9 @@ import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
 import { useBuzzer } from "../hooks/useBuzzer";
-import { useGameChannel } from "../hooks/useGameChannel";
-import { serverTimeNow } from "../hooks/useServerTime";
+import { isGameExpired, useGameChannel } from "../hooks/useGameChannel";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
-import type { ActiveGame } from "../lib/types";
+import type { GameState } from "../lib/types";
 import styles from "./TeamGameplayPage.module.css";
 
 interface PointEvent {
@@ -15,15 +14,30 @@ interface PointEvent {
   delta: number;
 }
 
-// The 4h expiry sweep (cleanup_expired_games) cascade-deletes game_teams a
-// beat before active_games, so our team's DELETE arrives while the game row is
-// still present — indistinguishable from a kick by row absence alone. The
-// sweep only touches games whose expires_at has passed, so the clock is the
-// discriminator (server-offset clock; falls back to the device clock until the
-// first Realtime event is observed).
-function isExpired(game: ActiveGame): boolean {
-  const expiresAt = Date.parse(game.expires_at);
-  return Number.isFinite(expiresAt) && serverTimeNow().getTime() >= expiresAt;
+// The end-of-game view, shared by "the host ended the game" (podium from live
+// state) and "the rows are gone / being swept" (podium from the last-known
+// snapshot, I-FinalBoard). `expired` — the game never reached "ended"; the
+// expiry sweep tore it down mid-play — adds the banner on top so the frozen
+// board reads as expired, not as a normal finish. It's an explicit prop rather
+// than derived from `board.game.status` so each call site states its intent
+// (the ended branch always passes false; the gone branch derives it from the
+// snapshot). Module-level so React keeps one component type across the
+// live-ended → swept transition (no podium remount, no confetti replay).
+function FinalBoard({
+  board,
+  gameCode,
+  expired,
+}: {
+  board: GameState;
+  gameCode: string;
+  expired: boolean;
+}) {
+  return (
+    <main className={styles.shell}>
+      {expired ? <div className={styles.statusEnded}>This game has ended or expired.</div> : null}
+      <EndScreen teams={Array.from(board.teams.values())} gameCode={gameCode} />
+    </main>
+  );
 }
 
 export function TeamGameplayPage() {
@@ -38,7 +52,7 @@ export function TeamGameplayPage() {
     }
   }, [stored, gameCode, navigate]);
 
-  const { state, status } = useGameChannel(gameCode);
+  const { state, status, finalBoard } = useGameChannel(gameCode);
   const buzzer = useBuzzer(gameCode, stored?.id ?? "", state);
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const prevScoreRef = useRef<number | null>(null);
@@ -78,7 +92,7 @@ export function TeamGameplayPage() {
       // Teardown, not a kick: the game-row DELETE lands a beat later and flips
       // status to "gone" (backstopped by the resync hydrate if that event is
       // ever dropped).
-      if (state.game.status === "ended" || isExpired(state.game)) return;
+      if (state.game.status === "ended" || isGameExpired(state.game)) return;
       navigate("/", { replace: true });
     }
   }, [hydratedOnce, stored, state, status, gameCode, navigate]);
@@ -95,16 +109,29 @@ export function TeamGameplayPage() {
   if (!stored) return null;
 
   // Our team row was cascade-deleted by the expiry sweep while the game row is
-  // still present: paint the banner now rather than flashing the buzz UI for
-  // the beat until the game-row DELETE flips status to "gone". (An ended game
-  // keeps rendering the podium below instead.)
+  // still present: paint the end-of-game view now rather than flashing the
+  // buzz UI for the beat until the game-row DELETE flips status to "gone".
+  // (An ended game keeps rendering the podium below instead.)
   const removedByExpiry =
     state !== null &&
     !state.teams.has(stored.id) &&
     state.game.status !== "ended" &&
-    isExpired(state.game);
+    isGameExpired(state.game);
 
   if (status === "gone" || removedByExpiry) {
+    // The final scoreboard survives the delete (I-FinalBoard): render it from
+    // the hook's last-known snapshot. No snapshot (this device never saw the
+    // live game — e.g. it navigated straight to an already-swept code) falls
+    // back to the plain banner.
+    if (finalBoard) {
+      return (
+        <FinalBoard
+          board={finalBoard}
+          gameCode={gameCode}
+          expired={finalBoard.game.status !== "ended"}
+        />
+      );
+    }
     return (
       <main className={styles.shell}>
         <div className={styles.statusEnded}>This game has ended or expired.</div>
@@ -113,14 +140,12 @@ export function TeamGameplayPage() {
   }
 
   // Once the host has ended the game, surface the same celebratory podium the
-  // display + manager show. The BUZZ button is gone — there's nothing left to do.
+  // display + manager show. The BUZZ button is gone — there's nothing left to
+  // do. Prefer the snapshot over live state: once the post-end sweep starts
+  // cascade-deleting team rows, live state shrinks team by team while the
+  // snapshot holds the full board.
   if (state?.game.status === "ended") {
-    const finalTeams = Array.from(state.teams.values());
-    return (
-      <main className={styles.shell}>
-        <EndScreen teams={finalTeams} gameCode={gameCode} />
-      </main>
-    );
+    return <FinalBoard board={finalBoard ?? state} gameCode={gameCode} expired={false} />;
   }
 
   const game = state?.game;

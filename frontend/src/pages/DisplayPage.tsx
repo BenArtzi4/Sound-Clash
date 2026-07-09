@@ -71,7 +71,7 @@ function DisplayEntry() {
 }
 
 function DisplayBoard({ gameCode }: { gameCode: string }) {
-  const { state, status } = useGameChannel(gameCode);
+  const { state, status, finalBoard } = useGameChannel(gameCode);
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   // Track the frame height so the QR footer can shrink on short / OS-scaled
@@ -136,9 +136,16 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   }, [state]);
 
   if (status === "gone") {
+    // The final scoreboard survives the delete (I-FinalBoard): render the
+    // podium from the hook's last-known snapshot with a "gone" banner on top.
+    // No snapshot (this screen never saw the live game — e.g. it opened
+    // straight onto an already-swept code) falls back to the bare banner.
     return (
       <main className={styles.shell}>
         <div className={`${styles.banner} ${styles.bannerEnded}`}>Game has ended or expired.</div>
+        {finalBoard ? (
+          <EndScreen teams={Array.from(finalBoard.teams.values())} gameCode={gameCode} />
+        ) : null}
       </main>
     );
   }
@@ -198,9 +205,14 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const isSoundtrackRound = currentSong?.is_soundtrack === true;
 
   if (game.status === "ended") {
+    // Prefer the snapshot's teams: once the post-end sweep begins
+    // cascade-deleting team rows, live `state` shrinks team by team while the
+    // snapshot holds the full final board (I-FinalBoard). EndScreen re-sorts,
+    // so an unsorted Map dump is fine.
+    const boardTeams = finalBoard ? Array.from(finalBoard.teams.values()) : teams;
     return (
       <main className={styles.shell}>
-        <EndScreen teams={teams} gameCode={gameCode} />
+        <EndScreen teams={boardTeams} gameCode={gameCode} />
       </main>
     );
   }

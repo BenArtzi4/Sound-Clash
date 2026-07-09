@@ -131,7 +131,7 @@ Playwright with multi-browser-context. Runs against a dedicated `Sound-Clash-Pre
 | `buzzer_race.spec.ts` | manager + 2 teams + display; both teams click within 5ms; deterministic winner; all contexts agree |
 | `full_game.spec.ts` | 3-round happy path with score accumulation |
 | `reconnection.spec.ts` | team disconnects mid-game; reload; state restored; can buzz |
-| `expiration.spec.ts` | game with expires_at in past; cron runs; all clients show the "ended or expired" banner in place (the team page must NOT redirect home — expiry is teardown, not a kick) |
+| `expiration.spec.ts` | game with expires_at in past; cron runs; all clients show the "ended or expired" banner in place (the team page must NOT redirect home — expiry is teardown, not a kick) AND keep the final scoreboard from last-known state (T4.11 / I-FinalBoard), naming the team that was in the room |
 | `admin_songs_crud.spec.ts` | create/edit/delete song via admin API + bulk-import idempotency (UI deferred; see roadmap) |
 | `kick_team.spec.ts` | manager kicks team; team's tab redirects |
 | `host_recovery.spec.ts` | host wipes localStorage → locked out; the backup host link (`#mt=<token>`) re-authenticates, scrubs the fragment, re-persists the token, and the recovered console starts a round |

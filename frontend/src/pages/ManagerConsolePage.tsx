@@ -81,7 +81,7 @@ export function ManagerConsolePage() {
       navigate(pathname + search, { replace: true });
     }
   }, [hash, pathname, search, navigate]);
-  const { state, status } = useGameChannel(gameCode);
+  const { state, status, finalBoard } = useGameChannel(gameCode);
   const player = usePlayerReady();
 
   // Double-buffer: two persistent YouTube players overlaid in one box. One is
@@ -828,6 +828,26 @@ export function ManagerConsolePage() {
   }
 
   if (status === "gone" || (state && !state.game)) {
+    // The final scoreboard + song export survive the delete (I-FinalBoard):
+    // render them from the hook's last-known snapshot so a host whose game was
+    // swept mid-view still gets the podium and can still export the songs that
+    // played (the songs table is durable, so SongExport's lookup works after
+    // the ephemeral rows are gone). No snapshot falls back to the bare message.
+    if (finalBoard) {
+      const boardTeams = Array.from(finalBoard.teams.values());
+      return (
+        <main className={styles.shell}>
+          <p className="muted">This game has ended or expired.</p>
+          <EndScreen teams={boardTeams} gameCode={gameCode} />
+          <div className={styles.endActions}>
+            <SongExport game={finalBoard.game} rounds={finalBoard.rounds} teams={boardTeams} />
+            <Link to="/" className="btn btn-primary">
+              Back to home
+            </Link>
+          </div>
+        </main>
+      );
+    }
     return (
       <main className={styles.shell}>
         <p className="error">This game no longer exists.</p>
@@ -852,11 +872,16 @@ export function ManagerConsolePage() {
   const teams = Array.from(state.teams.values());
 
   if (game.status === "ended") {
+    // Prefer the snapshot: once the post-end sweep starts cascade-deleting
+    // team rows, live `state` shrinks while the snapshot holds the full board
+    // and complete round history for the export (I-FinalBoard).
+    const board = finalBoard ?? state;
+    const boardTeams = Array.from(board.teams.values());
     return (
       <main className={styles.shell}>
-        <EndScreen teams={teams} gameCode={gameCode} />
+        <EndScreen teams={boardTeams} gameCode={gameCode} />
         <div className={styles.endActions}>
-          <SongExport game={game} rounds={state.rounds} teams={teams} />
+          <SongExport game={board.game} rounds={board.rounds} teams={boardTeams} />
           <Link to="/" className="btn btn-primary">
             Back to home
           </Link>

@@ -1,12 +1,14 @@
 // Game whose `expires_at` is backdated past, then swept by
 // cleanup_expired_games(): all open clients (manager, team, display)
-// surface the "gone" banner once Realtime delivers the DELETE on
+// surface the "ended or expired" banner once Realtime delivers the DELETE on
 // active_games. Reuses the existing UI status banners (no /expired
-// route; see the plan).
+// route; see the plan). Each client also keeps the final scoreboard visible
+// from its last-known snapshot (T4.11 / I-FinalBoard) rather than collapsing
+// to a bare line — the swept team still sees where everyone stood.
 //
 // Spec ref: docs/testing-strategy.md §4.4 + db/migrations/005_rpc_functions.sql
 // (cleanup_expired_games at line 178) + frontend/src/hooks/useGameChannel.ts
-// (DELETE on active_games -> status="gone").
+// (DELETE on active_games -> status="gone", finalBoard snapshot).
 
 import { test, expect, type Browser } from "@playwright/test";
 import { joinAsTeam } from "./fixtures/team-context";
@@ -50,10 +52,19 @@ test("expired game is swept; all clients surface the 'gone' banner", async ({ br
   });
   expect(team.page.url()).toContain("/team/");
 
-  await expect(
-    manager.page.getByText(/this game no longer exists/i),
-  ).toBeVisible({ timeout: 15_000 });
-  await expect(
-    display.page.getByText(/game has ended or expired/i),
-  ).toBeVisible({ timeout: 15_000 });
+  // T4.11: the manager keeps the final board (podium + song export) from its
+  // last-known snapshot instead of the old "This game no longer exists." line.
+  await expect(manager.page.getByText(/this game has ended or expired/i)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(manager.page.getByText(/final results/i)).toBeVisible({ timeout: 15_000 });
+  await expect(display.page.getByText(/game has ended or expired/i)).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Every client's frozen final board still names the team that was in the
+  // room when the sweep hit — the standings survive the row delete.
+  await expect(display.page.getByText("Ephemeral").first()).toBeVisible({ timeout: 15_000 });
+  await expect(team.page.getByText("Ephemeral").first()).toBeVisible({ timeout: 15_000 });
+  await expect(manager.page.getByText("Ephemeral").first()).toBeVisible({ timeout: 15_000 });
 });
