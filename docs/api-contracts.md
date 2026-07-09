@@ -227,6 +227,34 @@ just has no FastAPI route or browser caller anymore.
 
 ---
 
+### 2.5c Extending the game TTL — direct Postgres RPC
+
+Host clicks **Keep playing +1h** in the manager console's expiry warning
+banner (shown in the last ~20 minutes before `expires_at`). Same direct-RPC
+pattern as 2.5; the function checks the manager token internally and pushes
+`active_games.expires_at` to `GREATEST(expires_at, now()) + 1 hour`
+(migration 039).
+
+```ts
+const { data, error } = await supabase.rpc("extend_game", {
+  p_game_code: gameCode,
+  p_manager_token: managerToken,
+});
+```
+
+Frontend wrapper: `frontend/src/hooks/useManagerActions.ts::extendGameDirect`.
+
+**Response**: the new `expires_at` as a bare JSON timestamp string (the
+function `RETURNS timestamptz`). The authoritative countdown update reaches
+every client via the Realtime `UPDATE` on `active_games`.
+
+**Errors** (raised as PostgrestError with the named code in `message`):
+- `manager_token_required` (sqlstate `28000`) — bad/missing token.
+- `game_not_found` (`P0002`) — game code unknown.
+- `game_ended` (`P0001`) — game already ended; nothing to keep playing.
+
+---
+
 ### 2.6 `POST /games/{game_code}/bonus`
 
 Manager: award a discretionary bonus to any team in the game. Independent of round state and the buzz lock; the host picks the team. **Manager-token auth required.**
@@ -482,6 +510,7 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 - `select_next_song` RPC (direct from manager browser): NOT idempotent; each call advances the round number and inserts a new `game_rounds` row. The prior round is closed defensively inside the function; calling on an already-ended game raises `game_ended`.
 - `award_attempt` RPC (direct from manager browser): NOT idempotent. Each call records one attempt against the open round. Manager UI guards against double-submit with a busy flag; the SQL function additionally raises `title_already_claimed` / `artist_already_claimed` on retry. Calling on an ended round raises `round_already_ended`.
 - `release_buzz_lock` RPC (direct from manager browser): idempotent on the unlock side; safe to call when no buzz is held.
+- `extend_game` RPC (direct from manager browser): NOT idempotent; each call adds another hour to `expires_at`. The manager UI disables the banner button from click until the bumped value arrives over Realtime, so a double-tap can't stack a second hour.
 - `POST /games/{code}/end`: idempotent; calling on an already-`ended` game is a 409 (conflict), not a no-op, to surface the inconsistency to the manager UI.
 - `buzz_in` RPC: implicitly idempotent (the `IS NULL` predicate prevents double-claim).
 

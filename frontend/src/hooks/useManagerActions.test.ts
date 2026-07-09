@@ -5,7 +5,12 @@ vi.mock("../lib/supabase", async () => {
   return { supabase: mod.supabaseMock };
 });
 
-import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "./useManagerActions";
+import {
+  awardAttemptDirect,
+  extendGameDirect,
+  releaseBuzzLockDirect,
+  RpcError,
+} from "./useManagerActions";
 import { resetSupabaseMock, setRpcResponse, supabaseMock } from "../test/supabaseMock";
 
 const TOKEN = "11111111-1111-1111-1111-111111111111";
@@ -123,5 +128,35 @@ describe("releaseBuzzLockDirect", () => {
       error: { message: "manager_token_required", code: "28000" },
     });
     await expect(releaseBuzzLockDirect("ABCDEF", "wrong")).rejects.toBeInstanceOf(RpcError);
+  });
+});
+
+describe("extendGameDirect", () => {
+  it("passes the manager token and returns the new expires_at string", async () => {
+    // RETURNS timestamptz arrives as a bare JSON string.
+    setRpcResponse({ data: "2026-05-05T17:00:00+00:00", error: null });
+    const newExpiresAt = await extendGameDirect("ABCDEF", TOKEN);
+    expect(newExpiresAt).toBe("2026-05-05T17:00:00+00:00");
+    expect(supabaseMock.rpc).toHaveBeenCalledWith("extend_game", {
+      p_game_code: "ABCDEF",
+      p_manager_token: TOKEN,
+    });
+  });
+
+  it("throws RpcError carrying the PL/pgSQL message and sqlstate", async () => {
+    setRpcResponse({
+      data: null,
+      error: { message: "manager_token_required", code: "28000" },
+    });
+    await expect(extendGameDirect("ABCDEF", "wrong")).rejects.toMatchObject({
+      name: "RpcError",
+      message: "manager_token_required",
+      sqlstate: "28000",
+    });
+  });
+
+  it("raises when the RPC resolves without a timestamp", async () => {
+    setRpcResponse({ data: null, error: null });
+    await expect(extendGameDirect("ABCDEF", TOKEN)).rejects.toBeInstanceOf(RpcError);
   });
 });
