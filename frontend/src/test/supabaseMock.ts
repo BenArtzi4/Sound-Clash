@@ -27,6 +27,12 @@ interface State {
       is_soundtrack: boolean;
     }
   >;
+  // When > 0, the next N from("songs")...maybeSingle() lookups resolve with
+  // songFetchError instead of a row so tests can exercise the bounded backoff
+  // retry in lib/songMetadata.ts. songFetchAttempts counts every lookup.
+  songFetchFailuresRemaining: number;
+  songFetchError: { message: string; code?: string };
+  songFetchAttempts: number;
 }
 
 const state: State = {
@@ -36,6 +42,9 @@ const state: State = {
   hydrateError: null,
   rpcResponse: { data: [], error: null },
   songsById: {},
+  songFetchFailuresRemaining: 0,
+  songFetchError: { message: "song fetch failed" },
+  songFetchAttempts: 0,
 };
 
 export const channelMock = {
@@ -81,6 +90,11 @@ function buildSelect(table: TableName | "songs") {
         return { data: state.hydrate.game, error: null };
       }
       if (table === "songs" && pendingId !== null) {
+        state.songFetchAttempts += 1;
+        if (state.songFetchFailuresRemaining > 0) {
+          state.songFetchFailuresRemaining -= 1;
+          return { data: null, error: state.songFetchError };
+        }
         const row = state.songsById[pendingId];
         if (!row) return { data: null, error: null };
         // The in-game pages no longer select the dropped is_soundtrack column;
@@ -137,6 +151,9 @@ export function resetSupabaseMock(): void {
   state.hydrateError = null;
   state.rpcResponse = { data: [], error: null };
   state.songsById = {};
+  state.songFetchFailuresRemaining = 0;
+  state.songFetchError = { message: "song fetch failed" };
+  state.songFetchAttempts = 0;
   supabaseMock.channel.mockClear();
   supabaseMock.removeChannel.mockClear();
   supabaseMock.from.mockClear();
@@ -195,6 +212,18 @@ export function setSongFetch(song: {
     start_time: song.start_time ?? 0,
     is_soundtrack: song.is_soundtrack ?? false,
   };
+}
+
+export function setSongFetchFailures(
+  count: number,
+  error: { message: string; code?: string } = { message: "song fetch failed" },
+): void {
+  state.songFetchFailuresRemaining = count;
+  state.songFetchError = error;
+}
+
+export function getSongFetchAttempts(): number {
+  return state.songFetchAttempts;
 }
 
 export async function fireSubscribed(): Promise<void> {
