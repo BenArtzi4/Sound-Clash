@@ -23,8 +23,7 @@ import {
   startSongStart,
   type SongStartHandle,
 } from "../lib/telemetry";
-import { supabase } from "../lib/supabase";
-import { deriveIsSoundtrack, type SongGenreSlugEmbed } from "../lib/soundtrack";
+import { fetchSongById } from "../lib/songMetadata";
 import type { Song } from "../lib/types";
 import styles from "./ManagerConsolePage.module.css";
 
@@ -210,26 +209,17 @@ export function ManagerConsolePage() {
     // the round will catch up momentarily and the RPC reconciles the metadata.
     if (currentSong && currentSong.id === optimisticSongIdRef.current) return;
     let cancelled = false;
-    void (async () => {
-      const { data, error } = await supabase
-        .from("songs")
-        .select("id,title,artist,youtube_id,start_time,song_genres(genres(slug))")
-        .eq("id", currentRoundSongId)
-        .maybeSingle();
-      if (cancelled || error || !data) return;
-      // is_soundtrack is derived from genre membership (migration 028 dropped
-      // the column), so compute it from the embedded genre slugs.
-      const { song_genres, ...base } = data as unknown as Omit<Song, "is_soundtrack" | "genres"> & {
-        song_genres: SongGenreSlugEmbed[] | null;
-      };
-      const song: Song = { ...base, is_soundtrack: deriveIsSoundtrack(song_genres) };
+    // fetchSongById retries transient failures with bounded backoff (F-P1-7)
+    // so one blip doesn't leave the post-refresh player empty for the round.
+    void fetchSongById(currentRoundSongId, () => cancelled).then((song) => {
+      if (cancelled || !song) return;
       setCurrentSong(song);
       if (playerReady) {
         activePlayer()?.loadVideoById(song.youtube_id, song.start_time);
       } else {
         player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
       }
-    })();
+    });
     return () => {
       cancelled = true;
     };

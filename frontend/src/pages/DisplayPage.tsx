@@ -7,8 +7,7 @@ import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { useGameChannel } from "../hooks/useGameChannel";
-import { supabase } from "../lib/supabase";
-import { deriveIsSoundtrack, type SongGenreSlugEmbed } from "../lib/soundtrack";
+import { fetchSongById } from "../lib/songMetadata";
 import type { Song } from "../lib/types";
 import styles from "./DisplayPage.module.css";
 
@@ -102,20 +101,12 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     }
     if (currentSong && currentSong.id === currentRoundSongId) return;
     let cancelled = false;
-    void (async () => {
-      const { data, error } = await supabase
-        .from("songs")
-        .select("id,title,artist,youtube_id,start_time,song_genres(genres(slug))")
-        .eq("id", currentRoundSongId)
-        .maybeSingle();
-      if (cancelled || error || !data) return;
-      // is_soundtrack is derived from genre membership (migration 028 dropped
-      // the column), so compute it from the embedded genre slugs.
-      const { song_genres, ...base } = data as unknown as Omit<Song, "is_soundtrack" | "genres"> & {
-        song_genres: SongGenreSlugEmbed[] | null;
-      };
-      setCurrentSong({ ...base, is_soundtrack: deriveIsSoundtrack(song_genres) });
-    })();
+    // fetchSongById retries transient failures with bounded backoff (F-P1-7)
+    // so one blip doesn't blank the reveal for the whole round.
+    void fetchSongById(currentRoundSongId, () => cancelled).then((song) => {
+      if (cancelled || !song) return;
+      setCurrentSong(song);
+    });
     return () => {
       cancelled = true;
     };

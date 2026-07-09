@@ -168,6 +168,7 @@ import {
   resetSupabaseMock,
   setHydrate,
   setSongFetch,
+  setSongFetchFailures,
 } from "../test/supabaseMock";
 import { ManagerConsolePage } from "./ManagerConsolePage";
 
@@ -608,6 +609,54 @@ describe("ManagerConsolePage", () => {
     // The song/clip name (title) appears only as a secondary hint.
     expect(screen.getByText("He's a Pirate")).toBeInTheDocument();
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
+  });
+
+  it("retries the post-refresh song resolve so the round recovers from a transient blip", async () => {
+    // F-P1-7: after a manager-tab refresh mid-round, the song_id -> songs
+    // lookup used to give up on the first transient error, leaving the card
+    // and the player empty for the whole round. The bounded backoff retry in
+    // fetchSongById must recover it, and the recovered song must still flow
+    // into the player pipeline (queued here, flushed by onReady).
+    vi.useFakeTimers();
+    try {
+      setHydrate({
+        game: makeActiveGame({
+          status: "playing",
+          current_round_id: "r1",
+          current_song_id: "song-1",
+          round_number: 1,
+        }),
+        teams: [makeTeam({ id: "t1", name: "Alice" })],
+        rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-1" })],
+      });
+      setSongFetch({
+        id: "song-1",
+        title: "Take On Me",
+        artist: "a-ha",
+        youtube_id: "djV11Xbc914",
+        start_time: 10,
+      });
+      setSongFetchFailures(1);
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+      // The first attempt failed: no song card yet.
+      expect(screen.getByText(/no round started yet/i)).toBeInTheDocument();
+      // The first backoff retry (500ms) lands and fills the card.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      expect(screen.getByText("Take On Me")).toBeInTheDocument();
+      // The player wasn't ready during the resolve, so the song was queued;
+      // onReady flushes it into the live player.
+      act(() => {
+        onReadyHandler?.();
+      });
+      expect(lastHandle?.loadVideoById).toHaveBeenCalledWith("djV11Xbc914", 10);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("Continue button calls releaseBuzzLockDirect and resumes the player", async () => {
