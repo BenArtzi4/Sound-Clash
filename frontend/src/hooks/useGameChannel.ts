@@ -8,10 +8,20 @@ import type {
   PostgresChangePayload,
   Team,
 } from "../lib/types";
-import { observeServerTime } from "./useServerTime";
+import { observeServerTime, serverTimeNow } from "./useServerTime";
 import { log, recordFanout, resolveBuzzE2E, resolveScoreE2E } from "../lib/telemetry";
 
 export type ChannelStatus = "idle" | "connecting" | "subscribed" | "reconnecting" | "gone";
+
+// The 4h expiry sweep (cleanup_expired_games) only touches games whose
+// expires_at has passed, so the clock discriminates its teardown from other
+// row changes (server-offset clock; falls back to the device clock until the
+// first Realtime event is observed). Shared by the team page's kick-vs-expiry
+// logic and the final-board snapshot below.
+export function isGameExpired(game: ActiveGame): boolean {
+  const expiresAt = Date.parse(game.expires_at);
+  return Number.isFinite(expiresAt) && serverTimeNow().getTime() >= expiresAt;
+}
 
 // Backstop re-fetch interval. Supabase Realtime over WebSocket occasionally
 // drops a postgres_changes event (flaky networks, a missed heartbeat that
@@ -189,10 +199,64 @@ export function useGameChannel(gameCode: string): {
   state: GameState | null;
   status: ChannelStatus;
   error: Error | null;
+  finalBoard: GameState | null;
 } {
   const [state, dispatch] = useReducer(gameReducer, null);
   const [status, setStatus] = useState<ChannelStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
+
+  // Last-known state worth rendering as a final scoreboard once the game rows
+  // are gone (I-FinalBoard). During live play every committed state refreshes
+  // it. The expiry sweep cascade-deletes game_teams/game_rounds along with
+  // active_games; those child DELETEs can arrive before the game-row DELETE
+  // that nulls `state`, so the states committed mid-teardown shrink team by
+  // team — a snapshot taken then would wipe teams off the final board. So a
+  // shrinking update is skipped when it's part of a teardown:
+  //   • the game is `ended` — every shrink now is the post-end sweep, so hold
+  //     the whole board (the common, important case: the host ends the game and
+  //     the final board must persist); OR
+  //   • the game is expired-but-unended (an abandoned game the hourly sweep is
+  //     tearing down) AND the shrink is NOT a lone kick.
+  // A KICK — one team removed, ≥1 team left in the room, round history intact —
+  // is always honored, even in the overdue-but-unswept window (past expires_at
+  // but still `playing`, kept alive by the "Keep playing +1h" banner). Deleting
+  // a team's row there is a real host action; the removed team must NOT linger
+  // on the final board. Using the clock alone to mean "teardown" wrongly froze
+  // the snapshot over such a kick. Removing the last team, or a shrink that also
+  // drops rounds, is the sweep's cascade → held.
+  // Residual (accepted, abandoned games only): a >4h-overrun game the host never
+  // ended, whose sweep happens to deliver its team DELETEs before its round
+  // DELETEs, can show a partial final board — each intermediate team removal is
+  // indistinguishable from a kick without lookahead. The ended-game path and
+  // rounds-first / last-team sweeps are fully protected. Known gap unchanged: if
+  // the sweep's DELETEs drain in the same React batch as the first successful
+  // hydrate, no live state commits and the pages fall back to the plain banner.
+  //
+  // Held in state (not a ref) so consumers see it reactively; the functional
+  // updater returns the SAME reference on a held teardown-shrink, so React skips
+  // the otherwise-extra render in exactly that case, and on quiet backstop ticks
+  // the effect doesn't run at all (the reducer returns the same `state` ref).
+  const [finalBoardState, setFinalBoardState] = useState<GameState | null>(null);
+  useEffect(() => {
+    if (!state) return;
+    setFinalBoardState((snap) => {
+      if (snap === null || snap.game.game_code !== state.game.game_code) return state;
+      const shrank = state.teams.size < snap.teams.size || state.rounds.length < snap.rounds.length;
+      if (!shrank) return state;
+      // One team gone, room still populated, rounds untouched: a host kick.
+      const looksLikeKick =
+        state.teams.size === snap.teams.size - 1 &&
+        state.teams.size > 0 &&
+        state.rounds.length === snap.rounds.length;
+      const teardownShrink =
+        state.game.status === "ended" || (isGameExpired(state.game) && !looksLikeKick);
+      return teardownShrink ? snap : state;
+    });
+  }, [state]);
+  // Guard against a stale snapshot when the same mounted hook is pointed at a
+  // different game code (the reducer state has the same lag until the new
+  // game's first HYDRATE lands; the snapshot must not outlive it either).
+  const finalBoard = finalBoardState?.game.game_code === gameCode ? finalBoardState : null;
 
   useEffect(() => {
     if (!gameCode) return;
@@ -441,5 +505,5 @@ export function useGameChannel(gameCode: string): {
     };
   }, [gameCode]);
 
-  return { state, status, error };
+  return { state, status, error, finalBoard };
 }

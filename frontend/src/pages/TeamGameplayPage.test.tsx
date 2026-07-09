@@ -489,4 +489,88 @@ describe("TeamGameplayPage", () => {
       expect(window.localStorage.getItem("game:ABCDEF:team")).toBeNull();
     });
   });
+
+  // T4.11 / I-FinalBoard: the final scoreboard survives the row delete. When
+  // the game is swept (or ended then swept), the page renders the podium from
+  // the hook's last-known snapshot instead of a bare "gone" banner.
+  describe("final board survives delete (I-FinalBoard)", () => {
+    it("keeps the final scoreboard (with the expired banner) after the game row is deleted mid-play", async () => {
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      setHydrate({
+        game: makeActiveGame({ status: "playing", expires_at: "2026-05-05T11:00:00.000Z" }),
+        teams: [
+          makeTeam({ id: "team-1", name: "Alice", score: 8 }),
+          makeTeam({ id: "team-2", name: "Bob", score: 3 }),
+        ],
+        rounds: [],
+      });
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      await waitFor(() => expect(screen.getByTestId("buzz")).toBeEnabled());
+
+      act(() => {
+        fireGame(
+          makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }),
+        );
+      });
+
+      // The podium survives with BOTH teams, plus the "ended or expired"
+      // banner because the game never reached the ended state.
+      expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
+      expect(screen.getByText(/this game has ended or expired/i)).toBeInTheDocument();
+      expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
+      expect(screen.queryByText("home page")).not.toBeInTheDocument();
+    });
+
+    it("keeps the podium without the expired banner after an ended game's rows are deleted", async () => {
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      setHydrate({
+        game: makeActiveGame({ status: "ended", ended_at: "2026-05-05T13:00:00.000Z" }),
+        teams: [
+          makeTeam({ id: "team-1", name: "Alice", score: 8 }),
+          makeTeam({ id: "team-2", name: "Bob", score: 3 }),
+        ],
+        rounds: [],
+      });
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
+
+      act(() => {
+        fireGame(
+          makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }),
+        );
+      });
+
+      expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
+      expect(screen.queryByText(/this game has ended or expired/i)).not.toBeInTheDocument();
+      expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
+    });
+
+    it("falls back to the bare banner when the game was already gone on arrival (no snapshot)", async () => {
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      setHydrate({ game: null, teams: [], rounds: [] });
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      await waitFor(() =>
+        expect(screen.getByText(/this game has ended or expired/i)).toBeInTheDocument(),
+      );
+      expect(screen.queryByText(/^final results$/i)).not.toBeInTheDocument();
+    });
+  });
 });

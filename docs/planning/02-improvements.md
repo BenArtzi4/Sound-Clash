@@ -17,7 +17,7 @@ Make a real party survive the things that go wrong. (Several of these are also b
 - **I-Expiry · Expiry countdown + token-gated extend RPC.** ✅ shipped 2026-07-09 (PR #195, T4.8) — mig 039 `extend_game` (token-gated, `GREATEST(expires_at, now()) + 1h`); the console's "Ends at HH:MM" hint becomes a warning banner with the single **Keep playing +1h** action in the last ~20 min (manager-only, no auto-extend per maintainer).
 - **I-GoneDerive · Cascade-ordering guard on the team page.** ✅ shipped 2026-07-08 (PR #192, T4.4) — the team page distinguishes the expiry cascade from a kick via `expires_at` on the server-offset clock; T-CascadeTest pins the ordering.
 - **I-NextRecover · Revert the double-buffer on Next-round failure.** ✅ shipped 2026-07-08 (PR #193, T4.5) — on `select_next_song` failure the whole in-gesture swap rolls back: promoted player stopped, `activeKey` reverted, the still-current round's song reloaded, peeked song re-prebuffered so a retry keeps the fast path.
-- **I-FinalBoard · Host-visible final board that survives the abrupt delete.** `[M]` When a game ends/expires the host loses the live board (`game_history` has no UI). Render the final scoreboard from last-known state (and/or an admin-gated `game_history` read).
+- **I-FinalBoard · Host-visible final board that survives the abrupt delete.** ✅ shipped 2026-07-09 (T4.11) — `useGameChannel` exposes a `finalBoard` last-known-state snapshot (teardown-shrink skipped once ended/expired so a live kick still prunes); Display/Team render the `EndScreen` podium under the banner, Manager keeps the podium **and** the durable-table song export. Pure last-known-state — no `game_history` UI, no admin read, zero new infra.
 
 ## E. Disaster recovery & ops (`resilience`/ops) — remaining
 
