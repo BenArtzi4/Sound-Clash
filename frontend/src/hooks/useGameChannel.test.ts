@@ -820,11 +820,12 @@ describe("useGameChannel - subscription", () => {
     expect(result.current.finalBoard?.rounds.length).toBe(1);
   });
 
-  it("keeps the full board when an expired-but-unended game is swept mid-play", async () => {
-    // The hourly sweep can tear down a game that overran without ever being
-    // ended. It's distinguished from a kick by the clock: expires_at has
-    // passed on the server-offset clock (pinned by the first fired event's
-    // commit_timestamp, 2026-05-05T12:00Z).
+  it("honors a host kick during the overdue-but-unswept window (kicked team does not linger on the final board)", async () => {
+    // A game can be past expires_at but still `playing` (kept alive by the
+    // "Keep playing +1h" banner) while the hourly sweep hasn't run. A kick there
+    // is a real host action — one team removed, the room still populated, rounds
+    // intact — and must be honored, NOT frozen out as if it were teardown. This
+    // is the case the clock-only guard got wrong (review finding).
     const game = makeActiveGame({ status: "playing", expires_at: "2026-05-05T11:00:00.000Z" });
     setHydrate({
       game,
@@ -840,6 +841,55 @@ describe("useGameChannel - subscription", () => {
       fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t2" } }));
     });
     expect(result.current.state?.teams.size).toBe(1);
+    // Snapshot follows the kick — t2 is gone, not preserved by a false teardown.
+    expect(result.current.finalBoard?.teams.size).toBe(1);
+    expect(result.current.finalBoard?.teams.has("t2")).toBe(false);
+  });
+
+  it("holds the board when the sweep removes the LAST team of an overdue-unended game", async () => {
+    // The sweep's cascade DELETE that empties the room (not a kick — a kick
+    // never removes the last team) is teardown: the final board keeps the team
+    // so a single-team game still shows a scoreboard, not "no teams". This is
+    // the ordering the expiration e2e relies on (child DELETE before the game
+    // DELETE).
+    const game = makeActiveGame({ status: "playing", expires_at: "2026-05-05T11:00:00.000Z" });
+    setHydrate({ game, teams: [makeTeam({ id: "t1", name: "Solo", score: 9 })], rounds: [] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t1" } }));
+    });
+    expect(result.current.state?.teams.size).toBe(0);
+    expect(result.current.finalBoard?.teams.size).toBe(1);
+    expect(result.current.finalBoard?.teams.get("t1")?.name).toBe("Solo");
+  });
+
+  it("holds the board when an overdue-unended sweep drops a round (rounds-first cascade)", async () => {
+    // A shrink that also removes a round is unmistakably the cascade, never a
+    // kick — hold the whole board even with multiple teams still present.
+    const game = makeActiveGame({ status: "playing", expires_at: "2026-05-05T11:00:00.000Z" });
+    setHydrate({
+      game,
+      teams: [makeTeam({ id: "t1", score: 7 }), makeTeam({ id: "t2", score: 2 })],
+      rounds: [makeRound({ id: "r1", round_number: 1 })],
+    });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    act(() => {
+      fireRound(makePayload<GameRound>("game_rounds", "DELETE", { old: { id: "r1" } }));
+    });
+    expect(result.current.state?.rounds.length).toBe(0);
+    expect(result.current.finalBoard?.rounds.length).toBe(1);
+    // A team DELETE arriving after (state now has 0 rounds) is still teardown.
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "DELETE", { old: { id: "t2" } }));
+    });
     expect(result.current.finalBoard?.teams.size).toBe(2);
   });
 
