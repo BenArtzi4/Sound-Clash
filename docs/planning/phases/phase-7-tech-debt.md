@@ -26,7 +26,7 @@
 - [ ] Extract `SongTable`/`SongEditForm`/`useAdminSongs` from `AdminSongsPage`; fix the page-index clamp cleanly.
 
 ### T7.3 · Small quality cleanups `[S]`
-- [ ] `T-SongFetch`: `fetchSongWithSoundtrack()` in `lib/soundtrack.ts`; both pages call it.
+- ~~`T-SongFetch`~~ ✅ shipped 2026-07-09 with Phase 4 T4.7 (PR #194) as `fetchSongById()` in `lib/songMetadata.ts` — it carries the F-P1-7 retry, so it outgrew `lib/soundtrack.ts`.
 - [ ] `T-RpcError`: `throwOnRpcError()` helper for uniform RPC error shape across all five direct-RPC sites.
 - [ ] `T-Deps`: document/fix the 4 `exhaustive-deps` disables (`SongExport.tsx:90`, `DisplayPage.tsx:124`, `ManagerConsolePage.tsx:164,238`).
 - ~~`T-KeepWarm`~~ ✅ already implemented (`useKeepBackendWarm.ts`, wired in `ManagerConsolePage`).

@@ -7,6 +7,7 @@ Legend for the perf tag on latency-adjacent items: `buzz-latency` (moves the <20
 > **Resolved items removed 2026-07-05** (shipped in Phases 1–3; detail in git history / `CHANGELOG.md`): F-P0-1 (manager_token leak → `game_secrets`, mig 034), F-P0-2 (catalog DR backup), F-P0-4 (deploy-before-migrate outage), F-P1-8 (busy flag dropped clicks), F-P2-2 (Continue pending flag), F-P2-3 (keep-warm immediate ping). IDs are intentionally not reused.
 > **Resolved 2026-07-07** (Phase 4): F-P0-3 (deploy-during-game blank screen → `vite:preloadError` budget-guarded auto-reload + app-level `ErrorBoundary`; runbook §1.2; PR #185). F-P1-4 (dead-video Skip) was **de-scoped** (PR #186): the persistent "Video unavailable" state already ships, **Next round** already moves past a dead song, and select/peek exclude already-played songs — no Skip button, no blocklist.
 > **Resolved 2026-07-08** (Phase 4): F-P1-1 (failed hydrate silently dropped all live events → the event gate now opens only on a successful snapshot, events keep queuing on failure, and the queue is capped at 500 with an overflow-triggered resync; PR #190). F-P1-2 (players bounced to Home at the 4h sweep → the team page now tells the expiry cascade apart from a kick via `expires_at` on the server-offset clock and shows the "ended or expired" banner in place; kick-from-live-game still redirects; T-CascadeTest + tightened `expiration.spec.ts`; PR #192). F-P1-3 (failed Next-round left the room in silence → the in-gesture double-buffer swap now rolls back fully on `select_next_song` failure: promoted player stopped, `activeKey` reverted, the still-current round's song reloaded, and the peeked song re-prebuffered so a retry keeps the fast path; PR #193). F-P1-5 (bonus optimistic toast could lie → "Sending +4…" info toast on click, success toast only after the Render call resolves, `busy`-gated in flight; PR #193).
+> **Resolved 2026-07-09** (Phase 4): F-P1-7 (per-round song-metadata fetch gave up on the first transient error and blanked the round → both pages now resolve `song_id` via `fetchSongById()` in `lib/songMetadata.ts`, a cancellation-aware bounded backoff retry (5 attempts over ~7.5s); an authoritative "no row" is not retried; also closed tech-debt T-SongFetch by consolidating the duplicated select+cast; PR #194).
 
 ---
 
@@ -22,11 +23,6 @@ _None open._ (F-P0-3 shipped 2026-07-07 — Phase 4 T4.0, PR #185.)
 - **Evidence:** `managerToken.ts` — single credential, issued once at create, no re-issue; every host action is token-gated.
 - **Failure:** if the host browser evicts localStorage (private mode, cache clear, device swap) the game is dead until the 4h sweep; players sit frozen.
 - **Fix:** a host recovery affordance — a re-openable host link/QR embedding the token in the console — so the host can re-authenticate from the same or another device. Autonomous (frontend) once we decide the surface. Effort M. (Feature X-Recovery in `03`.)
-
-### F-P1-7 · Per-round song-metadata fetch: no retry, blanks the round `[bug]` — Phase 4 T4.7
-- **Evidence:** `DisplayPage.tsx:99` and `ManagerConsolePage.tsx:186` both `return` on any transient `songs` SELECT error; effect deps never change again → never retries for that round.
-- **Failure:** one transient DB blip and the display's title/artist reveal (or the manager's post-refresh player) stays blank for the whole round.
-- **Fix:** bounded backoff retry (or key the effect on a retry counter). Autonomous. Effort S.
 
 ---
 

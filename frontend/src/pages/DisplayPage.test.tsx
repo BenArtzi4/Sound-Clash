@@ -17,6 +17,7 @@ import {
   resetSupabaseMock,
   setHydrate,
   setSongFetch,
+  setSongFetchFailures,
 } from "../test/supabaseMock";
 import { DisplayPage } from "./DisplayPage";
 
@@ -278,6 +279,47 @@ describe("DisplayPage board", () => {
       expect(screen.getByTestId("display-reveal-title")).toHaveTextContent("Careless Whisper"),
     );
     expect(screen.getByTestId("display-reveal-artist")).toHaveTextContent("???");
+  });
+
+  it("retries a failed song-metadata fetch so the reveal recovers within the round", async () => {
+    // F-P1-7: a transient failure on the per-round songs fetch used to blank
+    // the reveal for the whole round because the effect never re-ran. The
+    // bounded backoff retry must recover it without any state change.
+    vi.useFakeTimers();
+    try {
+      setSongFetch({
+        id: "song-1",
+        title: "Careless Whisper",
+        artist: "George Michael",
+        youtube_id: "izGwDsrQ1eQ",
+      });
+      setSongFetchFailures(1);
+      setHydrate({
+        game: makeActiveGame({ status: "playing", current_round_id: "round-1" }),
+        teams: [makeTeam({ id: "t1", name: "Alpha" })],
+        rounds: [
+          makeRound({
+            id: "round-1",
+            song_id: "song-1",
+            title_claimed_by: "t1",
+            artist_claimed_by: null,
+          }),
+        ],
+      });
+      renderAt("/display/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      // The first attempt failed, so the claimed title still hides behind ???.
+      expect(screen.getByTestId("display-reveal-title")).toHaveTextContent("???");
+      // The first backoff retry (500ms) lands and fills the reveal.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      expect(screen.getByTestId("display-reveal-title")).toHaveTextContent("Careless Whisper");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reveals the film name (artist), not the song title, on a soundtrack round", async () => {
