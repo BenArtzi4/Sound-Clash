@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { ExpiryCountdown } from "../components/ExpiryCountdown";
+import { HostRecoveryLink } from "../components/HostRecoveryLink";
 import { Skeleton } from "../components/Skeleton";
 import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
@@ -21,7 +22,12 @@ import {
 } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { peekNextSongDirect, type PeekedSong } from "../hooks/usePeekNextSong";
-import { clearManagerToken, getManagerToken } from "../lib/managerToken";
+import {
+  clearManagerToken,
+  getManagerToken,
+  parseRecoveryHash,
+  setManagerToken,
+} from "../lib/managerToken";
 import {
   failScore,
   log,
@@ -36,7 +42,45 @@ import styles from "./ManagerConsolePage.module.css";
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
   const { toast } = useToast();
-  const managerToken = useMemo(() => getManagerToken(gameCode), [gameCode]);
+  const { hash, pathname, search } = useLocation();
+  const navigate = useNavigate();
+  // Adopt a backup-host-link token (T4.10): /manager/game/<code>#mt=<token>
+  // re-authenticates a host whose localStorage is gone (new device, cleared
+  // browser). Resolution order:
+  //   1. A token already stored for this game wins unconditionally — recovery
+  //      is for tokenless devices. The room knows the game code, so if the
+  //      hash won instead, any guest could craft a well-formed #mt= link that
+  //      silently clobbers the host's working credential (one-click lockout).
+  //   2. Otherwise a well-formed fragment is adopted: persisted for future
+  //      visits and mirrored in a ref so the credential survives the hash
+  //      scrub below even where localStorage writes are blocked (private
+  //      mode) — persistence is best-effort, the live session is not.
+  //   3. Otherwise fall back to that ref (an adoption earlier in this mount);
+  //      keyed by game code so a console-to-console navigation can't reuse it.
+  // Reading storage and the idempotent write inside the memo keep the very
+  // first render authenticated (no "not the host" flash); both are safe under
+  // StrictMode's double-invoke.
+  const adoptedTokenRef = useRef<{ gameCode: string; token: string } | null>(null);
+  const managerToken = useMemo(() => {
+    const stored = getManagerToken(gameCode);
+    if (stored) return stored;
+    const adopted = parseRecoveryHash(hash);
+    if (adopted) {
+      adoptedTokenRef.current = { gameCode, token: adopted };
+      setManagerToken(gameCode, adopted);
+      return adopted;
+    }
+    return adoptedTokenRef.current?.gameCode === gameCode ? adoptedTokenRef.current.token : null;
+  }, [gameCode, hash]);
+
+  // Scrub the adopted token out of the address bar and this history entry so
+  // it doesn't linger in screenshots or a shared device's history. replace
+  // keeps Back working (no extra entry for the tokened URL).
+  useEffect(() => {
+    if (parseRecoveryHash(hash)) {
+      navigate(pathname + search, { replace: true });
+    }
+  }, [hash, pathname, search, navigate]);
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
 
@@ -770,6 +814,10 @@ export function ManagerConsolePage() {
           Only the person who created game <strong>{gameCode}</strong> can manage it from this
           browser. If you meant to play, head home and join with the game code.
         </p>
+        <p className="muted">
+          Are you the host on a new device? Open the game's backup host link here (scan its QR or
+          paste the copied link) and this browser becomes the console.
+        </p>
         <p>
           <Link to="/" className="btn btn-ghost">
             Back to home
@@ -894,6 +942,8 @@ export function ManagerConsolePage() {
         extendPending={pendingExtendFor === game.expires_at}
         onExtend={() => void handleExtendGame()}
       />
+
+      <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
 
       <div className={styles.column}>
         {/* Two overlaid players: the active one (audible, on top) and the
