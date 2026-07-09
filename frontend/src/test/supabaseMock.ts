@@ -263,7 +263,12 @@ export function makeActiveGame(overrides: Partial<ActiveGame> = {}): ActiveGame 
     locked_at: null,
     started_at: "2026-05-05T12:00:00.000Z",
     ended_at: null,
-    expires_at: "2026-05-05T16:00:00.000Z",
+    // Far future on both clocks a test can run under (the real one, and a
+    // server clock pinned to 2026-05-05 by an observed commit_timestamp): the
+    // manager console renders expiry state from this field, so a stale
+    // near-past default would put every page test into the warning-banner
+    // state. Tests that exercise expiry set an explicit value.
+    expires_at: "2099-01-01T00:00:00.000Z",
     ...overrides,
   };
 }

@@ -37,6 +37,7 @@ vi.mock("../hooks/useManagerActions", () => ({
   },
   awardAttemptDirect: vi.fn(),
   releaseBuzzLockDirect: vi.fn(),
+  extendGameDirect: vi.fn(),
 }));
 
 vi.mock("../hooks/useSelectNextSong", () => ({
@@ -151,7 +152,12 @@ vi.mock("../components/YouTubePlayer", () => ({
 }));
 
 import { awardBonus, endGame } from "../lib/api";
-import { awardAttemptDirect, releaseBuzzLockDirect } from "../hooks/useManagerActions";
+import {
+  awardAttemptDirect,
+  extendGameDirect,
+  releaseBuzzLockDirect,
+} from "../hooks/useManagerActions";
+import { _resetServerTime, observeServerTime } from "../hooks/useServerTime";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { peekNextSongDirect } from "../hooks/usePeekNextSong";
 import type { ActiveGame, GameRound, SelectSongResponse } from "../lib/types";
@@ -187,6 +193,7 @@ beforeEach(() => {
   vi.mocked(peekNextSongDirect).mockReset();
   vi.mocked(awardAttemptDirect).mockReset();
   vi.mocked(releaseBuzzLockDirect).mockReset();
+  vi.mocked(extendGameDirect).mockReset();
   vi.mocked(awardBonus).mockReset();
   vi.mocked(endGame).mockReset();
   // Re-establish the telemetry handle impl (afterEach's clearAllMocks drops it).
@@ -1984,5 +1991,89 @@ describe("ManagerConsolePage", () => {
         expect.objectContaining({ preloaded: true, songId: "song-2" }),
       ),
     );
+  });
+
+  describe("expiry countdown + extend (T4.8)", () => {
+    // Pin the server-offset clock so expires_at values relative to
+    // 2026-05-05T12:00Z are deterministic regardless of the real clock. The
+    // observation is first-wins, so the later fireGame payloads (same default
+    // commit_timestamp) don't re-pin it.
+    beforeEach(() => {
+      _resetServerTime();
+      observeServerTime("2026-05-05T12:00:00.000Z");
+    });
+    afterEach(() => {
+      _resetServerTime();
+    });
+
+    it("shows only the subtle end-time hint while expiry is far off", async () => {
+      setHydrate({ game: makeActiveGame({ status: "waiting" }), teams: [], rounds: [] });
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+      expect(screen.getByTestId("expiry-hint")).toBeInTheDocument();
+      expect(screen.queryByTestId("expiry-banner")).not.toBeInTheDocument();
+    });
+
+    it("Keep playing calls extend_game, stays disabled until the Realtime bump, then the banner clears", async () => {
+      const nearExpiryGame = makeActiveGame({
+        status: "playing",
+        round_number: 1,
+        expires_at: "2026-05-05T12:10:00.000Z", // 10 min left on the pinned clock
+      });
+      setHydrate({ game: nearExpiryGame, teams: [], rounds: [] });
+      vi.mocked(extendGameDirect).mockResolvedValueOnce("2026-05-05T13:10:00+00:00");
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+
+      expect(screen.getByTestId("expiry-banner")).toHaveTextContent(/game expires in/i);
+
+      fireEvent.click(screen.getByTestId("extend-game"));
+      // The pending flag is keyed on the clicked expires_at, so the button
+      // stays disabled across the RPC -> Realtime gap (no double-extend).
+      expect(screen.getByTestId("extend-game")).toBeDisabled();
+      await waitFor(() => expect(extendGameDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+      await waitFor(() => expect(screen.getByText(/game extended/i)).toBeInTheDocument());
+      expect(screen.getByTestId("extend-game")).toBeDisabled();
+
+      // The Realtime UPDATE with the bumped expires_at swaps the banner for
+      // the subtle hint (70 min left on the pinned clock).
+      act(() => {
+        fireGame(
+          makePayload<ActiveGame>("active_games", "UPDATE", {
+            new: { ...nearExpiryGame, expires_at: "2026-05-05T13:10:00.000Z" },
+          }),
+        );
+      });
+      await waitFor(() => expect(screen.queryByTestId("expiry-banner")).not.toBeInTheDocument());
+      expect(screen.getByTestId("expiry-hint")).toBeInTheDocument();
+    });
+
+    it("re-enables Keep playing and surfaces an error toast when extend_game fails", async () => {
+      setHydrate({
+        game: makeActiveGame({
+          status: "playing",
+          round_number: 1,
+          expires_at: "2026-05-05T12:10:00.000Z",
+        }),
+        teams: [],
+        rounds: [],
+      });
+      const { RpcError } = await import("../hooks/useManagerActions");
+      vi.mocked(extendGameDirect).mockRejectedValueOnce(
+        new RpcError("manager_token_required", "28000"),
+      );
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+
+      fireEvent.click(screen.getByTestId("extend-game"));
+      await waitFor(() => expect(screen.getByText(/manager_token_required/i)).toBeInTheDocument());
+      expect(screen.getByTestId("extend-game")).toBeEnabled();
+    });
   });
 });

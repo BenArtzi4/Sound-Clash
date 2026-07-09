@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
+import { ExpiryCountdown } from "../components/ExpiryCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
@@ -12,7 +13,12 @@ import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { useResumeOnVisible } from "../hooks/useResumeOnVisible";
 import { ApiError, awardBonus, endGame } from "../lib/api";
-import { awardAttemptDirect, releaseBuzzLockDirect, RpcError } from "../hooks/useManagerActions";
+import {
+  awardAttemptDirect,
+  extendGameDirect,
+  releaseBuzzLockDirect,
+  RpcError,
+} from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { peekNextSongDirect, type PeekedSong } from "../hooks/usePeekNextSong";
 import { clearManagerToken, getManagerToken } from "../lib/managerToken";
@@ -108,6 +114,11 @@ export function ManagerConsolePage() {
   const [pendingArtist, setPendingArtist] = useState<string | null>(null);
   const [pendingWrong, setPendingWrong] = useState<string | null>(null);
   const [pendingContinue, setPendingContinue] = useState<string | null>(null);
+  // Extend-game handoff, same shape as the flags above but keyed on the
+  // expires_at value the click happened on: the banner's button stays disabled
+  // until the Realtime UPDATE lands with the bumped value (at which point the
+  // flag is stale and inert). Cleared on failure so the host can retry.
+  const [pendingExtendFor, setPendingExtendFor] = useState<string | null>(null);
 
   // Synchronous in-flight locks, one PER ACTION. These are the sole guard
   // against a same-action double-fire now that the shared `busy` gate is off
@@ -125,6 +136,7 @@ export function ManagerConsolePage() {
   const wrongInFlightRef = useRef(false);
   const continueInFlightRef = useRef(false);
   const nextRoundInFlightRef = useRef(false);
+  const extendInFlightRef = useRef(false);
 
   // When we get the buzz lock signal, pause playback on the live player.
   useEffect(() => {
@@ -660,6 +672,30 @@ export function ManagerConsolePage() {
     }
   }
 
+  // The expiry banner's "Keep playing +1h" -> extend_game direct RPC (mig
+  // 039), pushing active_games.expires_at out an hour. The Realtime UPDATE on
+  // expires_at is what moves the banner back to the subtle hint for everyone;
+  // the toast just confirms the commit to the host who clicked.
+  async function handleExtendGame() {
+    if (extendInFlightRef.current) return;
+    if (!state || !managerToken) return;
+    extendInFlightRef.current = true;
+    setPendingExtendFor(state.game.expires_at);
+    try {
+      const newExpiresAt = await extendGameDirect(gameCode, managerToken);
+      const endsAt = new Date(newExpiresAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      toast(`Game extended — now ends at ${endsAt}`, { variant: "success" });
+    } catch (err) {
+      setPendingExtendFor(null);
+      reportError(err);
+    } finally {
+      extendInFlightRef.current = false;
+    }
+  }
+
   async function handleBonus(teamId: string, teamName: string) {
     if (busy || !managerToken) return;
     // Close the picker and acknowledge the click immediately, but do NOT
@@ -852,6 +888,12 @@ export function ManagerConsolePage() {
           <span className="muted">Round {game.round_number}</span>
         </div>
       </header>
+
+      <ExpiryCountdown
+        expiresAt={game.expires_at}
+        extendPending={pendingExtendFor === game.expires_at}
+        onExtend={() => void handleExtendGame()}
+      />
 
       <div className={styles.column}>
         {/* Two overlaid players: the active one (audible, on top) and the

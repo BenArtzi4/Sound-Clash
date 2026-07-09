@@ -74,6 +74,28 @@ export async function awardAttemptDirect(
   };
 }
 
+// The expiry banner's "Keep playing +1h" (T4.8 / migration 039). Not a hot
+// path, but it's a PL/pgSQL function like the rest of the manager actions, so
+// it rides the same direct browser -> Supabase RPC route. Returns the new
+// expires_at; the Realtime UPDATE on active_games is what actually moves the
+// countdown for every client.
+export async function extendGameDirect(gameCode: string, managerToken: string): Promise<string> {
+  const { data, error } = await tracedRpc("extend_game", { game_code: gameCode }, () =>
+    supabase.rpc("extend_game", {
+      p_game_code: gameCode,
+      p_manager_token: managerToken,
+    }),
+  );
+  if (error) {
+    throw new RpcError(error.message, error.code);
+  }
+  // RETURNS timestamptz comes back as a bare JSON string.
+  if (typeof data !== "string") {
+    throw new RpcError("extend_game returned no timestamp");
+  }
+  return data;
+}
+
 export async function releaseBuzzLockDirect(gameCode: string, managerToken: string): Promise<void> {
   const { error } = await tracedRpc("release_buzz_lock", { game_code: gameCode }, () =>
     supabase.rpc("release_buzz_lock", {

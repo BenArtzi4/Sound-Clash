@@ -189,10 +189,11 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 ## 10. Game Expiration & TTL
 
-- `active_games.expires_at = started_at + interval '4 hours'` (fixed at game creation).
+- `active_games.expires_at = now() + interval '4 hours'`, stamped at game **creation** — lobby time counts against it.
+- **Host extension (T4.8, migration 039)**: the manager console shows a subtle "Ends at HH:MM" hint that becomes a warning banner in the last ~20 minutes, with a **Keep playing +1h** action. Each press calls the token-gated `extend_game` RPC, which sets `expires_at = GREATEST(expires_at, now()) + 1 hour`. Repeat presses stack; an ended game can't be extended. The banner (and action) also covers a game that has overrun its `expires_at` but hasn't been swept yet.
 - `pg_cron` runs `cleanup_expired_games()` hourly: `DELETE FROM active_games WHERE expires_at < now()`.
 - `game_teams` and `game_rounds` cascade-delete via FK.
-- **Mid-game truncation**: a marathon session running >4 hours from start will be deleted while still in `playing` state. The frontend handles this by detecting the rows vanishing (Realtime DELETE events) and showing a "game has ended or expired" banner in place on every client — no navigation; the team page in particular distinguishes this teardown from a kick (see §7). This is an accepted limitation; documented for users.
+- **Mid-game truncation**: a marathon session running >4 hours from start, whose host never extends, will be deleted while still in `playing` state. The frontend handles this by detecting the rows vanishing (Realtime DELETE events) and showing a "game has ended or expired" banner in place on every client — no navigation; the team page in particular distinguishes this teardown from a kick (see §7). This is an accepted limitation; documented for users.
 
 ## 11. Edge Cases & Open Questions
 

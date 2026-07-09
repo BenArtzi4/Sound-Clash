@@ -97,12 +97,12 @@ No user accounts, no JWTs, no password hashing. The service-role key is server-o
 
 ## 6. Ephemerality
 
-- `active_games.expires_at` = `started_at + interval '4 hours'` (fixed).
+- `active_games.expires_at` = creation time + 4 hours; the host can push it out in 1-hour steps from the manager console's expiry warning banner (`extend_game` RPC, migration 039).
 - pg_cron sweeps hourly: `DELETE FROM active_games WHERE expires_at < now()`.
 - Cascades to `game_teams` and `game_rounds`.
 - `songs`, `genres`, `song_genres` are durable.
 
-Mid-game truncation (>4h sessions) is an accepted limitation.
+Mid-game truncation (>4h sessions with no extension) is an accepted limitation; the console warns in the last ~20 minutes.
 
 ## 7. YouTube-Only Audio
 

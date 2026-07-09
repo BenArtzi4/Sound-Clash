@@ -74,8 +74,9 @@ Spin up Postgres via `testcontainers-postgres`. Apply all migrations from `db/mi
 | `test_award_bonus.py` | happy path; non-positive points rejected; game-not-found; game-already-ended | P1 |
 | `test_end_game.py` | happy path; on already-ended raises | P1 |
 | `test_cleanup_expired_games.py` | manually set `expires_at` to past; invoke `cleanup_expired_games()`; verify cascade to teams + rounds | P0 |
+| `test_extend_game.py` | +1h bump semantics (incl. the GREATEST branch for overdue games); repeat calls stack; lobby extendable; token validation (wrong/null); game_not_found / game_ended | P1 |
 | `test_rls_anon.py` | as `anon` role: SELECT works, INSERT/UPDATE/DELETE rejected on every table | P0 |
-| `test_rls_function_grants.py` | as `anon`: EXECUTE on the four browser-callable RPCs works (buzz_in + the three token-gated ones); EXECUTE on backend-only RPCs rejected | P0 |
+| `test_rls_function_grants.py` | as `anon`: EXECUTE on the six browser-callable RPCs works (buzz_in + the five token-gated ones); EXECUTE on backend-only RPCs rejected | P0 |
 | `test_migrations_idempotent.py` | run all migrations twice; second run is no-op | P1 |
 | `test_schema_constraints.py` | duplicate game_code rejected; duplicate (game_code,name) rejected; FK cascades | P1 |
 | `test_pg_cron_registered.py` | `SELECT * FROM cron.job WHERE jobname = 'cleanup-expired-games'` returns 1 row | P1 |

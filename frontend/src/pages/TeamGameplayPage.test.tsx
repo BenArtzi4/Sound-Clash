@@ -438,8 +438,8 @@ describe("TeamGameplayPage", () => {
         "game:ABCDEF:team",
         JSON.stringify({ id: "team-1", name: "Alice" }),
       );
-      // Default expires_at (16:00Z) is in the future relative to the pinned
-      // server clock (12:00Z): a genuine kick, not teardown.
+      // Default expires_at (far future) is well ahead of the pinned server
+      // clock (12:00Z): a genuine kick, not teardown.
       setHydrate({
         game: makeActiveGame({ status: "playing" }),
         teams: [makeTeam({ id: "team-1", name: "Alice" })],

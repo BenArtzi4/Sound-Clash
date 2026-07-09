@@ -258,7 +258,7 @@ no year limit; a `NULL`-year song matches no specific decade (see
 
 ### `active_games.expires_at`
 
-Default `started_at + 4 hours`. Read-only after game creation. The pg_cron sweep (`cleanup_expired_games()` in `rpc-functions.md`) deletes any row past this point.
+Default `now() + 4 hours`, stamped at game **creation** — lobby time counts against it. The host can push it out in one-hour steps via the token-gated `extend_game` RPC (migration 039: `GREATEST(expires_at, now()) + interval '1 hour'` per call, surfaced as the manager console's expiry-banner "Keep playing +1h" action); nothing else writes it after creation. The pg_cron sweep (`cleanup_expired_games()` in `rpc-functions.md`) deletes any row past this point.
 
 ### `active_games.buzzed_team_id` and `locked_at`
 
@@ -272,7 +272,7 @@ Migration 011 had `buzz_in` mirror the winning team onto `game_rounds.buzzed_tea
 
 Per-game uuid, the host's credential. **Lives in `game_secrets`, not `active_games`** (migration 034): `active_games` is anon-readable and in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate — any player who knew the 6-char code could hijack the game. `game_secrets` has no anon read policy, no base grant, and is **not** in the publication, so anon can never see it.
 
-A uuid is minted by an `AFTER INSERT` trigger on `active_games` (`create_game_secret`, in the same transaction as the game insert). `POST /games` reads it back (by `game_code`) and returns it to the host's browser, which stores it in `localStorage`. The FastAPI `require_manager_token` dependency reads `X-Manager-Token`, fetches the secret via the service-role client, and `secrets.compare_digest`s the values; this authorizes `bonus`, `end`, and `kick-team`. The four browser-direct RPCs (`award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`) validate it in-body (they `LEFT JOIN game_secrets`, running as SECURITY DEFINER). The secret shares the game's 4-hour TTL via `ON DELETE CASCADE`; `cleanup_expired_games` removes the game and the FK removes the secret.
+A uuid is minted by an `AFTER INSERT` trigger on `active_games` (`create_game_secret`, in the same transaction as the game insert). `POST /games` reads it back (by `game_code`) and returns it to the host's browser, which stores it in `localStorage`. The FastAPI `require_manager_token` dependency reads `X-Manager-Token`, fetches the secret via the service-role client, and `secrets.compare_digest`s the values; this authorizes `bonus`, `end`, and `kick-team`. The five browser-direct RPCs (`award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`) validate it in-body (they `LEFT JOIN game_secrets`, running as SECURITY DEFINER). The secret shares the game's 4-hour TTL via `ON DELETE CASCADE`; `cleanup_expired_games` removes the game and the FK removes the secret.
 
 ### `game_teams.score`
 

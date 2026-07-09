@@ -1,8 +1,8 @@
 # Sound Clash: Postgres RPC Functions
 
-The eleven PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
+The twelve PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), and `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), and `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner).
 
 ## 0. Conventions
 
@@ -379,6 +379,44 @@ Idempotent and side-effect-free (read-only). Migration 038 added the metadata co
 
 - Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/usePeekNextSong.ts::peekNextSongDirect`). Single caller in the deployed system.
 
+## 3e. `extend_game`: host pushes the 4-hour TTL out
+
+Added in migration 039 (T4.8 / I-Expiry). Called **direct from the manager browser** when the host clicks **Keep playing +1h** in the console's expiry warning banner (shown in the last ~20 minutes before `expires_at`, and kept up for a game that has overrun its `expires_at` but hasn't been swept yet — the sweep is hourly).
+
+```sql
+CREATE OR REPLACE FUNCTION extend_game(
+  p_game_code     text,
+  p_manager_token uuid
+) RETURNS timestamptz  -- the new expires_at
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- Token + game-state gate runs first, identical to `award_attempt` (mig 034 shape, `LEFT JOIN game_secrets`): raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) before the write.
+- Sets `expires_at = GREATEST(expires_at, now()) + interval '1 hour'`. The `GREATEST` matters for an overdue-but-unswept game: the host gets a real hour from now, not a stale hour that is already partly consumed.
+- The bump size is **fixed server-side** — there is no caller-supplied interval to abuse.
+- A `waiting` (lobby) game is extendable: the TTL runs from creation, so a long lobby is exactly when the extension is needed. An `ended` game is refused (`game_ended`) — it sits on its final scoreboard until the sweep.
+- No cap on repeat calls: only the token-holding host can extend, the game is their own, and the sweep resumes the moment they stop.
+- The `UPDATE` on `active_games` fans out over Realtime (`expires_at` is in the subscribed column set), so every client's countdown moves without extra plumbing.
+
+### Error semantics
+
+| Failure | Exception |
+|---|---|
+| Game doesn't exist | `P0002 game_not_found` |
+| Game already ended | `P0001 game_ended` |
+| Bad/missing token | `28000 manager_token_required` |
+
+### Idempotency
+
+Not idempotent — each call adds another hour. The manager UI disables the banner button from click until the bumped `expires_at` arrives over Realtime, so a double-tap can't stack an unintended second hour.
+
+### Callers
+
+- Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useManagerActions.ts::extendGameDirect`). Single caller in the deployed system.
+
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
 Added in migration 014. Independent of round state and the buzz lock; the host picks any team in the game and grants a positive number of points (default 4). Does not touch `game_rounds`. Called by FastAPI (`POST /games/{code}/bonus`). Not exposed to anon.
@@ -640,6 +678,8 @@ Idempotent on `(game_code, started_at)` — the existence check short-circuits a
 | `award_attempt` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `release_buzz_lock` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `select_next_song` | ✅ (token-gated) | ✅ | Browser (manager page) |
+| `peek_next_song` | ✅ (token-gated, read-only) | ✅ | Browser (manager page) |
+| `extend_game` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
@@ -647,8 +687,8 @@ Idempotent on `(game_code, started_at)` — the existence check short-circuits a
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
 | `archive_game` | ❌ | ✅ | Internal call from `end_game` + `cleanup_expired_games`. No HTTP caller. |
 
-The four anon-callable functions all validate authentication inside the
-function body (`buzz_in` checks the game-code; the other three check the
+The six anon-callable functions all validate authentication inside the
+function body (`buzz_in` checks the game-code; the other five check the
 per-game `manager_token`). This is what makes anon EXECUTE safe.
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
