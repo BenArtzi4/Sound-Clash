@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-07-09: **Games can now be extended past the 4-hour limit.** The host console shows a subtle "Ends at HH:MM" hint that becomes a warning banner in the last 20 minutes with a **Keep playing +1h** button (it also appears if the game has overrun its window but hasn't been cleaned up yet). Each press adds an hour and every screen picks up the new deadline instantly. Previously a marathon game vanished mid-round at the 4-hour mark with no warning.
 - 2026-07-05: **The big-screen scoreboard now highlights the podium.** The top three teams get gold, silver, and bronze rows — each with a 🥇/🥈/🥉 medal — so the leaders pop at a glance from across the room. Medals only appear once a team has actually scored, so nobody is crowned while everyone is still tied at 0. Display only.
 - 2026-06-25: Shared **soundclash.org** links now unfurl into a rich preview card in WhatsApp, iMessage, Slack, Discord, X, and other apps — the Sound Clash logo, name, and "Buzz in. Name the tune. Win the round." tagline on a branded 1200×630 image, instead of a bare blue link.
 - 2026-06-25: Sound Clash is now an **installable app (PWA)** — hosts and players can add it to their phone or desktop home screen and launch it **full-screen, without browser chrome**, with a proper Sound Clash icon. Nothing changes for people who keep using it in a browser tab; the join-by-link flow is unchanged. (No offline mode — the game still needs a live connection.)

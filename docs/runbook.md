@@ -224,15 +224,15 @@ Cause: the per-game manager token isn't in the browser's localStorage under `gam
 Triage:
 1. Have the original host re-open the page in the browser they used to create the game. The token survives a hard refresh.
 2. If the original browser is gone, there is no recovery: tokens are not stored server-side as anything but the row itself, and no one else has the value. Create a new game.
-3. If you are debugging and have service-role access, you can read the token from the row: `SELECT manager_token FROM active_games WHERE game_code = '<code>';`: but this is a debug-only escape hatch, not a normal flow.
+3. If you are debugging and have service-role access, you can read the token from the secrets table: `SELECT manager_token FROM game_secrets WHERE game_code = '<code>';` (migration 034 moved it off `active_games`): but this is a debug-only escape hatch, not a normal flow.
 
 ### 4.5 "Game expired mid-session"
 
 Symptoms: marathon session crosses 4-hour mark; game vanishes.
 
-Cause: by design (`expires_at` is fixed-from-start; pg_cron sweeps).
+Cause: `expires_at` is stamped at creation (+4h) and the hourly pg_cron sweep deletes anything past it.
 
-Mitigation: end the game before 4 hours, or accept the limitation. Future: make `expires_at` sliding (refresh on activity): see open items in `realtime-design.md`.
+Mitigation: as of migration 039 the manager console warns in the last ~20 minutes and offers **Keep playing +1h** (the token-gated `extend_game` RPC; repeatable). If the game already vanished, the extension window was missed — create a new game. If the banner's extend fails, check that PostgREST is reachable and that migration 039 is applied (`SELECT proname FROM pg_proc WHERE proname = 'extend_game';` should return one row).
 
 ### 4.6 "Songs catalog data lost"
 

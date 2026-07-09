@@ -2,11 +2,12 @@
 
 Spec: docs/security-rls.md §2.
 
-Five RPCs are callable by anon -- ``buzz_in`` (since migration 006),
+Six RPCs are callable by anon -- ``buzz_in`` (since migration 006),
 ``award_attempt`` and ``release_buzz_lock`` (as of migration 021, with the
 legacy un-tokenised overloads retired by migration 023), ``select_next_song``
-(as of migration 022), and ``peek_next_song`` (the read-only prebuffer probe,
-as of migration 029). Each does its own in-function manager-token check before
+(as of migration 022), ``peek_next_song`` (the read-only prebuffer probe, as of
+migration 029), and ``extend_game`` (the "keep playing" TTL bump, as of
+migration 039). Each does its own in-function manager-token check before
 performing any work, so the function-level EXECUTE grant is safe. The remaining
 backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
 ``end_game``, ``cleanup_expired_games`` -- must still reject anon.
@@ -115,6 +116,25 @@ async def test_anon_can_execute_peek_next_song_but_token_check_runs(
     with pytest.raises(asyncpg.PostgresError) as exc:
         await anon_conn.execute(
             "SELECT peek_next_song($1, $2)",
+            "ABCDEF",
+            uuid.uuid4(),
+        )
+    assert not isinstance(exc.value, asyncpg.InsufficientPrivilegeError)
+    assert exc.value.sqlstate in ("P0002", "28000")
+
+
+@pytest.mark.asyncio
+async def test_anon_can_execute_extend_game_but_token_check_runs(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 039: anon CAN call extend_game (the manager console's "keep
+    playing" TTL bump), but the in-function manager_token check rejects forged
+    calls. The error must be ``manager_token_required`` (sqlstate 28000) or,
+    if the game-code lookup fires first, ``game_not_found`` (P0002) -- either
+    way the function ran, it wasn't blocked at the grant gate."""
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await anon_conn.execute(
+            "SELECT extend_game($1, $2)",
             "ABCDEF",
             uuid.uuid4(),
         )
@@ -287,6 +307,12 @@ async def test_legacy_overloads_were_dropped(
         # Same anon-grant + in-function token-check model as select_next_song.
         (
             "peek_next_song",
+            "p_game_code text, p_manager_token uuid",
+        ),
+        # extend_game: the "keep playing" TTL bump added in migration 039.
+        # Same anon-grant + in-function token-check model as select_next_song.
+        (
+            "extend_game",
             "p_game_code text, p_manager_token uuid",
         ),
     ],

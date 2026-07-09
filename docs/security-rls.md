@@ -25,7 +25,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 | Credential | Header | Scope | Lifetime |
 |---|---|---|---|
-| **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `release_buzz_lock` / `select_next_song` / `peek_next_song` via token-gated direct RPC; bonus / end / kick a team via REST) | Minted by an `AFTER INSERT` trigger into `game_secrets` (mig 034), read back by `POST /games`; lives 4h, cascade-deleted when `cleanup_expired_games` removes the game |
+| **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `release_buzz_lock` / `select_next_song` / `peek_next_song` / `extend_game` via token-gated direct RPC; bonus / end / kick a team via REST) | Minted by an `AFTER INSERT` trigger into `game_secrets` (mig 034), read back by `POST /games`; lives 4h, cascade-deleted when `cleanup_expired_games` removes the game |
 | **admin password** | `X-Admin-Password` | Song catalog only (`/admin/songs/*` CRUD + bulk import) | Single env var on FastAPI; rotated by changing the env and restarting |
 
 `POST /games` is **public** (rate-limited 10/min/IP). The browser keeps the returned manager token in `localStorage` under `game:<code>:manager-token` and presents it on subsequent host calls. Players who happen to know the game code cannot manage it because they don't have the token. Hosting requires no signup, login, or persistent identity.
@@ -55,6 +55,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `release_buzz_lock`     | ✅ (token-gated: same as above) | ✅ |
 | `select_next_song`      | ✅ (token-gated: same as above; added in migration 022) | ✅ |
 | `peek_next_song`        | ✅ (token-gated, read-only prebuffer probe; added in migration 029) | ✅ |
+| `extend_game`           | ✅ (token-gated "keep playing" TTL bump; added in migration 039) | ✅ |
 | `start_round`           | ❌ | ✅ |
 | `end_round`             | ❌ | ✅ |
 | `award_bonus`           | ❌ | ✅ |
@@ -62,7 +63,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `cleanup_expired_games` | ❌ | ✅ (called by `pg_cron`, not FastAPI) |
 | `archive_game`          | ❌ | ✅ (internal: called by `end_game` + `cleanup_expired_games`; added in migration 033) |
 
-Five RPCs are reachable from the browser: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), and `peek_next_song` (the read-only prebuffer probe, since migration 029). All five perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
+Six RPCs are reachable from the browser: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), `peek_next_song` (the read-only prebuffer probe, since migration 029), and `extend_game` (the host's "keep playing" TTL bump, since migration 039 — writes only `active_games.expires_at`, always by a fixed +1h server-side). All six perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
 
 ### Why anon can SELECT any game
 
