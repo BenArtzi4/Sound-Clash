@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 
@@ -2074,6 +2074,85 @@ describe("ManagerConsolePage", () => {
       fireEvent.click(screen.getByTestId("extend-game"));
       await waitFor(() => expect(screen.getByText(/manager_token_required/i)).toBeInTheDocument());
       expect(screen.getByTestId("extend-game")).toBeEnabled();
+    });
+  });
+
+  describe("host recovery link (T4.10)", () => {
+    // Real tokens are gen_random_uuid(); the recovery hash only accepts the
+    // UUID shape, so these tests use one instead of the short TOKEN stub.
+    const RECOVERY_UUID = "b3b8c9d0-1234-4abc-9def-0123456789ab";
+
+    // Mirrors what the router shows in the address bar so the tests can
+    // assert the token fragment was scrubbed after adoption.
+    function LocationProbe() {
+      const { hash } = useLocation();
+      return <div data-testid="location-hash">{hash}</div>;
+    }
+
+    function renderConsoleWithHash(hash: string) {
+      return render(
+        <MemoryRouter initialEntries={[`/manager/game/ABCDEF${hash}`]}>
+          <ToastProvider>
+            <Routes>
+              <Route path="/" element={<div>home page</div>} />
+              <Route
+                path="/manager/game/:gameCode"
+                element={
+                  <>
+                    <ManagerConsolePage />
+                    <LocationProbe />
+                  </>
+                }
+              />
+            </Routes>
+          </ToastProvider>
+        </MemoryRouter>,
+      );
+    }
+
+    it("adopts the token from a #mt= recovery hash and scrubs it from the URL", async () => {
+      window.localStorage.clear();
+      renderConsoleWithHash(`#mt=${RECOVERY_UUID}`);
+
+      // The console accepted the credential on the very first render: no
+      // "not the host" screen, straight to connecting.
+      expect(screen.queryByText(/you're not the host/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/connecting to game/i)).toBeInTheDocument();
+      // Persisted for future plain visits...
+      expect(getManagerToken("ABCDEF")).toBe(RECOVERY_UUID);
+      // ...and the fragment replaced out of the address bar.
+      await waitFor(() => expect(screen.getByTestId("location-hash").textContent).toBe(""));
+    });
+
+    it("ignores a malformed recovery hash and stores nothing", () => {
+      window.localStorage.clear();
+      renderConsoleWithHash("#mt=not-a-uuid");
+
+      expect(screen.getByText(/you're not the host of this game/i)).toBeInTheDocument();
+      expect(getManagerToken("ABCDEF")).toBeNull();
+      // No scrub navigation for a hash we didn't consume.
+      expect(screen.getByTestId("location-hash").textContent).toBe("#mt=not-a-uuid");
+    });
+
+    it("a recovery hash overrides a stale stored token", () => {
+      // beforeEach stored TOKEN; the freshly-opened link's credential wins.
+      renderConsoleWithHash(`#mt=${RECOVERY_UUID}`);
+      expect(getManagerToken("ABCDEF")).toBe(RECOVERY_UUID);
+    });
+
+    it("offers the backup host link with the tokened URL from the console", async () => {
+      setHydrate({ game: makeActiveGame({ status: "waiting" }), teams: [], rounds: [] });
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+
+      const toggle = screen.getByTestId("host-link-toggle");
+      expect(screen.queryByTestId("host-link-panel")).not.toBeInTheDocument();
+      fireEvent.click(toggle);
+      expect(screen.getByTestId("host-link-url")).toHaveTextContent(
+        `/manager/game/ABCDEF#mt=${TOKEN}`,
+      );
     });
   });
 });

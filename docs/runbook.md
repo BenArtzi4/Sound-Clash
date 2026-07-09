@@ -219,12 +219,13 @@ Mitigation: rotate password (§3.1).
 
 Symptoms: visiting `/manager/game/<code>` shows "You're not the host of this game."
 
-Cause: the per-game manager token isn't in the browser's localStorage under `game:<code>:manager-token`. Most likely the host opened the URL in a different browser / incognito / device than the one that ran `POST /games`. Tokens never leave the host's device.
+Cause: the per-game manager token isn't in the browser's localStorage under `game:<code>:manager-token`. Most likely the host opened the URL in a different browser / incognito / device than the one that ran `POST /games`. Tokens leave the host's device only via the console's own backup host link.
 
 Triage:
 1. Have the original host re-open the page in the browser they used to create the game. The token survives a hard refresh.
-2. If the original browser is gone, there is no recovery: tokens are not stored server-side as anything but the row itself, and no one else has the value. Create a new game.
-3. If you are debugging and have service-role access, you can read the token from the secrets table: `SELECT manager_token FROM game_secrets WHERE game_code = '<code>';` (migration 034 moved it off `active_games`): but this is a debug-only escape hatch, not a normal flow.
+2. If the host grabbed the console's **Backup host link** (the collapsed disclosure under the console header — QR + copyable `/manager/game/<code>#mt=<token>` URL) onto another device or a note beforehand, opening that link re-authenticates any browser: the console adopts the token from the URL fragment into localStorage and scrubs it from the address bar (T4.10).
+3. If the original browser is gone **and** no backup link was saved, there is no self-service recovery: tokens are not stored server-side as anything but the row itself. Either create a new game, or —
+4. If you are debugging and have service-role access, read the token from the secrets table: `SELECT manager_token FROM game_secrets WHERE game_code = '<code>';` (migration 034 moved it off `active_games`), then hand the host `https://www.soundclash.org/manager/game/<code>#mt=<token>` to open. Debug-only escape hatch, not a normal flow.
 
 ### 4.5 "Game expired mid-session"
 

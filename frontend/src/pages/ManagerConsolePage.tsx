@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { ExpiryCountdown } from "../components/ExpiryCountdown";
+import { HostRecoveryLink } from "../components/HostRecoveryLink";
 import { Skeleton } from "../components/Skeleton";
 import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
@@ -21,7 +22,12 @@ import {
 } from "../hooks/useManagerActions";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { peekNextSongDirect, type PeekedSong } from "../hooks/usePeekNextSong";
-import { clearManagerToken, getManagerToken } from "../lib/managerToken";
+import {
+  clearManagerToken,
+  getManagerToken,
+  parseRecoveryHash,
+  setManagerToken,
+} from "../lib/managerToken";
 import {
   failScore,
   log,
@@ -36,7 +42,32 @@ import styles from "./ManagerConsolePage.module.css";
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
   const { toast } = useToast();
-  const managerToken = useMemo(() => getManagerToken(gameCode), [gameCode]);
+  const { hash, pathname, search } = useLocation();
+  const navigate = useNavigate();
+  // Adopt a backup-host-link token (T4.10): /manager/game/<code>#mt=<token>
+  // re-authenticates a host whose localStorage is gone (new device, cleared
+  // browser). Read synchronously so the very first render already holds the
+  // credential — no "not the host" flash. Persisting inside the memo is an
+  // idempotent write, safe under StrictMode's double-invoke; once the hash is
+  // scrubbed below, the memo re-runs and reads the same token back from
+  // storage.
+  const managerToken = useMemo(() => {
+    const adopted = parseRecoveryHash(hash);
+    if (adopted) {
+      setManagerToken(gameCode, adopted);
+      return adopted;
+    }
+    return getManagerToken(gameCode);
+  }, [gameCode, hash]);
+
+  // Scrub the adopted token out of the address bar and this history entry so
+  // it doesn't linger in screenshots or a shared device's history. replace
+  // keeps Back working (no extra entry for the tokened URL).
+  useEffect(() => {
+    if (parseRecoveryHash(hash)) {
+      navigate(pathname + search, { replace: true });
+    }
+  }, [hash, pathname, search, navigate]);
   const { state, status } = useGameChannel(gameCode);
   const player = usePlayerReady();
 
@@ -770,6 +801,10 @@ export function ManagerConsolePage() {
           Only the person who created game <strong>{gameCode}</strong> can manage it from this
           browser. If you meant to play, head home and join with the game code.
         </p>
+        <p className="muted">
+          Are you the host on a new device? Open the game's backup host link here (scan its QR or
+          paste the copied link) and this browser becomes the console.
+        </p>
         <p>
           <Link to="/" className="btn btn-ghost">
             Back to home
@@ -894,6 +929,8 @@ export function ManagerConsolePage() {
         extendPending={pendingExtendFor === game.expires_at}
         onExtend={() => void handleExtendGame()}
       />
+
+      <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
 
       <div className={styles.column}>
         {/* Two overlaid players: the active one (audible, on top) and the

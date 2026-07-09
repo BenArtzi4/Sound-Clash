@@ -1,5 +1,5 @@
-import { useEffect, useState, type CSSProperties } from "react";
-import QRCode from "qrcode";
+import { type CSSProperties } from "react";
+import { useQrSvg } from "../hooks/useQrSvg";
 import styles from "./QRPanel.module.css";
 
 interface Props {
@@ -9,29 +9,7 @@ interface Props {
 }
 
 export function QRPanel({ joinUrl, gameCode, size = 220 }: Props) {
-  const [svg, setSvg] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setError(false);
-    void QRCode.toString(joinUrl, {
-      type: "svg",
-      width: size,
-      errorCorrectionLevel: "M",
-      margin: 1,
-      color: { dark: "#0f172a", light: "#ffffff" },
-    })
-      .then((markup) => {
-        if (!cancelled) setSvg(markup);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [joinUrl, size]);
+  const { svg, error } = useQrSvg(joinUrl, size);
 
   return (
     <div className={styles.panel}>
