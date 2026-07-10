@@ -26,13 +26,49 @@ async def test_not_found(client) -> None:
     assert resp.json()["error"] == "not_found"
 
 
-async def test_duplicate_name_is_conflict(client, db) -> None:
+async def test_same_name_reclaims_existing_team(client, db) -> None:
+    # T5.7 / F-P2-1: rejoining a game with the same team name returns the
+    # existing team (same id, preserved score) instead of a 409 or a duplicate
+    # row. This is the "player refreshed / lost their tab" recovery path.
     code, _ = await insert_game(db, status="waiting")
-    r1 = await client.post(f"/games/{code}/teams", json={"name": "Same"})
+    r1 = await client.post(f"/games/{code}/teams", json={"name": "Alpha"})
     assert r1.status_code == 201
-    r2 = await client.post(f"/games/{code}/teams", json={"name": "Same"})
-    assert r2.status_code == 409
-    assert r2.json()["error"] == "conflict"
+    first = r1.json()
+
+    # Simulate the team having accumulated a score before the rejoin.
+    await db.execute(
+        "UPDATE game_teams SET score = 42 WHERE id = $1", first["id"]
+    )
+
+    r2 = await client.post(f"/games/{code}/teams", json={"name": "Alpha"})
+    assert r2.status_code == 201
+    second = r2.json()
+
+    # Same team reclaimed: identical id, the accumulated score preserved.
+    assert second["id"] == first["id"]
+    assert second["score"] == 42
+
+    # No duplicate row was created.
+    count = await db.fetchval(
+        "SELECT count(*) FROM game_teams WHERE game_code = $1 AND name = $2",
+        code,
+        "Alpha",
+    )
+    assert count == 1
+
+
+async def test_different_name_still_creates_new_team(client, db) -> None:
+    code, _ = await insert_game(db, status="waiting")
+    r1 = await client.post(f"/games/{code}/teams", json={"name": "Alpha"})
+    assert r1.status_code == 201
+    r2 = await client.post(f"/games/{code}/teams", json={"name": "Bravo"})
+    assert r2.status_code == 201
+    assert r2.json()["id"] != r1.json()["id"]
+
+    count = await db.fetchval(
+        "SELECT count(*) FROM game_teams WHERE game_code = $1", code
+    )
+    assert count == 2
 
 
 async def test_ended_game_returns_410(client, db) -> None:
