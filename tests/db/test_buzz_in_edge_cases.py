@@ -70,6 +70,63 @@ async def test_buzz_when_lock_already_held_returns_holder(
 
 
 @pytest.mark.asyncio
+async def test_buzz_member_team_wins_lock(
+    db: asyncpg.Connection,
+) -> None:
+    """Happy path unchanged (mig 041): a team that belongs to the game buzzes and
+    wins the lock, which is recorded on active_games.buzzed_team_id."""
+    game_code = await create_test_game(db, status="playing")
+    team_id = await create_test_team(db, game_code)
+
+    row = await call_buzz_in(db, game_code, team_id)
+
+    assert row is not None
+    assert row["locked"] is True
+    assert row["locked_team_id"] == team_id
+
+    active_lock = await db.fetchval(
+        "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", game_code
+    )
+    assert active_lock == team_id
+
+
+@pytest.mark.asyncio
+async def test_buzz_foreign_team_cannot_win_lock(
+    db: asyncpg.Connection,
+) -> None:
+    """Migration 041: a team from a DIFFERENT game cannot be planted into this
+    game's buzz lock. Passing a foreign game's team_id to buzz_in for this game
+    must NOT win the lock -- active_games.buzzed_team_id stays NULL and the return
+    row is locked=false. This closes the cross-game score-write vector (the FK
+    alone accepted any game_teams row; award_bonus already guards this with
+    team_not_in_game)."""
+    game_code = await create_test_game(db, status="playing")
+    other_game = await create_test_game(db, status="playing")
+    foreign_team = await create_test_team(db, other_game, name="Foreign")
+
+    row = await call_buzz_in(db, game_code, foreign_team)
+
+    # The foreign team fails the membership predicate, so the UPDATE matches 0
+    # rows and the function falls through to the "already locked / not playable"
+    # branch, returning the (still-empty) lock state for this game.
+    assert row is not None
+    assert row["locked"] is False
+    assert row["locked_team_id"] is None
+
+    # No foreign team was planted into this game's lock.
+    active_lock = await db.fetchval(
+        "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", game_code
+    )
+    assert active_lock is None
+
+    # And a legitimate member of this game can still buzz afterwards.
+    member = await create_test_team(db, game_code, name="Member")
+    win = await call_buzz_in(db, game_code, member)
+    assert win is not None and win["locked"] is True
+    assert win["locked_team_id"] == member
+
+
+@pytest.mark.asyncio
 async def test_buzz_sets_active_games_lock_only_not_round(
     db: asyncpg.Connection,
 ) -> None:

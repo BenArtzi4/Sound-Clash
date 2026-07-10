@@ -17,11 +17,11 @@ Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db
 The hot path. Called by browsers via PostgREST. <100ms RTT.
 
 ```sql
--- Current body as of migration 035. Earlier (mig 011) the function also
--- mirror-wrote game_rounds.buzzed_team_id for the since-retired award_points;
--- that write was pure Realtime waste (game_rounds is published with REPLICA
--- IDENTITY FULL, so it broadcast a no-op ROUND_CHANGE to every client on every
--- buzz) and is dropped. Nothing reads game_rounds.buzzed_team_id now.
+-- Current body as of migration 041. Migration 035 dropped the dead
+-- game_rounds.buzzed_team_id mirror-write (mig 011, for the since-retired
+-- award_points), and migration 041 added the EXISTS membership predicate so a
+-- team that does not belong to p_game_code can never win the lock (cross-game
+-- score-write guard; see security-rls.md §4 and award_bonus's team_not_in_game).
 CREATE OR REPLACE FUNCTION buzz_in(
   p_game_code char(6),
   p_team_id   uuid
@@ -36,20 +36,25 @@ DECLARE
 BEGIN
   -- Atomic conditional UPDATE on active_games. Only the first concurrent caller
   -- to satisfy buzzed_team_id IS NULL wins. RETURNING captures the resulting
-  -- locked_at for the function's return value.
+  -- locked_at for the function's return value. The EXISTS predicate scopes the
+  -- claim to a team that is a member of this game.
   UPDATE active_games ag
      SET buzzed_team_id = p_team_id,
          locked_at      = now()
    WHERE ag.game_code = p_game_code
      AND ag.status = 'playing'
      AND ag.buzzed_team_id IS NULL
+     AND EXISTS (
+       SELECT 1 FROM game_teams gt
+        WHERE gt.id = p_team_id AND gt.game_code = p_game_code
+     )
   RETURNING ag.locked_at INTO v_locked_at;
 
   IF FOUND THEN
     RETURN QUERY SELECT true, p_team_id, v_locked_at;
   ELSE
-    -- Lock already held or game not playable; return current state so
-    -- the caller can reconcile its UI.
+    -- Lock already held, game not playable, or team not a member of this game;
+    -- return current state so the caller can reconcile its UI.
     RETURN QUERY
     SELECT false, ag.buzzed_team_id, ag.locked_at
       FROM active_games ag
@@ -63,6 +68,8 @@ GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
 
 The lock lives **only** on `active_games` (`buzzed_team_id` + `locked_at`). `game_rounds.buzzed_team_id` is a vestigial nullable column, no longer written by any function (see `data-model.md §4`).
 
+A `p_team_id` that isn't a member of `p_game_code` (i.e. a team from another game) can **never** win the lock: the `EXISTS` membership predicate (mig 041) fails the UPDATE, so the call falls through to the "already locked / not playable" return path. This closes a cross-game score-write vector — see `security-rls.md §4`.
+
 ### Race correctness
 
 Postgres MVCC + row-level locking guarantees only one concurrent caller can satisfy `buzzed_team_id IS NULL`. See `realtime-design.md` §4 for the full argument.
@@ -73,7 +80,7 @@ Postgres MVCC + row-level locking guarantees only one concurrent caller can sati
 |---|---|
 | Valid call, lock available | `(locked=true, locked_team_id=<their id>, locked_at=<now>)` |
 | Valid call, lock already held | `(locked=false, locked_team_id=<other team>, locked_at=<earlier>)` |
-| `p_team_id` doesn't exist in `game_teams` | UPDATE proceeds; orphan FK eventually breaks. **Caller is responsible** for sending a valid team id (frontend reads from its localStorage). |
+| `p_team_id` isn't a member of `p_game_code` (nonexistent, or belongs to another game) | UPDATE matches 0 rows (the `EXISTS` membership predicate fails; mig 041); returns `(locked=false, ...)` with the game's current lock state. A foreign team can't be planted into the lock. **Caller is still responsible** for sending its own team id (frontend reads from its localStorage). |
 | `p_game_code` doesn't exist | UPDATE matches 0 rows; SELECT returns 0 rows; PostgREST returns `[]`. Frontend treats as no-op. |
 | Game in `waiting` or `ended` state | Same as "no match"; returns `(locked=false, ...)` if game exists. |
 
