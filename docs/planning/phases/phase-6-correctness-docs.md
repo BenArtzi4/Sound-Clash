@@ -13,11 +13,11 @@
 
 ## Tasks
 
-### T6.1 · Residual docs-drift sync `[S — one PR]`
-- [ ] `data-model.md`: intro "Six tables" → ten; §5/§6 "only `buzz_in` is anon-EXECUTE" → the five anon-callable RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`). (The `game_round_attempts`/history-table omissions are already fixed.) (T-DocDataModel)
-- [ ] `api-contracts.md`: fix "Only one function is exposed to anon" (~line 329); drop the removed `select-song`/`attempt`/`end-round` from the X-Manager-Token list (~line 71). Do **not** "fix" the 409s — code really returns 409 for already-ended /bonus,/end. (T-DocContracts)
-- [ ] `game-rules.md`: replace the "(admin auth)" host transitions with the `manager_token` model. (T-DocGameRules)
-- [ ] Spot-sweep: grep the four synced docs for other pre-open-hosting or pre-direct-RPC phrasing while in there.
+### T6.1 · Residual docs-drift sync `[S — one PR]` ✅ (PR #199)
+- [x] `data-model.md`: intro "Six tables" → **eleven** (the plan's "ten" under-counted — `game_round_attempts` mig 037 is a real table not in the §2 DDL block); §5/§6 "only `buzz_in` is anon-EXECUTE" → the **six** anon-callable RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — mig 039 added `extend_game` after this file was written). §6 table callers also fixed (award_attempt/start_round/end_round were wrong). (T-DocDataModel)
+- [x] `api-contracts.md`: fixed "Only one function is exposed to anon" (§3, was ~line 357). The X-Manager-Token list (~line 71) was **already** corrected in a Phase 4 sync — no removed endpoints remained there. Left the 409s as-is (correct). (T-DocContracts)
+- [x] `game-rules.md`: replaced the "(admin auth)" host transitions with the open-hosting / `manager_token` model. (T-DocGameRules)
+- [x] Spot-sweep: caught the same drift class in `architecture.md` (§5 "Nothing else" + stale `select-song`/`award-points` gate list), `diagrams/internal.md` + its hand-maintained `internal.html` mirror (the "only RPC anon EXECUTEs on" auth-table rows and the `/games/*` Mermaid node listing removed endpoints). All synced.
 
 ### T6.2 · Drop the orphan `total_rounds` column `[S]` — T-TotalRounds
 - [ ] Migration `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it; only relaxed NOT NULL). Confirm no code path reads/writes it (verified none as of 2026-07-07); sync `data-model.md`.

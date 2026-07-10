@@ -354,7 +354,7 @@ Bulk import is idempotent on `youtube_id`: existing songs are updated, new ones 
 
 ## 3. Postgres RPC (PostgREST)
 
-Called by the **browser** with the anon key. Only one function is exposed to anon: `buzz_in`.
+Called by the **browser** with the anon key. Six functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below) plus the five token-gated host RPCs `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`). Every other RPC is revoked from anon (mig 020).
 
 ### 3.1 `POST /rest/v1/rpc/buzz_in`
 
