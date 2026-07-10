@@ -1,10 +1,14 @@
 # Next session — start here
 
-_Last updated: 2026-07-10 (**Phase 6 T6.2 ✅ done** — PR #200, mig 040 drops the orphan `active_games.total_rounds` column. **Next: T6.3 — `UNIQUE(songs.youtube_id)` + a one-time prod dedup (migration PR; the prod dedup mutation needs maintainer go).**)_
+_Last updated: 2026-07-10 (**afternoon /next-task session** — merged **T6.2 (#200)**, **T7.4 (#201)**, **T7.3 T-RpcError+T-Deps (#202)**, and **fixed a mig-015 idempotency regression the stress gate caught (#203)**. **⚠️ Two maintainer actions pending** — see the box below. **Next autonomous work: Phase 7 (T7.5 or T7.2)** — T6.3 is blocked on maintainer prod access.)_
+
+> ### ⚠️ Maintainer actions pending (can't be done autonomously)
+> 1. **Apply mig 040 to prod** (T6.2 — deferred, hard-required-nothing column drop). Quiet window: `supabase link --project-ref jvfddxuaqcsrguibkymp && supabase db query --linked -f db/migrations/040_drop_total_rounds_column.sql`, then `bash ./tests/smoke/post_deploy.sh https://api.soundclash.org`. Prod is safe either way — mig 015 is now guarded so the drop can't break a replay.
+> 2. **Unblock T6.3** (`UNIQUE(songs.youtube_id)` + prod dedup). It needs a **read-only prod query** to find duplicate `youtube_id`s, which the auto-mode classifier denies without you present ("[Production Reads] … naming the prod target"). Run it *with* the maintainer, or have them run the dedup investigation. Details below.
 
 ## Short prompt to paste into the fresh session
 
-> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then do Phase 6 T6.3 per `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-6-correctness-docs.md`. Read `.claude/rules/lessons-learned.md` before running anything. T6.3 is a single migration PR: dedup prod's catalog on `youtube_id` (merge dupes, repoint `song_genres`, delete losers — leave the Avicii "Wake Me Up" same-song-different-*video* pair alone; it has two distinct youtube_ids), then add an idempotent `UNIQUE(songs.youtube_id)` index migration. The prod dedup mutates prod data → apply only after maintainer go. Verify no orphaned `song_genres` and that song selection still works. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
+> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then follow `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-7-tech-debt.md`. Read `.claude/rules/lessons-learned.md` before running anything (esp. the 2026-07-10 migration-idempotency entry). T6.3 is blocked on maintainer prod access, so do the next autonomous Phase 7 task: T7.5 (proper RLS fixture fix in `tests/db/conftest.py` — dedicated non-superuser `LOGIN` role + `current_user` assertion; and a reducer/e2e test for the T4.8 expiry warning) or T7.2 (decompose `ManagerConsolePage`/`AdminSongsPage`, guarded by their existing tests). Do T6.3 only when the maintainer is present to run the read-only prod dupe query. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button. NOTE: any PR touching `db/migrations/**` MUST get the `run-stress` + `run-e2e` labels — `backend.yml` is path-filtered and won't run the migration-idempotency check otherwise.**
 
 (Or just run the local **`/next-task`** skill — it encodes the same loop.)
 
@@ -17,19 +21,24 @@ _Last updated: 2026-07-10 (**Phase 6 T6.2 ✅ done** — PR #200, mig 040 drops 
 - **Pre-event validation done** (10-team live-prod pass 2026-07-05 + DB-verified 10-team/30-round e2e 2026-07-06); the two display-scaling bugs it found are fixed (PRs #176/#178). No open blockers. Reusable checklist: `docs/pre-event-checklist.md`.
 - **Phases 5–8 not started**, but re-verification shrank them: Phase 5's critical item (D-1) and T5.3 already shipped; Phase 6 is down to one doc-sync PR + two migrations; Phase 7 lost T-KeepWarm/T-DocRPC (done). Recommended order after Phase 4: **6 → 7 → 5 → 8** (see `phases/README.md`).
 
-## What to do next — Phase 6 (T6.3: `UNIQUE(songs.youtube_id)` + prod dedup)
+## What shipped this session (2026-07-10 afternoon)
 
-**T6.1 ✅ done (PR #199)** — docs-only drift sync merged (eleven-table intro, six anon RPCs, open-hosting auth model across `data-model.md`/`api-contracts.md`/`game-rules.md`/`architecture.md`/`diagrams/*`).
+- **T6.2 ✅ (PR #200)** — mig `040_drop_total_rounds_column.sql` drops the orphan `active_games.total_rounds`. Re-verified zero code refs; `data-model.md` ledger synced. **Prod apply still pending maintainer** (see ⚠️ box up top).
+- **T7.4 ✅ (PR #201, T-DeadCode)** — deleted the dead `Scoreboard.{tsx,test.tsx,module.css}` (nothing imported it) + CLAUDE.md/testing-strategy mentions + the tracked `create-page-after-fix.png`. (T-Lockfile still open.)
+- **T7.3 ✅ (PR #202)** — `T-RpcError`: `RpcError` + a new `throwOnRpcError()` helper in `lib/rpcError.ts` (re-exported from `useManagerActions`); all six direct-RPC sites throw the same type — `useBuzzer` no longer throws the raw PostgREST error. `T-Deps`: verified already satisfied (all 4 `exhaustive-deps` disables already have reason comments).
+- **Regression fix ✅ (PR #203)** — mig 040 (above) made the full migration set non-re-runnable: on a replay, mig **015** did `ALTER COLUMN total_rounds …` after 040 had dropped the column → the buzz-race **stress** job failed. Guarded 015's ALTERs with `IF EXISTS`. #200 never caught it because a `db/migrations/**`-only PR runs only CodeQL (`backend.yml` is path-filtered; the idempotency check is in the label-gated stress job). **New standing rule: label every migration-touching PR `run-stress` + `run-e2e`.** Full detail in `.claude/rules/lessons-learned.md` (2026-07-10).
 
-**T6.2 ✅ done (PR #200)** — mig `040_drop_total_rounds_column.sql` drops the orphan `active_games.total_rounds` (mig 015 only relaxed its NOT NULL). Re-verified zero code refs (grep hits only mig 003/015 + docs); applied twice on the local stack (idempotent skip on #2); a create-game INSERT that omits the column still succeeds; `data-model.md` ledger synced (015 note + 038/039/040 appended). **Prod apply is still pending maintainer go** — it's a hard-required-nothing drop, so run it in a quiet window: `supabase db query --linked -f db/migrations/040_drop_total_rounds_column.sql`.
+## What to do next
 
-Next is **T6.3**, a single migration PR (**D-8 = youtube_id now**):
+**T6.3 is blocked on maintainer prod access** (the read-only dupe query is denied by the auto-mode classifier without the maintainer present). So the next **autonomous** task is a Phase 7 item; recommended order:
 
-1. One-time dedup on prod's catalog: identify duplicate `youtube_id`s, merge them, repoint `song_genres`, delete the losers. (The known Avicii "Wake Me Up" double-upload is a same-song-different-*video* case — two distinct `youtube_id`s — so it is NOT a `youtube_id` dupe and must be left alone.) **This mutates prod data → needs maintainer go before applying.**
-2. Add the `UNIQUE(songs.youtube_id)` index migration (idempotent) once the catalog is clean.
-3. Verify no dedup regression: sane row counts, no orphaned `song_genres`, song selection still works (no repeats within a game).
+1. **T7.5** `[M]` — proper RLS fixture fix (`tests/db/conftest.py:124`: dedicated non-superuser `LOGIN` role + `current_user` assertion instead of `SET ROLE anon`) to kill the recurring `test_rls_anon` flake; plus a reducer/e2e test for the T4.8 expiry warning. **Backend/db — run pytest with `DATABASE_URL=""` so it uses a throwaway testcontainer, never the shared local stack** (lessons-learned).
+2. **T7.2** `[M]` — decompose the god components (`ManagerConsolePage` → `useSongPrebuffer`+`useScoring`; `AdminSongsPage` → `SongTable`/`SongEditForm`/`useAdminSongs`), guarded by their existing ~48-case tests.
+3. **T7.1** `[M, D-7]` — scoring single-source-of-truth in the DB. Own PR **behind the buzz-race gate** (`award_attempt` change) — careful.
 
-Migration PRs run backend/db CI. After merge + maintainer go, apply to prod (`supabase db query --linked`). Recommended phase order after 6: **7 → 5 → 8** (see `phases/README.md`).
+**T6.3 (when the maintainer is present)** — one migration PR (**D-8 = youtube_id now**): (a) read-only prod query for duplicate `youtube_id`s; (b) dedup — merge dupes, repoint `song_genres`, delete losers (leave the Avicii "Wake Me Up" same-song-different-*video* pair — two distinct youtube_ids — alone); (c) idempotent `UNIQUE(songs.youtube_id)` migration; (d) verify no orphaned `song_genres`, song selection still works. Consider making it one migration that dedups **then** adds the constraint so it applies atomically to prod. Label it `run-stress` + `run-e2e`.
+
+Recommended phase order after 6: **7 → 5 → 8** (see `phases/README.md`).
 
 ## The per-PR loop (from EXECUTION-CONTRACT.md — don't skip)
 
