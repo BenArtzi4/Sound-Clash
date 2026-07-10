@@ -23,9 +23,9 @@
 - [x] Migration `040_drop_total_rounds_column.sql` = `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it; only relaxed NOT NULL). Re-verified no code path reads/writes it (2026-07-10: repo-wide grep hits only mig 003/015 + docs — zero frontend/backend/RPC refs). Applied twice against the local stack (APPLY #2 = idempotent skip NOTICE); a create-game INSERT that omits the column still succeeds. Synced `data-model.md` ledger (015 → "actual DROP is mig 040"; appended 038/039/040). Prod apply deferred to maintainer go (hard-required-nothing drop).
 - [x] **Follow-up (PR #203):** #200's migration-only PR ran only CodeQL (`backend.yml` is path-filtered off `db/migrations/**`), so it missed that mig 040 made the full set non-re-runnable — on a replay, the earlier mig **015** `ALTER COLUMN total_rounds …` failed after 040 had dropped the column (caught by the buzz-race **stress** job on #202). Fixed by guarding 015's ALTERs with `IF EXISTS`. Standing rule now: **label every `db/migrations/**` PR `run-stress` + `run-e2e`** so the idempotency check actually runs.
 
-### T6.3 · `UNIQUE(songs.youtube_id)` `[M]` — T-YoutubeUnique, **D-8**
-- [ ] One-time dedup pass on prod's catalog (identify + merge duplicate `youtube_id`s, repoint `song_genres` — the known Avicii "Wake Me Up" double-upload is a same-song-different-video case, not a `youtube_id` dupe).
-- [ ] Add the unique index migration (idempotent).
+### T6.3 · `UNIQUE(songs.youtube_id)` `[M]` — T-YoutubeUnique, **D-8** ✅ (PR #216, mig 042, live on prod 2026-07-10)
+- [x] One-time dedup pass — a read-only prod query (`GROUP BY youtube_id HAVING count(*)>1`) returned **zero rows**: the catalog is already `youtube_id`-unique, so no dedup/merge/repoint was needed (the Avicii "Wake Me Up" pair is two distinct youtube_ids, confirmed). Seed + e2e/db fixtures verified dupe-free too.
+- [x] Added the unique index migration `042_songs_youtube_id_unique.sql` = `CREATE UNIQUE INDEX IF NOT EXISTS songs_youtube_id_key ON songs (youtube_id)` (idempotent). `run-stress`+`run-e2e` green (full-set double-apply + catalog seed against the constraint). Applied + verified on prod. `data-model.md` synced.
 
 ---
 
