@@ -7,7 +7,7 @@ This sequences the backlog (`../01`–`../04`) into ordered phases. Each phase f
 - **Phase 2 — Perceived smoothness & buttons** (PRs #159–#165): provisional buzz-lock from the RPC, instant press feedback, composited animations, no-layout-shift banners, dropped the silent `busy` gate, CONNECTING/RECONNECTING states. Exit gate passed on prod 2026-07-05.
 - **Phase 3 — Backend-path & Realtime economics** (PRs #166–#174; migrations 035–038 live on prod): dropped the dead `buzz_in` write, collapsed `award_attempt` to one UPDATE, took `game_round_attempts` off the Realtime publication (mig 037, + RLS), trimmed the resync, peek-metadata in-gesture. **−27.5% Realtime messages** on a scripted 6-team/5-round game. Exit gate passed on prod 2026-07-05.
 
-**Phase 4 is ⏳ in progress** — T4.0 (deploy-safe chunks, PR #185) and T4.2 (resume-on-visible, PR #187) shipped; T4.1 de-scoped (PR #186); T4.9 turned out already-shipped (PR #163). **Next task: T4.3.**
+**Phase 4 is ✅ complete** (PRs #185–#197; T4.1 de-scoped in #186, T4.9 pre-shipped in #163; exit gate passed 2026-07-10 — full local suites + e2e green against a local stack, and a deliberate prod "adverse" game touched T4.3 reconnection / T4.10 host recovery / T4.11 final board). **Next: Phase 6.**
 
 ## ▶ How to start a session (short prompt)
 
@@ -24,13 +24,13 @@ The [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) carries everything reusable �
 | 1 | ✅ done (git history) | Load & time-to-playable | shipped |
 | 2 | ✅ done (git history) | Perceived smoothness & buttons | shipped |
 | 3 | ✅ done (git history) | Backend-path & Realtime economics | shipped |
-| 4 | [phase-4-resilience.md](phase-4-resilience.md) | Mid-game failure modes | ⏳ **in progress — T4.3 next** |
+| 4 | [phase-4-resilience.md](phase-4-resilience.md) | Mid-game failure modes | ✅ done (exit gate passed 2026-07-10) |
 | 5 | [phase-5-security.md](phase-5-security.md) | Security & abuse hardening | ready (decisions resolved; T5.3/T5.5 already shipped) |
 | 6 | [phase-6-correctness-docs.md](phase-6-correctness-docs.md) | Correctness & docs/data-model | ready (scope shrank — one sync PR + two migrations) |
 | 7 | [phase-7-tech-debt.md](phase-7-tech-debt.md) | Tech-debt & test hardening | ready |
 | 8 | [phase-8-features.md](phase-8-features.md) | Features | ready (Tier 1–3; D-5/D-6 out of scope) |
 
-**Recommended path:** finish **Phase 4** (T4.3 → T4.11) → **6** (small now) → **7** → **5** → **8**. Ordering logic: resilience protects live games first; 6 is now cheap and unblocks honest docs; 7 de-risks the bigger refactors; 5's remaining items are mostly documentation + small guards (its critical fix already shipped); 8 builds features on the hardened base. Interleave freely — 6/7 items are independent cleanup.
+**Recommended path:** Phase 4 ✅ done → **6** (small now) → **7** → **5** → **8**. Ordering logic: resilience protected live games first; 6 is now cheap and unblocks honest docs; 7 de-risks the bigger refactors; 5's remaining items are mostly documentation + small guards (its critical fix already shipped); 8 builds features on the hardened base. Interleave freely — 6/7 items are independent cleanup.
 
 ## Global exit gate (every phase)
 

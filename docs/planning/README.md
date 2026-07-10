@@ -27,7 +27,7 @@ Make the game **load fast, respond instantly, and never lag** — every button, 
 
 ## Status snapshot
 
-_Updated: 2026-07-08 (planning reorg — every claim below re-verified against code/git)._
+_Updated: 2026-07-10 (Phase 4 ✅ done — exit gate passed; every other claim below re-verified against code/git during the 2026-07-08 reorg)._
 
 | Phase | Theme | State |
 |---|---|---|
@@ -35,7 +35,7 @@ _Updated: 2026-07-08 (planning reorg — every claim below re-verified against c
 | 1 | Perf: load & time-to-playable | ✅ done (PRs #150–#158; exit gate passed 2026-07-05) |
 | 2 | Perf: perceived smoothness & buttons | ✅ done (PRs #159–#165; exit gate passed 2026-07-05) |
 | 3 | Perf: backend-path & Realtime economics | ✅ done (PRs #166–#174; mig 035–038 live; −27.5% Realtime msgs) |
-| 4 | Resilience: mid-game failure modes | ⏳ **in progress** — T4.0 ✅ #185, T4.2 ✅ #187, T4.1 de-scoped #186, T4.9 pre-shipped #163; **T4.3 next**, then T4.4–T4.11 |
+| 4 | Resilience: mid-game failure modes | ✅ done (PRs #185–#197; T4.1 de-scoped, T4.9 pre-shipped; exit gate passed 2026-07-10) |
 | 5 | Security & abuse hardening | ready — critical D-1 already shipped (mig 034); T5.3 done; rest is small guards + owed docs + maintainer ops (T5.6) |
 | 6 | Correctness & docs hygiene | ready — scope shrank on re-verify: one small doc-sync PR + two migrations (T6.2/T6.3) |
 | 7 | Tech-debt & test hardening | ready — T-KeepWarm/T-DocRPC turned out done; the rest verified open |
@@ -45,7 +45,7 @@ _Updated: 2026-07-08 (planning reorg — every claim below re-verified against c
 
 **Maintainer-only carryovers (can't be closed by a coding session):** T1.7 Grafana Realtime alerts (+ I-Vitals dashboard); D-3/T5.6 Cloudflare edge + WAF; optional DB-password/`sb_secret_` rotation; merging the open Dependabot PRs (#133, #114, #147, #182); finishing the song-curation batch (Hebrew + soundtracks — see `03-features.md` §Content).
 
-**Next action:** Phase 4 **T4.3** (hydrate/queue robustness — the highest-value remaining bug). See [NEXT-SESSION.md](NEXT-SESSION.md) for the ready-to-paste kickoff, or run the local `/next-task` skill.
+**Next action:** **Phase 6** (correctness & docs hygiene — the scope shrank to one small doc-sync PR + two migrations T6.2/T6.3). See [NEXT-SESSION.md](NEXT-SESSION.md) for the ready-to-paste kickoff, or run the local `/next-task` skill.
 
 ## The one rule
 
