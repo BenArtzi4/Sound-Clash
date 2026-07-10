@@ -1,10 +1,10 @@
 # Next session — start here
 
-_Last updated: 2026-07-10 (**Phase 6 T6.2 ✅ done** — PR #TBD, mig 040 drops the orphan `active_games.total_rounds` column. **Next: T6.3 — `UNIQUE(songs.youtube_id)` + a one-time prod dedup (migration PR; the prod dedup mutation needs maintainer go).**)_
+_Last updated: 2026-07-10 (**Phase 6 T6.2 ✅ done** — PR #200, mig 040 drops the orphan `active_games.total_rounds` column. **Next: T6.3 — `UNIQUE(songs.youtube_id)` + a one-time prod dedup (migration PR; the prod dedup mutation needs maintainer go).**)_
 
 ## Short prompt to paste into the fresh session
 
-> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then do Phase 6 T6.2 per `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-6-correctness-docs.md`. Read `.claude/rules/lessons-learned.md` before running anything. T6.2 is a single migration PR: `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it but only relaxed NOT NULL); confirm no code path reads/writes `total_rounds` (verified none as of 2026-07-07 — re-verify), sync `data-model.md`, apply the migration twice locally for idempotency. It's a hard-required-nothing drop, so apply to prod after merge + maintainer go. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
+> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then do Phase 6 T6.3 per `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-6-correctness-docs.md`. Read `.claude/rules/lessons-learned.md` before running anything. T6.3 is a single migration PR: dedup prod's catalog on `youtube_id` (merge dupes, repoint `song_genres`, delete losers — leave the Avicii "Wake Me Up" same-song-different-*video* pair alone; it has two distinct youtube_ids), then add an idempotent `UNIQUE(songs.youtube_id)` index migration. The prod dedup mutates prod data → apply only after maintainer go. Verify no orphaned `song_genres` and that song selection still works. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
 
 (Or just run the local **`/next-task`** skill — it encodes the same loop.)
 
@@ -21,7 +21,7 @@ _Last updated: 2026-07-10 (**Phase 6 T6.2 ✅ done** — PR #TBD, mig 040 drops 
 
 **T6.1 ✅ done (PR #199)** — docs-only drift sync merged (eleven-table intro, six anon RPCs, open-hosting auth model across `data-model.md`/`api-contracts.md`/`game-rules.md`/`architecture.md`/`diagrams/*`).
 
-**T6.2 ✅ done (PR #TBD)** — mig `040_drop_total_rounds_column.sql` drops the orphan `active_games.total_rounds` (mig 015 only relaxed its NOT NULL). Re-verified zero code refs (grep hits only mig 003/015 + docs); applied twice on the local stack (idempotent skip on #2); a create-game INSERT that omits the column still succeeds; `data-model.md` ledger synced (015 note + 038/039/040 appended). **Prod apply is still pending maintainer go** — it's a hard-required-nothing drop, so run it in a quiet window: `supabase db query --linked -f db/migrations/040_drop_total_rounds_column.sql`.
+**T6.2 ✅ done (PR #200)** — mig `040_drop_total_rounds_column.sql` drops the orphan `active_games.total_rounds` (mig 015 only relaxed its NOT NULL). Re-verified zero code refs (grep hits only mig 003/015 + docs); applied twice on the local stack (idempotent skip on #2); a create-game INSERT that omits the column still succeeds; `data-model.md` ledger synced (015 note + 038/039/040 appended). **Prod apply is still pending maintainer go** — it's a hard-required-nothing drop, so run it in a quiet window: `supabase db query --linked -f db/migrations/040_drop_total_rounds_column.sql`.
 
 Next is **T6.3**, a single migration PR (**D-8 = youtube_id now**):
 
