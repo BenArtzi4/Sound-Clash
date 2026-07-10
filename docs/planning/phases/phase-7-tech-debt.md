@@ -21,7 +21,7 @@
 - [x] Expose the 5 UI constants from one shared module the toasts import (`frontend/src/lib/scoring.ts`); the toasts (`useScoring.ts`) + labels (`ManagerConsolePage.tsx`) import it, and `scoring.test.ts` (T-ScoringTest) cross-checks the values.
 - [x] Behind the buzz-race + full-game gate; own PR (`feature/t7.1-scoring-authority`, labelled `run-stress` + `run-e2e`).
 
-> **STATUS (2026-07-10):** implemented + fully green locally (frontend 455, db `test_award_attempt` 31, PostgREST routing + positive-scoring path verified on the local stack; mig 043 idempotent + dual-overload confirmed). **PR open, handed to the maintainer for the prod cutover** — do NOT self-merge (buzz-path + prod migration). Cutover order: **apply mig 043 to prod FIRST**, then merge (Cloudflare deploys the boolean-sending frontend), then verify scoring on prod, then a later **mig 044** drops the integer overload. Full steps below + in `NEXT-SESSION.md`.
+> **STATUS (2026-07-10): ✅ DONE — LIVE ON PROD + VERIFIED.** PR **#218 merged**; **mig 043 applied to prod** (both overloads present, `count=2`); Cloudflare Pages + Render deploys green; the **live deployed bundle sends only booleans** (`p_correct_title/p_correct_artist/p_wrong`, zero legacy int params). Prod scoring verified end-to-end via a transactional self-check against the live boolean overload — **title=10 / artist=5 / soundtrack=15 / wrong=−3 / free-guess=0** all correct; `post_deploy.sh` PASSED. CI on the PR: frontend 455, db `test_award_attempt` 31, buzz-race stress 100×, Playwright multi-context all green. **Only tail = mig 044** (drop the dead integer overload, a later fresh-session follow-up). Rollout steps preserved below for the mig-044 reference.
 
 #### T7.1 implementation plan (scoped 2026-07-10 night — **deferred to a maintainer-coordinated session**)
 
@@ -90,7 +90,7 @@ A read-only reconnaissance pass produced the plan below. **Not implemented auton
 
 ## Exit gate (Phase 7)
 - [ ] Coverage holds/improves; lint/typecheck/mypy/ruff green; full backend+db+frontend suites green.
-- [ ] Buzz-race + `award_attempt` scenarios green after the scoring refactor.
+- [x] Buzz-race + `award_attempt` scenarios green after the scoring refactor (PR #218: buzz-race stress 100× + 31 `test_award_attempt` scenarios green; verified live on prod).
 - [ ] RLS suite deterministically green in isolation and in the new CI job.
 - [ ] Bundle budget enforced; no accidental size regression from earlier phases.
-- [ ] **Full-Game Exit Gate** — scoring values unchanged from the player's view (title=10/artist=5/soundtrack=15/wrong=−3/bonus=+4) after the server-authoritative refactor.
+- [x] **Full-Game Exit Gate** — scoring values unchanged from the player's view (title=10/artist=5/soundtrack=15/wrong=−3/bonus=+4) after the server-authoritative refactor. Verified on prod post-#218 (transactional self-check against the live boolean overload + `post_deploy.sh` PASS).
