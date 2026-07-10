@@ -45,7 +45,8 @@ CREATE TABLE songs (
   release_year  integer                        -- original release year (mig 031); nullable
                   CHECK (release_year IS NULL OR release_year BETWEEN 1900 AND 2100),
   created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (youtube_id)                          -- one catalog row per YouTube video (mig 042; via UNIQUE INDEX songs_youtube_id_key)
 );
 
 CREATE TABLE genres (
@@ -351,7 +352,8 @@ db/migrations/
 ├── 038_peek_next_song_metadata.sql -- peek_next_song also returns the candidate's title/artist/is_soundtrack so Next-round can label the song in-gesture
 ├── 039_extend_game.sql          -- token-gated "Keep playing +1h" TTL bump: expires_at = GREATEST(expires_at, now()) + 1h
 ├── 040_drop_total_rounds_column.sql -- finally DROP the orphan active_games.total_rounds (mig 015 only relaxed it)
-└── 041_buzz_in_scope_team_to_game.sql -- buzz_in only locks for a team that belongs to the game (EXISTS guard); closes a cross-game score-write vector
+├── 041_buzz_in_scope_team_to_game.sql -- buzz_in only locks for a team that belongs to the game (EXISTS guard); closes a cross-game score-write vector
+└── 042_songs_youtube_id_unique.sql   -- enforce UNIQUE(songs.youtube_id) via idempotent UNIQUE INDEX; one catalog row per YouTube video
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
