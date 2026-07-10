@@ -18,7 +18,7 @@ Steady autonomous cleanup that makes the app easier to keep production-perfect. 
 
 ## B. Dead code & repo hygiene
 
-- **T-DeadCode · One-sweep dead-code removal.** `[S]` Delete `Scoreboard.tsx` + `.test.tsx` + `.module.css` (177 lines, all dead) and drop the CLAUDE.md mention; remove the tracked `create-page-after-fix.png` at repo root (not covered by any gitignore rule). (`screenshots/` and `.playwright-mcp/` verified untracked — nothing to do there.)
+- ~~**T-DeadCode · One-sweep dead-code removal.**~~ ✅ done 2026-07-10 (PR #201). Deleted `Scoreboard.{tsx,test.tsx,module.css}` (dead — nothing imported it; only an unrelated local `ScoreboardRow` type in `EndScreen.tsx` shares the prefix), dropped the CLAUDE.md mention + the stale `testing-strategy.md` test-table row + two illustrative code comments (`useGameChannel.ts`, `RoundCountdown.tsx`), and removed the tracked `create-page-after-fix.png`.
 - **T-Lockfile · Un-ignore `frontend/package-lock.json`.** `[S]` `.gitignore:35` excludes it ("temporarily untracked" due to an npm-10 Linux-runner bug ~3 weeks stale). Without it the Cloudflare deploy resolves `^` ranges fresh each build → non-reproducible deploys. Re-verify the npm bug, then commit the lockfile. **CI/deploy-adjacent — verify before flipping.**
 
 ## C. Tests

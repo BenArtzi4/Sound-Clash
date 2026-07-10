@@ -119,7 +119,6 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 | `pages/ManagerConsole.test.tsx` | renders game state; admin actions disabled until player ready |
 | `pages/DisplayScreen.test.tsx` | renders scoreboard; updates on team-score events |
 | `components/BuzzButton.test.tsx` | disabled while locked; disabled while disconnected; click fires buzz |
-| `components/Scoreboard.test.tsx` | sorts by score desc; ties shown together |
 | `lib/managerToken.test.ts` (plus inline coverage in `pages/ManagerConsolePage.test.tsx` + `pages/ManagerCreateGamePage.test.tsx`) | localStorage round-trip; absent token → "not the host" branch; recovery-hash (`#mt=<uuid>`) parse/format — strict UUID shape, malformed variants rejected |
 
 ### 4.4 E2E tests: `tests/e2e/`
