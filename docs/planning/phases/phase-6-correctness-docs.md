@@ -19,8 +19,8 @@
 - [x] `game-rules.md`: replaced the "(admin auth)" host transitions with the open-hosting / `manager_token` model. (T-DocGameRules)
 - [x] Spot-sweep: caught the same drift class in `architecture.md` (§5 "Nothing else" + stale `select-song`/`award-points` gate list), `diagrams/internal.md` + its hand-maintained `internal.html` mirror (the "only RPC anon EXECUTEs on" auth-table rows and the `/games/*` Mermaid node listing removed endpoints). All synced.
 
-### T6.2 · Drop the orphan `total_rounds` column `[S]` — T-TotalRounds
-- [ ] Migration `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it; only relaxed NOT NULL). Confirm no code path reads/writes it (verified none as of 2026-07-07); sync `data-model.md`.
+### T6.2 · Drop the orphan `total_rounds` column `[S]` — T-TotalRounds ✅ (PR #200)
+- [x] Migration `040_drop_total_rounds_column.sql` = `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it; only relaxed NOT NULL). Re-verified no code path reads/writes it (2026-07-10: repo-wide grep hits only mig 003/015 + docs — zero frontend/backend/RPC refs). Applied twice against the local stack (APPLY #2 = idempotent skip NOTICE); a create-game INSERT that omits the column still succeeds. Synced `data-model.md` ledger (015 → "actual DROP is mig 040"; appended 038/039/040). Prod apply deferred to maintainer go (hard-required-nothing drop).
 
 ### T6.3 · `UNIQUE(songs.youtube_id)` `[M]` — T-YoutubeUnique, **D-8**
 - [ ] One-time dedup pass on prod's catalog (identify + merge duplicate `youtube_id`s, repoint `song_genres` — the known Avicii "Wake Me Up" double-upload is a same-song-different-video case, not a `youtube_id` dupe).

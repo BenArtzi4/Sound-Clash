@@ -1,0 +1,12 @@
+-- Migration 040: Drop the orphan active_games.total_rounds column.
+--
+-- History: 003 created total_rounds NOT NULL; the round-limit feature was
+-- removed and 015 relaxed it (DROP NOT NULL + DEFAULT 0) as a transitional
+-- step, promising "a follow-up migration will DROP the column entirely once
+-- every live backend is on the new contract." That day is here: no frontend,
+-- backend, or PL/pgSQL RPC reads or writes total_rounds (verified 2026-07-10).
+-- The create-game INSERT omits it, select_next_song never touches it, and it is
+-- absent from data-model.md's active_games DDL block. This finishes 015's job.
+--
+-- Idempotent: DROP COLUMN IF EXISTS is a no-op once the column is gone.
+ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds;

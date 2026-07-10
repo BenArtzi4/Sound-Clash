@@ -339,7 +339,7 @@ db/migrations/
 ├── 012_manager_token.sql     -- per-game host credential
 ├── 013_seed_extra_genres.sql
 ├── 014_scoring_revamp.sql    -- wrong-buzz penalty, +4 bonus, drop source/timeout
-├── 015_drop_total_rounds.sql
+├── 015_drop_total_rounds.sql   -- relaxed total_rounds NOT NULL (the actual DROP is mig 040)
 ├── 016_multi_buzz_rounds.sql -- multi-buzz model: token claims, award_attempt, end_round
 ├── 017_free_guess_flag.sql   -- per-round free-guess flag; waives -3 after first correct
 │   … 018–032: manager-token RPCs, browser-direct RPC migration, soundtrack/decade filters, etc.
@@ -347,7 +347,10 @@ db/migrations/
 ├── 034_game_secrets.sql      -- move manager_token off active_games into anon-invisible game_secrets (D-1 leak fix)
 ├── 035_buzz_in_drop_round_update.sql   -- drop the dead game_rounds.buzzed_team_id mirror-write from buzz_in
 ├── 036_award_attempt_collapse_writes.sql -- collapse award_attempt's per-round writes into one UPDATE...RETURNING
-└── 037_lock_down_game_round_attempts.sql -- remove game_round_attempts from the Realtime publication + enable RLS
+├── 037_lock_down_game_round_attempts.sql -- remove game_round_attempts from the Realtime publication + enable RLS
+├── 038_peek_next_song_metadata.sql -- peek_next_song also returns the candidate's title/artist/is_soundtrack so Next-round can label the song in-gesture
+├── 039_extend_game.sql          -- token-gated "Keep playing +1h" TTL bump: expires_at = GREATEST(expires_at, now()) + 1h
+└── 040_drop_total_rounds_column.sql -- finally DROP the orphan active_games.total_rounds (mig 015 only relaxed it)
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
