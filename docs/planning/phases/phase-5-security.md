@@ -38,11 +38,11 @@
 - [ ] **Infra + DNS work, largely outside git** — plan it as an ops task; validate that buzz latency is unaffected by the extra hop (measure buzz p95 before/after — the proxy must not blow the <200ms budget).
 
 ### T5.7 · Document the accepted buzz-spoofing tradeoff `[S]` — **D-4 = accept**
-- [ ] No per-team tokens. Document in `security-rls.md` that buzzing is unauthenticated by design (casual play) and the host is the integrity check.
-- [ ] Implement the lightweight **same-name reclaim** for F-P2-1: `join_team` returns the existing team row when the same name rejoins the same game (no new token). Coordinate with the frontend redirect logic.
+- [x] ✅ No per-team tokens. Documented in `security-rls.md` §4 ("Accepted design tradeoffs") that buzzing is unauthenticated by design (casual play) and the host is the integrity check.
+- [ ] Implement the lightweight **same-name reclaim** for F-P2-1: `join_team` returns the existing team row when the same name rejoins the same game (no new token). Coordinate with the frontend redirect logic. *(still open — behavior change, needs frontend redirect coordination)*
 
 ### T5.8 · Pre-reveal answer leak `[architecture]` — **D-2 = accept + document**
-- [ ] Document the tradeoff in `security-rls.md` (the clip is audible to the room anyway; a DB-reading cheat is narrow and self-defeating). No code redesign for now.
+- [x] ✅ Documented the tradeoff in `security-rls.md` §4 ("Accepted design tradeoffs") — the clip is audible to the room anyway; a DB-reading cheat is narrow and self-defeating. No code redesign.
 
 ---
 

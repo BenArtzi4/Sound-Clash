@@ -193,6 +193,22 @@ If we ever add per-user scoping, RLS policies become more restrictive and Realti
 | **YouTube ID injection** (admin endpoint) | Low | Low | Validate as 11-char alphanumeric+`-_`; reject others |
 | **SQL injection** | Low | Critical | Use parameterized queries everywhere (`supabase-py` does this); functions use prepared parameters |
 
+### Accepted design tradeoffs (decided per §05, documented — not mitigated)
+
+Two abuse surfaces were surfaced by the security review and **consciously accepted** rather than fixed, because the fix costs more than the risk for a casual, in-the-room party game. They are recorded here so "we didn't think of it" can never be confused with "we decided it was fine."
+
+**Buzzing is unauthenticated by design (D-4).** Teams hold no per-team secret. Any client that knows the 6-char game code can call `buzz_in` for any `team_id` in that game (every `game_teams` row is anon-readable by design — see §2), and anyone can join with a name that matches an existing team. So a client *could* buzz as the wrong team, or an outsider who has the code *could* grief-buzz. This is deliberate:
+- **The host is the integrity check.** The buzzing team's name shows on the manager console *and* the shared display in real time. A wrong or malicious buzz is visible and correctable in the moment — the host uses **Continue round** to re-open the lock, or **Wrong** to deduct — exactly as they would for any human dispute at the table.
+- **The threat requires physical/social proximity.** To abuse it you must already know the code, which in practice means you're in the room (the code is shown on the projector). Grief-buzzing a stranger's game you have no way to reach is not a realistic path.
+- **The fix is disproportionate.** Per-team tokens would mean minting, storing, and threading a secret per player device through the join → redirect flow (and recovering it on refresh), plus a matching RLS/RPC change, for a threat the host already neutralizes socially. Not worth it for MVP. (If bot abuse ever appears, the lighter first steps are the §13 CAPTCHA-on-join and a longer game code, not per-team auth.)
+
+The same-name **reclaim** ergonomic that pairs with this (F-P2-1 — a team re-joining with the same name gets its existing row back instead of a duplicate) is a separate, still-open frontend/RPC change (Phase 5 T5.7); it does not alter the accepted posture above.
+
+**Pre-reveal "answer" is readable before the host reveals it (D-2).** A `game_rounds` row references the currently-playing song, and `songs` metadata (title, artist) is anon-readable (§2), so a determined player could open devtools mid-round, read the round's song id, and look up the title/artist a few seconds before the host reveals it. Accepted, not redesigned, because:
+- **The clip is audibly playing to the entire room.** The "answer" to *name that tune* is literally being broadcast — it is not a secret the DB is leaking, it's the game. Reading it in devtools beats listening by seconds, if at all.
+- **The cheat is narrow and self-defeating.** It requires devtools open mid-round at a party where you're supposed to be listening; it wins a casual trivia point at the cost of playing the game.
+- **Hiding it would tax the hot path.** The clients that render the player and the reveal legitimately need the round's song reference; withholding it would force a per-round server-gated reveal round-trip (latency + complexity) for negligible benefit. Documented per D-2.
+
 ## 5. Secret Inventory
 
 What secrets exist, where they live, who sees them:
