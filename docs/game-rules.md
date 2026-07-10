@@ -40,10 +40,10 @@ The manager and display are typically separate physical screens (laptop + TV). T
 
 | From | Event | To | Performed by |
 |---|---|---|---|
-| (none) | `POST /games` | `waiting` | Manager (admin auth) |
-| `waiting` | manager starts game | `playing` (round 1 active) | Manager (admin auth) |
-| `playing` | round complete | `playing` (next round) | Manager (admin auth) |
-| `playing` | manager presses "End game" | `ended` | Manager (admin auth) |
+| (none) | `POST /games` | `waiting` | Manager — open hosting (no auth); response returns the game's `manager_token` |
+| `waiting` | manager starts game | `playing` (round 1 active) | Manager via `select_next_song` RPC (`manager_token`) |
+| `playing` | round complete | `playing` (next round) | Manager via `select_next_song` RPC (`manager_token`) |
+| `playing` | manager presses "End game" | `ended` | Manager via `POST /games/{code}/end` (`X-Manager-Token`) |
 | any | `expires_at < now()` | (deleted) | `pg_cron` |
 
 Invalid transitions (e.g., `ended` → `playing`) MUST be rejected by the RPC layer.

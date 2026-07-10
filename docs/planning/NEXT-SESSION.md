@@ -1,10 +1,10 @@
 # Next session — start here
 
-_Last updated: 2026-07-10 (**Phase 4 ✅ done** — exit gate passed: full local suites + e2e green, prod adverse game hit T4.3/T4.10/T4.11). **Next: Phase 6 (correctness & docs hygiene), starting with T6.1.**_
+_Last updated: 2026-07-10 (**Phase 6 T6.1 ✅ done** — PR #199, docs-only drift sync merged. **Next: T6.2 — drop the orphan `active_games.total_rounds` column (migration PR).**)_
 
 ## Short prompt to paste into the fresh session
 
-> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then start Phase 6 (T6.1) per `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-6-correctness-docs.md`. Read `.claude/rules/lessons-learned.md` before running anything. T6.1 is a single-PR doc-sync of ~4 residual drifts (`data-model.md` "six tables"→ten + the five anon-callable RPCs; `api-contracts.md` "only one anon function" + the removed `select-song`/`attempt`/`end-round` from the X-Manager-Token list; `game-rules.md` "(admin auth)"→`manager_token`) — docs-only, so CI runs CodeQL only. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
+> **Continue the Sound Clash plan. Read `docs/planning/NEXT-SESSION.md` first, then do Phase 6 T6.2 per `docs/planning/phases/EXECUTION-CONTRACT.md` and `docs/planning/phases/phase-6-correctness-docs.md`. Read `.claude/rules/lessons-learned.md` before running anything. T6.2 is a single migration PR: `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it but only relaxed NOT NULL); confirm no code path reads/writes `total_rounds` (verified none as of 2026-07-07 — re-verify), sync `data-model.md`, apply the migration twice locally for idempotency. It's a hard-required-nothing drop, so apply to prod after merge + maintainer go. The maintainer is button-averse: prefer zero-UI/auto fixes and confirm before adding any button.**
 
 (Or just run the local **`/next-task`** skill — it encodes the same loop.)
 
@@ -17,16 +17,16 @@ _Last updated: 2026-07-10 (**Phase 4 ✅ done** — exit gate passed: full local
 - **Pre-event validation done** (10-team live-prod pass 2026-07-05 + DB-verified 10-team/30-round e2e 2026-07-06); the two display-scaling bugs it found are fixed (PRs #176/#178). No open blockers. Reusable checklist: `docs/pre-event-checklist.md`.
 - **Phases 5–8 not started**, but re-verification shrank them: Phase 5's critical item (D-1) and T5.3 already shipped; Phase 6 is down to one doc-sync PR + two migrations; Phase 7 lost T-KeepWarm/T-DocRPC (done). Recommended order after Phase 4: **6 → 7 → 5 → 8** (see `phases/README.md`).
 
-## What to do next — Phase 6 (T6.1: residual docs-drift sync)
+## What to do next — Phase 6 (T6.2: drop the orphan `total_rounds` column)
 
-Phase 4 is done (exit gate passed — see `phase-4-resilience.md`). Next is **Phase 6** (correctness & docs hygiene — scope shrank on re-verify to one doc-sync PR + two migrations). Start with **T6.1**, a single **docs-only** PR syncing ~4 residual drifts (exact lines in `phases/phase-6-correctness-docs.md`):
+**T6.1 ✅ done (PR #199)** — docs-only drift sync merged: `data-model.md` intro (→ eleven tables, three groups), §5/§6 anon-EXECUTE set (→ the six anon RPCs) + §6 caller column; `api-contracts.md` §3 anon-surface line; `game-rules.md` state-transition auth column (→ open-hosting / `manager_token`); plus the same drift class caught in `architecture.md`, `diagrams/internal.md` and its `internal.html` mirror. (Discovered while doing it: the plan's "ten tables" was one short — `game_round_attempts` is a real table absent from the §2 DDL block; and `api-contracts.md` line 71's endpoint list was already correct from a Phase 4 sync.)
 
-1. **`data-model.md`** — intro "Six tables" → ten; §5/§6 "only `buzz_in` is anon-EXECUTE" → the anon-callable RPC set. **Note:** that set is now **six** — `buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, **and `extend_game`** (mig 039, added in Phase 4 T4.8); the phase-6 file predates it and lists five, so include `extend_game` too. (T-DocDataModel)
-2. **`api-contracts.md`** — fix "Only one function is exposed to anon" (~line 329); drop the removed `select-song`/`attempt`/`end-round` from the X-Manager-Token list (~line 71). Do **not** "fix" the 409s — code really returns 409 for already-ended /bonus,/end. (T-DocContracts)
-3. **`game-rules.md`** — replace "(admin auth)" host transitions with the `manager_token` model. (T-DocGameRules)
-4. Spot-sweep the four synced docs for other pre-open-hosting / pre-direct-RPC phrasing.
+Next is **T6.2**, a single migration PR:
 
-Docs-only ⇒ CI runs **CodeQL only** (backend/frontend workflows are path-filtered; e2e is label-gated). Then **T6.2** (drop the orphan `total_rounds` column) and **T6.3** (`UNIQUE(songs.youtube_id)` + a one-time prod dedup) are separate single-session **migration** PRs. Recommended phase order after 6: **7 → 5 → 8** (see `phases/README.md`).
+1. Migration `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it but only relaxed the NOT NULL). Confirm no code path reads/writes `total_rounds` (verified none as of 2026-07-07 — re-verify frontend + backend + RPCs), sync `data-model.md`, apply the migration twice against a local `supabase start` stack for idempotency. (T-TotalRounds)
+2. Then **T6.3** (`UNIQUE(songs.youtube_id)` + a one-time prod dedup) is a separate single-session migration PR.
+
+Migration PRs run backend/db CI. After merge + maintainer go, apply to prod (`supabase db query --linked`). Recommended phase order after 6: **7 → 5 → 8** (see `phases/README.md`).
 
 ## The per-PR loop (from EXECUTION-CONTRACT.md — don't skip)
 

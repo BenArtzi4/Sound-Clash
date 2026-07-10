@@ -18,7 +18,7 @@ flowchart TB
     subgraph RENDER["FastAPI on Render"]
         direction TB
         Health["/health"]
-        Games["/games/*<br/>create / join / select-song /<br/>award-points / bonus / end / kick"]
+        Games["/games/*<br/>create / join /<br/>bonus / end / kick"]
         Admin["/admin/songs<br/>CRUD + bulk-import"]
         Genres["/genres"]
     end
@@ -74,9 +74,9 @@ flowchart TB
 |---|---|---|---|
 | Anonymous browser | `POST /games` | none | Open hosting; returns the per-game `manager_token` |
 | Anonymous browser | `POST /games/{code}/teams` | none | Players just need to know the code |
-| Anonymous browser | `supabase.rpc('buzz_in')` | anon JWT (RLS) | Hot path; the only RPC `anon` is `GRANT EXECUTE`d on |
-| Anonymous browser | `SELECT` on game-scoped rows | anon JWT (RLS) | RLS allows SELECT, denies all writes |
-| Manager browser | `POST /games/{code}/{select-song,award-points,bonus,end}` | `X-Manager-Token` | Per-game uuid stored on `active_games`, mirrored in localStorage |
+| Anonymous browser | `supabase.rpc('buzz_in')` | anon key | Buzzer hot path; one of six RPCs `anon` can EXECUTE (see `security-rls.md`) |
+| Anonymous browser | `SELECT` on game-scoped rows | anon key (RLS) | RLS allows SELECT, denies all writes |
+| Manager browser | `POST /games/{code}/{bonus,end}` + token-gated RPCs (`award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`) | `X-Manager-Token` (REST) / `p_manager_token` (RPC) | Per-game uuid in `game_secrets` (mig 034), mirrored in localStorage |
 | Manager browser | `DELETE /games/{code}/teams/{team_id}` | `X-Manager-Token` | Same |
 | Admin browser | `/admin/songs/*` | `X-Admin-Password` | Single env-var password, constant-time compared |
 | FastAPI itself | Anything via `supabase-py` | service-role key | Server-side only; never reaches the browser bundle |
