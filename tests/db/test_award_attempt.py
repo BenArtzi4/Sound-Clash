@@ -42,19 +42,25 @@ async def _attempt(
     conn: asyncpg.Connection,
     game_code: str,
     round_id,
-    title: int,
-    artist: int,
-    wrong: int,
+    title: bool,
+    artist: bool,
+    wrong: bool,
 ) -> list[asyncpg.Record]:
     """Convenience: call ``award_attempt`` with the game's own manager_token.
 
-    Tests that exercise *token validation* call the RPC directly with the
-    explicit 6th arg instead of using this helper.
+    Migration 043 made the DB the authority for the point magnitudes: the
+    boolean overload ``award_attempt(text, uuid, boolean, boolean, boolean,
+    uuid)`` takes flags and derives 10 / 5 / 3 server-side. The ``::boolean``
+    casts pin the call to that overload (the retired integer overload from
+    mig 036 still exists until mig 044, so an un-typed ``$3`` would be
+    ambiguous). Tests that exercise *token validation* call the RPC directly
+    with the explicit 6th arg instead of using this helper.
     """
     token = await fetch_manager_token(conn, game_code)
     return await conn.fetch(
         "SELECT team_id, points_delta, team_total_score, title_claimed_by, "
-        "artist_claimed_by FROM award_attempt($1, $2, $3, $4, $5, $6)",
+        "artist_claimed_by FROM award_attempt($1, $2, $3::boolean, $4::boolean, "
+        "$5::boolean, $6)",
         game_code,
         round_id,
         title,
@@ -89,7 +95,7 @@ async def test_award_attempt_title_only(db: asyncpg.Connection) -> None:
     team_id = await create_test_team(db, game_code)
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
-    rows = await _attempt(db, game_code, round_id, 10, 0, 0)
+    rows = await _attempt(db, game_code, round_id, True, False, False)
     assert len(rows) == 1
     assert rows[0]["team_id"] == team_id
     assert rows[0]["points_delta"] == 10
@@ -118,7 +124,7 @@ async def test_award_attempt_artist_only(db: asyncpg.Connection) -> None:
     team_id = await create_test_team(db, game_code)
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
-    rows = await _attempt(db, game_code, round_id, 0, 5, 0)
+    rows = await _attempt(db, game_code, round_id, False, True, False)
     assert rows[0]["points_delta"] == 5
     assert rows[0]["team_total_score"] == 5
     assert rows[0]["artist_claimed_by"] == team_id
@@ -130,7 +136,7 @@ async def test_award_attempt_both_tokens_atomic(db: asyncpg.Connection) -> None:
     team_id = await create_test_team(db, game_code)
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
-    rows = await _attempt(db, game_code, round_id, 10, 5, 0)
+    rows = await _attempt(db, game_code, round_id, True, True, False)
     assert rows[0]["points_delta"] == 15
     assert rows[0]["title_claimed_by"] == team_id
     assert rows[0]["artist_claimed_by"] == team_id
@@ -144,7 +150,7 @@ async def test_award_attempt_wrong_buzz_no_lockout(db: asyncpg.Connection) -> No
     await db.execute("UPDATE game_teams SET score = 10 WHERE id = $1", team_id)
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
-    rows = await _attempt(db, game_code, round_id, 0, 0, 3)
+    rows = await _attempt(db, game_code, round_id, False, False, True)
     assert rows[0]["team_id"] == team_id
     assert rows[0]["points_delta"] == -3
     assert rows[0]["team_total_score"] == 7
@@ -159,7 +165,7 @@ async def test_award_attempt_wrong_buzz_no_lockout(db: asyncpg.Connection) -> No
 
     # Same team can buzz and try again.
     await call_buzz_in(db, game_code, team_id)
-    rows2 = await _attempt(db, game_code, round_id, 10, 0, 0)
+    rows2 = await _attempt(db, game_code, round_id, True, False, False)
     assert rows2[0]["points_delta"] == 10
 
 
@@ -171,10 +177,10 @@ async def test_award_attempt_two_teams_split_tokens(db: asyncpg.Connection) -> N
     t2 = await create_test_team(db, game_code, name="T2")
 
     round_id = await _start_round_and_buzz(db, game_code, t1)
-    await _attempt(db, game_code, round_id, 10, 0, 0)
+    await _attempt(db, game_code, round_id, True, False, False)
 
     await _force_buzz(db, game_code, round_id, t2)
-    await _attempt(db, game_code, round_id, 0, 5, 0)
+    await _attempt(db, game_code, round_id, False, True, False)
 
     row = await db.fetchrow(
         "SELECT title_claimed_by, artist_claimed_by FROM game_rounds WHERE id = $1",
@@ -198,10 +204,10 @@ async def test_award_attempt_title_already_claimed_raises(
     t2 = await create_test_team(db, game_code, name="T2")
     round_id = await _start_round_and_buzz(db, game_code, t1)
 
-    await _attempt(db, game_code, round_id, 10, 0, 0)
+    await _attempt(db, game_code, round_id, True, False, False)
     await _force_buzz(db, game_code, round_id, t2)
     with pytest.raises(asyncpg.PostgresError) as exc:
-        await _attempt(db, game_code, round_id, 10, 0, 0)
+        await _attempt(db, game_code, round_id, True, False, False)
     assert exc.value.sqlstate == "P0001"
 
 
@@ -214,7 +220,7 @@ async def test_award_attempt_wrong_with_correct_raises(
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
     with pytest.raises(asyncpg.PostgresError) as exc:
-        await _attempt(db, game_code, round_id, 10, 0, 3)
+        await _attempt(db, game_code, round_id, True, False, True)
     assert exc.value.sqlstate == "P0001"
 
 
@@ -226,7 +232,7 @@ async def test_award_attempt_no_buzz_held_raises(db: asyncpg.Connection) -> None
     round_id = await db.fetchval("SELECT start_round($1, $2)", game_code, song_id)
 
     with pytest.raises(asyncpg.PostgresError) as exc:
-        await _attempt(db, game_code, round_id, 10, 0, 0)
+        await _attempt(db, game_code, round_id, True, False, False)
     assert exc.value.sqlstate == "P0001"
 
 
@@ -236,7 +242,7 @@ async def test_award_attempt_round_not_found_raises(
 ) -> None:
     game_code = await create_test_game(db, status="playing")
     with pytest.raises(asyncpg.PostgresError) as exc:
-        await _attempt(db, game_code, uuid.uuid4(), 10, 0, 0)
+        await _attempt(db, game_code, uuid.uuid4(), True, False, False)
     assert exc.value.sqlstate == "P0002"
 
 
@@ -278,7 +284,7 @@ async def test_award_attempt_after_end_round_raises(db: asyncpg.Connection) -> N
 
     await db.execute("SELECT end_round($1, $2)", game_code, round_id)
     with pytest.raises(asyncpg.PostgresError) as exc:
-        await _attempt(db, game_code, round_id, 10, 0, 0)
+        await _attempt(db, game_code, round_id, True, False, False)
     assert exc.value.sqlstate == "P0001"
 
 
@@ -294,7 +300,7 @@ async def test_award_attempt_wrong_before_correct_penalizes(
     team_id = await create_test_team(db, game_code)
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
-    rows = await _attempt(db, game_code, round_id, 0, 0, 3)
+    rows = await _attempt(db, game_code, round_id, False, False, True)
     assert rows[0]["points_delta"] == -3
 
 
@@ -309,11 +315,11 @@ async def test_award_attempt_wrong_after_correct_no_penalty(
     round_id = await _start_round_and_buzz(db, game_code, t1)
 
     # T1 scores title correct -> activates free_guess flag for the round.
-    await _attempt(db, game_code, round_id, 10, 0, 0)
+    await _attempt(db, game_code, round_id, True, False, False)
 
     # T2 buzzes wrong on artist -> free, delta = 0.
     await _force_buzz(db, game_code, round_id, t2)
-    rows = await _attempt(db, game_code, round_id, 0, 0, 3)
+    rows = await _attempt(db, game_code, round_id, False, False, True)
     assert rows[0]["points_delta"] == 0
     t2_score = await db.fetchval("SELECT score FROM game_teams WHERE id = $1", t2)
     assert t2_score == 0
@@ -331,15 +337,15 @@ async def test_award_attempt_free_guess_clears_after_one_attempt(
     round_id = await _start_round_and_buzz(db, game_code, t1)
 
     # T1 title -> flag on
-    await _attempt(db, game_code, round_id, 10, 0, 0)
+    await _attempt(db, game_code, round_id, True, False, False)
 
     # T2 wrong -> 0 (free), flag off
     await _force_buzz(db, game_code, round_id, t2)
-    await _attempt(db, game_code, round_id, 0, 0, 3)
+    await _attempt(db, game_code, round_id, False, False, True)
 
     # T3 wrong -> -3 (flag was consumed)
     await _force_buzz(db, game_code, round_id, t3)
-    rows = await _attempt(db, game_code, round_id, 0, 0, 3)
+    rows = await _attempt(db, game_code, round_id, False, False, True)
     assert rows[0]["points_delta"] == -3
 
 
@@ -354,17 +360,17 @@ async def test_award_attempt_free_guess_reactivates_on_subsequent_correct(
     round_id = await _start_round_and_buzz(db, game_code, t1)
 
     # T1 title -> flag on. T2 wrong -> free, flag off.
-    await _attempt(db, game_code, round_id, 10, 0, 0)
+    await _attempt(db, game_code, round_id, True, False, False)
     await _force_buzz(db, game_code, round_id, t2)
-    await _attempt(db, game_code, round_id, 0, 0, 3)
+    await _attempt(db, game_code, round_id, False, False, True)
 
     # T2 artist correct -> flag re-activates.
     await _force_buzz(db, game_code, round_id, t2)
-    await _attempt(db, game_code, round_id, 0, 5, 0)
+    await _attempt(db, game_code, round_id, False, True, False)
 
     # T1 wrong on the (now exhausted) round? Both tokens claimed, so wrong is the only valid call.
     await _force_buzz(db, game_code, round_id, t1)
-    rows = await _attempt(db, game_code, round_id, 0, 0, 3)
+    rows = await _attempt(db, game_code, round_id, False, False, True)
     assert rows[0]["points_delta"] == 0
 
 
@@ -385,7 +391,7 @@ async def test_award_attempt_combined_update_preserves_unset_columns(
     t2 = await create_test_team(db, game_code, name="T2")
     round_id = await _start_round_and_buzz(db, game_code, t1)
 
-    await _attempt(db, game_code, round_id, 10, 0, 0)
+    await _attempt(db, game_code, round_id, True, False, False)
     row = await db.fetchrow(
         "SELECT title_claimed_by, title_points, artist_claimed_by, artist_points, "
         "wrong_buzz_penalty, free_guess_active FROM game_rounds WHERE id = $1",
@@ -401,7 +407,7 @@ async def test_award_attempt_combined_update_preserves_unset_columns(
     # A wrong on the same round: penalty is waived (free-guess), free_guess flips
     # off, and the earlier title claim is preserved (CASE ELSE keeps it).
     await _force_buzz(db, game_code, round_id, t2)
-    await _attempt(db, game_code, round_id, 0, 0, 3)
+    await _attempt(db, game_code, round_id, False, False, True)
     row2 = await db.fetchrow(
         "SELECT title_claimed_by, wrong_buzz_penalty, free_guess_active "
         "FROM game_rounds WHERE id = $1",
@@ -428,7 +434,7 @@ async def test_award_attempt_noop_continue_writes_nothing_to_round(
         "wrong_buzz_penalty, free_guess_active FROM game_rounds WHERE id = $1",
         round_id,
     )
-    await _attempt(db, game_code, round_id, 0, 0, 0)
+    await _attempt(db, game_code, round_id, False, False, False)
     after = await db.fetchrow(
         "SELECT title_claimed_by, artist_claimed_by, title_points, artist_points, "
         "wrong_buzz_penalty, free_guess_active FROM game_rounds WHERE id = $1",
@@ -447,7 +453,7 @@ async def test_award_attempt_artist_correct_keeps_lock(db: asyncpg.Connection) -
     team_id = await create_test_team(db, game_code)
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
-    await _attempt(db, game_code, round_id, 0, 5, 0)
+    await _attempt(db, game_code, round_id, False, True, False)
 
     locked = await db.fetchval(
         "SELECT buzzed_team_id FROM active_games WHERE game_code = $1", game_code
@@ -462,7 +468,7 @@ async def test_award_attempt_wrong_clears_lock(db: asyncpg.Connection) -> None:
     team_id = await create_test_team(db, game_code)
     round_id = await _start_round_and_buzz(db, game_code, team_id)
 
-    await _attempt(db, game_code, round_id, 0, 0, 3)
+    await _attempt(db, game_code, round_id, False, False, True)
 
     locked = await db.fetchval(
         "SELECT buzzed_team_id, locked_at FROM active_games WHERE game_code = $1",
@@ -476,12 +482,12 @@ async def test_award_attempt_wrong_clears_lock(db: asyncpg.Connection) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "title_pts, artist_pts",
-    [(10, 0), (0, 5), (10, 5)],
+    "title_correct, artist_correct",
+    [(True, False), (False, True), (True, True)],
     ids=["title", "artist", "both"],
 )
 async def test_award_attempt_correct_refreshes_locked_at(
-    db: asyncpg.Connection, title_pts: int, artist_pts: int
+    db: asyncpg.Connection, title_correct: bool, artist_correct: bool
 ) -> None:
     """A correct attempt keeps the buzzing team on the floor but bumps
     locked_at so the clients' answer countdown restarts for the other token."""
@@ -496,7 +502,7 @@ async def test_award_attempt_correct_refreshes_locked_at(
         game_code,
     )
 
-    await _attempt(db, game_code, round_id, title_pts, artist_pts, 0)
+    await _attempt(db, game_code, round_id, title_correct, artist_correct, False)
 
     row = await db.fetchrow(
         "SELECT buzzed_team_id, locked_at, "
@@ -523,7 +529,7 @@ async def test_award_attempt_noop_continue_leaves_lock_untouched(
         "WHERE game_code = $1",
         game_code,
     )
-    await _attempt(db, game_code, round_id, 0, 0, 0)
+    await _attempt(db, game_code, round_id, False, False, False)
 
     row = await db.fetchrow(
         "SELECT buzzed_team_id, "
@@ -604,7 +610,7 @@ async def test_award_attempt_wrong_token_raises(db: asyncpg.Connection) -> None:
     bogus = uuid.uuid4()
     with pytest.raises(asyncpg.PostgresError) as exc:
         await db.fetch(
-            "SELECT points_delta FROM award_attempt($1, $2, 10, 0, 0, $3)",
+            "SELECT points_delta FROM award_attempt($1, $2, true, false, false, $3)",
             game_code,
             round_id,
             bogus,
@@ -625,7 +631,7 @@ async def test_award_attempt_null_token_raises(db: asyncpg.Connection) -> None:
 
     with pytest.raises(asyncpg.PostgresError) as exc:
         await db.fetch(
-            "SELECT points_delta FROM award_attempt($1, $2, 10, 0, 0, $3)",
+            "SELECT points_delta FROM award_attempt($1, $2, true, false, false, $3)",
             game_code,
             round_id,
             None,
@@ -639,7 +645,7 @@ async def test_award_attempt_unknown_game_raises(db: asyncpg.Connection) -> None
     'manager_token_required', when no row exists for the code at all."""
     with pytest.raises(asyncpg.PostgresError) as exc:
         await db.fetch(
-            "SELECT points_delta FROM award_attempt($1, $2, 10, 0, 0, $3)",
+            "SELECT points_delta FROM award_attempt($1, $2, true, false, false, $3)",
             "ZZZZZZ",
             uuid.uuid4(),
             uuid.uuid4(),
