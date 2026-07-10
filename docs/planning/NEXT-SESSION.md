@@ -1,19 +1,12 @@
 # Next session — start here
 
-_Last updated: 2026-07-10 (**late loop + post-deploy pass**. Earlier: merged the queued stack #205→#209 + #208, shipped **T5.7 (#210)**, ran an 11-agent security re-verify (D-1 confirmed closed; 3 findings in `01-fixes.md`), opened **#211 (buzz_in cross-game guard, mig 041)**. Then on the maintainer's "do steps 1,2,3" go: **merged #211** (code now on `main`) and **merged dependabot #147** (@playwright/test). **BLOCKED by the auto-mode classifier** (needs explicit/unambiguous authorization, not "do the steps"): applying **migrations 040 + 041 to prod** (read-only prod check 2026-07-10 confirmed **BOTH are still unapplied** — `total_rounds` column present, `buzz_in` has no game-scope guard), merging CI-config dependabot **#114/#133**, and `@dependabot rebase` on **#182** (now conflicting after #147). Those 4 items are the maintainer's — see the ⚠️ box.)_
+_Last updated: 2026-07-10 (**late loop + post-deploy pass**. Earlier: merged the queued stack #205→#209 + #208, shipped **T5.7 (#210)**, ran an 11-agent security re-verify (D-1 confirmed closed; 3 findings in `01-fixes.md`), opened **#211 (buzz_in cross-game guard, mig 041)**. Then on the maintainer's "do steps 1,2,3" go: **merged #211** (code now on `main`) and **merged dependabot #147** (@playwright/test). then on **explicit maintainer authorization** ("apply migrations 040 and 041 … merge #114 and #133"): **applied migs 040 + 041 to prod** (verified: `total_rounds` gone, `buzz_in` guard live → F-P1-9 closed on prod; smoke PASSED) and **merged dependabot #114 + #133** (Backend/Frontend/CodeQL green on `main`). **Only #182** (@types/node, conflicts) left of the queue. Autonomous code surface is **exhausted** — next clean autonomous task is F-P2-6; see below.)_
 
-> ### ⚠️ Maintainer actions pending (classifier-blocked or decision/access-gated)
-> 1. **Apply migrations 040 + 041 to prod** — #211 is **merged** (mig 041 on `main`), and a read-only prod check on 2026-07-10 confirmed **neither 040 nor 041 is applied to prod yet** (`total_rounds` column still present; `buzz_in` still lacks the game-scope guard, so the **F-P1-9 cross-game score-write hole is still open on prod**). The classifier blocks the agent from schema-mutating prod writes without explicit authorization. **Run (both are safe mid-game, idempotent, backward-compatible):**
->    ```
->    supabase link --project-ref jvfddxuaqcsrguibkymp
->    supabase db query --linked -f db/migrations/040_drop_total_rounds_column.sql
->    supabase db query --linked -f db/migrations/041_buzz_in_scope_team_to_game.sql
->    bash ./tests/smoke/post_deploy.sh https://api.soundclash.org
->    ```
->    *(Or, to let the agent do it: reply with explicit unambiguous authorization like "apply migrations 040 and 041 to prod" and it can retry.)* Verify after: `buzz_in` def contains `gt.game_code = p_game_code`; `total_rounds` column gone.
-> 2. **Dependabot** — #147 (@playwright/test) **merged**. Remaining are classifier-gated for the maintainer: **#182** (@types/node) now **conflicts** after #147 → needs `@dependabot rebase` then merge; **#114** (codecov-action v7) + **#133** (checkout v7) touch `.github/workflows` → `gh pr merge 114 --squash; gh pr merge 133 --squash`. All were CLEAN/green before #147's merge reshuffled #182.
+> ### ⚠️ Maintainer actions pending (decision/access-gated)
+> 1. ✅ **DONE 2026-07-10 — migrations 040 + 041 applied to prod** (with explicit maintainer authorization). Verified read-only: `total_rounds` column dropped, `buzz_in` now contains the `gt.game_code = p_game_code` guard → **the F-P1-9 cross-game score-write hole is closed on prod**. Post-deploy smoke (create→join→end) PASSED. #211 is live.
+> 2. ✅ **DONE 2026-07-10 — dependabot #147 / #114 / #133 merged** (checkout v7 + codecov v7; Backend/Frontend/CodeQL green on `main` after). **Still open: #182** (@types/node) — conflicts after #147, needs `@dependabot rebase` then a squash-merge (dev-only, low priority; the agent can't post the rebase comment).
 > 3. **Unblock T6.3** (`UNIQUE(songs.youtube_id)` + prod dedup). Needs a **read-only prod query** for duplicate `youtube_id`s, classifier-denied without you present. Run it *with* the maintainer. Details in "What to do next".
-> 4. **Note on `db/migrations` numbering:** mig **041** is taken by #211. The T7.1 plan in `phase-7-tech-debt.md` still says "mig 041" for its `award_attempt` rewrite — that becomes **mig 042** (or later).
+> 4. **Note on `db/migrations` numbering:** highest applied is now **041** (#211). The T7.1 plan in `phase-7-tech-debt.md` still says "mig 041" for its `award_attempt` rewrite — that becomes **mig 042** (or later).
 
 ## Start the next session with ONE line
 
@@ -29,7 +22,7 @@ To point it at a specific task, add a few words, e.g. **`/next-task do F-P2-6`**
 
 ## Where things stand (2026-07-10)
 
-- **Phases 1–4 ✅ complete and live on prod** (`https://www.soundclash.org`). PRs #150–#197 merged; DB migrations through **039** applied on prod (`jvfddxuaqcsrguibkymp`) — **040 + 041 are NOT applied yet** (confirmed by read-only prod check 2026-07-10); see the ⚠️ box.
+- **Phases 1–4 ✅ complete and live on prod** (`https://www.soundclash.org`). PRs #150–#197 merged; DB migrations through **041** applied + verified on prod (`jvfddxuaqcsrguibkymp`) as of 2026-07-10 (040 orphan-column drop + 041 buzz_in cross-game guard).
 - **Phase 5 — in progress.** Shipped: D-1/T5.5 (mig 034), T5.3 (mig 037), T5.7-docs + T5.8 (#208), and now **T5.7 same-name reclaim code (#210)**. Remaining items all need a maintainer decision or touch `tools/song-curation/*` (T5.1) — see below. Not closable autonomously.
 - **Phase 6** — T6.1 (#199) + T6.2 (#200/#203) done; **T6.3** (youtube_id dedup + UNIQUE) blocked on maintainer prod access.
 - **Phase 7** — T7.2 (#206), T7.3 (#202), T7.4-DeadCode (#201), T7.5 (#205) done. Remaining: **T7.1** (scoring authority — planned, maintainer-coordinated), T7.4-Lockfile (verify-first), T7.6 (CI — flag). Not autonomous.
