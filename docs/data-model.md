@@ -354,7 +354,8 @@ db/migrations/
 ├── 040_drop_total_rounds_column.sql -- finally DROP the orphan active_games.total_rounds (mig 015 only relaxed it)
 ├── 041_buzz_in_scope_team_to_game.sql -- buzz_in only locks for a team that belongs to the game (EXISTS guard); closes a cross-game score-write vector
 ├── 042_songs_youtube_id_unique.sql   -- enforce UNIQUE(songs.youtube_id) via idempotent UNIQUE INDEX; one catalog row per YouTube video
-└── 043_award_attempt_boolean_overload.sql -- scoring authority in the DB (T7.1): boolean overload of award_attempt derives +10/+5/−3 server-side, added alongside the integer overload (mig 044 drops the latter)
+├── 043_award_attempt_boolean_overload.sql -- scoring authority in the DB (T7.1): boolean overload of award_attempt derives +10/+5/−3 server-side, added alongside the integer overload
+└── 044_drop_award_attempt_integer_overload.sql -- drop the now-dead integer overload of award_attempt once the boolean-sending frontend soaked; boolean signature is now the sole one
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.

@@ -188,9 +188,10 @@ Frontend wrapper: `frontend/src/hooks/useManagerActions.ts::awardAttemptDirect`
 **Scoring authority (migration 043, T7.1).** The wire carries only booleans; the
 DB derives the magnitudes (`+10 / +5 / −3`), so the client can't send an arbitrary
 value. Migration 043 added this boolean overload **alongside** the legacy integer
-one (`p_title / p_artist / p_wrong_buzz`, mig 036) so the two can be deployed
-independently; migration 044 later drops the integer overload. See
-`rpc-functions.md §3`.
+one (`p_title / p_artist / p_wrong_buzz`, mig 036) so the two could be deployed
+independently; migration 044 then dropped the integer overload once the
+boolean-sending frontend had soaked, leaving the boolean signature as the sole
+overload. See `rpc-functions.md §3`.
 
 **Behavior**:
 - `p_correct_title = true` → +10 to the buzzed team; claims the TITLE token.
