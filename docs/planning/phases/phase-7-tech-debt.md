@@ -32,7 +32,7 @@
 - ~~`T-KeepWarm`~~ ✅ already implemented (`useKeepBackendWarm.ts`, wired in `ManagerConsolePage`).
 
 ### T7.4 · Dead code + hygiene `[S]` — T-DeadCode, T-Lockfile
-- [ ] One sweep: delete `Scoreboard.{tsx,test.tsx,module.css}` + CLAUDE.md mention; remove `create-page-after-fix.png` at repo root. (`screenshots/`/`.playwright-mcp/` verified untracked.)
+- [x] One sweep: deleted `Scoreboard.{tsx,test.tsx,module.css}` (dead — nothing imported it) + CLAUDE.md mention + the stale `testing-strategy.md` test-table row + two illustrative code comments; removed the tracked `create-page-after-fix.png` at repo root. Frontend format/lint/typecheck/test (445) green. (PR #201 — done 2026-07-10 while T6.3 waits on maintainer.)
 - [ ] Un-ignore `frontend/package-lock.json` after re-verifying the npm-10 runner bug is gone (deploy reproducibility). **Verify before flipping.**
 
 ### T7.5 · Test hardening `[M]` — T-RLSFix, T-CascadeTest
