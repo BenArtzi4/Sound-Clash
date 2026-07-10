@@ -1,0 +1,20 @@
+-- 042_songs_youtube_id_unique.sql
+-- Integrity: enforce one catalog row per YouTube video.
+--
+-- songs.youtube_id (char(11) NOT NULL, mig 002) had no uniqueness constraint,
+-- so nothing at the DB level stopped two songs rows pointing at the same
+-- YouTube video. The bulk-CSV importer already dedupes on youtube_id and the
+-- admin CRUD path is single-row, but a data-entry slip or a direct write could
+-- still create a duplicate -- which would then let the same video surface twice
+-- in one game's pool. This constraint makes duplicates impossible at the source.
+--
+-- Prod was verified dupe-free on youtube_id before adding (read-only prod query,
+-- 2026-07-10), so no dedup / data-merge is needed -- purely additive. NB: the
+-- known Avicii "Wake Me Up" pair is two DISTINCT youtube_ids (a same-song,
+-- different-video double upload), not a youtube_id duplicate.
+--
+-- Idempotent: a UNIQUE INDEX (which enforces uniqueness exactly like a UNIQUE
+-- constraint) created with IF NOT EXISTS is a clean no-op on re-apply. A bare
+-- ALTER TABLE ... ADD CONSTRAINT would error on the second pass, so it is
+-- avoided -- CI applies the whole migration set twice to verify idempotency.
+CREATE UNIQUE INDEX IF NOT EXISTS songs_youtube_id_key ON songs (youtube_id);
