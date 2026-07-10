@@ -1,6 +1,6 @@
 # Sound Clash: Data Model
 
-The schema for Postgres on Supabase. Six tables, two halves: durable catalog and ephemeral game state.
+The schema for Postgres on Supabase. Eleven tables in three groups: a **durable song catalog** (`songs`, `genres`, `song_genres`), **ephemeral per-game state** (`active_games`, `game_secrets`, `game_teams`, `game_rounds`, `game_round_attempts`) that cascade-deletes ~4h after game creation, and a **durable game-history archive** (`game_history`, `game_history_teams`, `game_history_songs`, mig 033) snapshotted at game end and never pruned.
 
 For PL/pgSQL function bodies that mutate this schema, see **`rpc-functions.md`**.
 For RLS policies and access matrix, see **`security-rls.md`**.
@@ -294,7 +294,7 @@ The 014 migration dropped `source_points` and `timeout_penalty` columns. The 016
 
 ## 5. Row-Level Security (summary)
 
-Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the `buzz_in` RPC (the only function `anon` is granted EXECUTE on). The exceptions are the durable history tables (`game_history*`, mig 033), the secret table (`game_secrets`, mig 034), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
+Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the six anon-EXECUTE RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The exceptions are the durable history tables (`game_history*`, mig 033), the secret table (`game_secrets`, mig 034), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
 
 Full policy DDL and threat model: see **`security-rls.md`**.
 
@@ -304,10 +304,14 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 
 | Function | Purpose | Caller |
 |---|---|---|
-| `buzz_in(p_game_code, p_team_id)` | Atomic buzzer lock | Browser via PostgREST |
-| `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | FastAPI |
-| `award_attempt(p_game_code, p_round_id, p_title, p_artist, p_wrong_buzz)` | Score one buzz; round stays open | FastAPI |
-| `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | FastAPI |
+| `buzz_in(p_game_code, p_team_id)` | Atomic buzzer lock | Browser via PostgREST (anon) |
+| `award_attempt(p_game_code, p_round_id, p_title, p_artist, p_wrong_buzz, p_manager_token)` | Score one buzz; round stays open | Browser via PostgREST (`manager_token`) |
+| `release_buzz_lock(p_game_code, p_manager_token)` | "Continue round" — clear the buzzer lock so play resumes | Browser via PostgREST (`manager_token`) |
+| `select_next_song(p_game_code, p_manager_token, p_song_id DEFAULT NULL)` | Close the prior round and open the next on an unplayed song | Browser via PostgREST (`manager_token`) |
+| `peek_next_song(p_game_code, p_manager_token)` | Read-only next-song candidate for prebuffering (no round advance) | Browser via PostgREST (`manager_token`) |
+| `extend_game(p_game_code, p_manager_token)` | Push `expires_at` out by 1h ("Keep playing +1h") | Browser via PostgREST (`manager_token`) |
+| `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | Internal (called by `select_next_song`) |
+| `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal (called by `select_next_song`) |
 | `award_bonus(p_game_code, p_team_id, p_points DEFAULT 4)` | Host-discretion bonus to a team | FastAPI |
 | `end_game(p_game_code)` | Archive, then mark game ended | FastAPI |
 | `cleanup_expired_games()` | Archive expiring games, then TTL-sweep | pg_cron |

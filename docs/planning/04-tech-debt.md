@@ -38,9 +38,9 @@ Steady autonomous cleanup that makes the app easier to keep production-perfect. 
 
 Docs are the authoritative spec; these are bugs by the repo's own rule. **Re-verified 2026-07-07:** the original "76 findings" headline had no backing item list, and most named drifts were fixed by the Phase 1–3 doc syncs (T-DocRPC done; the 409-vs-410 contracts claim turned out false — code returns 409). What actually remains fits one small sync PR:
 
-- **T-DocDataModel · `docs/data-model.md` residual drift.** `[S]` Intro still says "Six tables" (there are ten); §5/§6 still claim `buzz_in` is the only anon-EXECUTE function (false — five anon-callable RPCs). The `game_round_attempts`/history-table omissions were already fixed.
-- **T-DocContracts · `api-contracts.md` anon surface + removed endpoints.** `[S]` Line ~329 still says "Only one function is exposed to anon: `buzz_in`"; line ~71 still lists the removed `select-song`/`attempt`/`end-round` under X-Manager-Token.
-- **T-DocGameRules · `game-rules.md` state table attributes host transitions to "(admin auth)"** — pre-open-hosting; it's `manager_token` now.
+- ~~**T-DocDataModel · `docs/data-model.md` residual drift.**~~ ✅ **Done (PR #199, T6.1).** Intro → eleven tables in three groups (the "ten" estimate missed `game_round_attempts`, a real table absent from the §2 DDL block); §5/§6 → the six anon-EXECUTE RPCs (incl. `extend_game`, mig 039); §6 caller column corrected.
+- ~~**T-DocContracts · `api-contracts.md` anon surface + removed endpoints.**~~ ✅ **Done (PR #199, T6.1).** §3 "only one function exposed to anon" line fixed. The X-Manager-Token list (~line 71) was already corrected in an earlier Phase 4 sync — no removed endpoints remained.
+- ~~**T-DocGameRules · `game-rules.md` state table attributes host transitions to "(admin auth)"**~~ ✅ **Done (PR #199, T6.1).** State table → open-hosting / `manager_token` model.
 
 (The `CLAUDE.md` Scoreboard mention goes with T-DeadCode when the component is deleted; the runbook's stale legacy-AWS-fallback line and its build-docs pointer were fixed in the 2026-07 planning reorg.)
 

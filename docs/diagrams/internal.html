@@ -40,7 +40,7 @@ flowchart TB
     subgraph RENDER["FastAPI on Render"]
         direction TB
         Health["/health"]
-        Games["/games/*<br/>create / join / select-song /<br/>award-points / bonus / end / kick"]
+        Games["/games/*<br/>create / join /<br/>bonus / end / kick"]
         Admin["/admin/songs<br/>CRUD + bulk-import"]
         Genres["/genres"]
     end
@@ -103,9 +103,9 @@ flowchart TB
         <tbody>
           <tr><td>Anonymous browser</td><td><code>POST /games</code></td><td>none</td><td>Open hosting; returns the per-game <code>manager_token</code></td></tr>
           <tr><td>Anonymous browser</td><td><code>POST /games/{code}/teams</code></td><td>none</td><td>Players just need to know the code</td></tr>
-          <tr><td>Anonymous browser</td><td><code>supabase.rpc('buzz_in')</code></td><td>anon JWT (RLS)</td><td>Hot path; the only RPC <code>anon</code> is <code>GRANT EXECUTE</code>'d on</td></tr>
-          <tr><td>Anonymous browser</td><td><code>SELECT</code> on game-scoped rows</td><td>anon JWT (RLS)</td><td>RLS allows SELECT, denies all writes</td></tr>
-          <tr><td>Manager browser</td><td><code>POST /games/{code}/{select-song,award-points,bonus,end}</code></td><td><code>X-Manager-Token</code></td><td>Per-game uuid stored on <code>active_games</code>, mirrored in localStorage</td></tr>
+          <tr><td>Anonymous browser</td><td><code>supabase.rpc('buzz_in')</code></td><td>anon key</td><td>Buzzer hot path; one of six RPCs <code>anon</code> can EXECUTE (see <code>security-rls.md</code>)</td></tr>
+          <tr><td>Anonymous browser</td><td><code>SELECT</code> on game-scoped rows</td><td>anon key (RLS)</td><td>RLS allows SELECT, denies all writes</td></tr>
+          <tr><td>Manager browser</td><td><code>POST /games/{code}/{bonus,end}</code> + token-gated RPCs (<code>award_attempt</code>, <code>release_buzz_lock</code>, <code>select_next_song</code>, <code>peek_next_song</code>, <code>extend_game</code>)</td><td><code>X-Manager-Token</code> (REST) / <code>p_manager_token</code> (RPC)</td><td>Per-game uuid in <code>game_secrets</code> (mig 034), mirrored in localStorage</td></tr>
           <tr><td>Manager browser</td><td><code>DELETE /games/{code}/teams/{team_id}</code></td><td><code>X-Manager-Token</code></td><td>Same</td></tr>
           <tr><td>Admin browser</td><td><code>/admin/songs/*</code></td><td><code>X-Admin-Password</code></td><td>Single env-var password, constant-time compared</td></tr>
           <tr><td>FastAPI itself</td><td>Anything via <code>supabase-py</code></td><td>service-role key</td><td>Server-side only; never reaches the browser bundle</td></tr>
