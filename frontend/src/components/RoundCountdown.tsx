@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { serverTimeNow } from "../hooks/useServerTime";
 
 // Owns its own per-second `now` tick so re-rendering the timer doesn't
-// re-render the surrounding page tree (Scoreboard, BuzzButton, YouTubePlayer
+// re-render the surrounding page tree (BuzzButton, YouTubePlayer
 // etc.). Each parent (DisplayPage, TeamGameplayPage) passes its own CSS
 // module styles so the visual block stays page-specific. The styles map is
 // typed as Record<string,string> because Vite's CSSModuleClasses doesn't

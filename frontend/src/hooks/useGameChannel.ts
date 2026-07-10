@@ -105,7 +105,7 @@ function roundEqual(a: GameRound, b: GameRound): boolean {
 // Compare a freshly-hydrated payload against the current reducer state. If
 // every field the UI consumes matches, returning the same state reference from
 // the reducer lets React skip the whole render cascade. The periodic resync
-// hits this path for every quiet 20s interval — Scoreboard, BuzzButton, the
+// hits this path for every quiet 20s interval — BuzzButton, the
 // YouTubePlayer wrapper, etc. all stop re-rendering on backstop ticks.
 function hydrateUnchanged(
   state: GameState,
