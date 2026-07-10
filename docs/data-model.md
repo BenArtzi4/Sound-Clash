@@ -350,7 +350,8 @@ db/migrations/
 ├── 037_lock_down_game_round_attempts.sql -- remove game_round_attempts from the Realtime publication + enable RLS
 ├── 038_peek_next_song_metadata.sql -- peek_next_song also returns the candidate's title/artist/is_soundtrack so Next-round can label the song in-gesture
 ├── 039_extend_game.sql          -- token-gated "Keep playing +1h" TTL bump: expires_at = GREATEST(expires_at, now()) + 1h
-└── 040_drop_total_rounds_column.sql -- finally DROP the orphan active_games.total_rounds (mig 015 only relaxed it)
+├── 040_drop_total_rounds_column.sql -- finally DROP the orphan active_games.total_rounds (mig 015 only relaxed it)
+└── 041_buzz_in_scope_team_to_game.sql -- buzz_in only locks for a team that belongs to the game (EXISTS guard); closes a cross-game score-write vector
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
