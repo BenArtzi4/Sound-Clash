@@ -1,6 +1,6 @@
 # Next session — start here
 
-_Last updated: 2026-07-10 (**Phase 6 T6.1 ✅ done** — PR #199, docs-only drift sync merged. **Next: T6.2 — drop the orphan `active_games.total_rounds` column (migration PR).**)_
+_Last updated: 2026-07-10 (**Phase 6 T6.2 ✅ done** — PR #TBD, mig 040 drops the orphan `active_games.total_rounds` column. **Next: T6.3 — `UNIQUE(songs.youtube_id)` + a one-time prod dedup (migration PR; the prod dedup mutation needs maintainer go).**)_
 
 ## Short prompt to paste into the fresh session
 
@@ -17,14 +17,17 @@ _Last updated: 2026-07-10 (**Phase 6 T6.1 ✅ done** — PR #199, docs-only drif
 - **Pre-event validation done** (10-team live-prod pass 2026-07-05 + DB-verified 10-team/30-round e2e 2026-07-06); the two display-scaling bugs it found are fixed (PRs #176/#178). No open blockers. Reusable checklist: `docs/pre-event-checklist.md`.
 - **Phases 5–8 not started**, but re-verification shrank them: Phase 5's critical item (D-1) and T5.3 already shipped; Phase 6 is down to one doc-sync PR + two migrations; Phase 7 lost T-KeepWarm/T-DocRPC (done). Recommended order after Phase 4: **6 → 7 → 5 → 8** (see `phases/README.md`).
 
-## What to do next — Phase 6 (T6.2: drop the orphan `total_rounds` column)
+## What to do next — Phase 6 (T6.3: `UNIQUE(songs.youtube_id)` + prod dedup)
 
-**T6.1 ✅ done (PR #199)** — docs-only drift sync merged: `data-model.md` intro (→ eleven tables, three groups), §5/§6 anon-EXECUTE set (→ the six anon RPCs) + §6 caller column; `api-contracts.md` §3 anon-surface line; `game-rules.md` state-transition auth column (→ open-hosting / `manager_token`); plus the same drift class caught in `architecture.md`, `diagrams/internal.md` and its `internal.html` mirror. (Discovered while doing it: the plan's "ten tables" was one short — `game_round_attempts` is a real table absent from the §2 DDL block; and `api-contracts.md` line 71's endpoint list was already correct from a Phase 4 sync.)
+**T6.1 ✅ done (PR #199)** — docs-only drift sync merged (eleven-table intro, six anon RPCs, open-hosting auth model across `data-model.md`/`api-contracts.md`/`game-rules.md`/`architecture.md`/`diagrams/*`).
 
-Next is **T6.2**, a single migration PR:
+**T6.2 ✅ done (PR #TBD)** — mig `040_drop_total_rounds_column.sql` drops the orphan `active_games.total_rounds` (mig 015 only relaxed its NOT NULL). Re-verified zero code refs (grep hits only mig 003/015 + docs); applied twice on the local stack (idempotent skip on #2); a create-game INSERT that omits the column still succeeds; `data-model.md` ledger synced (015 note + 038/039/040 appended). **Prod apply is still pending maintainer go** — it's a hard-required-nothing drop, so run it in a quiet window: `supabase db query --linked -f db/migrations/040_drop_total_rounds_column.sql`.
 
-1. Migration `ALTER TABLE active_games DROP COLUMN IF EXISTS total_rounds` (mig 015 promised it but only relaxed the NOT NULL). Confirm no code path reads/writes `total_rounds` (verified none as of 2026-07-07 — re-verify frontend + backend + RPCs), sync `data-model.md`, apply the migration twice against a local `supabase start` stack for idempotency. (T-TotalRounds)
-2. Then **T6.3** (`UNIQUE(songs.youtube_id)` + a one-time prod dedup) is a separate single-session migration PR.
+Next is **T6.3**, a single migration PR (**D-8 = youtube_id now**):
+
+1. One-time dedup on prod's catalog: identify duplicate `youtube_id`s, merge them, repoint `song_genres`, delete the losers. (The known Avicii "Wake Me Up" double-upload is a same-song-different-*video* case — two distinct `youtube_id`s — so it is NOT a `youtube_id` dupe and must be left alone.) **This mutates prod data → needs maintainer go before applying.**
+2. Add the `UNIQUE(songs.youtube_id)` index migration (idempotent) once the catalog is clean.
+3. Verify no dedup regression: sane row counts, no orphaned `song_genres`, song selection still works (no repeats within a game).
 
 Migration PRs run backend/db CI. After merge + maintainer go, apply to prod (`supabase db query --linked`). Recommended phase order after 6: **7 → 5 → 8** (see `phases/README.md`).
 
