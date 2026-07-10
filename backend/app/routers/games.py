@@ -117,6 +117,29 @@ def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dic
     if _is_expired(game):
         raise GoneError(f"game {code} has expired")
 
+    # Idempotent reclaim (D-4 / F-P2-1): if a team with this exact
+    # (game_code, name) already exists, return it instead of inserting a
+    # duplicate. This lets a player who refreshed/lost their tab rejoin with
+    # the same name and resume their existing team (same id, preserved score)
+    # rather than get a fresh score-0 row or a 409. game_teams has a
+    # UNIQUE (game_code, name) constraint (migration 003), so the tiny
+    # select-then-insert race window (two simultaneous same-name joins) is
+    # closed by the DB: the loser hits the unique violation → 409, no
+    # duplicate row. Acceptable for casual play; the host is the integrity
+    # check (D-4, resolved — no per-team tokens).
+    with mapped_postgrest_errors():
+        existing = (
+            client.table("game_teams")
+            .select("*")
+            .eq("game_code", code)
+            .eq("name", name)
+            .limit(1)
+            .execute()
+        )
+    existing_rows = existing.data or []
+    if existing_rows:
+        return dict(existing_rows[0])
+
     with mapped_postgrest_errors():
         resp = client.table("game_teams").insert({"game_code": code, "name": name}).execute()
     rows = resp.data or []
