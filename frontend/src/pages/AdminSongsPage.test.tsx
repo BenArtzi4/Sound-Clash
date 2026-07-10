@@ -237,6 +237,69 @@ describe("AdminSongsPage: list", () => {
       expect(listSongs).toHaveBeenCalledWith(expect.objectContaining({ page: 2 }), "letmein");
     });
   });
+
+  it("clamps the page index back into range when the result set shrinks (delete on the last page)", async () => {
+    // Pure fake timers for full determinism: nothing (including the one-shot
+    // search debounce that also calls setPage(1)) advances unless we explicitly
+    // flush it, so the debounce can't race the clamp under a loaded suite run.
+    vi.useFakeTimers();
+    const flush = async () => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300);
+      });
+    };
+    try {
+      // Three pages (110 songs); advance to page 3 (the last one).
+      vi.mocked(listSongs).mockResolvedValue({
+        items: [SONG_A],
+        page: 3,
+        per_page: 50,
+        total: 110,
+      });
+      renderPage();
+      fireEvent.change(screen.getByLabelText(/admin password/i), { target: { value: "letmein" } });
+      fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+      // Drain the initial load AND the mount debounce's setPage(1) together, so
+      // the debounce is fully consumed before any navigation.
+      await flush();
+      expect(screen.getByText(/page 1 of 3/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /next/i }));
+      await flush();
+      expect(screen.getByText(/page 2 of 3/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /next/i }));
+      await flush();
+      expect(screen.getByText(/page 3 of 3/i)).toBeInTheDocument();
+
+      // The catalog shrinks to two pages' worth (total=90): page 3 no longer
+      // exists. Being stranded on "page 3 of 2" must not happen — the delete's
+      // refetch reveals the smaller total and the clamp snaps the index back to
+      // the last real page (2) and refetches it, so the operator sees rows.
+      vi.mocked(listSongs).mockResolvedValue({
+        items: [SONG_A],
+        page: 2,
+        per_page: 50,
+        total: 90,
+      });
+      vi.mocked(deleteSong).mockResolvedValueOnce();
+      fireEvent.click(screen.getAllByRole("button", { name: /delete/i })[0]!);
+      // The confirm dialog mounts synchronously on the click (conditional render
+      // on deleteId), so no async wait is needed under the fake-timer clock.
+      const dialog = screen.getByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+      // Flush the delete refetch (reveals total=90) then the clamp's page-2 refetch.
+      await flush();
+      await flush();
+
+      // Footer clamps to "page 2 of 2" (never "page 3 of 2") and a page-2 fetch
+      // is issued, landing the operator on a page that actually has rows.
+      expect(screen.getByText(/page 2 of 2/i)).toBeInTheDocument();
+      expect(screen.queryByText(/page 3 of 2/i)).not.toBeInTheDocument();
+      expect(listSongs).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }), "letmein");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("AdminSongsPage: create + edit + delete", () => {

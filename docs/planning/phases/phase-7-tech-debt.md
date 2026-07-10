@@ -22,8 +22,8 @@
 - [ ] Behind the buzz-race + full-game gate; own PR.
 
 ### T7.2 · Decompose the god components `[M]` — T-Manager, T-Admin
-- [ ] Extract `useSongPrebuffer` + `useScoring` from `ManagerConsolePage`; leave it as layout+wiring. Existing ~48-case test guards it.
-- [ ] Extract `SongTable`/`SongEditForm`/`useAdminSongs` from `AdminSongsPage`; fix the page-index clamp cleanly.
+- [x] Extract `useSongPrebuffer` + `useScoring` from `ManagerConsolePage`; leave it as layout+wiring. Existing ~48-case test guards it. (Pure refactor; all 64 `ManagerConsolePage.test.tsx` cases stayed green unchanged. Also split out `useManagerToken` so the intentional in-render ref access is contained to one small hook — needed because the new `react-hooks/refs` rule now analyzes the slimmed-down page.)
+- [x] Extract `SongTable`/`SongEditForm`/`useAdminSongs` from `AdminSongsPage`; fix the page-index clamp cleanly. (Clamp effect snaps `page` back to `totalPages` when a delete/filter shrinks the result set; new discriminating test in `AdminSongsPage.test.tsx`.)
 
 ### T7.3 · Small quality cleanups `[S]`
 - ~~`T-SongFetch`~~ ✅ shipped 2026-07-09 with Phase 4 T4.7 (PR #194) as `fetchSongById()` in `lib/songMetadata.ts` — it carries the F-P1-7 retry, so it outgrew `lib/soundtrack.ts`.
