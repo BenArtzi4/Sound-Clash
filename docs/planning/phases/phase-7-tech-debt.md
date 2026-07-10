@@ -25,6 +25,8 @@
 
 #### T7.1 implementation plan (scoped 2026-07-10 night — **deferred to a maintainer-coordinated session**)
 
+> **SUPERSEDED — shipped.** This is the preserved pre-ship planning artifact; its future-tense "a later mig 044 drops…" / "both overloads coexist (count=2)" wording describes the mid-rollout target, not current state. Both mig 043 and mig 044 are now **live on prod + verified** (see the STATUS box above): the boolean overload is the sole `award_attempt` signature. Read for the rollout reasoning, not for current facts.
+
 A read-only reconnaissance pass produced the plan below. **Not implemented autonomously** because it is (a) a scoring/game-rule change → EXECUTION-CONTRACT §4/§6 says bring it to the maintainer with a concrete recommendation; (b) a `DROP FUNCTION` signature change on the buzz-path hot function needing a **prod migration coordinated with the frontend deploy**; (c) it must **stack on the unmerged #206** (which moved every scoring call site into `useScoring.ts`).
 
 **Current state (facts):**
