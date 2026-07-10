@@ -55,6 +55,11 @@ class GoneError(DomainError):
     status = 410
 
 
+class PayloadTooLargeError(DomainError):
+    code = "payload_too_large"
+    status = 413
+
+
 class RateLimitedError(DomainError):
     code = "rate_limited"
     status = 429

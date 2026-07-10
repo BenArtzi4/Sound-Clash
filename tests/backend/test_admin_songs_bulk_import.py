@@ -85,6 +85,20 @@ async def test_admin_required(client) -> None:
     assert resp.status_code == 401
 
 
+async def test_under_cap_upload_still_imports(admin_client) -> None:
+    """A normal, well-under-cap upload is unaffected by the size cap (F-P2-6)."""
+    from app.routers.admin_songs import MAX_IMPORT_BYTES
+
+    csv = _csv([["Hello", "Adele", "YQHsXMglC9A", "0", "rock"]])
+    assert len(csv) < MAX_IMPORT_BYTES
+    resp = await admin_client.post(
+        "/admin/songs/bulk-import",
+        files={"file": ("songs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["inserted"] == 1
+
+
 async def test_bulk_import_persists_release_year(admin_client, db) -> None:
     header = "title,artist,youtube_id,start_time,genres,release_year\n"
     body = "Yr Song,Yr Artist,YQHsXMglC9A,0,rock,1994\n"

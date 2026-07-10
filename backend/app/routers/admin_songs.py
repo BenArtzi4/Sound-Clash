@@ -9,7 +9,7 @@ import anyio
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
 from app.constants import SOUNDTRACK_GENRE_SLUGS
-from app.db.errors import NotFoundError, mapped_postgrest_errors
+from app.db.errors import NotFoundError, PayloadTooLargeError, mapped_postgrest_errors
 from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 from app.middleware.admin_auth import require_admin
 from app.middleware.rate_limit import limiter
@@ -228,11 +228,52 @@ async def delete_song(request: Request, song_id: UUID) -> None:
 
 _REQUIRED_FILE = File(...)
 
+# Hard cap on the multipart upload buffered into the single free-tier worker's
+# RAM. The real catalog CSV is ~40 KB / ~1000 rows, so 5 MB is very generous
+# while still bounding a runaway upload before it can OOM the worker.
+MAX_IMPORT_BYTES = 5 * 1024 * 1024
+_READ_CHUNK_BYTES = 64 * 1024
+
+
+def _too_large() -> PayloadTooLargeError:
+    return PayloadTooLargeError(
+        f"upload exceeds the {MAX_IMPORT_BYTES}-byte limit",
+        details={"limit_bytes": MAX_IMPORT_BYTES},
+    )
+
+
+async def _read_capped(file: UploadFile) -> bytes:
+    """Buffer the upload, refusing to read past ``MAX_IMPORT_BYTES``.
+
+    Reads in bounded chunks and stops the moment the cap is exceeded, so a
+    missing or lying ``Content-Length`` can't push more than the cap into RAM.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_IMPORT_BYTES:
+            raise _too_large()
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 
 @router.post("/bulk-import", response_model=BulkImportSummary)
 @limiter.limit("5/minute")
 async def bulk_import(request: Request, file: UploadFile = _REQUIRED_FILE) -> BulkImportSummary:
-    raw = await file.read()
+    # Fast-path reject on a declared Content-Length before buffering anything;
+    # the streamed read below is the real backstop for a missing/lying header.
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            if int(declared) > MAX_IMPORT_BYTES:
+                raise _too_large()
+        except ValueError:
+            pass
+    raw = await _read_capped(file)
     rows = parse_csv(raw)
     summary = await apply_import(get_supabase_client(), rows)
     return BulkImportSummary(
