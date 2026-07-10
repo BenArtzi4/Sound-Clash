@@ -64,6 +64,8 @@ Numbers are targets at end of Phase 6. Don't game them; let the test count emerg
 
 Spin up Postgres via `testcontainers-postgres`. Apply all migrations from `db/migrations/`. Run tests against the fresh DB.
 
+The RLS tests (`test_rls_anon.py`, `test_rls_function_grants.py`) authenticate through the `anon_conn` fixture, which connects **as a dedicated non-superuser `LOGIN` role** provisioned once in setup and granted membership in `anon` (its own DSN), rather than doing `SET ROLE anon` on the superuser connection. The fixture asserts `session_user`/`current_user` is that role and that it is not a superuser and does not bypass RLS — so the denial assertions genuinely exercise anon-level privileges. This replaced the old `SET ROLE` approach, which leaked role state across reused containers and caused a recurring in-suite flake.
+
 | File | What it tests | Priority |
 |---|---|---|
 | `test_buzz_in_race.py` | 10 concurrent buzz_in calls → exactly 1 winner. **Loops 100×** in stress mode. | P0 |
