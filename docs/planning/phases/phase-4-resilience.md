@@ -30,12 +30,12 @@
 
 ## Open tasks
 
-_All T4.x tasks are complete or explicitly de-scoped. Remaining: the **Phase 4 exit gate** below._
+_None — all T4.x tasks are complete or explicitly de-scoped, and the **Phase 4 exit gate** below passed on 2026-07-10. **Phase 4 is ✅ done.** Recommended next phase: **6** (see `phases/README.md`)._
 
 ---
 
-## Exit gate (Phase 4)
-- [ ] Simulate each failure and confirm graceful recovery: kill a video mid-round (Next round recovers), background the host tab (song resumes — done), drop the Realtime socket (reconnect + no lost events), force a `select_next_song` failure (room isn't silenced), let a game near expiry (warning shows, extend works), wipe the host's localStorage (backup host link recovers — e2e-covered, exercise once live).
+## Exit gate (Phase 4) — ✅ passed 2026-07-10
+- [x] Simulate each failure and confirm graceful recovery: dead-video → Next round recovers (played-song exclusion); background the host tab → song resumes (T4.2, unit + live tab-return with the player persisting); drop the Realtime socket → reconnect + no lost events (T4.3 hydrate gate; `reconnection.spec.ts` green + a live mid-game team-tab reload that re-hydrated identity + round state); force a `select_next_song` failure → room isn't silenced (T4.5 rollback vitest); near-expiry → warning shows + extend works (T4.8; `extend_game` db tests green + the live "Ends at HH:MM" hint rendered); wipe host localStorage → backup host link recovers (T4.10; `host_recovery.spec.ts` green + a live wipe → "not the host" → `#mt=` backup-link recover → console restored + fragment scrubbed).
 - [x] New e2e/reducer tests for cascade-delete UX (T4.4), failed-hydrate (T4.3), expiry + final-board snapshot (T4.11: 14 hook/page vitest cases + `expiration.spec.ts`).
-- [ ] `tests/db` green incl. the new `extend_game`.
-- [ ] **Full-Game Exit Gate** passes; additionally run a deliberate "adverse" game touching at least 3 failure paths.
+- [x] `tests/db` green incl. the new `extend_game` (288 passed / 1 skipped via a throwaway testcontainer; buzz-race stress 5/5 winners; frontend 454 vitest green @ 91.9% stmt / 95.9% line; ruff/mypy/eslint/tsc clean).
+- [x] **Full-Game Exit Gate** passes: local suites green; e2e green against a local `supabase start` stack (`full_game`, `multi_buzz_round`, `buzzer_race`, `expiration`, `host_recovery`, `reconnection` — the lone `multi_buzz` scenario-3 miss was the documented dropped-click/YT-ready timing flake, green on isolated re-run with CI-parity retries); prod smoke `post_deploy.sh` green. Deliberate **"adverse" game on prod** (game `PM4DXX`, 2026-07-10) touched ≥3 failure paths — T4.3 reconnection, T4.10 host recovery, T4.11 final board (End → podium on manager + display + both team tabs, plus the manager song export) — atop the full manual flow (create → display QR → join×2 → start → **buzz locks others** → Correct Song → Continue → artist → scores fan out → Bonus → Next round → End). **Hebrew titles rendered** on manager + display (סופרסטאר / רוני סופרסטאר); **zero app console errors** (only YouTube's third-party `compute-pressure` warning).
