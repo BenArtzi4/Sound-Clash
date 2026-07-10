@@ -14,6 +14,7 @@ import {
   setRpcResponse,
   supabaseMock,
 } from "../test/supabaseMock";
+import { RpcError } from "../lib/rpcError";
 import type { GameState } from "../lib/types";
 
 beforeEach(() => {
@@ -89,7 +90,10 @@ describe("useBuzzer", () => {
     await act(async () => {
       await result.current.buzz();
     });
-    expect(result.current.error).not.toBeNull();
+    // The buzz path now throws the shared RpcError (uniform with the manager
+    // RPCs) instead of the raw PostgREST error object.
+    expect(result.current.error).toBeInstanceOf(RpcError);
+    expect(result.current.error?.message).toBe("boom");
   });
 
   it("paints an optimistic winner lock the instant buzz_in resolves", async () => {

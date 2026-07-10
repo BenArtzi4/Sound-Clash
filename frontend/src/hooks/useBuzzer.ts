@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { failBuzz, markBuzzStart, tracedRpc } from "../lib/telemetry";
+import { throwOnRpcError } from "../lib/rpcError";
 import type { BuzzResult, GameState } from "../lib/types";
 
 export function useBuzzer(
@@ -63,7 +64,9 @@ export function useBuzzer(
           p_team_id: teamId,
         }),
       );
-      if (rpcError) throw rpcError;
+      // Wrap in the shared RpcError so the buzz path throws the same error
+      // type as the manager RPCs (uniform error branching / telemetry).
+      throwOnRpcError(rpcError);
       // Paint the provisional lock from the RPC result immediately. The
       // Realtime UPDATE on active_games (applied by useGameChannel to
       // gameState) remains the source of truth and reconciles this a fan-out
