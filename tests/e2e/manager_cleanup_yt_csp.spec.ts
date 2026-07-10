@@ -201,11 +201,14 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     // guards against. Wait for both players to be ready and give the prebuffer
     // time to load + pause, THEN snapshot the baseline, so the idle window
     // measures steady state (which must stay bounded).
+    // 40s ceiling on both players: onReady hinges on the third-party YouTube
+    // IFrame API loading from www.youtube.com, whose latency varies on the
+    // runner and occasionally exceeded 20s in a slow-network window (issue #222).
     await expect(page.getByTestId("youtube-player")).toHaveAttribute("data-ready", "true", {
-      timeout: 20_000,
+      timeout: 40_000,
     });
     await expect(page.getByTestId("youtube-player-preload")).toHaveAttribute("data-ready", "true", {
-      timeout: 20_000,
+      timeout: 40_000,
     });
     await page.waitForTimeout(8_000); // let the one-time first-song prebuffer load + freeze
 
