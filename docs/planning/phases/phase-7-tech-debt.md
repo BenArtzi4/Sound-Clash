@@ -27,8 +27,8 @@
 
 ### T7.3 · Small quality cleanups `[S]`
 - ~~`T-SongFetch`~~ ✅ shipped 2026-07-09 with Phase 4 T4.7 (PR #194) as `fetchSongById()` in `lib/songMetadata.ts` — it carries the F-P1-7 retry, so it outgrew `lib/soundtrack.ts`.
-- [ ] `T-RpcError`: `throwOnRpcError()` helper for uniform RPC error shape across all five direct-RPC sites.
-- [ ] `T-Deps`: document/fix the 4 `exhaustive-deps` disables (`SongExport.tsx:90`, `DisplayPage.tsx:124`, `ManagerConsolePage.tsx:164,238`).
+- [x] `T-RpcError`: ✅ (PR #202) `RpcError` + `throwOnRpcError()` extracted to `lib/rpcError.ts` (re-exported from `useManagerActions` for back-compat). All **six** direct-RPC sites now throw the same type — `useBuzzer` previously threw the raw PostgREST error, now wraps it like the manager RPCs. New `lib/rpcError.test.ts`; buzz-error test tightened to assert `RpcError`.
+- [x] `T-Deps`: ✅ verified already satisfied 2026-07-10 — all 4 `exhaustive-deps` disables already carry a reason comment (`DisplayPage.tsx:115`, `SongExport.tsx:90`, `ManagerConsolePage.tsx:219,284` — line numbers drifted from the backlog during Phase 4). No code change needed.
 - ~~`T-KeepWarm`~~ ✅ already implemented (`useKeepBackendWarm.ts`, wired in `ManagerConsolePage`).
 
 ### T7.4 · Dead code + hygiene `[S]` — T-DeadCode, T-Lockfile
