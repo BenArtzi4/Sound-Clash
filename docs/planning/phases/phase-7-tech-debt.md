@@ -36,8 +36,8 @@
 - [ ] Un-ignore `frontend/package-lock.json` after re-verifying the npm-10 runner bug is gone (deploy reproducibility). **Verify before flipping.**
 
 ### T7.5 · Test hardening `[M]` — T-RLSFix, T-CascadeTest
-- [ ] Proper RLS fixture fix: dedicated non-superuser `LOGIN` role + `current_user` assertion (`tests/db/conftest.py:124` still uses `SET ROLE anon`). The table-coverage extension already shipped.
-- [ ] e2e/reducer tests for: expiry warning (T4.8). (Cascade-delete ordering shipped with T4.4/PR #192, failed-hydrate with T4.3/PR #190, `preloadError` deploy-path tests with T4.0.)
+- [x] Proper RLS fixture fix: `anon_conn` now connects **as a dedicated non-superuser `LOGIN` role** (`anon_login_test`, provisioned once in `_migrated` setup, granted membership in `anon`) via its own DSN, instead of `SET ROLE anon` on the superuser connection; the fixture asserts `session_user`/`current_user` is that role and `rolsuper`/`rolbypassrls` are false. Kills the recurring in-suite `test_rls_anon` flake. (T7.5 — done 2026-07-10.)
+- [x] Reducer test for the expiry warning (T4.8): `useGameChannel.test.ts` now asserts a `GAME_CHANGE` UPDATE bumping `expires_at` (the Realtime event `extend_game` triggers) flows into reducer state. The rest of the T4.8 flow was already covered end-to-end (`ExpiryCountdown.test.tsx`, `ManagerConsolePage.test.tsx` "Keep playing…", `useManagerActions.test.ts::extendGameDirect`, `test_extend_game.py`), so no duplication was added. (Cascade-delete ordering shipped with T4.4/PR #192, failed-hydrate with T4.3/PR #190, `preloadError` deploy-path tests with T4.0.)
 
 ### T7.6 · CI discipline `[S — flag CI changes]`
 - [ ] `T-RLSCI`: isolated CI job for the RLS suite (deterministic green/red).

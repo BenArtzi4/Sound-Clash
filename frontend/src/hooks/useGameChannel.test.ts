@@ -280,6 +280,28 @@ describe("gameReducer", () => {
     expect(next?.currentRound?.id).toBe("r1");
   });
 
+  it("GAME_CHANGE UPDATE carries a bumped expires_at into state (extend_game path)", () => {
+    // After the manager's "Keep playing +1h" fires extend_game, the only thing
+    // that moves the expiry warning back out of the window is the Realtime
+    // UPDATE on active_games with the new expires_at. Assert that update flows
+    // through the reducer so the ExpiryCountdown re-reads a later deadline.
+    const start = gameReducer(null, {
+      type: "HYDRATE",
+      game: makeActiveGame({ status: "playing", expires_at: "2026-05-05T12:10:00.000Z" }),
+      teams: [],
+      rounds: [],
+    });
+    const bumped = makeActiveGame({
+      status: "playing",
+      expires_at: "2026-05-05T13:10:00.000Z",
+    });
+    const next = gameReducer(start, {
+      type: "GAME_CHANGE",
+      payload: makePayload("active_games", "UPDATE", { new: bumped }),
+    });
+    expect(next?.game.expires_at).toBe("2026-05-05T13:10:00.000Z");
+  });
+
   it("GAME_CHANGE DELETE returns null", () => {
     const start = gameReducer(null, {
       type: "HYDRATE",

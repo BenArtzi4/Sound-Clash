@@ -1,6 +1,6 @@
 # Next session — start here
 
-_Last updated: 2026-07-10 (**afternoon /next-task session** — merged **T6.2 (#200)**, **T7.4 (#201)**, **T7.3 T-RpcError+T-Deps (#202)**, and **fixed a mig-015 idempotency regression the stress gate caught (#203)**. **⚠️ Two maintainer actions pending** — see the box below. **Next autonomous work: Phase 7 (T7.5 or T7.2)** — T6.3 is blocked on maintainer prod access.)_
+_Last updated: 2026-07-10 (**T7.5 shipped** — proper RLS fixture fix (`anon_conn` now a dedicated non-superuser `LOGIN` role, kills the `test_rls_anon` in-suite flake) + expiry-warning reducer test; PR open, awaiting green CI + merge. Earlier the same day: merged **T6.2 (#200)**, **T7.4 (#201)**, **T7.3 T-RpcError+T-Deps (#202)**, **mig-015 idempotency fix (#203)**. **⚠️ Two maintainer actions pending** — see the box below. **Next autonomous work: T7.2** — T6.3 is blocked on maintainer prod access.)_
 
 > ### ⚠️ Maintainer actions pending (can't be done autonomously)
 > 1. **Apply mig 040 to prod** (T6.2 — deferred, hard-required-nothing column drop). Quiet window: `supabase link --project-ref jvfddxuaqcsrguibkymp && supabase db query --linked -f db/migrations/040_drop_total_rounds_column.sql`, then `bash ./tests/smoke/post_deploy.sh https://api.soundclash.org`. Prod is safe either way — mig 015 is now guarded so the drop can't break a replay.
@@ -30,11 +30,12 @@ _Last updated: 2026-07-10 (**afternoon /next-task session** — merged **T6.2 (#
 
 ## What to do next
 
-**T6.3 is blocked on maintainer prod access** (the read-only dupe query is denied by the auto-mode classifier without the maintainer present). So the next **autonomous** task is a Phase 7 item; recommended order:
+**T6.3 is blocked on maintainer prod access** (the read-only dupe query is denied by the auto-mode classifier without the maintainer present). **T7.5 is done** (RLS fixture fix + expiry reducer test — PR open, test-only, no runtime/schema change). So the next **autonomous** task is a Phase 7 item; recommended order:
 
-1. **T7.5** `[M]` — proper RLS fixture fix (`tests/db/conftest.py:124`: dedicated non-superuser `LOGIN` role + `current_user` assertion instead of `SET ROLE anon`) to kill the recurring `test_rls_anon` flake; plus a reducer/e2e test for the T4.8 expiry warning. **Backend/db — run pytest with `DATABASE_URL=""` so it uses a throwaway testcontainer, never the shared local stack** (lessons-learned).
-2. **T7.2** `[M]` — decompose the god components (`ManagerConsolePage` → `useSongPrebuffer`+`useScoring`; `AdminSongsPage` → `SongTable`/`SongEditForm`/`useAdminSongs`), guarded by their existing ~48-case tests.
-3. **T7.1** `[M, D-7]` — scoring single-source-of-truth in the DB. Own PR **behind the buzz-race gate** (`award_attempt` change) — careful.
+1. **T7.2** `[M]` — decompose the god components (`ManagerConsolePage` → `useSongPrebuffer`+`useScoring`; `AdminSongsPage` → `SongTable`/`SongEditForm`/`useAdminSongs`), guarded by their existing ~48-case tests.
+2. **T7.1** `[M, D-7]` — scoring single-source-of-truth in the DB. Own PR **behind the buzz-race gate** (`award_attempt` change) — careful.
+
+_(T7.5 ✅ — `anon_conn` now connects as a dedicated non-superuser `LOGIN` role (`anon_login_test`, granted membership in `anon`) via its own DSN with `session_user`/`rolsuper`/`rolbypassrls` assertions, replacing `SET ROLE anon`; full `tests/db` suite green in-suite with no `test_rls_anon` contamination. Plus a `useGameChannel` reducer test that a `GAME_CHANGE` UPDATE bumping `expires_at` — the Realtime event `extend_game` triggers — flows into state; the rest of the T4.8 expiry flow was already fully covered.)_
 
 **T6.3 (when the maintainer is present)** — one migration PR (**D-8 = youtube_id now**): (a) read-only prod query for duplicate `youtube_id`s; (b) dedup — merge dupes, repoint `song_genres`, delete losers (leave the Avicii "Wake Me Up" same-song-different-*video* pair — two distinct youtube_ids — alone); (c) idempotent `UNIQUE(songs.youtube_id)` migration; (d) verify no orphaned `song_genres`, song selection still works. Consider making it one migration that dedups **then** adds the constraint so it applies atomically to prod. Label it `run-stress` + `run-e2e`.
 
