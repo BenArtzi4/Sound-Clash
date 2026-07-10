@@ -39,7 +39,7 @@
 
 ### T5.7 · Document the accepted buzz-spoofing tradeoff `[S]` — **D-4 = accept**
 - [x] ✅ No per-team tokens. Documented in `security-rls.md` §4 ("Accepted design tradeoffs") that buzzing is unauthenticated by design (casual play) and the host is the integrity check.
-- [ ] Implement the lightweight **same-name reclaim** for F-P2-1: `join_team` returns the existing team row when the same name rejoins the same game (no new token). Coordinate with the frontend redirect logic. *(still open — behavior change, needs frontend redirect coordination)*
+- [x] ✅ Implemented the lightweight **same-name reclaim** for F-P2-1: `_join_team_blocking` SELECTs the existing `(game_code, name)` row and returns it (same id, preserved score) before inserting, so a rejoin resumes the same team instead of 409/duplicating. No frontend change needed — the returned team row flows through the existing store-and-redirect path unchanged. Backend tests + docs (`api-contracts.md`, `security-rls.md` §4, `game-rules.md`) updated.
 
 ### T5.8 · Pre-reveal answer leak `[architecture]` — **D-2 = accept + document**
 - [x] ✅ Documented the tradeoff in `security-rls.md` §4 ("Accepted design tradeoffs") — the clip is audible to the room anyway; a DB-reading cheat is narrow and self-defeating. No code redesign.
