@@ -20,7 +20,9 @@ beforeEach(() => {
 });
 
 describe("awardAttemptDirect", () => {
-  it("translates booleans to point integers and passes the manager token", async () => {
+  it("sends the attempt flags as booleans and passes the manager token", async () => {
+    // T7.1: the DB derives the point magnitudes; the wire carries only booleans,
+    // routed to award_attempt's boolean overload (mig 043).
     setRpcResponse({
       data: [
         {
@@ -46,14 +48,14 @@ describe("awardAttemptDirect", () => {
     expect(supabaseMock.rpc).toHaveBeenCalledWith("award_attempt", {
       p_game_code: "ABCDEF",
       p_round_id: "r1",
-      p_title: 10,
-      p_artist: 0,
-      p_wrong_buzz: 0,
+      p_correct_title: true,
+      p_correct_artist: false,
+      p_wrong: false,
       p_manager_token: TOKEN,
     });
   });
 
-  it("maps wrong_buzz to the -3 penalty integer", async () => {
+  it("maps a wrong buzz to p_wrong=true with both correct flags false", async () => {
     setRpcResponse({
       data: [
         {
@@ -76,9 +78,9 @@ describe("awardAttemptDirect", () => {
     const firstCall = vi.mocked(supabaseMock.rpc).mock.calls[0];
     expect(firstCall).toBeDefined();
     const params = (firstCall as unknown as [string, Record<string, unknown>])[1];
-    expect(params.p_wrong_buzz).toBe(3);
-    expect(params.p_title).toBe(0);
-    expect(params.p_artist).toBe(0);
+    expect(params.p_wrong).toBe(true);
+    expect(params.p_correct_title).toBe(false);
+    expect(params.p_correct_artist).toBe(false);
   });
 
   it("throws RpcError carrying the PL/pgSQL message and sqlstate", async () => {

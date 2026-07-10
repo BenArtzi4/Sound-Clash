@@ -9,6 +9,13 @@ import {
 } from "./useManagerActions";
 import { selectNextSongDirect } from "./useSelectNextSong";
 import { clearManagerToken } from "../lib/managerToken";
+import {
+  ARTIST_POINTS,
+  BONUS_POINTS,
+  SOUNDTRACK_POINTS,
+  TITLE_POINTS,
+  WRONG_BUZZ_PENALTY,
+} from "../lib/scoring";
 import { failScore, log, markScoreStart } from "../lib/telemetry";
 import { fetchSongById } from "../lib/songMetadata";
 import type { GameState, Song } from "../lib/types";
@@ -274,7 +281,7 @@ export function useScoring(
     titleInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
-    if (teamName) toast(`+10 to ${teamName}`, { variant: "success" });
+    if (teamName) toast(`+${TITLE_POINTS} to ${teamName}`, { variant: "success" });
     // Pending flag flips the disabled prop synchronously on click and stays
     // set until the Realtime UPDATE on game_rounds.title_claimed_by lands
     // (after which the semantic gate takes over) -- no enable/disable
@@ -303,7 +310,7 @@ export function useScoring(
     artistInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
-    if (teamName) toast(`+5 to ${teamName}`, { variant: "success" });
+    if (teamName) toast(`+${ARTIST_POINTS} to ${teamName}`, { variant: "success" });
     setPendingArtist(roundId);
     markScoreStart(gameCode, roundId, "artist");
     try {
@@ -337,7 +344,7 @@ export function useScoring(
     artistInFlightRef.current = true;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
-    if (teamName) toast(`+15 to ${teamName}`, { variant: "success" });
+    if (teamName) toast(`+${SOUNDTRACK_POINTS} to ${teamName}`, { variant: "success" });
     setPendingTitle(roundId);
     setPendingArtist(roundId);
     markScoreStart(gameCode, roundId, "soundtrack");
@@ -398,7 +405,7 @@ export function useScoring(
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     const freeGuess = state.currentRound.free_guess_active;
-    if (teamName && !freeGuess) toast(`-3 to ${teamName}`, { variant: "info" });
+    if (teamName && !freeGuess) toast(`-${WRONG_BUZZ_PENALTY} to ${teamName}`, { variant: "info" });
     setPendingWrong(roundId);
     try {
       await applyAttempt(roundId, {
@@ -569,11 +576,11 @@ export function useScoring(
     // `busy` keeps Bonus + End game gated while it's in flight (the per-round
     // scoring buttons stay deliberately independent of it).
     setBonusOpen(false);
-    toast(`Sending +4 to ${teamName}...`, { variant: "info" });
+    toast(`Sending +${BONUS_POINTS} to ${teamName}...`, { variant: "info" });
     setBusy(true);
     try {
       await awardBonus(gameCode, managerToken, { team_id: teamId });
-      toast(`+4 bonus to ${teamName}`, { variant: "success" });
+      toast(`+${BONUS_POINTS} bonus to ${teamName}`, { variant: "success" });
     } catch (err) {
       reportError(err);
     } finally {

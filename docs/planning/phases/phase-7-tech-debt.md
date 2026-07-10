@@ -17,9 +17,11 @@
 ## Tasks
 
 ### T7.1 · Scoring single source of truth `[M]` — T-Scoring, **D-7 = yes, careful**
-- [ ] Refactor `award_attempt` to take booleans + derive soundtrack-ness from genre membership server-side (mig 028 pattern — there is **no** `is_soundtrack` column; it was **finally dropped in mig 028**, not 025: 025 dropped it, 027 re-added it, 028 dropped it for good), compute + cap points in the DB.
-- [ ] Expose the 5 UI constants from one shared module the toasts import; add the value-cross-check test (T-ScoringTest).
-- [ ] Behind the buzz-race + full-game gate; own PR.
+- [x] Refactor `award_attempt` to take booleans; **compute + cap points in the DB** (mig 043, boolean overload). Design 1 shipped (maintainer-confirmed 2026-07-10): the DB derives 10/5/3 server-side, closing the client-controlled-magnitude footgun. Soundtrack stays emergent as both-flags → 10+5=15 (two independent claims); the "derive soundtrack-ness from genre" wording was **Design 2**, deliberately deferred as an optional follow-up (not needed for the integrity win — see the design fork note below).
+- [x] Expose the 5 UI constants from one shared module the toasts import (`frontend/src/lib/scoring.ts`); the toasts (`useScoring.ts`) + labels (`ManagerConsolePage.tsx`) import it, and `scoring.test.ts` (T-ScoringTest) cross-checks the values.
+- [x] Behind the buzz-race + full-game gate; own PR (`feature/t7.1-scoring-authority`, labelled `run-stress` + `run-e2e`).
+
+> **STATUS (2026-07-10):** implemented + fully green locally (frontend 455, db `test_award_attempt` 31, PostgREST routing + positive-scoring path verified on the local stack; mig 043 idempotent + dual-overload confirmed). **PR open, handed to the maintainer for the prod cutover** — do NOT self-merge (buzz-path + prod migration). Cutover order: **apply mig 043 to prod FIRST**, then merge (Cloudflare deploys the boolean-sending frontend), then verify scoring on prod, then a later **mig 044** drops the integer overload. Full steps below + in `NEXT-SESSION.md`.
 
 #### T7.1 implementation plan (scoped 2026-07-10 night — **deferred to a maintainer-coordinated session**)
 

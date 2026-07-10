@@ -16,6 +16,13 @@ import { useResumeOnVisible } from "../hooks/useResumeOnVisible";
 import { useScoring } from "../hooks/useScoring";
 import { useSongPrebuffer } from "../hooks/useSongPrebuffer";
 import { parseRecoveryHash } from "../lib/managerToken";
+import {
+  ARTIST_POINTS,
+  BONUS_POINTS,
+  SOUNDTRACK_POINTS,
+  TITLE_POINTS,
+  WRONG_BUZZ_PENALTY,
+} from "../lib/scoring";
 import styles from "./ManagerConsolePage.module.css";
 
 export function ManagerConsolePage() {
@@ -362,7 +369,7 @@ export function ManagerConsolePage() {
                 data-testid="score-soundtrack"
               >
                 <span className={styles.scoreLabel}>Correct</span>
-                <span className={styles.scorePoints}>+15</span>
+                <span className={styles.scorePoints}>+{SOUNDTRACK_POINTS}</span>
               </button>
             ) : (
               <>
@@ -374,7 +381,7 @@ export function ManagerConsolePage() {
                   data-testid="score-title"
                 >
                   <span className={styles.scoreLabel}>Correct Song</span>
-                  <span className={styles.scorePoints}>+10</span>
+                  <span className={styles.scorePoints}>+{TITLE_POINTS}</span>
                 </button>
                 <button
                   type="button"
@@ -384,7 +391,7 @@ export function ManagerConsolePage() {
                   data-testid="score-artist"
                 >
                   <span className={styles.scoreLabel}>Correct Artist</span>
-                  <span className={styles.scorePoints}>+5</span>
+                  <span className={styles.scorePoints}>+{ARTIST_POINTS}</span>
                 </button>
               </>
             )}
@@ -396,7 +403,7 @@ export function ManagerConsolePage() {
               data-testid="score-wrong"
             >
               <span className={styles.scoreLabel}>Wrong</span>
-              <span className={styles.scorePoints}>-3</span>
+              <span className={styles.scorePoints}>-{WRONG_BUZZ_PENALTY}</span>
             </button>
             <button
               type="button"
@@ -408,7 +415,7 @@ export function ManagerConsolePage() {
               data-testid="score-bonus"
             >
               <span className={styles.scoreLabel}>Bonus</span>
-              <span className={styles.scorePoints}>+4</span>
+              <span className={styles.scorePoints}>+{BONUS_POINTS}</span>
             </button>
           </div>
 
@@ -420,7 +427,7 @@ export function ManagerConsolePage() {
                 role="group"
                 aria-label="Pick a team for the bonus"
               >
-                <span className={styles.bonusPickerHint}>Award +4 to:</span>
+                <span className={styles.bonusPickerHint}>Award +{BONUS_POINTS} to:</span>
                 <div className={styles.bonusPickerList}>
                   {teams.map((t) => (
                     <button
@@ -429,7 +436,7 @@ export function ManagerConsolePage() {
                       className={`btn ${styles.bonusTeamBtn}`}
                       onClick={() => void handleBonus(t.id, t.name)}
                       disabled={busy}
-                      aria-label={`Award +4 bonus to ${t.name}`}
+                      aria-label={`Award +${BONUS_POINTS} bonus to ${t.name}`}
                       data-testid={`bonus-team-${t.id}`}
                     >
                       {t.name}

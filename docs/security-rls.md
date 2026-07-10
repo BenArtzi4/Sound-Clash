@@ -150,8 +150,14 @@ GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
 -- award_attempt / release_buzz_lock: browser-callable via Supabase RPC,
 -- gated by the per-game manager_token (validated in the function body,
 -- not by GRANT). Migration 021 added the p_manager_token argument and
--- granted EXECUTE to anon on the new signatures.
+-- granted EXECUTE to anon on the new signatures. Migration 043 (T7.1) added a
+-- boolean overload — the DB derives the point magnitudes so the client can't
+-- send an arbitrary value — granted to anon alongside the integer one; both are
+-- token-gated in-body. Migration 044 drops the integer overload once no old
+-- clients remain.
 GRANT EXECUTE ON FUNCTION award_attempt(text, uuid, integer, integer, integer, uuid)
+  TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION award_attempt(text, uuid, boolean, boolean, boolean, uuid)
   TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION release_buzz_lock(text, uuid)
   TO anon, authenticated, service_role;

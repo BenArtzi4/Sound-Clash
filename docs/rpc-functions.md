@@ -201,12 +201,12 @@ Called **direct from the manager browser** via Supabase PostgREST RPC (as of mig
 
 ```sql
 CREATE OR REPLACE FUNCTION award_attempt(
-  p_game_code     text,
-  p_round_id      uuid,
-  p_title         integer,             -- 0 or 10
-  p_artist        integer,             -- 0 or 5
-  p_wrong_buzz    integer,             -- 0 or 3 (deducted)
-  p_manager_token uuid                 -- NONE of the 6 args carry a DEFAULT: a default on any would make this 6-arg overload ambiguous with 5-arg calls (Postgres 42725); see mig 021. The frontend always sends all six.
+  p_game_code      text,
+  p_round_id       uuid,
+  p_correct_title  boolean,            -- claim the TITLE token (+10, derived server-side)
+  p_correct_artist boolean,            -- claim the ARTIST token (+5, derived server-side)
+  p_wrong          boolean,            -- wrong buzz (−3, derived server-side; free-guess may waive it)
+  p_manager_token  uuid                -- NONE of the 6 args carry a DEFAULT: a default would make the overload ambiguous (Postgres 42725); see mig 021. The frontend always sends all six.
 )
 RETURNS TABLE(
   team_id            uuid,
@@ -220,17 +220,35 @@ SECURITY DEFINER
 SET search_path = public;
 ```
 
+**Scoring authority is in the DB (migration 043, T7.1 / D-7).** The client sends
+only booleans; the function derives the magnitudes itself (`+10 / +5 / −3`), so a
+tampered browser can no longer POST an arbitrary point value. Soundtrack rounds
+stay emergent — the UI sends **both** correct flags and the function sums
+`10 + 5 = 15` as two independent claims (no soundtrack awareness in the DB).
+
+> **Dual overload during rollout.** Migration 043 **adds** this boolean signature
+> **alongside** the legacy integer one (`award_attempt(text, uuid, integer,
+> integer, integer, uuid)`, mig 036, which took the magnitudes as client
+> integers). Both coexist so the migration can be applied to prod decoupled from
+> the frontend deploy — a still-loaded old tab routes to the integer overload,
+> a freshly deployed tab to the boolean one. PostgREST resolves by the distinct
+> named-arg set (`p_correct_title/p_correct_artist/p_wrong` vs
+> `p_title/p_artist/p_wrong_buzz`). A later **migration 044** drops the integer
+> overload once no old clients remain (mirrors mig 023). The body below is
+> otherwise byte-identical between the two overloads.
+
 Token check (run before any other read/write):
 - Fetch `ended_at` from `active_games` (LEFT JOIN `game_secrets` for `manager_token`) for the code. Since migration 034 the token lives in `game_secrets`, not `active_games`. Missing game row → `P0002 game_not_found`. Ended → `P0001 game_ended`. Mismatched or NULL token → `28000 manager_token_required`.
 
 Behavior:
+- Derives the point magnitudes from the flags server-side: `p_correct_title → 10`, `p_correct_artist → 5`, `p_wrong → 3` (a NULL flag is treated as false). Nothing on the wire carries a magnitude.
 - Reads the current `buzzed_team_id` off `active_games`. If null → raises `P0001 no_buzz_to_score`.
-- `p_wrong_buzz > 0 AND (p_title > 0 OR p_artist > 0)` → raises `P0001 wrong_buzz_with_correct`.
-- `p_title > 0` while `title_claimed_by` is already set → raises `P0001 title_already_claimed`. Same shape for `artist_already_claimed`.
+- `p_wrong AND (p_correct_title OR p_correct_artist)` → raises `P0001 wrong_buzz_with_correct`.
+- `p_correct_title` while `title_claimed_by` is already set → raises `P0001 title_already_claimed`. Same shape for `artist_already_claimed`.
 - On success: applies score delta to the buzzed team, marks `title_claimed_by` / `artist_claimed_by` if applicable, and inserts a `game_round_attempts` row.
 - **Write shape** (migration 036): all per-round column changes (title/artist claim + points, `wrong_buzz_penalty`, `free_guess_active`) are committed in **one** combined `UPDATE game_rounds` computed from branch vars via `CASE` (each unchanged column keeps its value); the statement is **skipped entirely** when nothing changes (no toggles, no wrong, `free_guess_active` unchanged), so a no-op Continue emits zero `game_rounds` writes. The team-score read and the returned claim columns fold into `RETURNING` (the score UPDATE's on the scoring path, the combined UPDATE's for the claims) rather than trailing `SELECT`s. This is a pure Realtime/round-trip economy change — a Correct Song emits one `ROUND_CHANGE` instead of two — with identical scoring behavior.
 - **Buzz-lock handling** (migration 018, refined by migration 019): only the wrong-buzz path clears `active_games.buzzed_team_id` and `locked_at`. A correct `title` / `artist` / `title_artist` attempt leaves `buzzed_team_id` in place — the answering team retains the floor for the other token until the manager presses Continue (`release_buzz_lock`) or Wrong, or until `start_round` defensively clears the lock for the next song — but it **refreshes `locked_at = now()`** so the clients' answer countdown restarts for the remaining token (migration 019). The no-op continue case (no toggles, no `wrong_buzz`) leaves the lock untouched. Before 018 the lock was always cleared regardless of outcome.
-- **Free-guess flag** (`game_rounds.free_guess_active`, migration 017): if `p_wrong_buzz > 0` AND `free_guess_active = true`, the penalty is waived (`points_delta = 0`); the attempt is still recorded with `outcome = 'wrong'`. After processing, the function sets `free_guess_active = true` if the outcome was correct (`title` / `artist` / `title_artist`) and `false` otherwise. So the flag is consumed by every attempt and re-armed by every correct one.
+- **Free-guess flag** (`game_rounds.free_guess_active`, migration 017): if `p_wrong` AND `free_guess_active = true`, the penalty is waived (`points_delta = 0`); the attempt is still recorded with `outcome = 'wrong'`. After processing, the function sets `free_guess_active = true` if the outcome was correct (`title` / `artist` / `title_artist`) and `false` otherwise. So the flag is consumed by every attempt and re-armed by every correct one.
 
 ### Error semantics
 

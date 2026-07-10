@@ -15,10 +15,6 @@ import type { AttemptResponse } from "../lib/types";
 // the shared throwOnRpcError helper now live in lib/rpcError.
 export { RpcError };
 
-const TITLE_POINTS = 10;
-const ARTIST_POINTS = 5;
-const WRONG_BUZZ_PENALTY = 3;
-
 export interface AttemptFlags {
   title_correct: boolean;
   artist_correct: boolean;
@@ -39,13 +35,18 @@ export async function awardAttemptDirect(
   roundId: string,
   flags: AttemptFlags,
 ): Promise<AttemptResponse> {
+  // The wire now carries only booleans — the DB (award_attempt, mig 043)
+  // derives the point magnitudes server-side, so the client can no longer send
+  // an arbitrary value (T7.1 / D-7). PostgREST routes on the p_correct_*/p_wrong
+  // named-arg set to the boolean overload; the legacy integer overload stays
+  // live until mig 044 for any still-loaded old tab.
   const { data, error } = await tracedRpc("award_attempt", { game_code: gameCode }, () =>
     supabase.rpc("award_attempt", {
       p_game_code: gameCode,
       p_round_id: roundId,
-      p_title: flags.title_correct ? TITLE_POINTS : 0,
-      p_artist: flags.artist_correct ? ARTIST_POINTS : 0,
-      p_wrong_buzz: flags.wrong_buzz ? WRONG_BUZZ_PENALTY : 0,
+      p_correct_title: flags.title_correct,
+      p_correct_artist: flags.artist_correct,
+      p_wrong: flags.wrong_buzz,
       p_manager_token: managerToken,
     }),
   );

@@ -175,21 +175,28 @@ any side effect. See `docs/rpc-functions.md §3` for the full signature and
 const { data, error } = await supabase.rpc("award_attempt", {
   p_game_code: gameCode,
   p_round_id: roundId,
-  p_title: titleCorrect ? 10 : 0,
-  p_artist: artistCorrect ? 5 : 0,
-  p_wrong_buzz: wrongBuzz ? 3 : 0,
+  p_correct_title: titleCorrect,
+  p_correct_artist: artistCorrect,
+  p_wrong: wrongBuzz,
   p_manager_token: managerToken,
 });
 ```
 
 Frontend wrapper: `frontend/src/hooks/useManagerActions.ts::awardAttemptDirect`
-(boolean → integer translation + shape normalisation).
+(shape normalisation only — the flags go on the wire as booleans).
+
+**Scoring authority (migration 043, T7.1).** The wire carries only booleans; the
+DB derives the magnitudes (`+10 / +5 / −3`), so the client can't send an arbitrary
+value. Migration 043 added this boolean overload **alongside** the legacy integer
+one (`p_title / p_artist / p_wrong_buzz`, mig 036) so the two can be deployed
+independently; migration 044 later drops the integer overload. See
+`rpc-functions.md §3`.
 
 **Behavior**:
-- `p_title = 10` → +10 to the buzzed team; claims the TITLE token.
-- `p_artist = 5` → +5 to the buzzed team; claims the ARTIST token.
-- Both → +15 in one shot (claims both tokens).
-- `p_wrong_buzz = 3` → −3 to the buzzed team. Mutually exclusive with the two above; if a token was already claimed earlier in the round the SQL function waives the penalty (free-guess rule, migration 017).
+- `p_correct_title = true` → +10 to the buzzed team; claims the TITLE token.
+- `p_correct_artist = true` → +5 to the buzzed team; claims the ARTIST token.
+- Both → +15 in one shot (claims both tokens) — this is how a soundtrack round scores.
+- `p_wrong = true` → −3 to the buzzed team. Mutually exclusive with the two above; if a token was already claimed earlier in the round the SQL function waives the penalty (free-guess rule, migration 017).
 - The buzz lock is **only** cleared on the wrong-buzz path. A correct attempt leaves `active_games.buzzed_team_id` and `locked_at` in place — the answering team retains the floor for the other token until the manager presses Continue or Next round.
 
 **Errors** (raised as PostgrestError with the named code in `message`):
