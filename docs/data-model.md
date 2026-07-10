@@ -306,7 +306,7 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | Function | Purpose | Caller |
 |---|---|---|
 | `buzz_in(p_game_code, p_team_id)` | Atomic buzzer lock | Browser via PostgREST (anon) |
-| `award_attempt(p_game_code, p_round_id, p_title, p_artist, p_wrong_buzz, p_manager_token)` | Score one buzz; round stays open | Browser via PostgREST (`manager_token`) |
+| `award_attempt(p_game_code, p_round_id, p_correct_title, p_correct_artist, p_wrong, p_manager_token)` | Score one buzz (DB derives the +10/+5/−3 magnitudes); round stays open | Browser via PostgREST (`manager_token`) |
 | `release_buzz_lock(p_game_code, p_manager_token)` | "Continue round" — clear the buzzer lock so play resumes | Browser via PostgREST (`manager_token`) |
 | `select_next_song(p_game_code, p_manager_token, p_song_id DEFAULT NULL)` | Close the prior round and open the next on an unplayed song | Browser via PostgREST (`manager_token`) |
 | `peek_next_song(p_game_code, p_manager_token)` | Read-only next-song candidate for prebuffering (no round advance) | Browser via PostgREST (`manager_token`) |
@@ -353,7 +353,8 @@ db/migrations/
 ├── 039_extend_game.sql          -- token-gated "Keep playing +1h" TTL bump: expires_at = GREATEST(expires_at, now()) + 1h
 ├── 040_drop_total_rounds_column.sql -- finally DROP the orphan active_games.total_rounds (mig 015 only relaxed it)
 ├── 041_buzz_in_scope_team_to_game.sql -- buzz_in only locks for a team that belongs to the game (EXISTS guard); closes a cross-game score-write vector
-└── 042_songs_youtube_id_unique.sql   -- enforce UNIQUE(songs.youtube_id) via idempotent UNIQUE INDEX; one catalog row per YouTube video
+├── 042_songs_youtube_id_unique.sql   -- enforce UNIQUE(songs.youtube_id) via idempotent UNIQUE INDEX; one catalog row per YouTube video
+└── 043_award_attempt_boolean_overload.sql -- scoring authority in the DB (T7.1): boolean overload of award_attempt derives +10/+5/−3 server-side, added alongside the integer overload (mig 044 drops the latter)
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
