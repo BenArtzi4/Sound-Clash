@@ -150,6 +150,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Security
 
+- 2026-07-10: a team can no longer be buzzed into a game it doesn't belong to — closes a cross-game score-tampering path in the buzzer. (PR #211)
 - 2026-07-04: **A game's host credential is no longer readable by players.** The per-game host token now lives in a separate table that players' browsers can't read (previously it rode along on the live game record that every player's screen subscribes to). Only the server and the game's own scoring functions can access it, so a player can't obtain the host token for their game (or any other). No change to how you host or play.
 - 2026-06-25: Server error (500) responses no longer echo raw database error text; they now return a generic message, with the detail logged server-side only.
 - 2026-05-12: Hardened the database so the host-only round actions (scoring a buzz, awarding a bonus, starting/ending a round, ending the game) can only be performed through the backend's manager-token gate — they can no longer be invoked directly with the public anon key. (`buzz_in`, the team buzzer, is unchanged.)
