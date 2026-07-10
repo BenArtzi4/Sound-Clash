@@ -358,6 +358,8 @@ All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (
 
 Bulk import is idempotent on `youtube_id`: existing songs are updated, new ones are inserted.
 
+The upload is capped at **5 MB** (the real catalog CSV is ~40 KB). An over-cap body is rejected with **`413 payload_too_large`** before it is parsed — enforced both on a declared `Content-Length` and via a streamed read, so a missing or under-declared header can't bypass the cap.
+
 ---
 
 ## 3. Postgres RPC (PostgREST)
