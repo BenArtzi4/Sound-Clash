@@ -57,10 +57,12 @@ async def test_anon_can_execute_award_attempt_but_token_check_runs(
 ) -> None:
     """Migration 021: anon CAN call award_attempt, but the function body's
     manager_token check rejects forged calls. The error must be
-    'manager_token_required' (sqlstate 28000), not 'insufficient privilege'."""
+    'manager_token_required' (sqlstate 28000), not 'insufficient privilege'.
+    Calls the boolean overload (mig 043; the integer one was dropped by mig
+    044)."""
     with pytest.raises(asyncpg.PostgresError) as exc:
         await anon_conn.execute(
-            "SELECT award_attempt($1, $2, 0, 0, 0, $3)",
+            "SELECT award_attempt($1, $2, false, false, false, $3)",
             "ABCDEF",
             uuid.uuid4(),
             uuid.uuid4(),
@@ -276,6 +278,33 @@ async def test_legacy_overloads_were_dropped(
 
 
 @pytest.mark.asyncio
+async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) -> None:
+    """Migration 044 dropped the integer overload of ``award_attempt`` -- the
+    one that took the point magnitudes as client integers (``p_title integer,
+    p_artist integer, p_wrong_buzz integer``, mig 036) -- once the
+    boolean-sending frontend (PR #218) had soaked on prod. The boolean overload
+    (mig 043) is now the sole signature and derives the magnitudes server-side.
+    If the integer overload reappears it means a stale migration replayed and
+    left the client-controlled-magnitude footgun back in place."""
+    row = await db.fetchrow(
+        """
+        SELECT 1
+          FROM pg_proc p
+          JOIN pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'public'
+           AND p.proname = 'award_attempt'
+           AND pg_get_function_identity_arguments(p.oid) = $1
+        """,
+        "p_game_code text, p_round_id uuid, p_title integer, "
+        "p_artist integer, p_wrong_buzz integer, p_manager_token uuid",
+    )
+    assert row is None, (
+        "award_attempt integer overload is back -- migration 044 should have "
+        "dropped it, leaving only the boolean overload (mig 043)"
+    )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "proname, args",
     [
@@ -284,13 +313,16 @@ async def test_legacy_overloads_were_dropped(
         # spelling ("character" for char(N), "integer" for int, etc.).
         # buzz_in: single signature; entire function is anon-callable.
         ("buzz_in", "p_game_code character, p_team_id uuid"),
-        # award_attempt and release_buzz_lock: the tokenised overloads added in
-        # migration 021 are now the only overloads (migration 023 dropped the
-        # legacy un-tokenised ones once the new direct-RPC path was stable).
+        # award_attempt: the boolean overload (mig 043, T7.1) is now the only
+        # signature -- migration 044 dropped the integer overload (mig 036) that
+        # took the point magnitudes as client integers, so the DB is the sole
+        # authority for how much a claim is worth. release_buzz_lock: the
+        # tokenised overload from migration 021 (migration 023 dropped the legacy
+        # un-tokenised one once the new direct-RPC path was stable).
         (
             "award_attempt",
-            "p_game_code text, p_round_id uuid, p_title integer, "
-            "p_artist integer, p_wrong_buzz integer, p_manager_token uuid",
+            "p_game_code text, p_round_id uuid, p_correct_title boolean, "
+            "p_correct_artist boolean, p_wrong boolean, p_manager_token uuid",
         ),
         ("release_buzz_lock", "p_game_code text, p_manager_token uuid"),
         # select_next_song: single tokenised signature added in migration 022.

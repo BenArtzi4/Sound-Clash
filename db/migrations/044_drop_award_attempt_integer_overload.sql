@@ -1,0 +1,36 @@
+-- 044_drop_award_attempt_integer_overload.sql
+-- Retire the now-dead integer overload of award_attempt.
+--
+-- Background: migration 043 (T7.1 / D-7) added a BOOLEAN overload of
+-- award_attempt ALONGSIDE the existing integer one (mig 036). The integer
+-- overload took the point MAGNITUDES as client integers (p_title=10 /
+-- p_artist=5 / p_wrong_buzz=3) and did arithmetic on whatever the browser sent
+-- -- the client-controlled-scoring footgun. The boolean overload derives those
+-- magnitudes server-side, so the wire can no longer carry a point value. The two
+-- coexisted deliberately so mig 043 could be applied to prod decoupled from the
+-- frontend deploy: a still-loaded old tab kept hitting the integer overload
+-- while a freshly deployed tab hit the boolean one (PostgREST routes by the
+-- distinct named-arg set).
+--
+-- The boolean-sending frontend (PR #218) has been live and stable on prod, and
+-- every game is ephemeral (4-hour TTL), so no client still calls the integer
+-- overload. This migration retires it, leaving the boolean overload as the sole
+-- award_attempt signature. Mirrors migration 023, which retired the pre-021
+-- legacy overloads once the direct-RPC path had soaked on prod.
+--
+-- Idempotent via DROP FUNCTION IF EXISTS. Safe to re-apply. (On the full-set
+-- idempotency replay, mig 036's CREATE OR REPLACE re-creates the integer
+-- overload and this migration drops it again -- the end state is deterministic:
+-- boolean overload present, integer overload absent.)
+--
+-- Caveat (rollout timing): apply this to prod only AFTER the boolean-sending
+-- frontend (PR #218) has fully rolled out AND no pre-#218 browser tab can still
+-- be open -- i.e. at least one full game-TTL window (4h) after the #218 deploy.
+-- The boolean overload (mig 043) is the sole active path from that point on. If
+-- a future operator rolls back to a pre-#218 (integer-sending) frontend without
+-- first restoring this function, the host's "Correct Song" click would 500 with
+-- "function award_attempt(text, uuid, integer, integer, integer, uuid) does not
+-- exist" until the rollback is unwound or migration 036 is re-applied (which
+-- recreates the integer overload).
+
+DROP FUNCTION IF EXISTS award_attempt(text, uuid, integer, integer, integer, uuid);

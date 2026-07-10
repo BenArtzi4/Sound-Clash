@@ -2,7 +2,7 @@
 
 The twelve PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), and `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), and `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload).
 
 ## 0. Conventions
 
@@ -226,16 +226,17 @@ tampered browser can no longer POST an arbitrary point value. Soundtrack rounds
 stay emergent — the UI sends **both** correct flags and the function sums
 `10 + 5 = 15` as two independent claims (no soundtrack awareness in the DB).
 
-> **Dual overload during rollout.** Migration 043 **adds** this boolean signature
-> **alongside** the legacy integer one (`award_attempt(text, uuid, integer,
-> integer, integer, uuid)`, mig 036, which took the magnitudes as client
-> integers). Both coexist so the migration can be applied to prod decoupled from
-> the frontend deploy — a still-loaded old tab routes to the integer overload,
-> a freshly deployed tab to the boolean one. PostgREST resolves by the distinct
-> named-arg set (`p_correct_title/p_correct_artist/p_wrong` vs
-> `p_title/p_artist/p_wrong_buzz`). A later **migration 044** drops the integer
-> overload once no old clients remain (mirrors mig 023). The body below is
-> otherwise byte-identical between the two overloads.
+> **Rollout history (dual overload → boolean-only).** Migration 043 **added**
+> this boolean signature **alongside** the legacy integer one
+> (`award_attempt(text, uuid, integer, integer, integer, uuid)`, mig 036, which
+> took the magnitudes as client integers), so the migration could be applied to
+> prod decoupled from the frontend deploy — a still-loaded old tab routed to the
+> integer overload, a freshly deployed tab to the boolean one, PostgREST
+> resolving by the distinct named-arg set (`p_correct_title/p_correct_artist/
+> p_wrong` vs `p_title/p_artist/p_wrong_buzz`). Once the boolean-sending frontend
+> (PR #218) had soaked, **migration 044** dropped the integer overload (mirrors
+> mig 023), leaving this boolean signature as the **sole** `award_attempt`
+> overload.
 
 Token check (run before any other read/write):
 - Fetch `ended_at` from `active_games` (LEFT JOIN `game_secrets` for `manager_token`) for the code. Since migration 034 the token lives in `game_secrets`, not `active_games`. Missing game row → `P0002 game_not_found`. Ended → `P0001 game_ended`. Mismatched or NULL token → `28000 manager_token_required`.
