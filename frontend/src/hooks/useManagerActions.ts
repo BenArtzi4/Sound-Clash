@@ -35,11 +35,11 @@ export async function awardAttemptDirect(
   roundId: string,
   flags: AttemptFlags,
 ): Promise<AttemptResponse> {
-  // The wire now carries only booleans — the DB (award_attempt, mig 043)
-  // derives the point magnitudes server-side, so the client can no longer send
-  // an arbitrary value (T7.1 / D-7). PostgREST routes on the p_correct_*/p_wrong
-  // named-arg set to the boolean overload; the legacy integer overload stays
-  // live until mig 044 for any still-loaded old tab.
+  // The wire carries only booleans — the DB (award_attempt, mig 043) derives
+  // the point magnitudes server-side, so the client can no longer send an
+  // arbitrary value (T7.1 / D-7). The boolean overload is the sole award_attempt
+  // signature: mig 044 dropped the legacy integer overload once the
+  // boolean-sending frontend had rolled out.
   const { data, error } = await tracedRpc("award_attempt", { game_code: gameCode }, () =>
     supabase.rpc("award_attempt", {
       p_game_code: gameCode,

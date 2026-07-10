@@ -50,11 +50,13 @@ async def _attempt(
 
     Migration 043 made the DB the authority for the point magnitudes: the
     boolean overload ``award_attempt(text, uuid, boolean, boolean, boolean,
-    uuid)`` takes flags and derives 10 / 5 / 3 server-side. The ``::boolean``
-    casts pin the call to that overload (the retired integer overload from
-    mig 036 still exists until mig 044, so an un-typed ``$3`` would be
-    ambiguous). Tests that exercise *token validation* call the RPC directly
-    with the explicit 6th arg instead of using this helper.
+    uuid)`` takes flags and derives 10 / 5 / 3 server-side, and migration 044
+    dropped the old integer overload so the boolean signature is now the only
+    one (the full migration set — including 044 — is applied before any test
+    runs). The ``::boolean`` casts are retained to document intent; before
+    mig 044 they were needed to disambiguate the two overloads, and they still
+    route to the sole boolean overload. Tests that exercise *token validation*
+    call the RPC directly with the explicit 6th arg instead of using this helper.
     """
     token = await fetch_manager_token(conn, game_code)
     return await conn.fetch(
