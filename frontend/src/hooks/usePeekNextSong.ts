@@ -18,7 +18,7 @@
 
 import { supabase } from "../lib/supabase";
 import { tracedRpc } from "../lib/telemetry";
-import { RpcError } from "./useManagerActions";
+import { throwOnRpcError } from "../lib/rpcError";
 
 export interface PeekedSong {
   song_id: string;
@@ -51,9 +51,7 @@ export async function peekNextSongDirect(
       p_manager_token: managerToken,
     }),
   );
-  if (error) {
-    throw new RpcError(error.message, error.code);
-  }
+  throwOnRpcError(error);
   const row = (Array.isArray(data) ? data[0] : data) as PeekNextSongRow | null | undefined;
   // Zero rows = pool exhausted (or nothing eligible). Not an error; the caller
   // treats null as "nothing to prebuffer".

@@ -12,7 +12,7 @@
 
 import { supabase } from "../lib/supabase";
 import { tracedRpc } from "../lib/telemetry";
-import { RpcError } from "./useManagerActions";
+import { RpcError, throwOnRpcError } from "../lib/rpcError";
 import type { SelectSongResponse } from "../lib/types";
 
 interface SelectNextSongRow {
@@ -41,9 +41,7 @@ export async function selectNextSongDirect(
       p_song_id: songId ?? null,
     }),
   );
-  if (error) {
-    throw new RpcError(error.message, error.code);
-  }
+  throwOnRpcError(error);
   const row = (Array.isArray(data) ? data[0] : data) as SelectNextSongRow | null;
   if (!row) {
     throw new RpcError("select_next_song returned no row");

@@ -7,7 +7,13 @@
 
 import { supabase } from "../lib/supabase";
 import { tracedRpc } from "../lib/telemetry";
+import { RpcError, throwOnRpcError } from "../lib/rpcError";
 import type { AttemptResponse } from "../lib/types";
+
+// Re-exported so existing importers (`import { RpcError } from
+// "./useManagerActions"`) keep resolving to the same class; the definition and
+// the shared throwOnRpcError helper now live in lib/rpcError.
+export { RpcError };
 
 const TITLE_POINTS = 10;
 const ARTIST_POINTS = 5;
@@ -27,19 +33,6 @@ interface AwardAttemptRow {
   artist_claimed_by: string | null;
 }
 
-// PostgREST surfaces RpcError as { code, message, details, hint }; the
-// PL/pgSQL `RAISE EXCEPTION '<code>' USING ERRCODE = '<sqlstate>'` lands as
-// `message = '<code>'` (e.g. 'manager_token_required', 'no_buzz_to_score').
-// We surface that string so callers can branch / toast on it.
-export class RpcError extends Error {
-  readonly sqlstate: string | undefined;
-  constructor(message: string, sqlstate?: string) {
-    super(message);
-    this.name = "RpcError";
-    this.sqlstate = sqlstate;
-  }
-}
-
 export async function awardAttemptDirect(
   gameCode: string,
   managerToken: string,
@@ -56,9 +49,7 @@ export async function awardAttemptDirect(
       p_manager_token: managerToken,
     }),
   );
-  if (error) {
-    throw new RpcError(error.message, error.code);
-  }
+  throwOnRpcError(error);
   // RETURNS TABLE comes back as an array; we read the single row.
   const row = (Array.isArray(data) ? data[0] : data) as AwardAttemptRow | null;
   if (!row) {
@@ -86,9 +77,7 @@ export async function extendGameDirect(gameCode: string, managerToken: string): 
       p_manager_token: managerToken,
     }),
   );
-  if (error) {
-    throw new RpcError(error.message, error.code);
-  }
+  throwOnRpcError(error);
   // RETURNS timestamptz comes back as a bare JSON string.
   if (typeof data !== "string") {
     throw new RpcError("extend_game returned no timestamp");
@@ -103,7 +92,5 @@ export async function releaseBuzzLockDirect(gameCode: string, managerToken: stri
       p_manager_token: managerToken,
     }),
   );
-  if (error) {
-    throw new RpcError(error.message, error.code);
-  }
+  throwOnRpcError(error);
 }
