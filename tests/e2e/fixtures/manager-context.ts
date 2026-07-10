@@ -71,9 +71,15 @@ export async function openManagerAndCreateGame(
   }
 
   // 6. Wait for the YouTube player wrapper to flip to ready so the Start
-  //    button enables.
+  //    button enables. `data-ready` only flips once the real YouTube IFrame
+  //    Player fires onReady, which depends on the third-party YT API + iframe
+  //    loading from www.youtube.com on the runner — latency varies, and a slow
+  //    window occasionally blew past 20s on attempt 1 (recovered on retry, but
+  //    logged as flaky; issue #222). The gate resolves the instant the attribute
+  //    flips, so a higher ceiling costs nothing on the happy path; it only
+  //    absorbs slow-YouTube windows.
   await expect(page.getByTestId("youtube-player")).toHaveAttribute("data-ready", "true", {
-    timeout: 20_000,
+    timeout: 40_000,
   });
 
   return { page, gameCode, managerToken };

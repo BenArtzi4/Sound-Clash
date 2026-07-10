@@ -40,8 +40,10 @@ test("wiped-localStorage host recovers console access via the backup host link",
 
   // 4. The recovered console is actually functional, not just rendered:
   //    Start game advances to round 1 (a token-gated select_next_song RPC).
+  // 40s ceiling: the YouTube IFrame API's onReady depends on a third-party
+  // load from www.youtube.com whose latency varies on the runner (issue #222).
   await expect(page.getByTestId("youtube-player")).toHaveAttribute("data-ready", "true", {
-    timeout: 20_000,
+    timeout: 40_000,
   });
   await expect(page.getByTestId("start-round")).toBeEnabled();
   await page.getByTestId("start-round").click();
