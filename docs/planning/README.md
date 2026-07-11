@@ -45,7 +45,7 @@ _Updated: 2026-07-12 (Phases 1–7 ✅ done; Phase 8 in progress — remaining f
 
 **Maintainer-only carryovers (can't be closed by a coding session):** T1.7 Grafana Realtime alerts (+ I-Vitals dashboard); D-3/T5.6 Cloudflare edge + WAF; optional DB-password/`sb_secret_` rotation; T5.1 CSV formula-injection guard (off-limits `tools/song-curation/*`); finishing the song-curation batch (Hebrew + soundtracks — see `03-features.md` §Content). _(All open Dependabot PRs merged 2026-07-10.)_
 
-**Next action:** **Phases 1–7 are ✅ complete; Phase 8 is in progress.** Remaining **autonomous** work is now tracked as GitHub issues — features (X-SFX #244, X-DarkRoom #243, X-Recap #245, X-GenreSpotlight #246) and cleanups (I-Liveness #248, T-Admin #249, F-P2-5 two-IP check #247). Maintainer-gated infra/ops (T5.6 Cloudflare, T1.7 Grafana, T5.1 CSV guard, song curation, secret rotation) is in **[MAINTAINER-GATED-TASKS.md](MAINTAINER-GATED-TASKS.md)**; [NEXT-SESSION.md](NEXT-SESSION.md) is the latest handoff.
+**Next action:** **Phases 1–7 are ✅ complete; Phase 8 is in progress.** Remaining **autonomous** work is now tracked as GitHub issues — features (X-SFX #244, X-DarkRoom #243, X-Recap #245, X-GenreSpotlight #246) and cleanups (I-Liveness #248, F-P2-5 two-IP check #247). Maintainer-gated infra/ops (T5.6 Cloudflare, T1.7 Grafana, T5.1 CSV guard, song curation, secret rotation) is in **[MAINTAINER-GATED-TASKS.md](MAINTAINER-GATED-TASKS.md)**; [NEXT-SESSION.md](NEXT-SESSION.md) is the latest handoff.
 
 ## The one rule
 
