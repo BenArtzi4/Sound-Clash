@@ -25,7 +25,7 @@
 - [x] ✅ **Shipped in Phase 3** (mig 037 / PR #168): RLS enabled, anon/authenticated revoked, table dropped from the Realtime publication; RLS suite covers it.
 
 ### T5.4 · `game_history` retention/PII `[S–M]` — extra_finding
-- [ ] Add a retention sweep or anonymize team names on archive (they're currently kept indefinitely, unlike the 4h ephemeral tables). Decide retention window with the maintainer if non-obvious.
+- [x] **Keep forever + document as accepted** (maintainer decision 2026-07-11). No retention sweep / anonymization job: `game_history` team names are user-chosen pseudonyms (not PII) and the archive is operator-only (RLS + no anon grant, mig 033), so indefinite retention is a consciously-accepted tradeoff rather than a gap. Documented in `security-rls.md` §4 (new "Durable game history is retained indefinitely (T5.4)" entry) + a pointer in `data-model.md`. If the posture ever changes, the noted lighter first step is a `pg_cron` sweep nulling `game_history_teams.name` past a window. Docs-only; no code/migration.
 
 ## Decision-resolved tasks (per §05, 2026-07-04)
 
