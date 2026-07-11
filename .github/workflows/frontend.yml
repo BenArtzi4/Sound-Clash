@@ -30,10 +30,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
-          # NOTE: npm cache disabled until frontend/package-lock.json is committed
-          # (will be generated when Node is installed locally for Phase 5).
-          # Re-enable with `cache: "npm"` + `cache-dependency-path` once the
-          # lockfile lands.
+          # cache-dependency-path is repo-root-relative (setup-node is a JS
+          # action; it ignores defaults.run.working-directory), so it must
+          # name frontend/package-lock.json, not package-lock.json.
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install
         run: |
@@ -93,7 +94,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
-          # See note above about cache.
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
       - run: |
           if [ -f package-lock.json ]; then
             npm ci
