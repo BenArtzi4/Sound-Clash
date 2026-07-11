@@ -76,6 +76,39 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
         continue-on-error: true
 
+  rls:
+    name: rls suite (isolated)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: pytest (RLS suite, isolated on a testcontainer)
+        # Runs ONLY the two RLS files, in their own process, on a throwaway
+        # testcontainer Postgres (DATABASE_URL unset -> conftest spins one up;
+        # ubuntu-latest runners have Docker). Isolation locks in the T7.5 fix
+        # (dedicated non-superuser LOGIN-role fixture) and rules out the historical
+        # in-suite fixture-contamination flake that only appeared when these files
+        # ran after the rest of the db suite. `-c pyproject.toml --rootdir=.` keeps
+        # rootdir at backend/ so asyncio_mode=auto + the needs_docker marker load;
+        # `-p no:cov` skips the --cov-fail-under=90 gate (no coverage on this job).
+        run: |
+          pytest -c pyproject.toml --rootdir=. -p no:cov \
+            ../tests/db/test_rls_anon.py \
+            ../tests/db/test_rls_function_grants.py
+
   deploy:
     name: deploy (Render)
     needs: test

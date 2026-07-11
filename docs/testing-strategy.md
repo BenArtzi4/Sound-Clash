@@ -27,7 +27,7 @@ We're optimizing for **confidence in correctness under realistic conditions** fo
 |---|---|---|---|
 | All tests pass | 100% (zero failures, zero un-skipped skips) | pytest, vitest, playwright | All workflows |
 | Backend line coverage | ≥ 90% | `pytest --cov=app --cov-fail-under=90` | `backend.yml` |
-| Backend branch coverage | ≥ 85% | `pytest --cov-branch --cov-fail-under=85` | `backend.yml` |
+| Backend branch coverage | ≥ 85% (tracked, not yet gated) | `pytest --cov-branch` (no `--cov-fail-under` on branch) | `backend.yml` |
 | Frontend line coverage | ≥ 85% | `vitest run --coverage` with v8 + threshold | `frontend.yml` |
 | PL/pgSQL function coverage | 100% | manual: every function has a happy + every error case | reviewed in PR |
 | Buzz race test | passes 100 consecutive runs | dedicated CI job loops the test | `e2e.yml` (gated on label `run-stress`) |
@@ -37,6 +37,23 @@ We're optimizing for **confidence in correctness under realistic conditions** fo
 | No `xfail` without an open issue link | enforced via PR review | reviewer | code review |
 
 PRs that drop coverage below threshold fail. PRs that introduce skipped tests on `main` fail. PRs cannot merge with red CI.
+
+### E2E is deliberately label-gated, not a hard PR gate (T-e2eGate)
+
+The full Playwright suite (`e2e.yml`) runs unconditionally on every **push to `main`** (and on `workflow_dispatch`), but on **pull requests only when the `run-e2e` label is present**. The buzz-race stress loop is likewise gated on `run-stress`. This is a deliberate policy choice, reaffirmed 2026-07-11 (T7.6 / T-e2eGate): **we do not hard-gate every PR on e2e.**
+
+**Why not gate every PR:**
+- The e2e run takes ~13 min and depends on a **third-party load from `www.youtube.com`** for the YouTube IFrame player's `onReady` event (issue #222). That fetch has variable latency the repo cannot control; even after raising the `data-ready` gate 20s→40s (#223), specs still sometimes need 2–3 reruns. Making e2e mandatory would make **every** merge — including docs-only, CI, and backend-only PRs that never touch the frontend or the buzz path — hostage to a youtube.com fetch, turning a tolerable flake into a systemic merge blocker and encouraging rerun-until-green (which erodes the very signal §1 demands).
+- Correctness is **already gated** on every PR without e2e: backend coverage ≥90% (`backend.yml`, single `--cov-fail-under=90` with branch tracked but not separately gated), frontend lint + typecheck + vitest coverage (lines/functions/statements ≥85%, branches ≥80%; `frontend.yml`), and CodeQL. The DB logic, backend endpoints, and frontend units all block a red PR from merging today.
+- `main` is still continuously exercised end-to-end: the push-to-`main` run means a frontend/buzz-path regression that slipped through an unlabeled PR is caught at the merge run, not in production.
+
+**When to apply the `run-e2e` label (and `run-stress` where relevant):**
+- Any PR touching `frontend/**`, the buzzer hot path, the browser-direct RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`), or the Realtime wire format.
+- Any PR touching `db/migrations/**` (also add `run-stress`, so CI replays the whole migration set twice — `backend.yml` does not fire on migrations-only changes).
+- Any change to the manager/team/display page flows or the YouTube player.
+- Pre-release / cutover verification.
+
+Revisit hard-gating **once the player-ready signal is deterministic** — i.e. a non-`youtube.com`-dependent readiness check replaces the current IFrame `onReady` wait that motivated #222/#223. Until then, label-gated is the standing decision. Making it mandatory is a `.github/workflows/` change and must be flagged per `.claude/rules/ci-and-repo-config.md`.
 
 ## 3. Test Pyramid (where each test type lives)
 
