@@ -19,7 +19,7 @@
 - [ ] In both `add-songs.html:420` and `review.js:403` `csvCell`: prefix a leading `'` (or force-quote) when a cell starts with `= + - @ \t \r`. Mirrored one-liner. Tooling-only.
 
 ### T5.2 · Team-name guard on join `[S]` — extra_idea
-- [ ] Basic profanity/emoji filter in `join_team` before insert (the 1–30 length cap already exists via the pydantic `TeamName` constraint). Names show on the projector and persist durably in `game_history`; a lightweight guard prevents ugly display + permanent inappropriate records.
+- [x] **Objective sanitization only** (maintainer decision 2026-07-11 — a profanity/emoji filter was declined: the game is Hebrew-primary + party-flavored, so a wordlist risks rejecting legit Hebrew and wanted emoji). The `TeamName` type gained a `BeforeValidator` (`backend/app/models/games.py`) that strips C0/C1 control chars, line/paragraph separators, zero-width / word-joiner chars, and explicit bidirectional override/isolate marks **before** the length check, so an all-junk name collapses to `""` and is rejected by `min_length=1`. Hebrew/RTL renders via the Unicode bidi algorithm without those marks; ZWJ/ZWNJ are kept so compound emoji survive. Tests: `tests/backend/test_team_name_sanitize.py` (13 model-level cases) + the existing HTTP blank/too-long checks. Docs synced (`security-rls.md` §8 + threat table, `api-contracts.md` §2.3); CHANGELOG entry. Not buzz-path, no migration.
 
 ### T5.3 · `game_round_attempts` RLS `[S]` — T-AttemptsRLS
 - [x] ✅ **Shipped in Phase 3** (mig 037 / PR #168): RLS enabled, anon/authenticated revoked, table dropped from the Realtime publication; RLS suite covers it.

@@ -95,6 +95,12 @@ Validation:
   the game is backed by a UNIQUE `(game_code, name)` constraint; the handler
   reclaims a matching existing row before inserting, so a same-name rejoin is a
   successful reclaim rather than a conflict.
+- **Sanitization (T5.2):** control, line/paragraph-separator, zero-width, and
+  bidirectional override/isolate characters are stripped from the name before
+  the length check (they can scramble the projector or leave permanent junk in
+  `game_history`). Hebrew/RTL and emoji — including ZWJ compound emoji — are
+  preserved. A name that is nothing but stripped characters collapses to empty
+  and is rejected as a `validation_error`.
 
 **Response 201**:
 ```json
