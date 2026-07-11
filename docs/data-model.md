@@ -24,7 +24,7 @@ active_games (PK: game_code) ◄────────────────
 
 **Durable** (never auto-deleted): `songs`, `genres`, `song_genres`.
 **Ephemeral** (deleted 4h after `started_at`): `active_games`, `game_teams`, `game_rounds`. Pruned by pg_cron.
-**Durable game history** (never pruned; mig 033): `game_history`, `game_history_teams`, `game_history_songs` — an end-of-game snapshot written by `archive_game()` so a finished game survives the 4h sweep. Operator-only (no `anon` read).
+**Durable game history** (never pruned; mig 033): `game_history`, `game_history_teams`, `game_history_songs` — an end-of-game snapshot written by `archive_game()` so a finished game survives the 4h sweep. Operator-only (no `anon` read). Indefinite retention (incl. team names) is a **consciously accepted** tradeoff — the strings are pseudonyms and the archive is operator-only; see `security-rls.md` §4 (T5.4).
 
 The only FK crossing the durable ↔ ephemeral boundary is `game_rounds.song_id → songs.id`, with `ON DELETE SET NULL` so deleting a song doesn't break in-progress rounds. The history tables likewise keep a soft `game_history_songs.song_id → songs.id` (ON DELETE SET NULL) but **denormalize** title/artist/youtube_id, so a later catalog edit or delete can't rewrite the recorded history.
 
