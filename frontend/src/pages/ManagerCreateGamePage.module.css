@@ -33,6 +33,71 @@
   font-weight: 700;
 }
 
+/* One-tap presets (X-Presets). A light "quick start" row above the genre grid:
+   secondary styling so it reads as a shortcut, not the primary control. */
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.presetsLabel {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-dim);
+  font-weight: 700;
+}
+
+.presetRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.preset {
+  min-height: 44px;
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text-dim);
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.preset:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+}
+
+.preset:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+/* A solid fill marks the preset whose selection is currently applied. */
+.presetActive {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.presetActive:hover {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-strong);
+  color: #ffffff;
+}
+
 .genres {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
