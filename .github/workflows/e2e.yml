@@ -27,6 +27,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
+          # cache-dependency-path is repo-root-relative (setup-node ignores the
+          # step-level working-directory), so it names frontend/package-lock.json.
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
       - uses: actions/setup-python@v6
         with:
@@ -42,8 +46,9 @@ jobs:
 
       - name: Install frontend deps
         working-directory: frontend
-        # frontend/package-lock.json is intentionally untracked (see commit
-        # 888a5ab: npm 10 esbuild optional-deps bug). Mirror frontend.yml.
+        # frontend/package-lock.json is tracked (PR #224), so this takes the
+        # npm ci branch; the setup-node npm cache above speeds the install.
+        # Mirrors frontend.yml.
         run: |
           if [ -f package-lock.json ]; then
             npm ci
