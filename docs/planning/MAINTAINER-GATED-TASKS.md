@@ -56,7 +56,7 @@ _All three sub-items shipped together in PR #232 (maintainer-authorized CI chang
 
 ## Group C — infra / deploy config you execute, I guide + validate
 
-### 3/6. ✅ F-P2-5 · Rate-limit per-IP behind the proxy  `[DONE — PR #231 merged + deployed; edge-verified. Two-IP check owed to you.]`
+### 3/6. ✅ F-P2-5 · Rate-limit per-IP behind the proxy  `[DONE — PR #231 merged + deployed; edge-verified. Two-IP check owed to you → issue #247.]`
 - **What:** behind Render's proxy every request looks like it comes from the proxy IP, so slowapi's per-IP rate limits collapse into **one shared bucket** (a single abuser can exhaust everyone's limit, or hide in the crowd). Fix = trust `X-Forwarded-For` (uvicorn `--proxy-headers` / forwarded-allow-ips + limiter reads the real client IP).
 - **Why not autonomous:** the fix is a **Render start-command / deploy-config** change (yours), possibly plus a small code tweak (mine).
 - **You do:** update the Render start command / env as I spec it.
@@ -88,9 +88,10 @@ _All three sub-items shipped together in PR #232 (maintainer-authorized CI chang
 - **I do:** the edit (if authorized) or hand you the exact diff.
 - **Done =** an exported cell starting with `=` is prefixed with `'`.
 
-### 10. ⬜ Phase 8 · Features
+### 10. 🟡 Phase 8 · Features (in progress)
 - **What:** the Tier 1–3 feature candidates in `phase-8-features.md`.
-- **Why not autonomous:** needs your **direction**, and you have standing **vetoes** (no auto-release / practice / streaks; SFX must not slow the buzz; explain GenreSpotlight + win-conditions before building).
+- **Shipped:** X-Presets (#241), X-Recovery (`HostRecoveryLink`), X-Extend (mig 039 + `ExpiryCountdown`). **Vetoed → dropped:** X-AutoRelease, X-Practice, X-Streaks.
+- **Remaining (each a GitHub issue, pick one to green-light):** X-SFX **#244** (needs your D-9 audio-asset sign-off; must not slow the buzz), X-DarkRoom **#243** (frontend-only), X-Recap **#245** (canvas PNG), X-GenreSpotlight **#246** (owes a "why is it good?" case; DB migration).
 - **You do:** pick which feature(s), confirm the design against the vetoes.
 - **I do:** design-then-build the chosen one through the normal loop.
 - **Done =** the feature is live on prod + passes the full-game exit gate.
@@ -119,4 +120,5 @@ _All three sub-items shipped together in PR #232 (maintainer-authorized CI chang
 - 2026-07-11: #3 F-P2-5 **reclassified** during pre-scoping — the safe fix is a spoof-resistant custom `key_func` (rightmost `X-Forwarded-For` hop), which is **code-only** (no Dockerfile/Render change), so it no longer needs a maintainer deploy action. One empirical unknown: Render's exact XFF format, confirmed on prod after deploy.
 - 2026-07-11: #4 T7.6 — shipped all three CI-discipline sub-items in **PR #232** (maintainer-authorized), designed + adversarially verified by a pre-ship workflow: isolated `rls suite (isolated)` job (green on the PR), dependency-free gzipped-JS bundle budget (350037/410000 B, green on the PR), and the e2e-gate decision (keep label-gated, documented in `testing-strategy.md`). **Phase 7 exit gate passed → Phases 1–7 all complete.** Everything below (#5–#10) is genuinely maintainer-gated (infra/dashboard/off-limits-tooling/product-direction) — handed off. ✅ DONE.
 - 2026-07-11: #10 Phase 8 — **kicked off on your direction** ("pick phase 8, I wrote there what to do"). Built the first non-vetoed Tier-1 feature **X-Presets** (one-tap Quick-start presets on the create screen) end-to-end: frontend-only, no migration, not buzz-path → **PR #241 merged + live on prod + verified** (live-bundle grep + real-browser check on `soundclash.org/manager/create`). Honored your `phase-8-features.md` markers (skipped X-AutoRelease/X-Practice/X-Streaks; X-GenreSpotlight deferred pending my "why is it good?" writeup). Left `phase-8-features.md` untouched (your uncommitted file) — **tick its `X-Presets` box when convenient**. Phase 8 remains open (more features await your per-feature direction). 🟡 in progress.
+- 2026-07-12: **planning cleanup + issue tracker.** Discovered **X-Recovery** (`HostRecoveryLink`) and **X-Extend** (mig 039 + `ExpiryCountdown`) were already shipped but unticked — ticked them + X-Presets in `phase-8-features.md`; dropped the vetoed X-AutoRelease/X-Practice/X-Streaks. Synced the stale `01`–`04` backlog to actual shipped state (Phase 6–7 items marked resolved; D-2/D-4 doc halves closed via #208). Opened GitHub issues for all remaining not-started work so it's pick-up-able: X-SFX #244, X-DarkRoom #243, X-Recap #245, X-GenreSpotlight #246, F-P2-5 two-IP check #247, I-Liveness #248, T-Admin #249. Docs-only PR.
 - 2026-07-11: #3 F-P2-5 — implemented `client_ip` key_func keying on **`CF-Connecting-IP`** (research-confirmed present on Render/Cloudflare) → rightmost-XFF → socket. 6 unit + 1 per-IP integration test, 100% key-func coverage, docs + CHANGELOG. **PR #231 merged, Render deployed.** Prod edge-verified: baseline `POST /games` → 201; spoofed `CF-Connecting-IP` → **403 from Cloudflare** (header is un-forgeable — even stronger than "overwritten"); spoofed `X-Forwarded-For` → 201 (passes, but key uses CF-Connecting-IP on prod). Change is safe-by-construction (a bad key = old shared-bucket, never a regression). ✅ DONE — **owed: your two-IP behavioral check** (laptop vs phone-on-cellular: ~11 rapid game-creates from device A → last one 429s; then create from device B on a *different* network → should be 201, proving independent buckets).
