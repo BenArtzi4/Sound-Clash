@@ -20,15 +20,10 @@ _None open._ (F-P0-3 shipped 2026-07-07 — Phase 4 T4.0, PR #185.)
 
 ## P1 — Real user-facing bugs
 
-### F-P1-6 · `manager_token` loss mid-game orphans the game `[bug]` — Phase 4 T4.10
-- **Evidence:** `managerToken.ts` — single credential, issued once at create, no re-issue; every host action is token-gated.
-- **Failure:** if the host browser evicts localStorage (private mode, cache clear, device swap) the game is dead until the 4h sweep; players sit frozen.
-- **Fix:** a host recovery affordance — a re-openable host link/QR embedding the token in the console — so the host can re-authenticate from the same or another device. Autonomous (frontend) once we decide the surface. Effort M. (Feature X-Recovery in `03`.)
+_None open._
 
-### F-P1-9 · Cross-game score write via `buzz_in` `[security, medium]` — **fix PR in flight (mig 041)**
-- **Evidence:** `035_buzz_in_drop_round_update.sql` sets `active_games.buzzed_team_id = p_team_id` gated only by the FK (`buzzed_team_id → game_teams.id`), never scoped to `p_game_code`; `036_award_attempt_collapse_writes.sql` then `UPDATE game_teams SET score = … WHERE id = v_team_id` with no game filter. `award_bonus` (`014_scoring_revamp.sql:149-152`) already has the `team_not_in_game` guard buzz_in lacks. Found by the 2026-07-10 adversarial security re-verify (11-agent workflow); adversarially confirmed real & new (not D-4).
-- **Failure:** a host holding only their OWN game's manager_token can plant a **foreign** game's team id in their own buzz lock (team UUIDs are anon-readable via the code) and then `award_attempt` mutates that foreign team's score in a game they hold no token for — the victim host never sees a buzz (the lock sits on the attacker's game), so the token gate is bypassed. The anon "lock-grief" half (planting a foreign/unknown team in a stranger's lock) is the same primitive at low severity. Bounded: transient scores in a 4h ephemeral game; attacker must know the victim's projector-visible 6-char code.
-- **Fix:** add one race-preserving predicate to buzz_in's conditional UPDATE — `AND EXISTS (SELECT 1 FROM game_teams gt WHERE gt.id = p_team_id AND gt.game_code = p_game_code)` — so a non-member team can never win the lock (closes the vector at the source). Standalone idempotent mig **041**, buzz-path so `run-stress`+`run-e2e` labelled; **PR opened this session, handed to the maintainer to merge + apply mig 041 to prod** (buzz-path + prod migration, not self-merged). Optional defense-in-depth: mirror the guard in `award_attempt` when T7.1 rewrites it. Effort S.
+- **F-P1-6 · `manager_token` loss mid-game orphans the game** `[bug]` — ✅ **RESOLVED**: X-Recovery shipped — `HostRecoveryLink.tsx` is a re-openable token-gated host link/QR on the manager console, so a host whose localStorage is wiped re-authenticates from the same or another device.
+- **F-P1-9 · Cross-game score write via `buzz_in`** `[security, medium]` — ✅ **RESOLVED 2026-07-10 (PR #211, mig 041)**: `buzz_in`'s conditional UPDATE now carries `AND EXISTS (SELECT 1 FROM game_teams gt WHERE gt.id = p_team_id AND gt.game_code = p_game_code)`, so a non-member team can never win the lock (race preserved). Merged + applied + verified on prod. Optional defense-in-depth (mirror in `award_attempt`) noted for a future mig 045 — low priority (`award_attempt` credits the game-scoped `active_games.buzzed_team_id`, not a client team-id).
 
 ---
 
@@ -39,19 +34,17 @@ _None open._ (F-P0-3 shipped 2026-07-07 — Phase 4 T4.0, PR #185.)
 - **Failure:** evicted player can't re-attach to their score; same-name rejoin 409s ("team name already taken").
 - **Fix (shipped):** D-4 declined per-team tokens, so `POST /games/{code}/teams` (`_join_team_blocking`) now SELECTs the existing `(game_code, name)` row and returns it (same id, preserved score) before inserting — a same-name rejoin is a reclaim, not a 409. No schema change; the UNIQUE constraint is the concurrent-insert backstop. Phase 5 T5.7, PR #210.
 
-### F-P2-5 · Per-IP rate limits collapse to one global bucket behind the proxy `[availability, low]` — ✅ **FIXED (code-only, PR TBD)**
+### F-P2-5 · Per-IP rate limits collapse to one global bucket behind the proxy `[availability, low]` — ✅ **FIXED (code-only, PR #231, deployed + edge-verified)** · behavioral two-IP check owed → **[issue #247](https://github.com/BenArtzi4/Sound-Clash/issues/247)**
 - **Evidence:** `backend/app/middleware/rate_limit.py` keyed slowapi on `get_remote_address` (`request.client.host`); behind Render/Cloudflare every client shares the proxy hop's IP → one bucket.
 - **Failure:** the documented per-IP limits (security-rls.md §4/§6, "10/min/IP") weren't real; on a busy night >10 legitimate hosts creating games in a rolling minute could 429 an innocent host (shared-bucket self-DoS). Brute-force posture unchanged (128-bit token / 16-char admin password carry that). Found by the 2026-07-10 security re-verify.
 - **Fix (shipped):** turned the key_func into `client_ip` (`rate_limit.py`) which keys on **`CF-Connecting-IP`** — the Cloudflare header Render sets to the true client IP and *overwrites*, so it's spoof-resistant — falling back to the **rightmost** `X-Forwarded-For` hop (the proxy-appended, non-spoofable one; the leftmost is client-forgeable since Render only appends) then the socket peer. **Code-only** — no `--proxy-headers`/Dockerfile change needed, so no deploy-config flag. Unit tests (`test_rate_limit_key.py`) + a per-IP bucketing integration test (`test_rate_limits.py`). Caveat: trusts the edge; origin-bypass hardening is T5.6's job. Docs: `security-rls.md` §6. Effort S.
 
-### F-P2-6 · Bulk-import CSV upload has no size cap `[availability, low]`
-- **Evidence:** `backend/app/routers/admin_songs.py:235` does an unbounded `await file.read()`, buffering the whole multipart body into the single free-tier worker's RAM.
-- **Failure:** a large upload can OOM the worker. Admin-gated (`require_admin`), so it's a trusted-principal / self-inflicted DoS — no anon reachability, no privilege escalation, hence low. Found by the 2026-07-10 security re-verify.
-- **Fix:** reject on `Content-Length` above a small cap and/or read in bounded chunks up to a few MB → HTTP 413 before decode/parse. Optionally batch the per-row DB writes in `csv_import._apply_blocking`. Effort S. (Clean autonomous backend hardening — no buzz-path, no migration.)
+### F-P2-6 · Bulk-import CSV upload has no size cap `[availability, low]` — ✅ **RESOLVED 2026-07-10 (PR #215)**
+- **Fix (shipped):** `admin_songs.py` bulk-import now rejects an oversized upload with **HTTP 413** (5 MB cap) before buffering/parsing. Admin-gated backend hardening; no buzz-path, no migration.
 
 ### F-P2-4 · CSV formula injection in the two curation exporters `[security, low]` — Phase 5 T5.1
 - **Evidence:** `add-songs.html:420` + `review.js:403` `csvCell` quote per RFC-4180 but don't neutralize a leading `= + - @ \t \r`; titles derive from attacker-uploadable YouTube titles.
-- **Fix:** prefix a leading `'` (or force-quote) when the cell starts with a formula trigger — one mirrored one-liner. Effort S. (Tooling-only; not user-facing, but cheap.)
+- **Fix:** prefix a leading `'` (or force-quote) when the cell starts with a formula trigger — one mirrored one-liner. Effort S. (Tooling-only; not user-facing, but cheap.) **Maintainer-gated** — the two files are the maintainer's uncommitted in-flight `tools/song-curation/*` (off-limits); see MAINTAINER-GATED-TASKS.md #9.
 
 ---
 

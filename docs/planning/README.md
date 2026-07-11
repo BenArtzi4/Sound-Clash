@@ -27,7 +27,7 @@ Make the game **load fast, respond instantly, and never lag** — every button, 
 
 ## Status snapshot
 
-_Updated: 2026-07-10 (Phase 4 ✅ done — exit gate passed; every other claim below re-verified against code/git during the 2026-07-08 reorg)._
+_Updated: 2026-07-12 (Phases 1–7 ✅ done; Phase 8 in progress — remaining features tracked as GitHub issues; every claim below re-verified against code/git)._
 
 | Phase | Theme | State |
 |---|---|---|
@@ -39,13 +39,13 @@ _Updated: 2026-07-10 (Phase 4 ✅ done — exit gate passed; every other claim b
 | 5 | Security & abuse hardening | ✅ code done (D-1/mig034, T5.3, T5.7, T5.2/#229, T5.4/#230); only **T5.6** Cloudflare (infra) + **T5.1** CSV guard (off-limits tooling) remain — both maintainer-gated |
 | 6 | Correctness & docs hygiene | ✅ done (T6.1/#199, T6.2/#200/#203, T6.3/#216) |
 | 7 | Tech-debt & test hardening | ✅ done (T7.1–T7.6; exit gate passed 2026-07-11; T7.6/#232) |
-| 8 | Features | ready — Tier 1–3 in scope (X-Skip declined); D-5/D-6 out of scope — **needs maintainer direction + honors the standing vetoes** |
+| 8 | Features | 🟡 in progress — X-Presets (#241), X-Recovery, X-Extend ✅ shipped; X-AutoRelease/X-Practice/X-Streaks ❌ vetoed; remaining tracked as issues: X-SFX #244, X-DarkRoom #243, X-Recap #245, X-GenreSpotlight #246 |
 
 **Pre-event validation (2026-07-05/06):** a 10-team/40-person live-prod pass + a DB-verified 10-team/30-round e2e found two display-scaling bugs, both fixed and shipped (PRs #176/#178). No open blockers. The reusable checklist now lives at [`docs/pre-event-checklist.md`](../pre-event-checklist.md).
 
-**Maintainer-only carryovers (can't be closed by a coding session):** T1.7 Grafana Realtime alerts (+ I-Vitals dashboard); D-3/T5.6 Cloudflare edge + WAF; optional DB-password/`sb_secret_` rotation; merging the open Dependabot PRs (#133, #114, #147, #182); finishing the song-curation batch (Hebrew + soundtracks — see `03-features.md` §Content).
+**Maintainer-only carryovers (can't be closed by a coding session):** T1.7 Grafana Realtime alerts (+ I-Vitals dashboard); D-3/T5.6 Cloudflare edge + WAF; optional DB-password/`sb_secret_` rotation; T5.1 CSV formula-injection guard (off-limits `tools/song-curation/*`); finishing the song-curation batch (Hebrew + soundtracks — see `03-features.md` §Content). _(All open Dependabot PRs merged 2026-07-10.)_
 
-**Next action:** **Phases 1–7 are ✅ complete.** What remains is **not autonomously closable** by a coding session: **Phase 8** features (needs maintainer direction + the standing vetoes) and maintainer-gated infra/ops (T5.6 Cloudflare, T1.7 Grafana, T5.1 CSV guard on off-limits tooling, song curation, secret rotation). See **[MAINTAINER-GATED-TASKS.md](MAINTAINER-GATED-TASKS.md)** for the full breakdown and [NEXT-SESSION.md](NEXT-SESSION.md) for the latest handoff.
+**Next action:** **Phases 1–7 are ✅ complete; Phase 8 is in progress.** Remaining **autonomous** work is now tracked as GitHub issues — features (X-SFX #244, X-DarkRoom #243, X-Recap #245, X-GenreSpotlight #246) and cleanups (I-Liveness #248, T-Admin #249, F-P2-5 two-IP check #247). Maintainer-gated infra/ops (T5.6 Cloudflare, T1.7 Grafana, T5.1 CSV guard, song curation, secret rotation) is in **[MAINTAINER-GATED-TASKS.md](MAINTAINER-GATED-TASKS.md)**; [NEXT-SESSION.md](NEXT-SESSION.md) is the latest handoff.
 
 ## The one rule
 
