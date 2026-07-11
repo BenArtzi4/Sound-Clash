@@ -19,7 +19,7 @@ Steady autonomous cleanup that makes the app easier to keep production-perfect. 
 ## B. Dead code & repo hygiene
 
 - ~~**T-DeadCode · One-sweep dead-code removal.**~~ ✅ done 2026-07-10 (PR #201). Deleted `Scoreboard.{tsx,test.tsx,module.css}` (dead — nothing imported it; only an unrelated local `ScoreboardRow` type in `EndScreen.tsx` shares the prefix), dropped the CLAUDE.md mention + the stale `testing-strategy.md` test-table row + two illustrative code comments (`useGameChannel.ts`, `RoundCountdown.tsx`), and removed the tracked `create-page-after-fix.png`.
-- **T-Lockfile · Un-ignore `frontend/package-lock.json`.** `[S]` `.gitignore:35` excludes it ("temporarily untracked" due to an npm-10 Linux-runner bug ~3 weeks stale). Without it the Cloudflare deploy resolves `^` ranges fresh each build → non-reproducible deploys. Re-verify the npm bug, then commit the lockfile. **CI/deploy-adjacent — verify before flipping.**
+- ~~**T-Lockfile · Un-ignore `frontend/package-lock.json`.**~~ ✅ **done 2026-07-11 (PR #224).** Gate verified met: CI runs Node 22 (npm 10.9+) since 2026-05-07 and `frontend.yml` already `npm ci`s when a lockfile is present. Root cause doubly moot — Vite 8 uses **Rolldown** (not esbuild), and the regenerated lockfile (npm 11.12) records all 15 platform bindings incl. the runner's `@rolldown/binding-linux-x64-gnu`. Deploys now resolve from the pinned lockfile via `npm ci`. Re-enabling the setup-node npm cache is a separate CI-flag follow-up.
 
 ## C. Tests
 
