@@ -126,6 +126,91 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
   });
 
+  describe("presets (X-Presets)", () => {
+    const CATALOG = [
+      { id: "g-rock", name: "Rock", slug: "rock" },
+      { id: "g-pop", name: "Pop", slug: "pop" },
+      { id: "g-ipop", name: "Israeli Pop", slug: "israeli-pop" },
+      { id: "g-st", name: "Soundtracks", slug: "soundtracks" },
+    ];
+
+    it("one-tap preset selects its genres and decades and enables submit", async () => {
+      vi.mocked(listGenres).mockResolvedValueOnce(CATALOG);
+      vi.mocked(createGame).mockResolvedValueOnce({
+        game_code: "ZZZZZZ",
+        status: "waiting",
+        selected_genres: ["g-rock", "g-pop"],
+        selected_decades: [1980, 1990],
+        started_at: "2026-05-05T12:00:00Z",
+        expires_at: "2026-05-05T16:00:00Z",
+        manager_token: "abc-token-123",
+      });
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+
+      const submit = screen.getByRole("button", { name: /create game/i });
+      expect(submit).toBeDisabled();
+
+      fireEvent.click(screen.getByRole("button", { name: /80s & 90s Party/i }));
+
+      // Rock + Pop on, the others off; 80s + 90s decades on.
+      expect(screen.getByLabelText(/rock/i)).toBeChecked();
+      expect(screen.getByLabelText(/^pop$/i)).toBeChecked();
+      expect(screen.getByLabelText(/israeli pop/i)).not.toBeChecked();
+      expect(screen.getByLabelText(/^80s$/i)).toBeChecked();
+      expect(screen.getByLabelText(/^90s$/i)).toBeChecked();
+      expect(submit).toBeEnabled();
+
+      fireEvent.click(submit);
+      await waitFor(() => expect(createGame).toHaveBeenCalled());
+      expect(createGame).toHaveBeenCalledWith({
+        selected_genres: ["g-rock", "g-pop"],
+        selected_decades: [1980, 1990],
+      });
+    });
+
+    it("the Everything preset selects every loaded genre and no decade", async () => {
+      vi.mocked(listGenres).mockResolvedValueOnce(CATALOG);
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+
+      fireEvent.click(screen.getByRole("button", { name: /^everything$/i }));
+
+      for (const g of CATALOG) expect(screen.getByLabelText(g.name)).toBeChecked();
+      expect(screen.getByLabelText(/^80s$/i)).not.toBeChecked();
+    });
+
+    it("skips preset slugs absent from the catalog (graceful degradation)", async () => {
+      // Movie Night = soundtracks + israeli-soundtracks, but the catalog here has
+      // only 'soundtracks', so the preset resolves to just that one genre.
+      vi.mocked(listGenres).mockResolvedValueOnce(CATALOG);
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+
+      fireEvent.click(screen.getByRole("button", { name: /movie night/i }));
+
+      expect(screen.getByLabelText(/soundtracks/i)).toBeChecked();
+      expect(screen.getByLabelText(/rock/i)).not.toBeChecked();
+      expect(screen.getByRole("button", { name: /create game/i })).toBeEnabled();
+    });
+
+    it("marks the applied preset active and clears it when the selection changes", async () => {
+      vi.mocked(listGenres).mockResolvedValueOnce(CATALOG);
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+
+      const everything = screen.getByRole("button", { name: /^everything$/i });
+      expect(everything).toHaveAttribute("aria-pressed", "false");
+
+      fireEvent.click(everything);
+      expect(everything).toHaveAttribute("aria-pressed", "true");
+
+      // Editing the chips breaks the exact match, so the preset de-highlights.
+      fireEvent.click(screen.getByLabelText(/rock/i));
+      expect(everything).toHaveAttribute("aria-pressed", "false");
+    });
+  });
+
   it("shows an error if listGenres fails", async () => {
     vi.mocked(listGenres).mockRejectedValueOnce(new Error("offline"));
     renderPage();
