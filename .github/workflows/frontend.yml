@@ -71,6 +71,28 @@ jobs:
             exit 1
           fi
 
+      - name: Bundle-size budget (gzipped JS)
+        run: |
+          # T7.6 / T-BundleBudget: fail the PR on an accidental JS bundle-size
+          # regression. Dependency-free (repo rule bans size-limit/bundlesize):
+          # sums the per-file gzipped size of every emitted dist/assets/*.js and
+          # compares against a fixed budget. Reuses the dist/ built by the
+          # preceding "Verify no service-role key leaked" step (no rebuild).
+          # Measured 2026-07-11: 350037 bytes. Budget 410000 = ~17% headroom.
+          # Raise BUDGET deliberately (in a PR) when an intentional feature
+          # grows the bundle; an accidental jump trips this and must be explained.
+          BUDGET=410000
+          total=0
+          for f in dist/assets/*.js; do
+            size=$(gzip -c "$f" | wc -c)
+            total=$((total + size))
+          done
+          echo "gzipped JS: ${total} bytes (budget: ${BUDGET})"
+          if [ "$total" -gt "$BUDGET" ]; then
+            echo "::error::Frontend JS bundle ${total} bytes exceeds budget ${BUDGET} bytes"
+            exit 1
+          fi
+
       - name: Upload coverage
         uses: codecov/codecov-action@v7
         if: always()
