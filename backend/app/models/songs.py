@@ -72,3 +72,38 @@ class BulkImportSummary(BaseModel):
     inserted: int
     updated: int
     total: int
+
+
+class AvailabilityCheckRequest(BaseModel):
+    """One page of the dead-video scan (I-Liveness). Probes ``limit`` songs
+    starting at ``offset``, or the explicit ``song_ids`` if given."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Cap the page so the worst-case probe time stays well under Render's ~100s
+    # gateway timeout (see ``services.youtube_availability``). Page the whole
+    # ~1025-song catalog in a handful of calls via ``next_offset``.
+    limit: int = Field(default=200, ge=1, le=250)
+    offset: int = Field(default=0, ge=0)
+    song_ids: list[UUID] | None = None
+
+
+class AvailabilitySong(BaseModel):
+    """A song flagged by the availability scan (enough to find/fix it in the UI)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    youtube_id: str
+    title: str
+
+
+class AvailabilityReport(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    checked: int
+    dead: list[AvailabilitySong]
+    unknown: list[AvailabilitySong]
+    # Offset for the next page, or null when this page reached the end of the
+    # catalog (always null when explicit ``song_ids`` were probed).
+    next_offset: int | None = None
