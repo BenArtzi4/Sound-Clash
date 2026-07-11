@@ -191,7 +191,7 @@ If we ever add per-user scoping, RLS policies become more restrictive and Realti
 | **DoS via team-join spam** | Medium | Low (UNIQUE constraint catches dupes) | Rate limit `POST /games/.../teams` to 30/min/IP |
 | **DoS via buzz spam** | Low | Low (Postgres handles concurrency) | Postgres MVCC; no app-level rate limit needed |
 | **Cross-site request forgery (CSRF)** | Low | Low | No cookies; admin auth is a header (not auto-sent by browser); SameSite N/A |
-| **XSS via team name** | Low | Medium (admin views injected names) | React auto-escapes; never use `dangerouslySetInnerHTML` for user-supplied content; CSP header |
+| **XSS / display-spoofing via team name** | Low | Medium (admin views injected names) | React auto-escapes; never use `dangerouslySetInnerHTML` for user-supplied content; CSP header; team names sanitized of control/bidi/zero-width chars on join (T5.2, see §8) |
 | **Realtime quota exhaustion** | Medium | Medium (game-day outage) | Alert at 75% utilization; document max-concurrent-games limit |
 | **Admin password brute force** | Low | High (catalog write access) | 16+ char strong password; rate limit `/admin/*` to 100/min/IP |
 | **Manager-token guess for someone else's game** | Very low | Medium (could control a stranger's game) | 128-bit uuid → 2^128 search space; rate-limit on `/games/*` is 100/min/IP per endpoint; tokens auto-expire after 4h with the game row |
@@ -303,7 +303,9 @@ class CreateGameRequest(BaseModel):
     selected_genres: conlist(UUID, min_length=1)
 
 class JoinTeamRequest(BaseModel):
-    name: constr(strip_whitespace=True, min_length=1, max_length=30)
+    # TeamName = strip_whitespace + 1–30 chars, plus a BeforeValidator that
+    # strips control / bidirectional-override / zero-width characters (T5.2).
+    name: TeamName
 ```
 
 YouTube ID validation: `re.match(r'^[A-Za-z0-9_-]{11}$', youtube_id)`.
@@ -311,6 +313,8 @@ YouTube ID validation: `re.match(r'^[A-Za-z0-9_-]{11}$', youtube_id)`.
 Game code validation: `re.match(r'^[A-Z2-9]{6}$', game_code)` (excludes ambiguous chars).
 
 Reject anything that doesn't fit. Don't try to "fix" invalid input.
+
+**Team-name sanitization (T5.2 — the one narrow exception to "don't fix").** A team name renders on the projector and persists durably in `game_history` (unlike the 4h-ephemeral tables), so the `TeamName` type runs a `BeforeValidator` that strips C0/C1 control chars, line/paragraph separators, zero-width / word-joiner chars, and the explicit bidirectional override/isolate marks (U+202A–U+202E, U+2066–U+2069) that can scramble the display. Hebrew (and any RTL script) renders correctly via the Unicode bidi algorithm **without** these marks, so stripping them never harms a legitimate name; ZWJ (U+200D) and ZWNJ (U+200C) are deliberately **kept** so compound emoji survive. The strip runs *before* the length check, so a name that is nothing but stripped characters collapses to `""` and is still **rejected** by `min_length=1` — genuinely-invalid input (blank, over-length) is rejected, not fixed.
 
 ## 9. Logging & Sensitive Data
 
