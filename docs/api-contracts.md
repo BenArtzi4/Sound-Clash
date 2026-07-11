@@ -369,10 +369,40 @@ All under `/admin/songs/*`. **Admin-password auth required** on every endpoint (
 | `PUT`    | `/admin/songs/{id}` | Update a song (full replacement; partial use PATCH if needed later) |
 | `DELETE` | `/admin/songs/{id}` | Delete a song (cascades to `song_genres`) |
 | `POST`   | `/admin/songs/bulk-import` | Multipart CSV upload; columns: `title, artist, youtube_id, start_time, genres` (semicolon-separated genre slugs). A row plays as a soundtrack round when its `genres` include `soundtracks` or `israeli-soundtracks`. |
+| `POST`   | `/admin/songs/check-availability` | Probe a page of the catalog for dead YouTube videos (I-Liveness). **Report-only, no writes** — see below. |
 
 Bulk import is idempotent on `youtube_id`: existing songs are updated, new ones are inserted.
 
 The upload is capped at **5 MB** (the real catalog CSV is ~40 KB). An over-cap body is rejected with **`413 payload_too_large`** before it is parsed — enforced both on a declared `Content-Length` and via a streamed read, so a missing or under-declared header can't bypass the cap.
+
+#### `POST /admin/songs/check-availability` — dead-video scan (report-only)
+
+Probes each song's `youtube_id` against YouTube's public **oEmbed** endpoint and reports which are gone, so an admin can review/fix/delete them via the CRUD above **before** they surface as a "video unavailable" error mid-game. It **never writes** — it only classifies.
+
+The catalog is ~1025 songs and each probe is a network round-trip, so the endpoint works **one page at a time** (worst-case wall time stays well under Render's ~100s gateway timeout). Page through the whole catalog by following `next_offset`.
+
+Request body (all fields optional):
+
+```jsonc
+{
+  "limit": 200,        // page size, 1..250 (default 200)
+  "offset": 0,         // page offset (default 0)
+  "song_ids": null     // OR an explicit list of song UUIDs to probe (ignores limit/offset)
+}
+```
+
+Response `200`:
+
+```jsonc
+{
+  "checked": 200,                                   // songs probed on this page
+  "dead":    [{"id": "…", "youtube_id": "…", "title": "…"}],   // oEmbed 404 → removed
+  "unknown": [{"id": "…", "youtube_id": "…", "title": "…"}],   // 401/400/5xx/timeout → could not confirm
+  "next_offset": 200                                // offset for the next page, or null at the end
+}
+```
+
+Classification is deliberately conservative so an admin never deletes a good song on a false positive: **only a definitive oEmbed `404` is `dead`**. A `401` (embed-disabled / region-blocked — may still play in the IFrame), a `400` (id YouTube rejects as malformed), any `5xx`, and any timeout/network error are all reported as **`unknown`** (surfaced for a human to eyeball, never asserted dead).
 
 ---
 
@@ -521,6 +551,7 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 | `POST /games` | 10 / minute / IP | Prevent game-code spam |
 | `POST /games/*/teams` | 30 / minute / IP | Prevent team-spam DoS |
 | `POST /admin/songs/bulk-import` | 5 / minute / IP | Heavy operation |
+| `POST /admin/songs/check-availability` | 10 / minute / IP | Each call fans out network probes |
 | All admin endpoints | 100 / minute / IP | Conservative cap |
 
 `buzz_in` RPC is not rate-limited at the API layer (Postgres handles concurrency safely). Future: add Postgres-side rate limit if abuse seen.
