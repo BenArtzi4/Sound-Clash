@@ -246,15 +246,16 @@ FastAPI uses `slowapi` (in-memory, per-instance; fine for single Render instance
 
 ```python
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=client_ip)  # see below — NOT get_remote_address
 
 @router.post("/games")
 @limiter.limit("10/minute")
 async def create_game(...):
     ...
 ```
+
+**Keying on the real client IP (F-P2-5).** The default `get_remote_address` returns `request.client.host`, which behind Render's proxy is the *proxy* IP — so every client would collapse into one shared bucket (a busy party could trip a per-IP limit on legitimate joins, and an abuser would be indistinguishable from the crowd). Instead `client_ip` (`app/middleware/rate_limit.py`) keys on **`CF-Connecting-IP`** — Render fronts services with Cloudflare, which sets that header to the true client IP and **overwrites** any client-supplied value, so it cannot be forged. It falls back to the **rightmost** `X-Forwarded-For` hop (the one the nearest trusted proxy appended — the leftmost is client-spoofable because Render only *appends* to XFF) and finally the socket peer for local/dev. Caveat: this trusts the edge; a request that reached the origin *bypassing* Cloudflare could set these headers freely — closing that path is the job of the T5.6 Cloudflare/WAF edge (origin locked to edge-only).
 
 | Endpoint | Limit | Reason |
 |---|---|---|
