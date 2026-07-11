@@ -200,7 +200,7 @@ If we ever add per-user scoping, RLS policies become more restrictive and Realti
 
 ### Accepted design tradeoffs (decided per §05, documented — not mitigated)
 
-Two abuse surfaces were surfaced by the security review and **consciously accepted** rather than fixed, because the fix costs more than the risk for a casual, in-the-room party game. They are recorded here so "we didn't think of it" can never be confused with "we decided it was fine."
+Several design tradeoffs were surfaced by the security review and **consciously accepted** rather than fixed, because the fix costs more than the risk for a casual, in-the-room party game. They are recorded here so "we didn't think of it" can never be confused with "we decided it was fine."
 
 **Buzzing is unauthenticated by design (D-4).** Teams hold no per-team secret. Any client that knows the 6-char game code can call `buzz_in` for any `team_id` in that game (every `game_teams` row is anon-readable by design — see §2), and anyone can join with a name that matches an existing team. So a client *could* buzz as the wrong team, or an outsider who has the code *could* grief-buzz. This is deliberate:
 - **The host is the integrity check.** The buzzing team's name shows on the manager console *and* the shared display in real time. A wrong or malicious buzz is visible and correctable in the moment — the host uses **Continue round** to re-open the lock, or **Wrong** to deduct — exactly as they would for any human dispute at the table.
@@ -215,6 +215,12 @@ The same-name **reclaim** ergonomic that pairs with this (F-P2-1 — a team re-j
 - **The clip is audibly playing to the entire room.** The "answer" to *name that tune* is literally being broadcast — it is not a secret the DB is leaking, it's the game. Reading it in devtools beats listening by seconds, if at all.
 - **The cheat is narrow and self-defeating.** It requires devtools open mid-round at a party where you're supposed to be listening; it wins a casual trivia point at the cost of playing the game.
 - **Hiding it would tax the hot path.** The clients that render the player and the reveal legitimately need the round's song reference; withholding it would force a per-round server-gated reveal round-trip (latency + complexity) for negligible benefit. Documented per D-2.
+
+**Durable game history is retained indefinitely (T5.4 — accepted).** The `game_history` / `game_history_teams` / `game_history_songs` archive (mig 033) snapshots every game that played ≥1 round and is **never pruned**, so team names persist far beyond the 4h TTL of the live tables. Retention was reviewed and **accepted as-is** — no retention sweep, no anonymization job — because:
+- **The stored strings are pseudonyms, not PII.** Team names are free-text party handles chosen per game (see §9); no accounts, emails, or real identities are collected, so there is no personal data with a basis to expire.
+- **The archive is operator-only.** RLS is enabled with no anon policy and the base grants are revoked from `anon`/`authenticated` (mig 033), so the history is reachable only via the service-role key in the Supabase SQL editor — never by players or the anon web client.
+- **Volume is negligible.** One parent row per game that played a round, plus a handful of child rows; the table grows slowly and is an audit/analytics convenience, so unbounded growth is not a practical concern.
+If the privacy posture ever changes (e.g. names become linkable to real identities), the lighter first step is a `pg_cron` sweep that nulls `game_history_teams.name` past a retention window — mirroring `cleanup_expired_games` — rather than deleting the whole record.
 
 ## 5. Secret Inventory
 
