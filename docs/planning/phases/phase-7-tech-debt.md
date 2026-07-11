@@ -90,9 +90,9 @@ A read-only reconnaissance pass produced the plan below. **Not implemented auton
 - **D-7** (scoring authority) gates T7.1.
 - CI edits (T7.6) are flag-before-doing per `.claude/rules/ci-and-repo-config.md`.
 
-## Exit gate (Phase 7)
-- [ ] Coverage holds/improves; lint/typecheck/mypy/ruff green; full backend+db+frontend suites green.
+## Exit gate (Phase 7) — ✅ PASSED 2026-07-11
+- [x] Coverage holds/improves; lint/typecheck/mypy/ruff green; full backend+db+frontend suites green. (CI green on every PR this session #229–#232; backend 90% gate held.)
 - [x] Buzz-race + `award_attempt` scenarios green after the scoring refactor (PR #218: buzz-race stress 100× + 31 `test_award_attempt` scenarios green; verified live on prod).
-- [ ] RLS suite deterministically green in isolation and in the new CI job.
-- [ ] Bundle budget enforced; no accidental size regression from earlier phases.
+- [x] RLS suite deterministically green in isolation and in the new CI job. (T7.6 `rls suite (isolated)` job green on PR #232.)
+- [x] Bundle budget enforced; no accidental size regression from earlier phases. (T7.6 gzipped-JS budget step, 350037 B / 410000 B, green on PR #232.)
 - [x] **Full-Game Exit Gate** — scoring values unchanged from the player's view (title=10/artist=5/soundtrack=15/wrong=−3/bonus=+4) after the server-authoritative refactor. Verified on prod post-#218 (transactional self-check against the live boolean overload + `post_deploy.sh` PASS).
