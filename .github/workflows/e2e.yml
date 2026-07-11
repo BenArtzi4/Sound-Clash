@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           # cache-dependency-path is repo-root-relative (setup-node ignores the
           # step-level working-directory), so it names frontend/package-lock.json.
           cache: "npm"
