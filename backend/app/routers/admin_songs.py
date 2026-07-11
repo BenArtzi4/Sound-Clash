@@ -14,6 +14,9 @@ from app.db.supabase_client import SupabaseClientLike, get_supabase_client
 from app.middleware.admin_auth import require_admin
 from app.middleware.rate_limit import limiter
 from app.models.songs import (
+    AvailabilityCheckRequest,
+    AvailabilityReport,
+    AvailabilitySong,
     BulkImportSummary,
     SongCreate,
     SongList,
@@ -21,6 +24,7 @@ from app.models.songs import (
     SongUpdate,
 )
 from app.services.csv_import import apply_import, parse_csv
+from app.services.youtube_availability import check_many
 
 router = APIRouter(
     prefix="/admin/songs",
@@ -259,6 +263,74 @@ async def _read_capped(file: UploadFile) -> bytes:
             raise _too_large()
         chunks.append(chunk)
     return b"".join(chunks)
+
+
+AVAILABILITY_COLUMNS = "id,youtube_id,title"
+
+
+def _availability_page_blocking(
+    client: SupabaseClientLike,
+    *,
+    limit: int,
+    offset: int,
+    song_ids: list[str] | None,
+) -> tuple[list[dict[str, Any]], int | None]:
+    """Read one page of songs to probe. Returns ``(songs, next_offset)``.
+
+    An explicit ``song_ids`` list ignores paging (``next_offset`` is None). The
+    offset window orders by ``id`` for a stable page across calls; a short page
+    (fewer rows than ``limit``) means the catalog is exhausted → ``next_offset``
+    is None.
+    """
+    if song_ids is not None:
+        resp = client.table("songs").select(AVAILABILITY_COLUMNS).in_("id", song_ids).execute()
+        return [dict(r) for r in (resp.data or [])], None
+
+    end = offset + limit - 1  # range() is inclusive on both ends
+    resp = (
+        client.table("songs").select(AVAILABILITY_COLUMNS).order("id").range(offset, end).execute()
+    )
+    rows = [dict(r) for r in (resp.data or [])]
+    next_offset = offset + limit if len(rows) == limit else None
+    return rows, next_offset
+
+
+@router.post("/check-availability", response_model=AvailabilityReport)
+@limiter.limit("10/minute")
+async def check_availability(
+    request: Request, body: AvailabilityCheckRequest
+) -> AvailabilityReport:
+    """Probe a page of the catalog for dead YouTube videos (report-only).
+
+    Reads one page of songs, probes each ``youtube_id`` via YouTube oEmbed, and
+    returns the ones that are gone (``dead``) or unreachable-but-maybe-alive
+    (``unknown``). No writes — the admin reviews and fixes/deletes via the
+    existing song CRUD. Page through the catalog with ``next_offset``.
+    """
+    client = get_supabase_client()
+    song_ids = [str(s) for s in body.song_ids] if body.song_ids is not None else None
+    songs, next_offset = await anyio.to_thread.run_sync(
+        lambda: _availability_page_blocking(
+            client, limit=body.limit, offset=body.offset, song_ids=song_ids
+        )
+    )
+    verdicts = await check_many([s["youtube_id"] for s in songs])
+
+    dead: list[AvailabilitySong] = []
+    unknown: list[AvailabilitySong] = []
+    for song in songs:
+        verdict = verdicts.get(song["youtube_id"], "unknown")
+        if verdict == "ok":
+            continue
+        ref = AvailabilitySong(id=song["id"], youtube_id=song["youtube_id"], title=song["title"])
+        (dead if verdict == "dead" else unknown).append(ref)
+
+    return AvailabilityReport(
+        checked=len(songs),
+        dead=dead,
+        unknown=unknown,
+        next_offset=next_offset,
+    )
 
 
 @router.post("/bulk-import", response_model=BulkImportSummary)
