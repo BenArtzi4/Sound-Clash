@@ -95,3 +95,11 @@ def test_blank_still_rejected() -> None:
 def test_too_long_still_rejected() -> None:
     with pytest.raises(ValidationError):
         JoinTeamRequest(name="X" * 31)
+
+
+def test_non_string_name_rejected() -> None:
+    # The BeforeValidator passes non-str values through untouched so pydantic
+    # raises its normal string-type error rather than a TypeError from re.sub.
+    with pytest.raises(ValidationError):
+        JoinTeamRequest(name=123)  # type: ignore[arg-type]
+
