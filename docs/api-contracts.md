@@ -8,7 +8,7 @@ Three categories of API:
 
 | Category | Transport | Endpoint | Authn |
 |---|---|---|---|
-| **REST (FastAPI)** | HTTPS | `https://api.soundclash.org` | `X-Manager-Token` for `/games/{code}/*` host actions; `X-Admin-Password` for `/admin/songs/*`; nothing for game creation, joining, or `/genres` |
+| **REST (FastAPI)** | HTTPS | `https://api.soundclash.org` | `X-Manager-Token` for `/games/{code}/*` host actions (incl. the `rejoin-token` reveal); `X-Admin-Password` for `/admin/songs/*`; nothing for game creation, joining, `/games/{code}/rejoin` (the rejoin token in the body is the credential), or `/genres` |
 | **Postgres RPC (PostgREST)** | HTTPS | `https://<project>.supabase.co/rest/v1/rpc/<fn>` | Supabase **anon key** in `apikey` + `Authorization` headers |
 | **Realtime (Supabase)** | WebSocket | `wss://<project>.supabase.co/realtime/v1` | Supabase **anon key** |
 
@@ -116,6 +116,53 @@ Validation:
 The frontend stores `id` in `localStorage` keyed by `game_code` for reconnection.
 
 **Errors**: `validation_error` (400; bad name), `not_found` (404; game doesn't exist), `gone` (410; game expired or ended). A same-name rejoin no longer 409s (it reclaims the existing team); a `conflict` (409) can still surface only in the narrow race where two simultaneous same-name joins both pass the reclaim SELECT and the UNIQUE constraint rejects the second INSERT.
+
+---
+
+### 2.3a `POST /games/{game_code}/rejoin`
+
+Reconnect a device to an **existing** team via that team's per-team rejoin
+token — for a team that lost its device (dead phone, closed tab, a different
+device) and needs its *exact* row back (same `id`, preserved `score`). Issue
+#183. **No auth** in the header sense: the rejoin token in the body **is** the
+credential (a 128-bit uuid). Rate-limited 30/min/IP. This creates nothing — it
+resolves the token, not a new team.
+
+The token reaches the player from a host-shown QR of the form
+`…/join/<CODE>#rt=<token>` (URL **fragment**, like the host `#mt=` recovery
+link — see `security-rls.md` §1); the browser reads it out of the fragment and
+posts it here. The token is disclosed to the host only via the
+manager-token-gated `GET /games/{code}/teams/{id}/rejoin-token` (§2.8a) — it is
+never returned to players by the join endpoint and never stored in player
+`localStorage`.
+
+**Request body**:
+```json
+{ "token": "1f1a2b3c-4d5e-6f70-8190-a1b2c3d4e5f6" }
+```
+
+**Response 200** (same shape as the join response — the existing team, **not** a new one):
+```json
+{
+  "id": "<team_uuid>",
+  "game_code": "ABCDEF",
+  "name": "Team Awesome",
+  "score": 14,
+  "joined_at": "2026-05-03T14:25:11.000Z"
+}
+```
+
+The backend resolves the token in the anon-invisible `team_secrets` table
+(migration 046, scoped by `(game_code, rejoin_token)`), then re-reads the team
+row it points at. There is no new SECURITY DEFINER RPC — the service-role
+backend reads `team_secrets` directly. Off the buzzer hot path (a rejoin
+happens at most once when a device reconnects).
+
+**Errors**: `validation_error` (400; token isn't a valid uuid), `not_found`
+(404; the game doesn't exist **or** the token matches no team in it), `gone`
+(410; game expired or ended). A wrong-but-well-formed token is a plain 404 —
+the same response a real host's stale link would get — so the endpoint doesn't
+distinguish "no such team" from "no such game".
 
 ---
 
@@ -341,6 +388,34 @@ Cascade: any future actions by the kicked team are rejected because their row is
 
 ---
 
+### 2.8a `GET /games/{game_code}/teams/{team_id}/rejoin-token`
+
+Reveal a team's per-team rejoin token to the authenticated host, so the manager
+console can render a "Reconnect a team" rescue QR the player scans on a new or
+borrowed device (issue #183). **Manager-token auth required.** This is the
+**only** endpoint that ever discloses a rejoin token, and only to the host —
+the token is never returned to players by the join endpoint. Rate-limited
+100/min/IP.
+
+**Headers**: `X-Manager-Token: <token>`
+
+**Response 200**:
+```json
+{
+  "team_id": "<team_uuid>",
+  "rejoin_token": "1f1a2b3c-4d5e-6f70-8190-a1b2c3d4e5f6"
+}
+```
+
+The host builds the scan link `…/join/<game_code>#rt=<rejoin_token>` from this
+(the token rides the URL **fragment**, so it never reaches server logs); the
+player's browser then calls `POST /games/{code}/rejoin` (§2.3a).
+
+**Errors**: `unauthorized` (401; missing/wrong manager token), `not_found`
+(404; unknown `team_id` under a valid manager token), `gone` (410; game ended).
+
+---
+
 ### 2.9 `GET /genres`
 
 Public. List all genres.
@@ -563,6 +638,8 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 |---|---|---|
 | `POST /games` | 10 / minute / IP | Prevent game-code spam |
 | `POST /games/*/teams` | 30 / minute / IP | Prevent team-spam DoS |
+| `POST /games/*/rejoin` | 30 / minute / IP | Prevent rejoin-token brute force |
+| `GET /games/*/teams/*/rejoin-token` | 100 / minute / IP | Host-only; conservative cap |
 | `POST /admin/songs/bulk-import` | 5 / minute / IP | Heavy operation |
 | `POST /admin/songs/check-availability` | 10 / minute / IP | Each call fans out network probes |
 | All admin endpoints | 100 / minute / IP | Conservative cap |
