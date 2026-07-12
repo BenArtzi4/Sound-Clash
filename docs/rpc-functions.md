@@ -717,7 +717,7 @@ SET search_path = public;
 
 Behavior:
 - Flagging sets `unavailable_at = now()` **only where it is currently `NULL`** — the
-  timestamp records when the video was *first* confirmed dead, and a weekly re-scan
+  timestamp records when the video was *first* confirmed dead, and a re-scan
   doesn't rewrite (or bump) already-flagged rows.
 - Clearing sets `unavailable_at = NULL` **only where it is currently `NOT NULL`** — a
   restored (or transiently-404ing) video becomes eligible again; this self-healing is why
@@ -736,10 +736,11 @@ nothing and counts zero.
 
 ### Callers
 
-- FastAPI `POST /admin/songs/check-availability` with `commit=true` (admin-gated; also run
-  by the weekly dead-video-scan GitHub Actions cron). Migration 045 REVOKEs EXECUTE from
-  anon/authenticated (an anon grant would let anyone bury the whole catalog) and GRANTs it
-  to service_role, per the migration-020 pattern.
+- FastAPI `POST /admin/songs/check-availability` with `commit=true` (admin-gated) — run
+  manually by the operator, and on a schedule once the separate weekly dead-video-scan
+  GitHub Actions cron ships (`.github/workflows/dead-video-scan.yml`, its own flagged PR).
+  Migration 045 REVOKEs EXECUTE from anon/authenticated (an anon grant would let anyone
+  bury the whole catalog) and GRANTs it to service_role, per the migration-020 pattern.
 
 ## 6. Function ↔ Caller Reference Matrix
 
