@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
@@ -7,6 +7,7 @@ import { HostRecoveryLink } from "../components/HostRecoveryLink";
 import { Skeleton } from "../components/Skeleton";
 import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
+import { TeamRescueModal } from "../components/TeamRescueModal";
 import { YouTubePlayer } from "../components/YouTubePlayer";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
@@ -45,6 +46,8 @@ export function ManagerConsolePage() {
   }, [hash, pathname, search, navigate]);
   const { state, status, finalBoard } = useGameChannel(gameCode);
   const player = usePlayerReady();
+  // Host-only "reconnect a team" rescue modal (issue #183).
+  const [rescueOpen, setRescueOpen] = useState(false);
 
   // Keep the Render-hosted API warm while a game is running so the host's
   // occasional REST calls (Bonus / End game / Kick) and late team joins don't
@@ -268,7 +271,19 @@ export function ManagerConsolePage() {
         onExtend={() => void handleExtendGame()}
       />
 
-      <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
+      <div className={styles.hostTools}>
+        <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
+        {teams.length > 0 ? (
+          <button
+            type="button"
+            className={styles.rescueTrigger}
+            onClick={() => setRescueOpen(true)}
+            data-testid="rescue-open"
+          >
+            Reconnect a team
+          </button>
+        ) : null}
+      </div>
 
       <div className={styles.column}>
         {/* Two overlaid players: the active one (audible, on top) and the
@@ -491,6 +506,15 @@ export function ManagerConsolePage() {
         }}
         onCancel={() => setEndConfirmOpen(false)}
       />
+
+      {rescueOpen ? (
+        <TeamRescueModal
+          gameCode={gameCode}
+          managerToken={managerToken}
+          teams={teams}
+          onClose={() => setRescueOpen(false)}
+        />
+      ) : null}
     </main>
   );
 }

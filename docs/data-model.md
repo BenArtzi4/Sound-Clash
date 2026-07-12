@@ -1,6 +1,6 @@
 # Sound Clash: Data Model
 
-The schema for Postgres on Supabase. Eleven tables in three groups: a **durable song catalog** (`songs`, `genres`, `song_genres`), **ephemeral per-game state** (`active_games`, `game_secrets`, `game_teams`, `game_rounds`, `game_round_attempts`) that cascade-deletes ~4h after game creation, and a **durable game-history archive** (`game_history`, `game_history_teams`, `game_history_songs`, mig 033) snapshotted at game end and never pruned.
+The schema for Postgres on Supabase. Twelve tables in three groups: a **durable song catalog** (`songs`, `genres`, `song_genres`), **ephemeral per-game state** (`active_games`, `game_secrets`, `game_teams`, `team_secrets`, `game_rounds`, `game_round_attempts`) that cascade-deletes ~4h after game creation, and a **durable game-history archive** (`game_history`, `game_history_teams`, `game_history_songs`, mig 033) snapshotted at game end and never pruned.
 
 For PL/pgSQL function bodies that mutate this schema, see **`rpc-functions.md`**.
 For RLS policies and access matrix, see **`security-rls.md`**.
@@ -101,6 +101,19 @@ CREATE TABLE game_teams (
   UNIQUE (game_code, name)
 );
 
+-- Per-team rejoin credential, split off game_teams (migration 046) so anon --
+-- who can read every game_teams column over Realtime -- can never see it.
+-- No anon read policy, no base grant, NOT in the supabase_realtime publication.
+-- Provisioned by an AFTER INSERT trigger on game_teams (create_team_secret),
+-- cascade-deleted with the team (same 4-hour ephemerality). Only the
+-- service-role backend reads it, to resolve a rejoin token back to a team row
+-- (POST /games/.../rejoin) or reveal it to the host (GET .../rejoin-token).
+CREATE TABLE team_secrets (
+  team_id      uuid PRIMARY KEY REFERENCES game_teams(id) ON DELETE CASCADE,
+  game_code    text NOT NULL REFERENCES active_games(game_code) ON DELETE CASCADE,
+  rejoin_token uuid NOT NULL DEFAULT gen_random_uuid()
+);
+
 CREATE TABLE game_rounds (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   game_code       text NOT NULL REFERENCES active_games(game_code) ON DELETE CASCADE,
@@ -171,6 +184,7 @@ CREATE INDEX active_games_expires_at_idx  ON active_games (expires_at);  -- cron
 CREATE INDEX game_teams_game_code_idx     ON game_teams  (game_code);
 CREATE INDEX game_rounds_game_code_idx    ON game_rounds (game_code);
 CREATE INDEX song_genres_genre_idx        ON song_genres (genre_id);
+CREATE INDEX team_secrets_rejoin_token_idx ON team_secrets (rejoin_token);  -- rejoin lookup (mig 046)
 
 -- Game history (mig 033)
 CREATE INDEX game_history_teams_history_idx ON game_history_teams (game_history_id);
@@ -293,6 +307,12 @@ Per-game uuid, the host's credential. **Lives in `game_secrets`, not `active_gam
 
 A uuid is minted by an `AFTER INSERT` trigger on `active_games` (`create_game_secret`, in the same transaction as the game insert). `POST /games` reads it back (by `game_code`) and returns it to the host's browser, which stores it in `localStorage`. The FastAPI `require_manager_token` dependency reads `X-Manager-Token`, fetches the secret via the service-role client, and `secrets.compare_digest`s the values; this authorizes `bonus`, `end`, and `kick-team`. The five browser-direct RPCs (`award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`) validate it in-body (they `LEFT JOIN game_secrets`, running as SECURITY DEFINER). The secret shares the game's 4-hour TTL via `ON DELETE CASCADE`; `cleanup_expired_games` removes the game and the FK removes the secret.
 
+### `team_secrets.rejoin_token`
+
+Per-team uuid, the **host-only** credential for reconnecting a team that lost its device (dead phone, closed tab, borrowed device) back to its *exact* `game_teams` row — same `id`, preserved `score` (issue #183). It mirrors `game_secrets.manager_token`'s isolation: **lives in `team_secrets`, not `game_teams`** (migration 046) because `game_teams` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there would be fanned out to every subscribed player. `team_secrets` has no anon read policy, no base grant, and is **not** in the publication, so anon can never see it.
+
+A uuid is minted by an `AFTER INSERT` trigger on `game_teams` (`create_team_secret`, in the same transaction as the team insert; `ON CONFLICT (team_id) DO NOTHING`), and existing teams are backfilled idempotently by the migration. The token is disclosed **only** to the authenticated host, via the manager-token-gated `GET /games/{code}/teams/{team_id}/rejoin-token` — never returned to players by the join endpoint, never stored in player `localStorage`, never sent over Realtime. To reconnect, the player scans a host-shown QR (`…/join/<CODE>#rt=<token>`, URL fragment — like the host `#mt=` recovery link) and the browser calls the unauthenticated `POST /games/{code}/rejoin`, where the rejoin token itself is the credential (128-bit uuid). Both endpoints resolve the token via the service-role backend (there is **no** SECURITY DEFINER RPC — rejoin is a cold-start-tolerant FastAPI endpoint, off the buzzer hot path). The row carries `game_code` denormalized so the rejoin lookup can scope by `(game_code, rejoin_token)`; it shares the team's ephemerality via `ON DELETE CASCADE` (the game sweep drops `active_games`, `game_teams` cascades, and each `team_secrets` cascades in turn). The pre-existing name-based reclaim (T5.7 — joining with the same name resumes the same team) stays fully open as the "easy" recovery path; the rejoin token is an additive, host-only *secure* path, not a gate on the name path.
+
 ### `game_teams.score`
 
 Integer. Can go negative; wrong-buzz deducts 3 (`award_attempt`). Updated by `award_attempt` and `award_bonus` RPCs, never directly.
@@ -313,7 +333,7 @@ The 014 migration dropped `source_points` and `timeout_penalty` columns. The 016
 
 ## 5. Row-Level Security (summary)
 
-Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the six anon-EXECUTE RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The exceptions are the durable history tables (`game_history*`, mig 033), the secret table (`game_secrets`, mig 034), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
+Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the six anon-EXECUTE RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The exceptions are the durable history tables (`game_history*`, mig 033), the secret tables (`game_secrets`, mig 034; `team_secrets`, mig 046), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
 
 Full policy DDL and threat model: see **`security-rls.md`**.
 
@@ -373,7 +393,9 @@ db/migrations/
 ├── 041_buzz_in_scope_team_to_game.sql -- buzz_in only locks for a team that belongs to the game (EXISTS guard); closes a cross-game score-write vector
 ├── 042_songs_youtube_id_unique.sql   -- enforce UNIQUE(songs.youtube_id) via idempotent UNIQUE INDEX; one catalog row per YouTube video
 ├── 043_award_attempt_boolean_overload.sql -- scoring authority in the DB (T7.1): boolean overload of award_attempt derives +10/+5/−3 server-side, added alongside the integer overload
-└── 044_drop_award_attempt_integer_overload.sql -- drop the now-dead integer overload of award_attempt once the boolean-sending frontend soaked; boolean signature is now the sole one
+├── 044_drop_award_attempt_integer_overload.sql -- drop the now-dead integer overload of award_attempt once the boolean-sending frontend soaked; boolean signature is now the sole one
+│   … 045: songs.unavailable_at dead-video auto-skip + set_song_availability writer
+└── 046_team_secrets.sql        -- per-team rejoin_token in an anon-invisible team_secrets table (host-only team reconnect, issue #183); mirrors game_secrets' isolation
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.

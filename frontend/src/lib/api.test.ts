@@ -10,10 +10,12 @@ import {
   endGame,
   getHealth,
   getSong,
+  getTeamRejoinToken,
   joinTeam,
   kickTeam,
   listGenres,
   listSongs,
+  rejoinTeam,
   updateSong,
 } from "./api";
 import type { SongWritePayload } from "./types";
@@ -132,6 +134,28 @@ describe("api - public routes", () => {
     expect(JSON.parse(init.body as string)).toEqual({ name: "Alice" });
   });
 
+  it("rejoinTeam POSTs the token to /rejoin without auth headers", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        id: "t1",
+        game_code: "ABCDEF",
+        name: "Alice",
+        score: 37,
+        joined_at: "2026-05-05T12:00:00Z",
+      }),
+    );
+    const team = await rejoinTeam("ABCDEF", "33333333-3333-3333-3333-333333333333");
+    expect(team.score).toBe(37);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/games/ABCDEF/rejoin");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      token: "33333333-3333-3333-3333-333333333333",
+    });
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Manager-Token"]).toBeUndefined();
+  });
+
   it("createGame is unauthenticated and returns the manager token", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(201, {
@@ -176,6 +200,22 @@ describe("api - manager-token routes", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers["X-Manager-Token"]).toBe(TOKEN);
     expect(JSON.parse(init.body as string)).toEqual({ team_id: "t9" });
+  });
+
+  it("getTeamRejoinToken GETs the rejoin-token endpoint with the manager header", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        team_id: "t1",
+        rejoin_token: "44444444-4444-4444-4444-444444444444",
+      }),
+    );
+    const res = await getTeamRejoinToken("ABCDEF", "t1", TOKEN);
+    expect(res.rejoin_token).toBe("44444444-4444-4444-4444-444444444444");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/games/ABCDEF/teams/t1/rejoin-token");
+    expect(init.method).toBe("GET");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["X-Manager-Token"]).toBe(TOKEN);
   });
 
   it("endGame returns parsed body", async () => {

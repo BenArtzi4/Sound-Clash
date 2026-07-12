@@ -15,6 +15,7 @@ vi.mock("../lib/api", () => ({
     }
   },
   joinTeam: vi.fn(),
+  rejoinTeam: vi.fn(),
   getHealth: vi.fn(() => Promise.resolve({ status: "ok", version: "test", supabase: "ok" })),
 }));
 
@@ -22,12 +23,15 @@ vi.mock("../lib/api", () => ({
 // pull in the real (heavy) module or its Supabase/YouTube side effects.
 vi.mock("./TeamGameplayPage", () => ({ TeamGameplayPage: () => null }));
 
-import { ApiError, getHealth, joinTeam } from "../lib/api";
+import { ApiError, getHealth, joinTeam, rejoinTeam } from "../lib/api";
 import { JoinTeamPage } from "./JoinTeamPage";
+
+const REJOIN_UUID = "b3b8c9d0-1234-4abc-9def-0123456789ab";
 
 beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(joinTeam).mockReset();
+  vi.mocked(rejoinTeam).mockReset();
   vi.mocked(getHealth).mockClear();
 });
 
@@ -131,6 +135,43 @@ describe("JoinTeamPage", () => {
   it("pre-warms the backend on mount", () => {
     renderAt("/join/ABCDEF");
     expect(getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("adopts a #rt= rejoin token: reconnects and lands on gameplay", async () => {
+    vi.mocked(rejoinTeam).mockResolvedValueOnce({
+      id: "t1",
+      game_code: "ABCDEF",
+      name: "Alice",
+      score: 37,
+      joined_at: "2026-05-05T12:00:00Z",
+    });
+    renderAt(`/join/ABCDEF#rt=${REJOIN_UUID}`);
+    await waitFor(() => {
+      expect(rejoinTeam).toHaveBeenCalledWith("ABCDEF", REJOIN_UUID);
+    });
+    // Stores the normal {id,name} identity (so a later refresh auto-rejoins)
+    // and navigates to the gameplay route.
+    expect(JSON.parse(window.localStorage.getItem("game:ABCDEF:team") ?? "{}")).toEqual({
+      id: "t1",
+      name: "Alice",
+    });
+    await waitFor(() => expect(screen.getByText("team page")).toBeInTheDocument());
+    // Never falls back to a manual join for a valid link.
+    expect(joinTeam).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the manual form when a #rt= rejoin link is invalid", async () => {
+    vi.mocked(rejoinTeam).mockRejectedValueOnce(new ApiError("not_found", "no", 404));
+    renderAt(`/join/ABCDEF#rt=${REJOIN_UUID}`);
+    await waitFor(() => expect(screen.getByText(/didn't work/i)).toBeInTheDocument());
+    // The join form is back so the player can re-enter their name (path B).
+    expect(screen.getByLabelText(/game code/i)).toBeInTheDocument();
+  });
+
+  it("rejects a #rt= link with no game code and never calls rejoin", async () => {
+    renderAt(`/join#rt=${REJOIN_UUID}`);
+    await waitFor(() => expect(screen.getByText(/missing a valid game code/i)).toBeInTheDocument());
+    expect(rejoinTeam).not.toHaveBeenCalled();
   });
 
   it("switches the submit label to a waking-server hint after a slow pending join", () => {

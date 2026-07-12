@@ -13,6 +13,7 @@ import type {
   SongListResponse,
   SongWritePayload,
   Team,
+  TeamRejoinToken,
 } from "./types";
 
 export class ApiError extends Error {
@@ -150,6 +151,25 @@ export function __resetListGenresCacheForTests(): void {
 
 export function joinTeam(gameCode: string, name: string): Promise<Team> {
   return request("POST", `/games/${gameCode}/teams`, { body: { name } });
+}
+
+// Reconnect to an existing team via its per-team rejoin token (issue #183).
+// The token comes from a host-shown QR (…/join/<CODE>#rt=<token>); the server
+// resolves it back to the SAME game_teams row with its preserved score.
+export function rejoinTeam(gameCode: string, token: string): Promise<Team> {
+  return request("POST", `/games/${gameCode}/rejoin`, { body: { token } });
+}
+
+// Host-only: reveal a team's rejoin token so the console can render a rescue
+// QR. Gated by X-Manager-Token — this is the only endpoint that discloses it.
+export function getTeamRejoinToken(
+  gameCode: string,
+  teamId: string,
+  managerToken: string,
+): Promise<TeamRejoinToken> {
+  return request("GET", `/games/${gameCode}/teams/${teamId}/rejoin-token`, {
+    managerToken,
+  });
 }
 
 export function createGame(body: {

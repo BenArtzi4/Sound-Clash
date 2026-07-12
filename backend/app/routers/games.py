@@ -10,8 +10,15 @@ also collapsed the picker + start_round composition into a single
 
 The remaining FastAPI endpoints here are cold-start-tolerant operations
 that happen at most once or twice per game: create-game, join-team,
-award-bonus, end-game, kick-team. They dispatch the service-role-only
-RPCs ``end_game`` and ``award_bonus``.
+rejoin-team, team-rejoin-token, award-bonus, end-game, kick-team. They
+dispatch the service-role-only RPCs ``end_game`` and ``award_bonus``.
+
+Rejoin (issue #183): ``POST /games/{code}/rejoin`` resolves a per-team
+rejoin token (from the anon-invisible ``team_secrets`` table, migration
+046) back to the existing ``game_teams`` row so a lost/new device resumes
+the exact team + score. The token is disclosed only to the authenticated
+host via ``GET /games/{code}/teams/{id}/rejoin-token`` (manager-token
+gated), never to players.
 """
 
 from __future__ import annotations
@@ -39,6 +46,8 @@ from app.models.games import (
     EndGameResponse,
     JoinTeamRequest,
     JoinTeamResponse,
+    RejoinTeamRequest,
+    TeamRejoinTokenResponse,
 )
 from app.services.codes import generate_unique_code
 
@@ -148,6 +157,71 @@ def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dic
     return dict(rows[0])
 
 
+def _rejoin_team_blocking(client: SupabaseClientLike, code: str, token: str) -> dict[str, Any]:
+    """Resolve a per-team rejoin token back to its existing game_teams row
+    (issue #183). The token is looked up in the anon-invisible team_secrets
+    table with the service-role key; a match returns the SAME team row (same id,
+    same accumulated score) so a rescued device resumes the exact team rather
+    than a fresh 0-point one. Off the buzzer hot path (rejoin happens once when
+    a device is lost), so it rides FastAPI like create-game/join."""
+    game = _fetch_game_blocking(client, code)
+    if game["status"] == "ended" or game.get("ended_at"):
+        raise GoneError(f"game {code} has ended")
+    if _is_expired(game):
+        raise GoneError(f"game {code} has expired")
+
+    # team_secrets is scoped by (game_code, rejoin_token); an unknown/foreign
+    # token matches nothing -> a generic 404 that doesn't distinguish "no such
+    # token" from "wrong game". The uuid `=` is a fixed 16-byte compare, not a
+    # timing oracle (see migration 021), so no constant-time compare is needed.
+    with mapped_postgrest_errors():
+        secret = (
+            client.table("team_secrets")
+            .select("team_id")
+            .eq("game_code", code)
+            .eq("rejoin_token", token)
+            .limit(1)
+            .execute()
+        )
+    secret_rows = secret.data or []
+    if not secret_rows:
+        raise NotFoundError("no team matches that rejoin link")
+
+    team_id = secret_rows[0]["team_id"]
+    with mapped_postgrest_errors():
+        team = (
+            client.table("game_teams")
+            .select("*")
+            .eq("id", team_id)
+            .eq("game_code", code)
+            .limit(1)
+            .execute()
+        )
+    team_rows = team.data or []
+    if not team_rows:
+        raise NotFoundError("no team matches that rejoin link")
+    return dict(team_rows[0])
+
+
+def _rejoin_token_blocking(client: SupabaseClientLike, code: str, team_id: str) -> dict[str, Any]:
+    """Read a team's rejoin token so the host can build a rescue QR. Called only
+    behind require_manager_token, so the token is revealed exclusively to the
+    authenticated host, never to players."""
+    with mapped_postgrest_errors():
+        resp = (
+            client.table("team_secrets")
+            .select("team_id,rejoin_token")
+            .eq("game_code", code)
+            .eq("team_id", team_id)
+            .limit(1)
+            .execute()
+        )
+    rows = resp.data or []
+    if not rows:
+        raise NotFoundError(f"team {team_id} not found in game {code}")
+    return dict(rows[0])
+
+
 def _bonus_blocking(
     client: SupabaseClientLike,
     code: str,
@@ -221,6 +295,41 @@ async def join_team(request: Request, game_code: str, body: JoinTeamRequest) -> 
     client = get_supabase_client()
     row = await anyio.to_thread.run_sync(_join_team_blocking, client, game_code, body.name)
     return JoinTeamResponse.model_validate(row)
+
+
+@router.post(
+    "/games/{game_code}/rejoin",
+    response_model=JoinTeamResponse,
+    status_code=status.HTTP_200_OK,
+)
+@limiter.limit("30/minute")
+async def rejoin_team(
+    request: Request, game_code: str, body: RejoinTeamRequest
+) -> JoinTeamResponse:
+    """Reconnect a device to an existing team via its per-team rejoin token
+    (issue #183). Resolves to the SAME game_teams row with its preserved score.
+    The token reaches here from a host-shown QR (…/join/<CODE>#rt=<token>);
+    it is never returned to players by any other endpoint. 200 (no creation)."""
+    client = get_supabase_client()
+    row = await anyio.to_thread.run_sync(_rejoin_team_blocking, client, game_code, str(body.token))
+    return JoinTeamResponse.model_validate(row)
+
+
+@router.get(
+    "/games/{game_code}/teams/{team_id}/rejoin-token",
+    response_model=TeamRejoinTokenResponse,
+    dependencies=[Depends(require_manager_token)],
+)
+@limiter.limit("100/minute")
+async def team_rejoin_token(
+    request: Request, game_code: str, team_id: UUID
+) -> TeamRejoinTokenResponse:
+    """Reveal a team's rejoin token to the authenticated host so the console can
+    render a rescue QR. Manager-token-gated: this is the ONLY way a rejoin token
+    is ever disclosed."""
+    client = get_supabase_client()
+    row = await anyio.to_thread.run_sync(_rejoin_token_blocking, client, game_code, str(team_id))
+    return TeamRejoinTokenResponse.model_validate(row)
 
 
 @router.post(
