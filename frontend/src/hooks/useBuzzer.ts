@@ -4,6 +4,19 @@ import { failBuzz, markBuzzStart, tracedRpc } from "../lib/telemetry";
 import { throwOnRpcError } from "../lib/rpcError";
 import type { BuzzResult, GameState } from "../lib/types";
 
+// How long a provisional (optimistic) lock may live unconfirmed before it
+// self-expires. The guess exists only to bridge the ~200-300ms Realtime
+// fan-out gap between buzz_in resolving over REST and the active_games UPDATE
+// echoing back over the WebSocket, so anything older than a couple of seconds
+// is always stale -- the authoritative echo was lost (a dropped Realtime frame
+// or a silently half-open socket during a WS-only outage, the #254
+// "reconnecting" state) and will never arrive. Expiring it re-arms the button
+// instead of stranding a team on "SOMEONE ELSE BUZZED" for the rest of an open
+// round (issue #261). The real ~300ms echo always beats this by ~8x, so the
+// happy path never sees the timeout fire. Exported so the test can advance
+// fake timers by exactly one TTL.
+export const PROVISIONAL_LOCK_TTL_MS = 2500;
+
 export function useBuzzer(
   gameCode: string,
   teamId: string,
@@ -32,6 +45,7 @@ export function useBuzzer(
   const inFlightRef = useRef(false);
 
   const realtimeLock = gameState?.game.buzzed_team_id ?? null;
+  const roundNumber = gameState?.game.round_number;
   // Authoritative Realtime state always wins; the provisional guess only fills
   // the gap before the first UPDATE for this round's lock lands.
   const effectiveLock = realtimeLock ?? provisionalLock;
@@ -47,7 +61,31 @@ export function useBuzzer(
     setProvisionalLock(null);
   }, [realtimeLock]);
 
-  const roundNumber = gameState?.game.round_number;
+  // Round-advance reconciler (issue #261). The effect above only fires on a
+  // *change* to the authoritative lock. In the stranding sequence the client's
+  // WebSocket is down while another team takes the lock AND it is released, so
+  // buzzed_team_id stays null->null from this tab's view and that effect never
+  // runs. But if the round advanced during the outage, round_number moving
+  // proves the prior round -- and any lock it held -- is over, so the guess
+  // must go even though the authoritative lock never appeared to change.
+  useEffect(() => {
+    setProvisionalLock(null);
+  }, [roundNumber]);
+
+  // TTL backstop (issue #261). Both reconcilers above need an authoritative
+  // *change* to fire; a client that misses BOTH the lock event and its clear
+  // during a WS-only outage sees the authoritative state stay null->null (same
+  // round, same null lock), so neither fires and the button strands on
+  // "SOMEONE ELSE BUZZED" until some other team next buzzes. Self-expire any
+  // provisional older than the fan-out window so the button re-arms on its own.
+  // Keyed on provisionalLock: a fresh guess restarts the timer, the reconcilers
+  // clearing it to null cancel the timer via cleanup, and unmount clears it too.
+  useEffect(() => {
+    if (provisionalLock === null) return;
+    const timer = window.setTimeout(() => setProvisionalLock(null), PROVISIONAL_LOCK_TTL_MS);
+    return () => window.clearTimeout(timer);
+  }, [provisionalLock]);
+
   const buzz = useCallback(async () => {
     if (inFlightRef.current || isLocked || !isPlaying) return;
     inFlightRef.current = true;
