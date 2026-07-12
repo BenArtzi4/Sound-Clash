@@ -14,11 +14,12 @@ const telemetry = vi.hoisted(() => ({
 }));
 vi.mock("../lib/telemetry", () => telemetry);
 
-import { useGameChannel } from "./useGameChannel";
+import { LOCKED_RESYNC_INTERVAL_MS, useGameChannel } from "./useGameChannel";
 import {
   fireGame,
   fireRound,
   fireStatus,
+  fireSubscribed,
   fireTeam,
   makeActiveGame,
   makePayload,
@@ -87,5 +88,42 @@ describe("useGameChannel telemetry wiring", () => {
       "realtime_disconnect",
       expect.objectContaining({ game_code: "ABCDEF", sub_status: "CHANNEL_ERROR" }),
     );
+  });
+
+  it("logs a warning when a backstop tick repairs a stale buzz lock (#254)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const locked = makeActiveGame({
+        status: "playing",
+        round_number: 3,
+        current_round_id: "r3",
+        buzzed_team_id: "team-2",
+        locked_at: "2026-05-05T12:01:00.000Z",
+      });
+      setHydrate({ game: locked, teams: [], rounds: [makeRound({ id: "r3", round_number: 3 })] });
+      renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+
+      // The DB cleared the lock but the Realtime UPDATE was lost; the next
+      // locked-cadence backstop tick notices the drift, repairs it, and emits
+      // the diagnostic that makes dropped events visible in Grafana.
+      setHydrate({ game: { ...locked, buzzed_team_id: null, locked_at: null }, teams: [], rounds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 500);
+      });
+      expect(telemetry.log).toHaveBeenCalledWith(
+        "warn",
+        "stale_buzz_lock_resynced",
+        expect.objectContaining({
+          game_code: "ABCDEF",
+          stale_team: "team-2",
+          fresh_team: "none",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
