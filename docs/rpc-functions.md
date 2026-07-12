@@ -356,7 +356,8 @@ Behavior:
 - Then `no_genres_selected` (`22023`) if `selected_genres` is empty.
 - Random path: picks an unplayed song from `song_genres` constrained to `selected_genres`. Equal-weight per eligible genre, picked via Postgres `random()` in a CTE. Raises `no_more_songs` (`22023`) when the pool is exhausted. (Historically this logic lived in `backend/app/services/song_picker.py`, removed in the dead-code cleanup.)
 - **Decade filter (migration 032):** when `active_games.selected_decades` is non-empty, the `eligible` CTE additionally requires `(songs.release_year / 10 * 10) = ANY(selected_decades)` — the song's decade must be one the host chose. The empty default imposes no year limit. A `NULL` `release_year` matches no specific decade, so unknown-year songs are excluded when a decade is selected and included when none is. `selected_decades` is optional; only `selected_genres` is required.
-- Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow).
+- **Dead-video auto-skip (migration 045):** the `eligible` CTE also requires `songs.unavailable_at IS NULL`, so a video the availability scan confirmed dead (see §5b) is never randomly picked — an all-flagged pool raises the same `no_more_songs`.
+- Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow), and **no `unavailable_at` filter** — a host forcing a specific song (the peek commit / a restart) is a deliberate act.
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
 - Returns one row with the new round + the picked song's metadata.
 - The returned `is_soundtrack` flag is **computed** (migration 028), not read from a column — `songs.is_soundtrack` was dropped. It is `EXISTS(SELECT 1 FROM song_genres sg JOIN genres g ON g.id = sg.genre_id WHERE sg.song_id = <picked> AND g.slug IN ('soundtracks', 'israeli-soundtracks'))`, i.e. true when the song belongs to a soundtrack genre. The `RETURNS TABLE` shape is unchanged, so PostgREST routing and the realtime/frontend contract are identical.
@@ -391,7 +392,7 @@ SET search_path = public;
 
 Behavior:
 - Token + game-state gate runs first, **identical** to `select_next_song`: raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) / `no_genres_selected` (`22023`) before returning any candidate.
-- Runs the **same** unplayed-song random picker as `select_next_song`'s random path (exclude already-played, bucket by selected genre, random genre then random song) — including the decade filter (migration 032), kept in lockstep so a peeked candidate is never one the eventual commit would reject.
+- Runs the **same** unplayed-song random picker as `select_next_song`'s random path (exclude already-played, bucket by selected genre, random genre then random song) — including the decade filter (migration 032) and the dead-video auto-skip (migration 045, `unavailable_at IS NULL`), kept in lockstep so a peeked candidate is never one the eventual commit would reject and a prebuffered video is never a dead one.
 - **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
 - **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "nothing to prebuffer"; the real `no_more_songs` still surfaces from the eventual `select_next_song` commit.
@@ -696,6 +697,51 @@ Idempotent on `(game_code, started_at)` — the existence check short-circuits a
 - `end_game` (§4) — before flipping status to `ended`.
 - `cleanup_expired_games` (§5) — for every expiring game, before the delete.
 
+## 5b. `set_song_availability`: persist dead-video scan verdicts
+
+Added in migration 045 (I-Liveness Phase 2, issue #248). Service-role only — called by
+`POST /admin/songs/check-availability` when the admin scan runs with `commit=true`
+(`backend/app/routers/admin_songs.py::_apply_verdicts_blocking`). Writes the
+`songs.unavailable_at` flag that the auto-pickers (§3c random path, §3d) filter on, so a
+confirmed-dead YouTube video never reaches a round.
+
+```sql
+CREATE OR REPLACE FUNCTION set_song_availability(
+  p_flag_ids  uuid[],   -- oEmbed 404 verdicts: flag as unavailable
+  p_clear_ids uuid[]    -- oEmbed 200 verdicts: restore to playable
+) RETURNS TABLE(flagged integer, cleared integer)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- Flagging sets `unavailable_at = now()` **only where it is currently `NULL`** — the
+  timestamp records when the video was *first* confirmed dead, and a re-scan
+  doesn't rewrite (or bump) already-flagged rows.
+- Clearing sets `unavailable_at = NULL` **only where it is currently `NOT NULL`** — a
+  restored (or transiently-404ing) video becomes eligible again; this self-healing is why
+  a transient 404 can't permanently bury a good song.
+- Ambiguous scan verdicts (`401`/`400`/`5xx`/timeout → `unknown`) are never passed in by
+  the caller — the endpoint only sends definitive `404`s as `p_flag_ids` and `200`s as
+  `p_clear_ids`.
+- Returns the counts of rows **actually changed** (surfaced as `flagged`/`cleared` in the
+  endpoint's response). `NULL`/empty arrays are no-ops; unknown ids are ignored.
+- No parameter DEFAULTs (mig-021 lesson: keep PostgREST named-arg routing unambiguous).
+
+### Idempotency
+
+Idempotent: re-flagging an already-flagged song or re-clearing an already-clear one changes
+nothing and counts zero.
+
+### Callers
+
+- FastAPI `POST /admin/songs/check-availability` with `commit=true` (admin-gated) — run
+  manually by the operator, and on a schedule once the separate weekly dead-video-scan
+  GitHub Actions cron ships (`.github/workflows/dead-video-scan.yml`, its own flagged PR).
+  Migration 045 REVOKEs EXECUTE from anon/authenticated (an anon grant would let anyone
+  bury the whole catalog) and GRANTs it to service_role, per the migration-020 pattern.
+
 ## 6. Function ↔ Caller Reference Matrix
 
 | Function | Anon callable? | Service role callable? | Called by |
@@ -712,6 +758,7 @@ Idempotent on `(game_code, started_at)` — the existence check short-circuits a
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
 | `archive_game` | ❌ | ✅ | Internal call from `end_game` + `cleanup_expired_games`. No HTTP caller. |
+| `set_song_availability` | ❌ | ✅ | FastAPI POST /admin/songs/check-availability with `commit=true` |
 
 The six anon-callable functions all validate authentication inside the
 function body (`buzz_in` checks the game-code; the other five check the

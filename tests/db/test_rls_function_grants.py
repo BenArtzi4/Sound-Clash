@@ -10,7 +10,8 @@ migration 029), and ``extend_game`` (the "keep playing" TTL bump, as of
 migration 039). Each does its own in-function manager-token check before
 performing any work, so the function-level EXECUTE grant is safe. The remaining
 backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
-``end_game``, ``cleanup_expired_games`` -- must still reject anon.
+``end_game``, ``cleanup_expired_games``, ``archive_game``,
+``set_song_availability`` -- must still reject anon.
 """
 
 from __future__ import annotations
@@ -194,6 +195,21 @@ async def test_anon_cannot_execute_archive_game(
         await anon_conn.execute("SELECT archive_game($1)", game_code)
 
 
+@pytest.mark.asyncio
+async def test_anon_cannot_execute_set_song_availability(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 045: set_song_availability is service-role-only (the admin
+    scan's commit path). anon must be denied at the grant gate -- otherwise
+    anyone could bury the whole catalog."""
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await anon_conn.execute(
+            "SELECT set_song_availability($1::uuid[], $2::uuid[])",
+            [uuid.uuid4()],
+            [],
+        )
+
+
 # ----- migration 020: explicit grant state on the backend-only RPCs ----------
 #
 # On hosted Supabase a `REVOKE ... FROM PUBLIC` is not enough, because the
@@ -215,6 +231,7 @@ async def test_anon_cannot_execute_archive_game(
         "end_game",
         "cleanup_expired_games",
         "archive_game",
+        "set_song_availability",
     ],
 )
 async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) -> None:
