@@ -262,3 +262,51 @@ async def test_update_unknown_id_404(admin_client, db) -> None:
         },
     )
     assert resp.status_code == 404
+
+
+async def test_update_with_new_youtube_id_clears_unavailable_flag(admin_client, db) -> None:
+    """Fixing a dead song by swapping in a new video makes it playable again
+    immediately (mig 045) -- the dead verdict belongs to the video, not the
+    song row -- instead of staying skipped until the next availability scan."""
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    song_id = await insert_song(db, youtube_id="deadVIDEO01", genre_slugs=["rock"])
+    await db.execute("UPDATE songs SET unavailable_at = now() WHERE id = $1", song_id)
+
+    resp = await admin_client.put(
+        f"/admin/songs/{song_id}",
+        json={
+            "title": "Fixed",
+            "artist": "Fixed",
+            "youtube_id": "newVIDEO123",
+            "start_time": 0,
+            "genre_ids": [str(rock[0])],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["unavailable_at"] is None
+    assert await db.fetchval("SELECT unavailable_at FROM songs WHERE id = $1", song_id) is None
+
+
+async def test_update_keeping_youtube_id_keeps_unavailable_flag(admin_client, db) -> None:
+    """A metadata-only edit (same video) must NOT clear the dead verdict --
+    the video is still dead; only the weekly scan's 200 (or a video swap)
+    un-flags it."""
+    rock = await fetch_genre_ids(db, slugs=["rock"])
+    song_id = await insert_song(db, youtube_id="deadVIDEO01", genre_slugs=["rock"])
+    await db.execute("UPDATE songs SET unavailable_at = now() WHERE id = $1", song_id)
+
+    resp = await admin_client.put(
+        f"/admin/songs/{song_id}",
+        json={
+            "title": "Renamed only",
+            "artist": "Renamed only",
+            "youtube_id": "deadVIDEO01",
+            "start_time": 0,
+            "genre_ids": [str(rock[0])],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["unavailable_at"] is not None
+    assert (
+        await db.fetchval("SELECT unavailable_at FROM songs WHERE id = $1", song_id) is not None
+    )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -31,6 +32,9 @@ class SongPayload(BaseModel):
     youtube_id: str
     start_time: int
     release_year: int | None = None
+    # When the availability scan last confirmed the video dead (mig 045);
+    # NULL/None = playable. Flagged songs are skipped by the auto-pickers.
+    unavailable_at: datetime | None = None
     is_soundtrack: bool = False
     genres: list[GenreRef] = Field(default_factory=list)
 
@@ -86,6 +90,11 @@ class AvailabilityCheckRequest(BaseModel):
     limit: int = Field(default=200, ge=1, le=250)
     offset: int = Field(default=0, ge=0)
     song_ids: list[UUID] | None = None
+    # Phase 2 (mig 045): persist the verdicts for the probed page. ``dead``
+    # sets songs.unavailable_at (the auto-pickers then skip them); ``ok``
+    # clears it (a restored video becomes eligible again); ``unknown`` never
+    # writes. False keeps the exact Phase-1 report-only behavior.
+    commit: bool = False
 
 
 class AvailabilitySong(BaseModel):
@@ -104,6 +113,11 @@ class AvailabilityReport(BaseModel):
     checked: int
     dead: list[AvailabilitySong]
     unknown: list[AvailabilitySong]
+    # Rows whose ``unavailable_at`` actually changed on this page (newly
+    # flagged dead / newly cleared back to playable). Always 0 unless the
+    # request set ``commit=true``.
+    flagged: int = 0
+    cleared: int = 0
     # Offset for the next page, or null when this page reached the end of the
     # catalog (always null when explicit ``song_ids`` were probed).
     next_offset: int | None = None

@@ -108,3 +108,101 @@ async def test_explicit_song_ids_ignore_paging(admin_client, db, monkeypatch) ->
 async def test_limit_over_cap_rejected(admin_client) -> None:
     resp = await admin_client.post("/admin/songs/check-availability", json={"limit": 999})
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# commit=true: persist the verdicts (I-Liveness Phase 2, mig 045)
+# ---------------------------------------------------------------------------
+
+
+async def _unavailable_at(db, song_id):
+    return await db.fetchval("SELECT unavailable_at FROM songs WHERE id = $1", song_id)
+
+
+async def test_commit_flags_dead_clears_ok_leaves_unknown(
+    admin_client, db, monkeypatch
+) -> None:
+    """The three verdicts map to the three write behaviors: 404 flags, 200
+    clears a previously-flagged song, anything ambiguous never writes."""
+    dead_id = await insert_song(db, title="Gone", youtube_id="deadVIDEO01", genre_slugs=["rock"])
+    restored_id = await insert_song(
+        db, title="Back", youtube_id="aliveVIDEO1", genre_slugs=["rock"]
+    )
+    unknown_id = await insert_song(
+        db, title="Maybe", youtube_id="unknownVID1", genre_slugs=["rock"]
+    )
+    # "Back" and "Maybe" were flagged by an earlier scan.
+    await db.execute(
+        "UPDATE songs SET unavailable_at = now() WHERE id = ANY($1::uuid[])",
+        [restored_id, unknown_id],
+    )
+    _stub_probe(
+        monkeypatch,
+        {"deadVIDEO01": "dead", "aliveVIDEO1": "ok", "unknownVID1": "unknown"},
+    )
+
+    resp = await admin_client.post("/admin/songs/check-availability", json={"commit": True})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["flagged"] == 1
+    assert body["cleared"] == 1
+
+    assert await _unavailable_at(db, dead_id) is not None  # 404 -> flagged
+    assert await _unavailable_at(db, restored_id) is None  # 200 -> cleared
+    assert await _unavailable_at(db, unknown_id) is not None  # unknown -> untouched
+
+
+async def test_commit_false_writes_nothing(admin_client, db, monkeypatch) -> None:
+    """Phase-1 regression guard: without commit the scan stays report-only."""
+    dead_id = await insert_song(db, title="Gone", youtube_id="deadVIDEO01", genre_slugs=["rock"])
+    flagged_id = await insert_song(db, title="Back", youtube_id="aliveVIDEO1", genre_slugs=["rock"])
+    await db.execute("UPDATE songs SET unavailable_at = now() WHERE id = $1", flagged_id)
+    _stub_probe(monkeypatch, {"deadVIDEO01": "dead", "aliveVIDEO1": "ok"})
+
+    resp = await admin_client.post("/admin/songs/check-availability", json={})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["flagged"] == 0
+    assert body["cleared"] == 0
+
+    assert await _unavailable_at(db, dead_id) is None  # dead but NOT flagged
+    assert await _unavailable_at(db, flagged_id) is not None  # ok but NOT cleared
+
+
+async def test_commit_only_touches_the_probed_page(admin_client, db, monkeypatch) -> None:
+    """A limit/offset page with commit=true must not write outside its page."""
+    id_a = await insert_song(db, title="A", youtube_id="deadVIDEOa1", genre_slugs=["rock"])
+    id_b = await insert_song(db, title="B", youtube_id="deadVIDEOb2", genre_slugs=["rock"])
+    _stub_probe(monkeypatch, {}, default="dead")
+
+    # Pages are ordered by id; Python UUID ordering matches Postgres uuid
+    # ordering (both compare the 128-bit value), so page 1 of size 1 is min().
+    first, second = sorted([id_a, id_b])
+
+    resp = await admin_client.post(
+        "/admin/songs/check-availability", json={"limit": 1, "offset": 0, "commit": True}
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["checked"] == 1
+    assert body["flagged"] == 1
+    assert body["next_offset"] == 1
+
+    assert await _unavailable_at(db, first) is not None
+    assert await _unavailable_at(db, second) is None  # outside the page -> untouched
+
+
+async def test_commit_with_explicit_song_ids(admin_client, db, monkeypatch) -> None:
+    probed = await insert_song(db, title="One", youtube_id="idONEvideo1", genre_slugs=["rock"])
+    skipped = await insert_song(db, title="Two", youtube_id="idTWOvideo2", genre_slugs=["rock"])
+    _stub_probe(monkeypatch, {}, default="dead")
+
+    resp = await admin_client.post(
+        "/admin/songs/check-availability",
+        json={"song_ids": [str(probed)], "commit": True},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["flagged"] == 1
+
+    assert await _unavailable_at(db, probed) is not None
+    assert await _unavailable_at(db, skipped) is None

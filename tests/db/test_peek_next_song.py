@@ -347,3 +347,37 @@ async def test_no_genres_selected_raises(db: asyncpg.Connection) -> None:
         await _peek(db, game_code, token)
     assert exc.value.sqlstate == "22023"
     assert "no_genres_selected" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Dead-video auto-skip (migration 045)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_peek_never_returns_an_unavailable_song(db: asyncpg.Connection) -> None:
+    """Two eligible songs, one flagged unavailable: repeated peeks always land
+    on the live one (the picker is random, so probe it several times)."""
+    game_code, songs = await _seed_game_with_songs(db, extra_songs=1)
+    token = await fetch_manager_token(db, game_code)
+    dead, alive = songs
+    await db.execute("UPDATE songs SET unavailable_at = now() WHERE id = $1", dead)
+
+    for _ in range(10):
+        rows = await _peek(db, game_code, token)
+        assert len(rows) == 1
+        assert rows[0]["song_id"] == alive
+
+
+@pytest.mark.asyncio
+async def test_peek_returns_zero_rows_when_all_songs_unavailable(
+    db: asyncpg.Connection,
+) -> None:
+    """An all-flagged pool looks exhausted to the peek: zero rows, no error --
+    same contract as a genuinely empty pool."""
+    game_code, songs = await _seed_game_with_songs(db)
+    token = await fetch_manager_token(db, game_code)
+    await db.execute("UPDATE songs SET unavailable_at = now() WHERE id = $1", songs[0])
+
+    rows = await _peek(db, game_code, token)
+    assert rows == []

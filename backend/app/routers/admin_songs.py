@@ -32,7 +32,7 @@ router = APIRouter(
     dependencies=[Depends(require_admin)],
 )
 
-SONG_COLUMNS = "id,title,artist,youtube_id,start_time,release_year"
+SONG_COLUMNS = "id,title,artist,youtube_id,start_time,release_year,unavailable_at"
 
 
 def _attach_genres(client: SupabaseClientLike, songs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -151,14 +151,19 @@ def _create_song_blocking(client: SupabaseClientLike, body: SongCreate) -> dict[
 def _update_song_blocking(
     client: SupabaseClientLike, song_id: str, body: SongUpdate
 ) -> dict[str, Any]:
-    _fetch_song_blocking(client, song_id)
-    payload = {
+    existing = _fetch_song_blocking(client, song_id)
+    payload: dict[str, Any] = {
         "title": body.title,
         "artist": body.artist,
         "youtube_id": body.youtube_id,
         "start_time": body.start_time,
         "release_year": body.release_year,
     }
+    if body.youtube_id != existing["youtube_id"]:
+        # A dead-video verdict (mig 045) belongs to the video, not the song
+        # row: swapping in a new video makes the song playable again now,
+        # instead of staying skipped until the next availability scan.
+        payload["unavailable_at"] = None
     with mapped_postgrest_errors():
         client.table("songs").update(payload).eq("id", song_id).execute()
 
@@ -295,17 +300,45 @@ def _availability_page_blocking(
     return rows, next_offset
 
 
+def _apply_verdicts_blocking(
+    client: SupabaseClientLike,
+    *,
+    flag_ids: list[str],
+    clear_ids: list[str],
+) -> tuple[int, int]:
+    """Persist scan verdicts via ``set_song_availability`` (mig 045).
+
+    One service-role RPC round-trip covers both writes atomically; ``now()``
+    is evaluated in the DB so no timestamp crosses the HTTP boundary. Returns
+    ``(flagged, cleared)`` — the counts of rows actually changed (already
+    flagged / already clear rows are left untouched by the function).
+    """
+    resp = client.rpc(
+        "set_song_availability",
+        {"p_flag_ids": flag_ids, "p_clear_ids": clear_ids},
+    ).execute()
+    rows = resp.data or []
+    row = rows[0] if rows else {}
+    return int(row.get("flagged", 0)), int(row.get("cleared", 0))
+
+
 @router.post("/check-availability", response_model=AvailabilityReport)
 @limiter.limit("10/minute")
 async def check_availability(
     request: Request, body: AvailabilityCheckRequest
 ) -> AvailabilityReport:
-    """Probe a page of the catalog for dead YouTube videos (report-only).
+    """Probe a page of the catalog for dead YouTube videos.
 
     Reads one page of songs, probes each ``youtube_id`` via YouTube oEmbed, and
     returns the ones that are gone (``dead``) or unreachable-but-maybe-alive
-    (``unknown``). No writes — the admin reviews and fixes/deletes via the
-    existing song CRUD. Page through the catalog with ``next_offset``.
+    (``unknown``). Page through the catalog with ``next_offset``.
+
+    By default (``commit=false``) it is report-only — no writes; the admin
+    reviews and fixes/deletes via the existing song CRUD. With ``commit=true``
+    the verdicts for the probed page are persisted (I-Liveness Phase 2):
+    ``dead`` flags ``songs.unavailable_at`` so the round pickers skip the song,
+    ``ok`` clears a previously-flagged song back to playable, and ``unknown``
+    never writes.
     """
     client = get_supabase_client()
     song_ids = [str(s) for s in body.song_ids] if body.song_ids is not None else None
@@ -318,17 +351,29 @@ async def check_availability(
 
     dead: list[AvailabilitySong] = []
     unknown: list[AvailabilitySong] = []
+    ok_ids: list[str] = []
     for song in songs:
         verdict = verdicts.get(song["youtube_id"], "unknown")
         if verdict == "ok":
+            ok_ids.append(str(song["id"]))
             continue
         ref = AvailabilitySong(id=song["id"], youtube_id=song["youtube_id"], title=song["title"])
         (dead if verdict == "dead" else unknown).append(ref)
+
+    flagged = cleared = 0
+    if body.commit:
+        flag_ids = [str(s.id) for s in dead]
+        if flag_ids or ok_ids:
+            flagged, cleared = await anyio.to_thread.run_sync(
+                lambda: _apply_verdicts_blocking(client, flag_ids=flag_ids, clear_ids=ok_ids)
+            )
 
     return AvailabilityReport(
         checked=len(songs),
         dead=dead,
         unknown=unknown,
+        flagged=flagged,
+        cleared=cleared,
         next_offset=next_offset,
     )
 
