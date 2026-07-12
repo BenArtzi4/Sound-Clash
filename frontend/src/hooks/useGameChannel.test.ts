@@ -917,7 +917,11 @@ describe("useGameChannel - subscription", () => {
       // lost. Time is the only recovery: one tight tick later the backstop
       // hydrates and un-strands the button, instead of leaving it dead for up
       // to 60s (longer than many rounds).
-      setHydrate({ game: { ...locked, buzzed_team_id: null, locked_at: null }, teams: [], rounds: [] });
+      setHydrate({
+        game: { ...locked, buzzed_team_id: null, locked_at: null },
+        teams: [],
+        rounds: [],
+      });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 500);
       });

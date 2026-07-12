@@ -538,7 +538,11 @@ export function useGameChannel(gameCode: string): {
             // legit clear can race the fetch within one tick, but that window
             // is milliseconds against a 15s cadence) — this is the signal that
             // makes dropped Realtime events visible in Grafana.
-            if (resync && lockRef.current !== null && freshGame.buzzed_team_id !== lockRef.current) {
+            if (
+              resync &&
+              lockRef.current !== null &&
+              freshGame.buzzed_team_id !== lockRef.current
+            ) {
               log("warn", "stale_buzz_lock_resynced", {
                 game_code: gameCode,
                 stale_team: lockRef.current,

@@ -109,7 +109,11 @@ describe("useGameChannel telemetry wiring", () => {
       // The DB cleared the lock but the Realtime UPDATE was lost; the next
       // locked-cadence backstop tick notices the drift, repairs it, and emits
       // the diagnostic that makes dropped events visible in Grafana.
-      setHydrate({ game: { ...locked, buzzed_team_id: null, locked_at: null }, teams: [], rounds: [] });
+      setHydrate({
+        game: { ...locked, buzzed_team_id: null, locked_at: null },
+        teams: [],
+        rounds: [],
+      });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 500);
       });

@@ -68,10 +68,7 @@ function makeTeams() {
 }
 
 function storeOwnTeam() {
-  window.localStorage.setItem(
-    "game:ABCDEF:team",
-    JSON.stringify({ id: "team-1", name: "Team 1" }),
-  );
+  window.localStorage.setItem("game:ABCDEF:team", JSON.stringify({ id: "team-1", name: "Team 1" }));
 }
 
 describe("TeamGameplayPage — stale buzz lock recovery (#254)", () => {
