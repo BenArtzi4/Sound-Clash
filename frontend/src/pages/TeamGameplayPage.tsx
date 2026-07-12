@@ -156,8 +156,19 @@ export function TeamGameplayPage() {
   const lockedTeamId = buzzer.lockedTeamId;
   const lockedTeam = lockedTeamId != null ? (state?.teams.get(lockedTeamId) ?? null) : null;
 
+  // "reconnecting" deliberately does NOT disable the button (#254): buzz_in is
+  // a PostgREST REST call, independent of the Realtime WebSocket, and an
+  // outage keeps the channel in "reconnecting" the whole time (supabase-js
+  // retries on a backoff that plateaus at 10s, with no cap). Hard-disabling
+  // here turned every transient blip into a dead BUZZ button mid-round. Worst
+  // case the local view is stale-unlocked and the press loses: buzz_in returns
+  // the true winner and the button flips to "SOMEONE ELSE BUZZED" — the same
+  // correction as losing a real race.
   const buzzDisabled =
-    !state || status !== "subscribed" || game?.status !== "playing" || buzzer.isLocked;
+    !state ||
+    (status !== "subscribed" && status !== "reconnecting") ||
+    game?.status !== "playing" ||
+    buzzer.isLocked;
 
   const buzz = ((): { tone: BuzzTone; label: string; subtitle?: string } => {
     if (game?.status === "playing") {

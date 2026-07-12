@@ -131,13 +131,13 @@ P0 = blocks Phase 3 exit; P1 = ships in Phase 3 but lower priority.
 | `lib/supabase.test.ts` | client singleton; reads env vars |
 | `lib/api.test.ts` | sets X-Admin-Password header from session for admin routes |
 | `hooks/useBuzzer.test.ts` | calls `rpc('buzz_in', ...)`; pending → success/lost states; double-press blocked |
-| `hooks/useGameChannel.test.ts` | subscribes with filter; reducer applies INSERT/UPDATE/DELETE; unsubscribes on unmount |
+| `hooks/useGameChannel.test.ts` | subscribes with filter; reducer applies INSERT/UPDATE/DELETE; derives the round-advance game transition from a round INSERT ahead of the game row (#254); lock-aware backstop cadence (15s locked / 60s quiet); unsubscribes on unmount |
 | `hooks/useServerTime.test.ts` | computes offset on first event; `serverTimeNow()` returns offset-corrected time |
 | `hooks/usePlayerReady.test.ts` | resolves when YT ready; queues song load before ready |
 | `pages/TeamGameplay.test.tsx` | renders pending/locked/won/lost; reads team identity from localStorage |
 | `pages/ManagerConsole.test.tsx` | renders game state; admin actions disabled until player ready |
 | `pages/DisplayScreen.test.tsx` | renders scoreboard; updates on team-score events |
-| `components/BuzzButton.test.tsx` | disabled while locked; disabled while disconnected; click fires buzz |
+| `components/BuzzButton.test.tsx` | disabled while locked; click fires buzz; stays enabled while `reconnecting` mid-game (#254 — asserted at page level in `TeamGameplayPage.staleLock.test.tsx`) |
 | `lib/managerToken.test.ts` (plus inline coverage in `pages/ManagerConsolePage.test.tsx` + `pages/ManagerCreateGamePage.test.tsx`) | localStorage round-trip; absent token → "not the host" branch; recovery-hash (`#mt=<uuid>`) parse/format — strict UUID shape, malformed variants rejected |
 
 ### 4.4 E2E tests: `tests/e2e/`

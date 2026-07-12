@@ -10,6 +10,7 @@ import { _resetServerTime } from "./useServerTime";
 import type { ActiveGame, GameRound, Team } from "../lib/types";
 import {
   gameReducer,
+  LOCKED_RESYNC_INTERVAL_MS,
   MAX_PENDING_EVENTS,
   RESYNC_INTERVAL_MS,
   useGameChannel,
@@ -364,7 +365,10 @@ describe("gameReducer", () => {
   });
 
   it("ROUND_CHANGE INSERT adds and sorts, UPDATE patches, DELETE removes", () => {
-    const game = makeActiveGame({ current_round_id: "r1" });
+    // round_number 2 keeps both INSERTs below at-or-behind the game row, so
+    // the round-advance derivation (#254, tested separately) stays out of
+    // this test's add/sort/patch/remove mechanics.
+    const game = makeActiveGame({ current_round_id: "r1", round_number: 2 });
     let state = gameReducer(null, {
       type: "HYDRATE",
       game,
@@ -421,6 +425,91 @@ describe("gameReducer", () => {
       payload: makePayload("game_rounds", "DELETE", { old: {} }),
     });
     expect(state?.rounds.length).toBe(1);
+  });
+
+  // The round-advance derivation (#254): start_round inserts the new round and
+  // updates active_games in one transaction, so a round INSERT ahead of the
+  // game row proves the game row moved — the reducer derives that transition
+  // rather than depending on the (droppable) active_games UPDATE event.
+  it("ROUND_CHANGE INSERT ahead of the game row derives the round-advance transition", () => {
+    const start = gameReducer(null, {
+      type: "HYDRATE",
+      game: makeActiveGame({
+        status: "playing",
+        round_number: 4,
+        current_round_id: "r4",
+        current_song_id: "song-4",
+        buzzed_team_id: "team-2",
+        locked_at: "2026-05-05T12:01:00Z",
+      }),
+      teams: [],
+      rounds: [makeRound({ id: "r4", round_number: 4, song_id: "song-4" })],
+    });
+    const next = gameReducer(start, {
+      type: "ROUND_CHANGE",
+      payload: makePayload("game_rounds", "INSERT", {
+        new: makeRound({ id: "r5", round_number: 5, song_id: "song-5" }),
+      }),
+    });
+    expect(next?.game.round_number).toBe(5);
+    expect(next?.game.current_round_id).toBe("r5");
+    expect(next?.game.current_song_id).toBe("song-5");
+    expect(next?.game.buzzed_team_id).toBeNull();
+    expect(next?.game.locked_at).toBeNull();
+    expect(next?.currentRound?.id).toBe("r5");
+  });
+
+  it("ROUND_CHANGE INSERT of round 1 derives the waiting→playing start transition", () => {
+    // The same derivation covers a dropped "Start game" UPDATE: the very first
+    // round INSERT flips the stale waiting view to playing.
+    const start = gameReducer(null, {
+      type: "HYDRATE",
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [],
+      rounds: [],
+    });
+    const next = gameReducer(start, {
+      type: "ROUND_CHANGE",
+      payload: makePayload("game_rounds", "INSERT", {
+        new: makeRound({ id: "r1", round_number: 1, song_id: "song-1" }),
+      }),
+    });
+    expect(next?.game.status).toBe("playing");
+    expect(next?.game.round_number).toBe(1);
+    expect(next?.game.current_round_id).toBe("r1");
+    expect(next?.currentRound?.id).toBe("r1");
+  });
+
+  it("ROUND_CHANGE INSERT at or behind the game row never touches the game (a replayed INSERT cannot wipe a live buzz lock)", () => {
+    // When the active_games UPDATE arrived first (the normal order is not
+    // guaranteed) — or Realtime re-delivers the current round's INSERT — the
+    // round is NOT ahead, and the derivation must no-op: re-nulling
+    // buzzed_team_id here would destroy a live buzz lock mid-round.
+    const game = makeActiveGame({
+      status: "playing",
+      round_number: 5,
+      current_round_id: "r5",
+      current_song_id: "song-5",
+      buzzed_team_id: "team-3",
+      locked_at: "2026-05-05T12:03:00Z",
+    });
+    const start = gameReducer(null, {
+      type: "HYDRATE",
+      game,
+      teams: [],
+      rounds: [makeRound({ id: "r4", round_number: 4, song_id: "song-4" })],
+    });
+    const next = gameReducer(start, {
+      type: "ROUND_CHANGE",
+      payload: makePayload("game_rounds", "INSERT", {
+        new: makeRound({ id: "r5", round_number: 5, song_id: "song-5" }),
+      }),
+    });
+    expect(next?.game).toBe(game);
+    expect(next?.game.buzzed_team_id).toBe("team-3");
+    // The INSERT itself still lands: the round is merged and becomes current.
+    expect(next?.rounds.map((r) => r.id)).toEqual(["r4", "r5"]);
+    expect(next?.currentRound?.id).toBe("r5");
   });
 
   it("idempotency: applying the same INSERT twice is a no-op", () => {
@@ -769,6 +858,75 @@ describe("useGameChannel - subscription", () => {
       });
       // Each hydrate hits the three ephemeral tables.
       expect(supabaseMock.from.mock.calls.length).toBe(callsAfterInit + 3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the quiet 60s cadence while no buzz lock is held (no hydrate on the tight tick)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const game = makeActiveGame();
+      setHydrate({ game, teams: [], rounds: [] });
+      renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const callsAfterInit = supabaseMock.from.mock.calls.length;
+      // One tight tick passes with no lock held: the backstop must NOT fire —
+      // the 15s cadence is reserved for locked state (#254).
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 500);
+      });
+      expect(supabaseMock.from.mock.calls.length).toBe(callsAfterInit);
+      // ...but the quiet 60s cadence still lands.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RESYNC_INTERVAL_MS - LOCKED_RESYNC_INTERVAL_MS);
+      });
+      expect(supabaseMock.from.mock.calls.length).toBe(callsAfterInit + 3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tightens the backstop to LOCKED_RESYNC_INTERVAL_MS while a buzz lock is held and repairs a stale lock (#254)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // The client saw team-2 buzz...
+      const locked = makeActiveGame({
+        status: "playing",
+        round_number: 3,
+        current_round_id: "r3",
+        buzzed_team_id: "team-2",
+        locked_at: "2026-05-05T12:01:00.000Z",
+      });
+      setHydrate({
+        game: locked,
+        teams: [],
+        rounds: [makeRound({ id: "r3", round_number: 3 })],
+      });
+      const { result } = renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+      await waitFor(() => expect(result.current.state?.game.buzzed_team_id).toBe("team-2"));
+      const callsAfterInit = supabaseMock.from.mock.calls.length;
+
+      // ...then the DB cleared the lock (release_buzz_lock / a wrong-buzz
+      // award — writes with NO redundant Realtime signal) and the UPDATE was
+      // lost. Time is the only recovery: one tight tick later the backstop
+      // hydrates and un-strands the button, instead of leaving it dead for up
+      // to 60s (longer than many rounds).
+      setHydrate({
+        game: { ...locked, buzzed_team_id: null, locked_at: null },
+        teams: [],
+        rounds: [],
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 500);
+      });
+      expect(supabaseMock.from.mock.calls.length).toBe(callsAfterInit + 3);
+      await waitFor(() => expect(result.current.state?.game.buzzed_team_id).toBeNull());
     } finally {
       vi.useRealTimers();
     }

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type {
   ActiveGame,
@@ -38,6 +38,20 @@ export function isGameExpired(game: ActiveGame): boolean {
 // minute — comfortably faster than a human notices a stuck button. Exported so
 // the test can advance fake timers by exactly one interval.
 export const RESYNC_INTERVAL_MS = 60_000;
+
+// While the local state holds a buzz lock the backstop tightens to this
+// cadence (#254). A stale lock is the one desync that silently kills gameplay:
+// the buzz button is dead and buzz_in's own guard refuses to fire, so nothing
+// the player does can self-correct it (a stale UNLOCKED view heals on the next
+// press — buzz_in returns the true winner). Two lock-clearing writes carry no
+// redundant Realtime signal at all (release_buzz_lock, award_attempt's wrong
+// branch), and realtime-js can sit on a half-open socket for ~25-50s before
+// its heartbeat notices (status stays "subscribed", events silently lost) —
+// so time is the only recovery for them. Locked windows are a fraction of a
+// game and HYDRATE no-ops when nothing changed, so the extra cost is ~3 REST
+// queries per 15s per client only while a buzz is being judged. Must divide
+// RESYNC_INTERVAL_MS evenly (the quiet cadence is every Nth tick).
+export const LOCKED_RESYNC_INTERVAL_MS = 15_000;
 
 // Ceiling on the pre-hydration event queue. The queue only grows while the
 // event gate is closed (no authoritative snapshot has succeeded yet), so
@@ -182,8 +196,33 @@ export function gameReducer(state: GameState | null, action: GameAction): GameSt
         const merged = exists
           ? state.rounds.map((r) => (r.id === round.id ? round : r))
           : [...state.rounds, round].sort((a, b) => a.round_number - b.round_number);
-        const currentRound = state.game.current_round_id === round.id ? round : state.currentRound;
-        return { ...state, rounds: merged, currentRound };
+        // Round-advance derivation (#254): start_round (the only writer that
+        // inserts game_rounds rows) inserts the new round AND updates
+        // active_games in ONE transaction, setting exactly status='playing',
+        // round_number, current_song_id, current_round_id, buzzed_team_id=NULL,
+        // locked_at=NULL (docs/rpc-functions.md §start_round). An inserted
+        // round AHEAD of our game row therefore proves the game row has moved
+        // — derive that transition here instead of depending on the
+        // active_games UPDATE event arriving. Realtime never replays a lost
+        // event, and a client that missed that UPDATE used to keep the
+        // PREVIOUS round's buzz lock ("SOMEONE ELSE BUZZED" in a fresh round)
+        // until the 60s backstop. Strictly `>`: a re-delivered INSERT of the
+        // in-progress round must never re-null a live buzz lock, and when the
+        // UPDATE arrived first the game row is already ahead, so this no-ops.
+        const game: ActiveGame =
+          round.round_number > state.game.round_number
+            ? {
+                ...state.game,
+                status: "playing",
+                round_number: round.round_number,
+                current_song_id: round.song_id,
+                current_round_id: round.id,
+                buzzed_team_id: null,
+                locked_at: null,
+              }
+            : state.game;
+        const currentRound = game.current_round_id === round.id ? round : state.currentRound;
+        return { ...state, game, rounds: merged, currentRound };
       }
       // UPDATE
       const rounds = state.rounds.map((r) => (r.id === round.id ? round : r));
@@ -204,6 +243,15 @@ export function useGameChannel(gameCode: string): {
   const [state, dispatch] = useReducer(gameReducer, null);
   const [status, setStatus] = useState<ChannelStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
+
+  // Latest lock holder, mirrored into a ref so the mount effect's closures
+  // (the backstop interval and hydrate) can read it — they close over the
+  // first render's `state` otherwise. Drives the lock-aware backstop cadence
+  // and the stale-lock diagnostic below (#254).
+  const lockRef = useRef<string | null>(null);
+  useEffect(() => {
+    lockRef.current = state?.game.buzzed_team_id ?? null;
+  }, [state]);
 
   // Last-known state worth rendering as a final scoreboard once the game rows
   // are gone (I-FinalBoard). During live play every committed state refreshes
@@ -380,16 +428,25 @@ export function useGameChannel(gameCode: string): {
     // window the SUBSCRIBED re-hydrate forces no extra render.
     void hydrate({ authoritative: false });
 
-    // Periodic catch-up in case a Realtime event was dropped (see comment on
-    // RESYNC_INTERVAL_MS). Idempotent — HYDRATE returns the same state ref
-    // when nothing changed, so quiet ticks cost ~3 REST queries with zero
-    // re-renders.
+    // Periodic catch-up in case a Realtime event was dropped (see comments on
+    // RESYNC_INTERVAL_MS / LOCKED_RESYNC_INTERVAL_MS). Idempotent — HYDRATE
+    // returns the same state ref when nothing changed, so quiet ticks cost
+    // ~3 REST queries with zero re-renders. One interval at the tight cadence;
+    // it hydrates every tick while a buzz lock is held locally (a stale lock
+    // is unrecoverable by any user action) and every Nth tick otherwise (the
+    // original 60s quiet cadence).
+    const quietEveryNthTick = RESYNC_INTERVAL_MS / LOCKED_RESYNC_INTERVAL_MS;
     let resyncId: number | null = null;
     function startResync(): void {
       if (resyncId !== null) return;
+      let tick = 0;
       resyncId = window.setInterval(() => {
-        if (!cancelled) void hydrate();
-      }, RESYNC_INTERVAL_MS);
+        if (cancelled) return;
+        tick += 1;
+        if (lockRef.current !== null || tick % quietEveryNthTick === 0) {
+          void hydrate({ resync: true });
+        }
+      }, LOCKED_RESYNC_INTERVAL_MS);
     }
     function stopResync(): void {
       if (resyncId !== null) {
@@ -440,7 +497,10 @@ export function useGameChannel(gameCode: string): {
     // stay queued for the SUBSCRIBED hydrate to drain), and if it resolves
     // after an authoritative hydrate it drops its now-stale snapshot rather
     // than clobbering newer state.
-    async function hydrate({ authoritative = true }: { authoritative?: boolean } = {}) {
+    async function hydrate({
+      authoritative = true,
+      resync = false,
+    }: { authoritative?: boolean; resync?: boolean } = {}) {
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
           supabase
@@ -469,11 +529,29 @@ export function useGameChannel(gameCode: string): {
               pending.length = 0;
             }
           } else {
+            // Cast via unknown: a non-literal select() string makes
+            // supabase-js infer GenericStringError rather than a row shape.
+            const freshGame = gameRes.data as unknown as ActiveGame;
+            // Diagnostic for #254: a backstop tick that finds a different lock
+            // in the DB than the one we're holding means the clearing event
+            // was lost and the poll repaired it. Rare enough to warn on (a
+            // legit clear can race the fetch within one tick, but that window
+            // is milliseconds against a 15s cadence) — this is the signal that
+            // makes dropped Realtime events visible in Grafana.
+            if (
+              resync &&
+              lockRef.current !== null &&
+              freshGame.buzzed_team_id !== lockRef.current
+            ) {
+              log("warn", "stale_buzz_lock_resynced", {
+                game_code: gameCode,
+                stale_team: lockRef.current,
+                fresh_team: freshGame.buzzed_team_id ?? "none",
+              });
+            }
             dispatch({
               type: "HYDRATE",
-              // Cast via unknown: a non-literal select() string makes
-              // supabase-js infer GenericStringError rather than a row shape.
-              game: gameRes.data as unknown as ActiveGame,
+              game: freshGame,
               teams: (teamsRes.data ?? []) as Team[],
               rounds: (roundsRes.data ?? []) as GameRound[],
             });
