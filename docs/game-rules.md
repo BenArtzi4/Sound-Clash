@@ -154,7 +154,7 @@ A separate manager action, independent of round and buzz state.
 
 - Only one team can hold the lock at a time. The atomic guarantee is in the `buzz_in` PL/pgSQL function (see `rpc-functions.md`).
 - The buzz button is enabled only while `active_games.status = 'playing'` AND `buzzed_team_id IS NULL`.
-- After lock, the button is disabled for ALL teams until the manager presses "Wrong" (`award_attempt` with `wrong_buzz`), "Continue round" (`release_buzz_lock`), or "Next round" (`select_next_song`) — any of which clears `buzzed_team_id`. A Correct Song / Correct Artist verdict keeps the lock on the buzzing team (so they get the other token) and only refreshes `locked_at`.
+- After lock, the button is disabled for ALL teams until the manager presses "Wrong" (`award_attempt` with `wrong_buzz`), "Continue round" (`release_buzz_lock`), or "Next round" (`select_next_song`) — any of which clears `buzzed_team_id`. A Correct Song / Correct Artist verdict keeps the lock on the buzzing team (so they get the other token) and only refreshes `locked_at`. (Clients don't depend solely on the clearing Realtime event arriving: the Next-round clear is re-derived from the new round's INSERT, and mid-round clears are backstopped at 15s while a lock is held — #254.)
 - A team that buzzed wrong (or correct) on the current song is **not** locked out for the remainder of the round; the buzzer re-arms for everyone, including them. The only constraint is that an already-claimed token cannot be re-claimed by anyone.
 - The `locked_at` timestamp is server-authoritative. Clients display "X locked it" with no client-side ordering logic.
 - Rejected buzz attempts (lock already held) get a quiet UI signal; no error toast, just disabled state.
@@ -166,7 +166,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 - A team's identity is `{ game_team_id (uuid), game_code }`. Both are stored in `localStorage` on join.
 - On page reload or temporary disconnect, the page reads `localStorage`, re-subscribes to the Realtime channel, and resumes; no server-side state restoration needed.
 - If the team's row was deleted, the page distinguishes why before acting: a kick from a live game clears the stored identity and redirects home, while a game that has ended or passed its `expires_at` (the expiry sweep cascade-deletes `game_teams` just before `active_games`) keeps the player on `/team/` and shows the "game has ended or expired" banner **with the final scoreboard** rendered from the last-known state (T4.11 / I-FinalBoard) — the swept player still sees where everyone stood, not a bare line.
-- No "reconnect grace period" is enforced. If a team disconnects, the game continues. They can rejoin while the game is `waiting` or `playing`.
+- No "reconnect grace period" is enforced. If a team disconnects, the game continues. They can rejoin while the game is `waiting` or `playing`. While the Realtime channel is `reconnecting` mid-game, the BUZZ button stays live — `buzz_in` goes over REST and the DB adjudicates, so a press during a blip is either a normal win or a normal loss (#254).
 - If `localStorage` is lost (different device, cleared storage), rejoining with the **same team name** resumes the same team: `POST /games/{code}/teams` reclaims the existing `(game_code, name)` row (same id, preserved score) rather than creating a fresh duplicate (T5.7 / F-P2-1).
 
 ## 8. Reconnection (manager)

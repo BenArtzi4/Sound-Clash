@@ -131,6 +131,8 @@ interface GameState {
 
 State updates are applied in the order Realtime delivers events. Postgres replication is ordered per row, but cross-table ordering is not guaranteed. The frontend's reducer is idempotent: applying the same event twice is a no-op.
 
+**Round-advance derivation (cross-table redundancy, issue #254).** `start_round` (the only writer that inserts `game_rounds` rows) inserts the new round row and updates `active_games` (`status='playing'`, `round_number`, `current_song_id`, `current_round_id`, `buzzed_team_id = NULL`, `locked_at = NULL`) in ONE transaction — so the two Realtime events are redundant descriptions of the same transition. The reducer exploits that: a `game_rounds` INSERT whose `round_number` is strictly ahead of the local game row derives the full `active_games` transition on the spot, instead of depending on the `active_games` UPDATE event arriving. Realtime never replays a lost event; before this derivation, a client that missed that UPDATE kept the previous round's buzz lock (the button read "SOMEONE ELSE BUZZED" in a fresh round) until the backstop resync. The strict `>` guard makes it order-independent (when the UPDATE arrives first, the game row is already ahead and the derivation no-ops) and makes a re-delivered INSERT of the in-progress round harmless (it can never re-null a live buzz lock). If `start_round`'s transaction shape ever changes, this derivation in `gameReducer` must change with it.
+
 ## 6. Initial State and Reconciliation
 
 When a client subscribes, it does NOT automatically receive a snapshot of current state; Realtime only forwards future changes. Therefore:
@@ -158,6 +160,8 @@ The order matters: subscribe first, then fetch. If we fetched first then subscri
 
 **Pre-hydrate for a faster first render.** In addition to the authoritative fetch above, the client fires one *pre-hydrate* fetch immediately on mount, in parallel with the WebSocket handshake, so the BUZZ button renders a full round-trip sooner instead of waiting the ~300-800ms for `SUBSCRIBED`. The pre-hydrate is deliberately *non-authoritative*: it only paints an early snapshot. It does **not** open the event gate (`hydrated` stays `false`, so live events keep queuing), and if it resolves after the authoritative `SUBSCRIBED` fetch it drops its now-stale snapshot instead of overwriting newer state. The `SUBSCRIBED` fetch (and the periodic backstop) remains the single source that opens the gate and drains the queued events — so the subscribe-first-then-fetch guarantee above is untouched: live events are always applied on top of the authoritative snapshot, never reverted by a hydrate. The gate only opens on a fetch that actually **succeeded**: a failed authoritative fetch surfaces an error but keeps events queuing for the next attempt (re-`SUBSCRIBED`, backstop tick, or visibility resume), rather than letting them dispatch against empty state and vanish. The queue is capped (500 events); on overflow the backlog is dropped **and** a fresh authoritative fetch is requested, whose full snapshot supersedes everything dropped — so an overflow is a resync, not a silent loss. See `frontend/src/hooks/useGameChannel.ts`.
 
+**Backstop cadence (lock-aware, issue #254).** The periodic backstop re-hydrate runs every 60s in the quiet state and tightens to **15s while the local state holds a buzz lock** (`buzzed_team_id != null`). A stale lock is the one desync no user action can fix — the button is dead and `buzz_in`'s client-side guard refuses to fire — and two of the lock-clearing writes (`release_buzz_lock`, `award_attempt`'s wrong branch) emit no redundant Realtime signal, so time is their only recovery. A stale *unlocked* view self-corrects on the next press (the RPC returns the true winner), so the quiet state keeps the cheap 60s cadence. `HYDRATE` no-ops when nothing changed, so the tight cadence costs ~3 REST queries per 15s per client only while a buzz is being judged. When a backstop tick finds a different lock than the one held locally, it logs a `stale_buzz_lock_resynced` warning — the Grafana-visible signal that a Realtime event was actually dropped.
+
 ## 7. Reconnection
 
 `supabase-js` reconnects automatically with exponential backoff (1s, 2s, 4s, ..., capped). On reconnect, it re-establishes the WebSocket and resubscribes existing channels. Missed events during disconnect are NOT replayed; Realtime is not durable.
@@ -168,7 +172,7 @@ The recovery strategy:
 2. The reducer overwrites local state with the fresh fetch.
 3. Future events apply on top.
 
-**Disconnect signaling**: while disconnected, the team UI shows a non-blocking banner ("reconnecting…"). The buzz button is disabled (because the lock state is stale). Once reconnected, normal operation resumes.
+**Disconnect signaling**: while disconnected before the game starts, the team UI shows "RECONNECTING…". Once a game is playing, the buzz button **stays enabled** during `reconnecting` (issue #254): `buzz_in` is a PostgREST REST call, independent of the WebSocket, and an outage can hold the channel in `reconnecting` for its whole duration (the rejoin backoff plateaus at 10s with no retry cap). A press against a stale-unlocked view simply loses to the DB's authoritative check — `buzz_in` returns the true winner and the button flips to "SOMEONE ELSE BUZZED", the same correction as losing a real race. Hard-disabling the button here turned every transient blip into a dead buzzer mid-round.
 
 ### Team identity persistence
 
@@ -248,7 +252,8 @@ The manager UI also disables the "Start round" button until the player reports r
 
 | Failure | Detection | Mitigation |
 |---|---|---|
-| Realtime disconnects | `channel.subscribe` callback gets `CLOSED`/`CHANNEL_ERROR` | Show "reconnecting…" banner; disable buzzer; `supabase-js` auto-reconnects |
+| Realtime disconnects | `channel.subscribe` callback gets `CLOSED`/`CHANNEL_ERROR` | Pre-game: show "reconnecting…". Mid-game: buzzer stays enabled (`buzz_in` is REST, DB-validated; #254). `supabase-js` auto-reconnects and the re-`SUBSCRIBED` hydrate refreshes state |
+| A single `active_games` UPDATE is dropped (socket churn, silent heartbeat death, free-tier throughput) | Not directly detectable; the socket may still report `SUBSCRIBED` (a half-open socket goes unnoticed for ~25-50s until the heartbeat timeout) | Round advances self-heal instantly: the reducer derives the `active_games` transition from the same-transaction `game_rounds` INSERT (#254). Lock-clears with no redundant event (`release_buzz_lock`, `award_attempt`'s wrong branch) are caught by the lock-aware backstop: 15s cadence while the local state holds a buzz lock, 60s otherwise; a repair logs `stale_buzz_lock_resynced` |
 | `buzz_in` RPC times out | Promise rejects after 10s timeout | Show "buzz failed, try again"; do NOT retry automatically (could double-press) |
 | `buzz_in` returns network error | Same | Same |
 | Postgres slow query (rare) | RPC RTT > 500ms | Logged client-side via Sentry; investigate; not user-recoverable |

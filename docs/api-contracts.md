@@ -497,7 +497,7 @@ Each `postgres_changes` callback receives:
 ```
 
 The frontend maintains derived state:
-- **Game state**: latest `active_games` row.
+- **Game state**: latest `active_games` row. A `game_rounds` INSERT that is strictly ahead of the local game row ALSO advances this (status/round pointers/lock cleared): `start_round` writes both rows in one transaction, so the reducer derives the game-row transition from the surviving INSERT even when the `active_games` UPDATE event is lost (#254; see `realtime-design.md` §5).
 - **Teams**: full team list, updated on INSERT/UPDATE/DELETE.
 - **Current round**: the `game_rounds` row whose id matches `active_games.current_round_id`.
 
@@ -509,6 +509,8 @@ When a team buzzes:
 3. All subscribed clients see `new.buzzed_team_id` go non-null and update their UI.
 
 There is no separate "buzzer_locked" event type. The data model IS the event stream.
+
+The lock *clears* the same way — an `active_games` UPDATE with `buzzed_team_id: null` (from `release_buzz_lock`, `award_attempt`'s wrong branch, or `select_next_song`). Two resilience paths cover a lost clear event: the round-advance clear is re-derived from the same-transaction `game_rounds` INSERT, and the mid-round clears are caught by the lock-aware backstop re-fetch (15s while a lock is held locally, 60s otherwise) (#254).
 
 ### 4.4 Reconnection
 
