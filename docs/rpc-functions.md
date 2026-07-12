@@ -737,10 +737,12 @@ nothing and counts zero.
 ### Callers
 
 - FastAPI `POST /admin/songs/check-availability` with `commit=true` (admin-gated) — run
-  manually by the operator, and on a schedule once the separate weekly dead-video-scan
-  GitHub Actions cron ships (`.github/workflows/dead-video-scan.yml`, its own flagged PR).
-  Migration 045 REVOKEs EXECUTE from anon/authenticated (an anon grant would let anyone
-  bury the whole catalog) and GRANTs it to service_role, per the migration-020 pattern.
+  manually by the operator, and weekly by the dead-video-scan GitHub Actions cron
+  (`.github/workflows/dead-video-scan.yml`, Mondays 06:17 UTC; it also maintains a
+  `dead-videos`-labelled GitHub issue listing whatever it flags, and closes that issue
+  once the catalog is clean again). Migration 045 REVOKEs EXECUTE from
+  anon/authenticated (an anon grant would let anyone bury the whole catalog) and GRANTs
+  it to service_role, per the migration-020 pattern.
 
 ## 6. Function ↔ Caller Reference Matrix
 

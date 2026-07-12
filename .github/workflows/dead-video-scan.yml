@@ -1,0 +1,117 @@
+# Weekly dead-video scan (I-Liveness Phase 2, issue #248).
+#
+# Pages the whole catalog through POST /admin/songs/check-availability with
+# commit=true: a video YouTube confirms gone (oEmbed 404) gets flagged and the
+# round pickers skip it (mig 045); a flagged video that answers 200 again is
+# restored; ambiguous probes (401/400/5xx/timeout) never write. The scan then
+# maintains ONE canonical "dead videos" issue (label: dead-videos): created or
+# updated while dead songs exist, closed automatically once the catalog is
+# clean again.
+#
+# Needs the ADMIN_PASSWORD repo secret (the same X-Admin-Password the admin
+# song catalog uses). A missing secret fails fast rather than scanning as
+# report-only.
+
+name: Dead video scan
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC, off the top-of-hour rush
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+concurrency:
+  group: dead-video-scan
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Scan the catalog and sync the dead-videos issue
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          API: https://api.soundclash.org
+        run: |
+          set -euo pipefail
+          if [ -z "$ADMIN_PASSWORD" ]; then
+            echo "::error::ADMIN_PASSWORD secret is not set"
+            exit 1
+          fi
+
+          offset=0 checked=0 flagged=0 cleared=0
+          : > dead.jsonl
+          : > unknown.jsonl
+          # 40 pages x 250 songs = 10k headroom; the catalog is ~1k.
+          for page in $(seq 1 40); do
+            body=$(jq -nc --argjson o "$offset" '{limit: 250, offset: $o, commit: true}')
+            # POST is safe to retry: flag/clear are idempotent. Generous
+            # timeout + retries ride out a Render cold start.
+            resp=$(curl -sS --fail-with-body --max-time 180 \
+              --retry 3 --retry-delay 30 --retry-all-errors \
+              -H "X-Admin-Password: $ADMIN_PASSWORD" \
+              -H "Content-Type: application/json" \
+              -d "$body" "$API/admin/songs/check-availability")
+            jq -c '.dead[]' <<<"$resp" >> dead.jsonl
+            jq -c '.unknown[]' <<<"$resp" >> unknown.jsonl
+            checked=$((checked + $(jq -r '.checked' <<<"$resp")))
+            flagged=$((flagged + $(jq -r '.flagged' <<<"$resp")))
+            cleared=$((cleared + $(jq -r '.cleared' <<<"$resp")))
+            next=$(jq -r '.next_offset' <<<"$resp")
+            [ "$next" = "null" ] && break
+            offset=$next
+            sleep 7 # stay under the endpoint's 10/min rate limit
+          done
+
+          dead_count=$(wc -l < dead.jsonl)
+          unknown_count=$(wc -l < unknown.jsonl)
+          echo "checked=$checked dead=$dead_count unknown=$unknown_count flagged=$flagged cleared=$cleared"
+
+          issue=$(gh issue list --label dead-videos --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ "$dead_count" -eq 0 ]; then
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --comment "Weekly scan $(date -u +%F): checked $checked songs, no dead videos remain (restored $cleared). Closing."
+            fi
+            exit 0
+          fi
+
+          {
+            echo "The weekly availability scan found catalog songs whose YouTube videos are gone."
+            echo
+            echo "They are **already auto-skipped** in games (mig 045), so nothing is broken mid-party — but each one shrinks the playable pool until fixed. Edit the song with a working \`youtube_id\` (that clears the flag immediately) or delete it."
+            echo
+            echo "_Last scan: $(date -u '+%Y-%m-%d %H:%M UTC') — checked $checked songs; $dead_count dead ($flagged newly flagged); $cleared restored._"
+            echo
+            echo "| Title | YouTube ID | Song ID |"
+            echo "|---|---|---|"
+            jq -r '"| \(.title) | `\(.youtube_id)` | `\(.id)` |"' dead.jsonl
+            if [ "$unknown_count" -gt 0 ]; then
+              echo
+              echo "<details><summary>$unknown_count songs answered ambiguously (401/400/5xx/timeout) — not flagged, worth an occasional eyeball</summary>"
+              echo
+              echo "| Title | YouTube ID | Song ID |"
+              echo "|---|---|---|"
+              jq -r '"| \(.title) | `\(.youtube_id)` | `\(.id)` |"' unknown.jsonl
+              echo
+              echo "</details>"
+            fi
+          } > issue_body.md
+
+          if [ -n "$issue" ]; then
+            gh issue edit "$issue" --body-file issue_body.md
+            gh issue comment "$issue" --body "Scan $(date -u +%F): $dead_count dead ($flagged newly flagged), $cleared restored, $checked checked. Body updated."
+          else
+            gh label create dead-videos \
+              --description "Catalog songs whose YouTube video is gone" \
+              --color D93F0B 2>/dev/null || true
+            gh issue create \
+              --title "Dead YouTube videos in the catalog (auto-maintained)" \
+              --label dead-videos \
+              --body-file issue_body.md
+          fi
