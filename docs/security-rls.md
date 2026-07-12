@@ -64,6 +64,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `end_game`              | ❌ | ✅ |
 | `cleanup_expired_games` | ❌ | ✅ (called by `pg_cron`, not FastAPI) |
 | `archive_game`          | ❌ | ✅ (internal: called by `end_game` + `cleanup_expired_games`; added in migration 033) |
+| `set_song_availability` | ❌ | ✅ (persists dead-video scan verdicts; called by the admin scan's `commit=true` path; added in migration 045) |
 
 Six RPCs are reachable from the browser: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), `peek_next_song` (the read-only prebuffer probe, since migration 029), and `extend_game` (the host's "keep playing" TTL bump, since migration 039 — writes only `active_games.expires_at`, always by a fixed +1h server-side). All six perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
 
@@ -165,7 +166,10 @@ GRANT EXECUTE ON FUNCTION release_buzz_lock(text, uuid)
 -- additionally revokes the direct anon/authenticated grants that hosted
 -- Supabase adds, and re-asserts the grant for service_role.
 --   start_round, end_round, award_bonus, end_game, cleanup_expired_games,
---   archive_game (mig 033, internal snapshot helper)
+--   archive_game (mig 033, internal snapshot helper),
+--   set_song_availability (mig 045, dead-video verdict writer -- anon EXECUTE
+--   would let anyone bury the whole catalog, so its own migration applies the
+--   same REVOKE-from-anon/authenticated + GRANT-to-service_role pattern)
 ```
 
 ## 3. Realtime Subscriptions

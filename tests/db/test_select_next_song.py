@@ -435,3 +435,69 @@ async def test_manual_pick_with_unknown_song_raises(db: asyncpg.Connection) -> N
         await _call(db, game_code, token, song_id=uuid.uuid4())
     assert exc.value.sqlstate == "P0002"
     assert "song_not_found" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Dead-video auto-skip (migration 045)
+# ---------------------------------------------------------------------------
+
+
+async def _flag_unavailable(conn: asyncpg.Connection, song_id: uuid.UUID) -> None:
+    await conn.execute(
+        "UPDATE songs SET unavailable_at = now() WHERE id = $1", song_id
+    )
+
+
+@pytest.mark.asyncio
+async def test_unavailable_song_is_never_randomly_picked(db: asyncpg.Connection) -> None:
+    """Two eligible songs, one flagged unavailable: the random pick must land
+    on the live one, and the next pick must exhaust the pool instead of ever
+    serving the flagged song."""
+    game_code, songs = await _seed_game_with_one_song(db, extra_songs=1)
+    token = await fetch_manager_token(db, game_code)
+    dead, alive = songs
+    await _flag_unavailable(db, dead)
+
+    rows = await _call(db, game_code, token)
+    assert rows[0]["song_id"] == alive
+
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert exc.value.sqlstate == "22023"
+    assert "no_more_songs" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_all_songs_unavailable_raises_no_more_songs(db: asyncpg.Connection) -> None:
+    """When every in-genre song is flagged, the pool is exhausted up front."""
+    game_code, songs = await _seed_game_with_one_song(db)
+    token = await fetch_manager_token(db, game_code)
+    await _flag_unavailable(db, songs[0])
+
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert exc.value.sqlstate == "22023"
+    assert "no_more_songs" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_manual_pick_overrides_unavailable_flag(db: asyncpg.Connection) -> None:
+    """The explicit p_song_id branch is deliberately NOT filtered: a host
+    forcing a specific song (peek commit / restart) is a deliberate act."""
+    game_code, songs = await _seed_game_with_one_song(db)
+    token = await fetch_manager_token(db, game_code)
+    await _flag_unavailable(db, songs[0])
+
+    rows = await _call(db, game_code, token, song_id=songs[0])
+    assert rows[0]["song_id"] == songs[0]
+
+
+@pytest.mark.asyncio
+async def test_null_unavailable_at_stays_eligible(db: asyncpg.Connection) -> None:
+    """The column defaults to NULL, so an untouched catalog behaves exactly as
+    before the migration."""
+    game_code, songs = await _seed_game_with_one_song(db)
+    token = await fetch_manager_token(db, game_code)
+
+    rows = await _call(db, game_code, token)
+    assert rows[0]["song_id"] == songs[0]

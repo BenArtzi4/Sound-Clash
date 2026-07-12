@@ -44,6 +44,7 @@ CREATE TABLE songs (
   start_time    integer NOT NULL DEFAULT 0,    -- seconds
   release_year  integer                        -- original release year (mig 031); nullable
                   CHECK (release_year IS NULL OR release_year BETWEEN 1900 AND 2100),
+  unavailable_at timestamptz,                  -- dead-video auto-skip (mig 045); NULL = playable
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (youtube_id)                          -- one catalog row per YouTube video (mig 042; via UNIQUE INDEX songs_youtube_id_key)
@@ -217,6 +218,23 @@ The decade filter (migration 032) derives a song's decade as `release_year / 10 
 decade, so it is excluded from a decade-filtered game and included only when the host picks
 no decade. The catalog is backfilled by `tools/song-curation/`; the admin song form and CSV
 importer both accept an optional `release_year` so new songs can carry it from creation.
+
+### `songs.unavailable_at`
+
+Nullable `timestamptz` (migration 045, I-Liveness Phase 2). **When the availability scan
+last confirmed the song's YouTube video dead** (oEmbed `404`); `NULL` means playable. The
+auto-pickers (`select_next_song`'s random path and `peek_next_song`) skip flagged songs, so
+a confirmed-dead video never reaches a round; the explicit `p_song_id` override is
+deliberately not filtered (a host forcing a specific song is a deliberate act).
+
+Written only by the service-role-only `set_song_availability` RPC, called by
+`POST /admin/songs/check-availability` with `commit=true`: a `404` verdict flags a song
+(only if currently `NULL` — the timestamp records *first noticed*, and re-scans don't
+rewrite it), a `200` clears it back to `NULL` (a restored/transient video becomes eligible
+again), and an ambiguous verdict (`401`/`400`/`5xx`/timeout) never writes. Updating a song
+with a **different** `youtube_id` via the admin CRUD also clears the flag — the verdict
+belongs to the video, not the song row. The flag is metadata, not deletion: the song stays
+in the catalog and the admin list, and self-heals when the video comes back.
 
 ### `active_games.game_code`
 
