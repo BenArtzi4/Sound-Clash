@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
-import { ApiError, joinTeam } from "../lib/api";
-import { setStoredTeam } from "../lib/teamStorage";
+import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
+import { parseRejoinHash, setStoredTeam } from "../lib/teamStorage";
 import styles from "./JoinTeamPage.module.css";
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
@@ -14,12 +14,17 @@ function normalizeCode(raw: string): string {
 
 export function JoinTeamPage() {
   const { gameCode: paramCode } = useParams<{ gameCode?: string }>();
+  const { hash } = useLocation();
   const navigate = useNavigate();
 
   const [code, setCode] = useState(normalizeCode(paramCode ?? ""));
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Rejoin-by-link (issue #183): a host-shown QR opens /join/<CODE>#rt=<token>.
+  // If we land with a valid token fragment, reconnect straight to the team and
+  // skip the form; on failure, drop to the manual form with a message.
+  const [rejoining, setRejoining] = useState(() => parseRejoinHash(hash) !== null);
 
   // Wake the Render backend now so the join POST (which goes through Render) is
   // warm by the time the player finishes typing.
@@ -34,6 +39,44 @@ export function JoinTeamPage() {
   useEffect(() => {
     void import("./TeamGameplayPage");
   }, []);
+
+  // Adopt a #rt= rejoin token once: resolve it to the exact team (same id,
+  // preserved score) and jump to gameplay, storing the normal {id,name}
+  // identity so later refreshes use the same-browser auto-rejoin path. On
+  // failure, scrub the token from the URL and fall back to the manual form.
+  useEffect(() => {
+    const token = parseRejoinHash(hash);
+    if (!token) {
+      setRejoining(false);
+      return;
+    }
+    const targetCode = normalizeCode(paramCode ?? "");
+    if (!CODE_RE.test(targetCode)) {
+      setRejoining(false);
+      setError("That rejoin link is missing a valid game code.");
+      return;
+    }
+    let cancelled = false;
+    setRejoining(true);
+    void (async () => {
+      try {
+        const team = await rejoinTeam(targetCode, token);
+        if (cancelled) return;
+        setStoredTeam(targetCode, { id: team.id, name: team.name });
+        navigate(`/team/${targetCode}`, { replace: true });
+      } catch {
+        if (cancelled) return;
+        setRejoining(false);
+        setError(
+          "That rejoin link didn't work. Enter your team name to rejoin and keep your score.",
+        );
+        navigate(`/join/${targetCode}`, { replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hash, paramCode, navigate]);
 
   const trimmedName = name.trim();
   const codeValid = CODE_RE.test(code);
@@ -61,6 +104,17 @@ export function JoinTeamPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (rejoining) {
+    return (
+      <main className={styles.shell}>
+        <div className={styles.card} aria-busy="true">
+          <h1 className={styles.title}>Reconnecting…</h1>
+          <p className={styles.subtitle}>Getting you back into your team.</p>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -106,6 +160,9 @@ export function JoinTeamPage() {
           <span className={styles.counter} aria-hidden="true">
             {trimmedName.length}/30
           </span>
+          <p className={styles.hint}>
+            Already had a team? Enter the same name to rejoin and keep your score.
+          </p>
         </div>
 
         {error ? <p className="error">{error}</p> : null}

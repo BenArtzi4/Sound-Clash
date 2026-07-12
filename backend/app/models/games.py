@@ -99,6 +99,28 @@ class JoinTeamResponse(BaseModel):
     joined_at: datetime
 
 
+class RejoinTeamRequest(BaseModel):
+    """Body for ``POST /games/{code}/rejoin`` (issue #183). The per-team rejoin
+    token, resolved server-side back to the existing team row. Distinct field
+    name from the manager token so the two are never confused."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: UUID
+
+
+class TeamRejoinTokenResponse(BaseModel):
+    """Body of ``GET /games/{code}/teams/{team_id}/rejoin-token`` — the only
+    place a rejoin token is ever revealed, and only to the authenticated host
+    (the endpoint is manager-token-gated). The host renders it as a transient
+    QR for a team to scan on a new/borrowed device."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    team_id: UUID
+    rejoin_token: UUID
+
+
 class AwardBonusRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

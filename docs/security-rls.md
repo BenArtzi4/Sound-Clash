@@ -26,11 +26,14 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | Credential | Header | Scope | Lifetime |
 |---|---|---|---|
 | **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `release_buzz_lock` / `select_next_song` / `peek_next_song` / `extend_game` via token-gated direct RPC; bonus / end / kick a team via REST) | Minted by an `AFTER INSERT` trigger into `game_secrets` (mig 034), read back by `POST /games`; lives 4h, cascade-deleted when `cleanup_expired_games` removes the game |
+| **team rejoin token** | request body of `POST /games/{code}/rejoin` (not a header) | Reconnect one specific team to its existing row (issue #183). Revealed to the host only via the manager-token-gated `GET /games/{code}/teams/{id}/rejoin-token`; never returned to players by join, never in Realtime | Minted by an `AFTER INSERT` trigger into `team_secrets` (mig 046); lives 4h, cascade-deleted with the team when the game is swept |
 | **admin password** | `X-Admin-Password` | Song catalog only (`/admin/songs/*` CRUD + bulk import) | Single env var on FastAPI; rotated by changing the env and restarting |
 
 `POST /games` is **public** (rate-limited 10/min/IP). The browser keeps the returned manager token in `localStorage` under `game:<code>:manager-token` and presents it on subsequent host calls. Players who happen to know the game code cannot manage it because they don't have the token. Hosting requires no signup, login, or persistent identity.
 
 **Host recovery link (T4.10).** The manager console offers an opt-in "Backup host link" — `/manager/game/<code>#mt=<token>` as a QR + copyable URL — so a host whose localStorage is gone (new device, cleared browser) can re-authenticate. Security posture: the token rides the URL **fragment**, which browsers never send over the wire, so it cannot land in CDN/access logs or `Referer` headers; the console adopts it into localStorage on load and immediately rewrites the URL (replace navigation) so it doesn't linger in the address bar, history entry, or screenshots. Adoption is deliberately narrow: it only accepts the canonical UUID shape (a crafted link can't plant arbitrary strings in storage; a wrong-but-well-formed token just fails validation inside the SECURITY DEFINER functions / REST middleware exactly like any bad token), and it only happens on a device that holds **no** stored token for that game — an existing credential always wins, so a crafted `#mt=` link opened by the real host can never overwrite or clobber their working token. In storage-blocked browsers (private mode) the adopted token lives in memory for the life of the tab: recovery still works, it just doesn't survive a refresh. The link is deliberately collapsed behind a tap on the host's own screen — it is never rendered on the shared display — and the UI warns that anyone holding it controls the game. Sharing the link is equivalent to sharing host control; the threat model treats it like handing over the hosting phone.
+
+**Team rejoin token (issue #183).** A per-team `rejoin_token` (uuid) lets a team that lost its device (dead phone, cleared storage, a different phone) reconnect to its *exact* `game_teams` row — same `id`, preserved `score`. The token lives in the anon-invisible `team_secrets` table (mig 046, §2), mirroring `game_secrets`' isolation: `game_teams` is anon-readable **and** in the Realtime publication, so a token on `game_teams` would be fanned out to every subscribed player. Security posture: the token is disclosed **only** to the authenticated host, via the manager-token-gated `GET /games/{code}/teams/{team_id}/rejoin-token`; it is **never** returned to players by the join endpoint, **never** stored in player localStorage, and **never** sent over Realtime. The host holds up a "Reconnect a team" QR of the form `…/join/<code>#rt=<token>` — the token again rides the URL **fragment** (never hits server logs / `Referer`), and the player's browser posts it to the unauthenticated `POST /games/{code}/rejoin`, where the 128-bit uuid itself is the credential (a wrong-but-well-formed token is a plain 404). There is no per-team SECURITY DEFINER RPC — rejoin is a cold-start-tolerant FastAPI endpoint that reads `team_secrets` with the service-role key, off the buzzer hot path. The pre-existing **name-based reclaim stays open** as the "easy" recovery path (see §4 D-4); the rejoin token is an additive host-only *secure* path, not a gate on it.
 
 ## 2. RLS Policy Matrix
 
@@ -44,11 +47,12 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `game_rounds`   | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_round_attempts` *(mig 037)* | ❌ (analytics-only) | ❌ | ❌ | ❌ |
 | `game_secrets` *(mig 034)*        | ❌ (**host credential**) | ❌ | ❌ | ❌ |
+| `team_secrets` *(mig 046)*        | ❌ (**per-team rejoin credential**) | ❌ | ❌ | ❌ |
 | `game_history` *(mig 033)*        | ❌ (operator-only) | ❌ | ❌ | ❌ |
 | `game_history_teams` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 | `game_history_songs` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 
-`service_role` bypasses all RLS. The tables `anon` cannot read are `game_secrets` (mig 034), the durable `game_history*` tables (mig 033), and `game_round_attempts` (mig 037 — the per-buzz analytics log; the app never reads it and it's not in the Realtime publication, so it's locked to operators/service-role): each has RLS enabled with no read policy and no anon `GRANT`. **`game_secrets` holds the per-game `manager_token`** — it was moved off `active_games` (mig 034) precisely because `active_games` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate. `game_secrets` is also deliberately **not** in the Realtime publication. The host-facing "export songs" feature reads the live ephemeral tables in the host's own session, not these.
+`service_role` bypasses all RLS. The tables `anon` cannot read are `game_secrets` (mig 034), `team_secrets` (mig 046), the durable `game_history*` tables (mig 033), and `game_round_attempts` (mig 037 — the per-buzz analytics log; the app never reads it and it's not in the Realtime publication, so it's locked to operators/service-role): each has RLS enabled with no read policy and no anon `GRANT` (`service_role` keeps `SELECT`/`INSERT` on the two secret tables). **`game_secrets` holds the per-game `manager_token`** — it was moved off `active_games` (mig 034) precisely because `active_games` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate. **`team_secrets` holds the per-team `rejoin_token`** (mig 046, issue #183) and is split off `game_teams` for the identical reason — `game_teams` is anon-readable and in the publication, so a rejoin token stored there would leak the same way. Both secret tables are also deliberately **not** in the Realtime publication. The host-facing "export songs" feature reads the live ephemeral tables in the host's own session, not these.
 
 | RPC function | anon EXECUTE | service_role EXECUTE |
 |---|---|---|
@@ -130,6 +134,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 -- Per-buzz analytics log (mig 037): service_role read/insert only.
 GRANT SELECT, INSERT ON game_round_attempts TO service_role;
 
+-- Per-team rejoin credential (mig 046): same posture as game_secrets --
+-- service_role read/insert only, anon base privileges revoked, and NOT in the
+-- Realtime publication. The service-role backend reads it to resolve a rejoin
+-- token / reveal it to the host; there is no SECURITY DEFINER RPC.
+ALTER TABLE team_secrets ENABLE ROW LEVEL SECURITY;   -- RLS on, no policy => anon denied
+REVOKE ALL ON team_secrets FROM anon, authenticated;
+GRANT SELECT, INSERT ON team_secrets TO service_role;
+
 -- Defense in depth: hosted Supabase auto-grants base privileges on every new
 -- public table to anon/authenticated. RLS-with-no-policy already denies anon
 -- every row, but we ALSO revoke the base privilege so anon gets a hard
@@ -182,7 +194,7 @@ For Sound Clash, `anon` can SELECT any game row → anon receives every game's e
 
 If we ever add per-user scoping, RLS policies become more restrictive and Realtime auto-respects them.
 
-**Publication membership.** Only the three tables the frontend actually subscribes to — `active_games`, `game_teams`, `game_rounds` — are in the `supabase_realtime` publication. `game_secrets` (mig 034) and `game_round_attempts` (mig 037) are deliberately **out** of it: the former is a secret, the latter is an analytics log with no subscriber, so publishing it only burned Realtime quota (a full row WAL-decoded and broadcast on every scored buzz, for nobody). A future streaks feature would re-add `game_round_attempts` to the publication as part of that work.
+**Publication membership.** Only the three tables the frontend actually subscribes to — `active_games`, `game_teams`, `game_rounds` — are in the `supabase_realtime` publication. `game_secrets` (mig 034), `team_secrets` (mig 046), and `game_round_attempts` (mig 037) are deliberately **out** of it: the first two are secrets (fanning them out would defeat the whole point of splitting them off `active_games` / `game_teams`), the last is an analytics log with no subscriber, so publishing it only burned Realtime quota (a full row WAL-decoded and broadcast on every scored buzz, for nobody). A future streaks feature would re-add `game_round_attempts` to the publication as part of that work.
 
 ## 4. Threat Model
 
@@ -199,6 +211,7 @@ If we ever add per-user scoping, RLS policies become more restrictive and Realti
 | **Realtime quota exhaustion** | Medium | Medium (game-day outage) | Alert at 75% utilization; document max-concurrent-games limit |
 | **Admin password brute force** | Low | High (catalog write access) | 16+ char strong password; rate limit `/admin/*` to 100/min/IP |
 | **Manager-token guess for someone else's game** | Very low | Medium (could control a stranger's game) | 128-bit uuid → 2^128 search space; rate-limit on `/games/*` is 100/min/IP per endpoint; tokens auto-expire after 4h with the game row |
+| **Rejoin-token guess to hijack a team** (issue #183) | Very low | Low (take over a team's score in a stranger's game) | 128-bit uuid → 2^128 search space; disclosed only to the authenticated host, never to players / Realtime; `POST /games/*/rejoin` rate-limited 30/min/IP; tokens auto-expire after 4h with the team. Note the *easy* recovery path (name reclaim) is already open by design (D-4), so the token adds security, not attack surface |
 | **YouTube ID injection** (admin endpoint) | Low | Low | Validate as 11-char alphanumeric+`-_`; reject others |
 | **SQL injection** | Low | Critical | Use parameterized queries everywhere (`supabase-py` does this); functions use prepared parameters |
 
@@ -214,6 +227,8 @@ Several design tradeoffs were surfaced by the security review and **consciously 
 **Cross-game buzzing is NOT accepted — it is closed at the source (mig 041).** D-4 above accepts that a client can buzz as any team *within the same game* (the host is the integrity check). It does **not** extend to planting a team from a *different* game into a game's buzz lock. Before mig 041, `buzz_in` set `active_games.buzzed_team_id = p_team_id` gated only by the FK to `game_teams.id`, which any team from any game satisfies; `award_attempt` then credits/debits whoever holds the lock with no `game_code` filter, so a caller could tamper with a foreign game's team score. Migration 041 adds an `EXISTS (SELECT 1 FROM game_teams WHERE id = p_team_id AND game_code = p_game_code)` predicate to the buzz claim, so a non-member team can never win the lock — the same defense `award_bonus` already carries via its `team_not_in_game` guard (mig 014). The buzz-race property (single atomic conditional UPDATE) is unchanged.
 
 The same-name **reclaim** ergonomic that pairs with this (F-P2-1 — a team re-joining with the same name gets its existing row back instead of a duplicate) is **implemented** as of Phase 5 T5.7: `POST /games/{code}/teams` now SELECTs a matching `(game_code, name)` row and returns it (same `id`, preserved `score`) before inserting, so a refreshed/reconnecting player resumes their team instead of hitting the UNIQUE constraint. It does not alter the accepted posture above — reclaim is keyed only on the public team name (no per-team secret), so anyone with the code could still reclaim a team by guessing its name; that is intentional under D-4 (the host is the integrity check).
+
+**Host-only rejoin token is additive, not a gate (issue #183).** The per-team `rejoin_token` in `team_secrets` (mig 046, §1–§2) adds a *secure* reconnect path **on top of** the open name-reclaim above — it does **not** close or gate it. The name path stays fully open (the accepted "easy" recovery for a 4h, account-less party game); the token path exists for hosts who want a non-guessable rescue: the host reveals the token to exactly one team via the manager-token-gated `GET /games/{code}/teams/{id}/rejoin-token`, holds up a `…/join/<code>#rt=<token>` QR, and the player's device rejoins via `POST /games/{code}/rejoin`. Because the token is a 128-bit uuid disclosed only to the host (never to players, never over Realtime), it is not guessable the way a team *name* is — so the two paths coexist: name-reclaim is the convenient one, the token is the secure one, and neither weakens the D-4 posture (the host remains the integrity check either way). There is deliberately **no** rejoin QR on the player screen and **no** per-team SECURITY DEFINER RPC — the whole flow is host-driven and served by cold-start-tolerant FastAPI endpoints off the buzzer hot path.
 
 **Pre-reveal "answer" is readable before the host reveals it (D-2).** A `game_rounds` row references the currently-playing song, and `songs` metadata (title, artist) is anon-readable (§2), so a determined player could open devtools mid-round, read the round's song id, and look up the title/artist a few seconds before the host reveals it. Accepted, not redesigned, because:
 - **The clip is audibly playing to the entire room.** The "answer" to *name that tune* is literally being broadcast — it is not a secret the DB is leaking, it's the game. Reading it in devtools beats listening by seconds, if at all.
@@ -236,6 +251,7 @@ What secrets exist, where they live, who sees them:
 | `SUPABASE_SERVICE_ROLE_KEY` | GitHub secrets, Render env | Server-only |
 | `ADMIN_PASSWORD` | GitHub secrets, Render env | Server + the catalog operator (gates `/admin/songs/*` only) |
 | `manager_token` (per game) | `game_secrets.manager_token` (uuid, anon-invisible; mig 034); host's `localStorage` | Whoever holds the host browser session for that game |
+| `rejoin_token` (per team) | `team_secrets.rejoin_token` (uuid, anon-invisible; mig 046) | The authenticated host (via the manager-token-gated reveal endpoint) and whoever the host shares the rejoin QR with; never players by default |
 | `RENDER_DEPLOY_HOOK` | GitHub secrets | CI only |
 | `CF_API_TOKEN` | GitHub secrets | CI only |
 | Postgres direct connection string | Supabase dashboard, **never** in repo | Operator only (rare use) |

@@ -47,3 +47,34 @@ export function clearStoredTeam(gameCode: string): void {
     // ignore
   }
 }
+
+// --- Team rejoin link (issue #183) ----------------------------------------
+//
+// A team that lost its device is rescued by the HOST: the manager console
+// reveals that team's per-team rejoin token (from the anon-invisible
+// team_secrets table) and renders a QR of the form
+//   /join/<CODE>#rt=<rejoin_token>
+// The team scans it on a new/borrowed device; JoinTeamPage adopts the token,
+// calls POST /games/<CODE>/rejoin to resolve it back to the exact team (same
+// id, preserved score), then stores the normal {id,name} identity and scrubs
+// the fragment. The token rides the URL FRAGMENT, never the query string —
+// fragments stay in the browser, so the token can't land in CDN/access logs or
+// Referer headers. This mirrors the host's #mt= recovery link (managerToken.ts).
+//
+// Tokens are minted server-side by gen_random_uuid() (migration 046), so only
+// accept the canonical UUID shape — a crafted link can't drive an arbitrary
+// value into the rejoin request.
+const REJOIN_HASH_RE = /^#rt=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+export function rejoinHash(token: string): string {
+  return `#rt=${token}`;
+}
+
+export function parseRejoinHash(hash: string): string | null {
+  const match = REJOIN_HASH_RE.exec(hash);
+  return match ? (match[1] ?? null) : null;
+}
+
+export function teamRejoinUrl(gameCode: string, token: string): string {
+  return `${window.location.origin}/join/${gameCode}${rejoinHash(token)}`;
+}

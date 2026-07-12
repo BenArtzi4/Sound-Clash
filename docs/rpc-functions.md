@@ -1,8 +1,8 @@
 # Sound Clash: Postgres RPC Functions
 
-The twelve PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
+The thirteen PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), and `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC).
 
 ## 0. Conventions
 
@@ -744,6 +744,51 @@ nothing and counts zero.
   anon/authenticated (an anon grant would let anyone bury the whole catalog) and GRANTs
   it to service_role, per the migration-020 pattern.
 
+## 5c. `create_team_secret`: provision a per-team rejoin token (trigger)
+
+Added in migration 046 (issue #183). A trigger function, **not** an RPC — it has no
+HTTP caller and is not exposed to anon. It runs from an `AFTER INSERT` trigger on
+`game_teams` (`trg_create_team_secret`), in the **same transaction** as the team insert,
+so every team always has exactly one `team_secrets` row (its per-team `rejoin_token`) and
+the two can never diverge. `SECURITY DEFINER` so it succeeds regardless of which role
+inserts the team. Mirrors `create_game_secret` (mig 034, the `active_games` twin).
+
+```sql
+CREATE OR REPLACE FUNCTION create_team_secret() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO team_secrets (team_id, game_code)
+  VALUES (NEW.id, NEW.game_code)
+  ON CONFLICT (team_id) DO NOTHING;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_create_team_secret ON game_teams;
+CREATE TRIGGER trg_create_team_secret
+  AFTER INSERT ON game_teams
+  FOR EACH ROW EXECUTE FUNCTION create_team_secret();
+```
+
+**Team rejoin has no anon RPC.** Unlike the manager-token host actions (which validate
+the token inside SECURITY DEFINER functions), reconnecting a team is a pair of
+cold-start-tolerant **FastAPI endpoints** off the buzzer hot path: `POST
+/games/{code}/rejoin` (resolves the rejoin token back to the team row) and the
+manager-token-gated `GET /games/{code}/teams/{team_id}/rejoin-token` (reveals it to the
+host). Both read the anon-invisible `team_secrets` table with the service-role key; see
+`api-contracts.md §2.3a / §2.8a` and `security-rls.md §1`.
+
+### Idempotency
+
+Idempotent per team via `ON CONFLICT (team_id) DO NOTHING`; a re-fired trigger or the
+migration's one-time backfill of existing teams never double-inserts.
+
+### Callers
+
+- The `trg_create_team_secret` `AFTER INSERT` trigger on `game_teams`. No HTTP caller.
+
 ## 6. Function ↔ Caller Reference Matrix
 
 | Function | Anon callable? | Service role callable? | Called by |
@@ -761,6 +806,7 @@ nothing and counts zero.
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
 | `archive_game` | ❌ | ✅ | Internal call from `end_game` + `cleanup_expired_games`. No HTTP caller. |
 | `set_song_availability` | ❌ | ✅ | FastAPI POST /admin/songs/check-availability with `commit=true` |
+| `create_team_secret` | ❌ | ✅ | Trigger only (`AFTER INSERT` on `game_teams`). No HTTP caller. Team rejoin is a FastAPI endpoint, not an anon RPC. |
 
 The six anon-callable functions all validate authentication inside the
 function body (`buzz_in` checks the game-code; the other five check the

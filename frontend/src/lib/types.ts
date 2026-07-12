@@ -149,6 +149,13 @@ export interface EndGameResponse {
   ended_at: string;
 }
 
+// GET /games/{code}/teams/{id}/rejoin-token — the host-only reveal of a team's
+// rejoin token (issue #183). Never sent to players.
+export interface TeamRejoinToken {
+  team_id: string;
+  rejoin_token: string;
+}
+
 // Admin song-catalog payloads. Mirrors backend/app/models/songs.py.
 export interface SongWritePayload {
   title: string;
