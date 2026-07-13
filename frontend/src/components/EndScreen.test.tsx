@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EndScreen } from "./EndScreen";
 import type { Team } from "../lib/types";
 
@@ -11,7 +11,13 @@ const baseTeam: Team = {
   joined_at: "2026-05-05T12:00:00Z",
 };
 
+const realMatchMedia = window.matchMedia;
+
 describe("EndScreen", () => {
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
+
   it("shows the FINAL RESULTS heading and game code", () => {
     render(<EndScreen teams={[]} gameCode="ABCDEF" />);
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
@@ -40,7 +46,8 @@ describe("EndScreen", () => {
       { ...baseTeam, id: "5", name: "Eve", score: 10 },
     ];
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
-    expect(screen.getByText(/top teams/i)).toBeInTheDocument();
+    // Nothing hidden (5 <= cap) -> the list is the full field, titled "Final standings".
+    expect(screen.getByText(/final standings/i)).toBeInTheDocument();
     const scoreboard = screen.getByTestId("final-scoreboard");
     expect(scoreboard.querySelectorAll("[data-team-id]")).toHaveLength(5);
     expect(scoreboard.textContent).toMatch(/Alice/);
@@ -61,6 +68,8 @@ describe("EndScreen", () => {
       { ...baseTeam, id: "7", name: "Grace", score: 10 },
     ];
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    // Teams are hidden -> the list is a "Top teams" subset, not the full field.
+    expect(screen.getByText(/top teams/i)).toBeInTheDocument();
     const scoreboard = screen.getByTestId("final-scoreboard");
     // Only the top 5 render as rows; the last two are summarized.
     expect(scoreboard.querySelectorAll("[data-team-id]")).toHaveLength(5);
@@ -181,5 +190,66 @@ describe("EndScreen", () => {
     expect(winnersCard?.textContent).toMatch(/Alice/);
     expect(winnersCard?.textContent).toMatch(/Bob/);
     expect(winnersCard?.textContent).toMatch(/Carol/);
+  });
+
+  it("shows every tied team on the podium and never hides a higher scorer", () => {
+    // Regression: a 4-way tie for 2nd must show all four on the silver card —
+    // a higher-scoring tied team (Eve, 30) must not be hidden while a
+    // lower-scoring team (Frank, 10) keeps its own bronze card.
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 50 },
+      { ...baseTeam, id: "2", name: "Bob", score: 30 },
+      { ...baseTeam, id: "3", name: "Carol", score: 30 },
+      { ...baseTeam, id: "4", name: "Dave", score: 30 },
+      { ...baseTeam, id: "5", name: "Eve", score: 30 },
+      { ...baseTeam, id: "6", name: "Frank", score: 10 },
+    ];
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    // No "+N more tied" collapse anywhere.
+    expect(screen.queryByText(/more tied/i)).not.toBeInTheDocument();
+    // Every team — including the tied runner-up Eve (30) — is on the podium,
+    // so a lower-scoring team (Frank, 10) can't sit on the podium while a
+    // higher-scoring tied team is hidden. The podium is the gold card's parent.
+    const podium = screen.getByText("WINNER").parentElement?.parentElement;
+    for (const name of ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank"]) {
+      expect(podium?.textContent).toContain(name);
+    }
+  });
+
+  it("shows all five teams when the whole field ties for first", () => {
+    // The realistic ceiling is five teams sharing one score; they all fit on
+    // the shared card (it grows to fit — no internal scroll).
+    const teams: Team[] = [1, 2, 3, 4, 5].map((n) => ({
+      ...baseTeam,
+      id: `${n}`,
+      name: `P${n}`,
+      score: 30,
+      joined_at: `2026-05-05T12:00:0${n}Z`,
+    }));
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    const winnersCard = screen.getByText(/winners/i).parentElement;
+    for (const name of ["P1", "P2", "P3", "P4", "P5"]) {
+      expect(winnersCard?.textContent).toContain(name);
+    }
+  });
+
+  it("shows final scores immediately for reduced-motion users (no count-up)", () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("reduce"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    render(
+      <EndScreen teams={[{ ...baseTeam, id: "1", name: "Alice", score: 42 }]} gameCode="ABCDEF" />,
+    );
+    // The gold podium score is a CountUp; with reduced motion it renders the
+    // final value on first paint instead of rolling up from 0.
+    const winnerCard = screen.getByText(/winner/i).parentElement;
+    expect(winnerCard?.textContent).toMatch(/42/);
   });
 });
