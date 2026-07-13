@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RouteFallback } from "./components/RouteFallback";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { ToastProvider } from "./context/ToastContext";
 import { HomePage } from "./pages/HomePage";
 import { JoinTeamPage } from "./pages/JoinTeamPage";
@@ -37,6 +38,7 @@ export function App() {
     // instead of a blank page. See lib/preloadError.ts for the auto-reload path.
     <ErrorBoundary>
       <BrowserRouter>
+        <ScrollToTop />
         <ToastProvider>
           <Suspense fallback={<RouteFallback />}>
             <Routes>
