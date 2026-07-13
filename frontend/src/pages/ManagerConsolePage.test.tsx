@@ -2098,13 +2098,13 @@ describe("ManagerConsolePage", () => {
       _resetServerTime();
     });
 
-    it("shows only the subtle end-time hint while expiry is far off", async () => {
+    it("shows no expiry UI at all while expiry is far off", async () => {
       setHydrate({ game: makeActiveGame({ status: "waiting" }), teams: [], rounds: [] });
       renderConsole();
       await act(async () => {
         await fireSubscribed();
       });
-      expect(screen.getByTestId("expiry-hint")).toBeInTheDocument();
+      expect(screen.queryByTestId("expiry-hint")).not.toBeInTheDocument();
       expect(screen.queryByTestId("expiry-banner")).not.toBeInTheDocument();
     });
 
@@ -2131,8 +2131,8 @@ describe("ManagerConsolePage", () => {
       await waitFor(() => expect(screen.getByText(/game extended/i)).toBeInTheDocument());
       expect(screen.getByTestId("extend-game")).toBeDisabled();
 
-      // The Realtime UPDATE with the bumped expires_at swaps the banner for
-      // the subtle hint (70 min left on the pinned clock).
+      // The Realtime UPDATE with the bumped expires_at clears the banner
+      // (70 min left on the pinned clock — back outside the warning window).
       act(() => {
         fireGame(
           makePayload<ActiveGame>("active_games", "UPDATE", {
@@ -2141,7 +2141,7 @@ describe("ManagerConsolePage", () => {
         );
       });
       await waitFor(() => expect(screen.queryByTestId("expiry-banner")).not.toBeInTheDocument());
-      expect(screen.getByTestId("expiry-hint")).toBeInTheDocument();
+      expect(screen.queryByTestId("expiry-hint")).not.toBeInTheDocument();
     });
 
     it("re-enables Keep playing and surfaces an error toast when extend_game fails", async () => {

@@ -4,14 +4,15 @@ import styles from "./ExpiryCountdown.module.css";
 
 // The manager console's view of the game TTL (T4.8 / I-Expiry). active_games
 // rows are swept ~4 hours after creation (docs/game-rules.md §10) and the
-// clock starts at creation, so lobby time eats into it. This renders the
-// deadline as a subtle "Ends at HH:MM" hint until the last WARNING_WINDOW_MS,
-// then as a warning banner whose "Keep playing +1h" action is the only
-// surface for the extend_game RPC — deliberately not a persistent button.
-// A game past its expires_at but not yet swept (the sweep is hourly) keeps
-// the banner and the action: extend_game grants a full hour from now there.
-// The banner leaves the warning state on its own when the Realtime UPDATE for
-// the bumped expires_at moves `expiresAt` back out of the window.
+// clock starts at creation, so lobby time eats into it. Outside the last
+// WARNING_WINDOW_MS this renders nothing (the host asked for no standing
+// "Ends at HH:MM" hint); inside it, a warning banner whose "Keep playing +1h"
+// action is the only surface for the extend_game RPC — deliberately not a
+// persistent button. A game past its expires_at but not yet swept (the sweep
+// is hourly) keeps the banner and the action: extend_game grants a full hour
+// from now there. The banner leaves the warning state on its own when the
+// Realtime UPDATE for the bumped expires_at moves `expiresAt` back out of the
+// window.
 //
 // Owns its own per-second tick, RoundCountdown-style, so re-rendering the
 // clock doesn't re-render the page tree. Times are computed on the
@@ -68,17 +69,9 @@ export function ExpiryCountdown({ expiresAt, extendPending, onExtend }: Props) {
             Keep playing +1h
           </button>
         </div>
-      ) : (
-        <p className={styles.hint} data-testid="expiry-hint">
-          Ends at {formatEndTime(expiresAt)}
-        </p>
-      )}
+      ) : null}
     </>
   );
-}
-
-function formatEndTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatRemaining(ms: number): string {

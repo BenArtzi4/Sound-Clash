@@ -24,11 +24,11 @@ describe("ExpiryCountdown", () => {
     vi.useRealTimers();
   });
 
-  it("shows the subtle end-time hint (no button) while more than 20 minutes remain", () => {
+  it("renders nothing (no hint, no banner, no button) while more than 20 minutes remain", () => {
     render(
       <ExpiryCountdown expiresAt={iso(60 * 60_000)} extendPending={false} onExtend={() => {}} />,
     );
-    expect(screen.getByTestId("expiry-hint")).toHaveTextContent(/ends at/i);
+    expect(screen.queryByTestId("expiry-hint")).not.toBeInTheDocument();
     expect(screen.queryByTestId("expiry-banner")).not.toBeInTheDocument();
     expect(screen.queryByTestId("extend-game")).not.toBeInTheDocument();
   });
@@ -47,7 +47,7 @@ describe("ExpiryCountdown", () => {
     expect(banner).toHaveTextContent("Game expires in 13:59");
   });
 
-  it("ticks across the threshold: the hint becomes the banner as the window is entered", () => {
+  it("ticks across the threshold: nothing becomes the banner as the window is entered", () => {
     render(
       <ExpiryCountdown
         expiresAt={iso(WARNING_WINDOW_MS + 30_000)}
@@ -55,12 +55,11 @@ describe("ExpiryCountdown", () => {
         onExtend={() => {}}
       />,
     );
-    expect(screen.getByTestId("expiry-hint")).toBeInTheDocument();
+    expect(screen.queryByTestId("expiry-banner")).not.toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(31_000);
     });
-    expect(screen.queryByTestId("expiry-hint")).not.toBeInTheDocument();
     expect(screen.getByTestId("expiry-banner")).toBeInTheDocument();
   });
 
@@ -88,7 +87,7 @@ describe("ExpiryCountdown", () => {
     expect(screen.getByTestId("extend-game")).toBeDisabled();
   });
 
-  it("returns to the subtle hint when the bumped expires_at arrives", () => {
+  it("clears the banner when the bumped expires_at arrives", () => {
     // Simulates the Realtime UPDATE landing after a successful extend_game.
     const { rerender } = render(
       <ExpiryCountdown expiresAt={iso(10 * 60_000)} extendPending={false} onExtend={() => {}} />,
@@ -99,6 +98,6 @@ describe("ExpiryCountdown", () => {
       <ExpiryCountdown expiresAt={iso(70 * 60_000)} extendPending={false} onExtend={() => {}} />,
     );
     expect(screen.queryByTestId("expiry-banner")).not.toBeInTheDocument();
-    expect(screen.getByTestId("expiry-hint")).toBeInTheDocument();
+    expect(screen.queryByTestId("expiry-hint")).not.toBeInTheDocument();
   });
 });
