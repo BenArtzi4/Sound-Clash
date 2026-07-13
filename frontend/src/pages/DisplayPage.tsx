@@ -19,6 +19,11 @@ interface PointEvent {
 
 const ANSWER_DURATION_SEC = 10;
 
+// Issue #179: the public board shows only the top 5 teams so the "who's
+// winning" story stays readable across a room. Every team that falls off the
+// board keeps its own place + score on its phone (see TeamGameplayPage).
+const MAX_BOARD_TEAMS = 5;
+
 const CODE_RE = /^[A-Z2-9]{6}$/;
 const CODE_CHAR_RE = /[A-Z2-9]/g;
 
@@ -165,37 +170,22 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   }
 
   const game = state.game;
-  const teams = Array.from(state.teams.values()).sort((a, b) => {
+  const rankedTeams = Array.from(state.teams.values()).sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     return a.joined_at.localeCompare(b.joined_at);
   });
-
-  // Auto-fit the scoreboard to a non-scrolling TV/projector frame (B-1). Past
-  // ~8 teams a single 1080p column pushes the lower ranks and the QR footer off
-  // the fold, and a projector can't scroll. So we flow the standings into two
-  // balanced columns (rank order stays column-major: 1..k down the left, k+1..n
-  // down the right — the CSS grid fills column 1 for --rows rows, then column 2)
-  // and pick a density tier from how many rows land in the tallest column. The
-  // tier drives a fixed, legible per-row height plus matching font/gaps/QR size
-  // in DisplayPage.module.css, sized so every row + the QR fit the frame from 2
-  // up to 20 teams. Only two columns are ever used; beyond 20 teams rows would
-  // start to clip (the frame stays put — it never scrolls).
-  const teamCount = teams.length;
-  const scoreColumns = teamCount > 8 ? 2 : 1;
-  const rowsPerColumn = Math.max(1, Math.ceil(teamCount / scoreColumns));
-  const density = rowsPerColumn <= 5 ? "normal" : rowsPerColumn <= 8 ? "compact" : "dense";
+  // Only the top 5 make the board (issue #179); the rest keep their standing on
+  // their own phones. A ≤5-row board always fits a non-scrolling TV/projector
+  // frame as a single roomy "normal"-density column, so the old two-column
+  // auto-fit that packed up to 20 teams onto a projector is no longer needed.
+  const teams = rankedTeams.slice(0, MAX_BOARD_TEAMS);
+  const hiddenTeamCount = rankedTeams.length - teams.length;
+  const density = "normal";
+  const rowsPerColumn = Math.max(1, teams.length);
   // QR shrinks on shorter (often OS-scaled) laptop frames so the footer doesn't
   // starve the scoreboard; on a tall projector it stays large and scannable.
   const qrSize =
-    viewportHeight < 700
-      ? 96
-      : viewportHeight < 820
-        ? 118
-        : viewportHeight < 950
-          ? 140
-          : density === "dense"
-            ? 148
-            : 172;
+    viewportHeight < 700 ? 96 : viewportHeight < 820 ? 118 : viewportHeight < 950 ? 140 : 172;
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
   const round = state.currentRound;
   const titleClaimedById = round?.title_claimed_by ?? null;
@@ -370,6 +360,15 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           </ol>
         )}
       </div>
+
+      {/* Everyone below the top 5 is off the board but still in the game — name
+          how many so the room knows the standings run deeper than what's shown.
+          Their own place + score lives on their phone (issue #179). */}
+      {hiddenTeamCount > 0 ? (
+        <p className={styles.moreTeams} data-testid="more-teams">
+          +{hiddenTeamCount} more {hiddenTeamCount === 1 ? "team" : "teams"} playing
+        </p>
+      ) : null}
 
       {/* Always-visible join footer so a late player can scan after the round
           has started. (Hidden on the end-game podium via the early-return
