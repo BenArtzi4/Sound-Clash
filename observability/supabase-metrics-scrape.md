@@ -1,29 +1,20 @@
-# Supabase metrics scrape — design (BLOCKED on maintainer config)
+# Supabase metrics scrape — LIVE (setup + alerts)
 
-The second time-critical alert requested for I-Vitals is **Realtime concurrent
-connections ≥150 of the ~200 free-tier cap + message-quota burn**. This alert
-**cannot be built yet**, and here is why plus exactly what to configure.
+The I-Vitals request for a **Realtime connections + message-quota** alert led
+here: those signals aren't in Faro (the browser can't see a connection it was
+*refused*), so the authoritative source is **Supabase's own Prometheus metrics
+endpoint**.
 
-## Why it's blocked
+**Status: ✅ scraped as of 2026-07-13.** A hosted Grafana Cloud "Metrics
+Endpoint" job (`supabase-soundclash`) ingests it into `grafanacloud-prom`
+(`count(up)=1`). Setup below for reference/rebuild; the confirmed metrics and the
+buildable alert are in §3–§4. **Caveat that survived the scrape:** the exact
+"≥150/200 concurrent connections" and "2M msg/month quota" numbers are still
+**not** exported — see §3.
 
-Realtime connection counts and message-quota counters are **not** in Faro
-telemetry (Faro only reports what the *browser* sees, and per the standing note
-those signals only exist while clients are already healthy — a connection you
-were refused never emits a `realtime_fanout`). The authoritative source is
-**Supabase's own Prometheus metrics endpoint**, and it is **not currently
-scraped** into this Grafana Cloud stack.
-
-Verified 2026-07-12 with the read-only Grafana MCP:
-
-```
-list_prometheus_metric_names(grafanacloud-prom, regex=".*(supabase|realtime|postgres|pgbouncer).*")  ->  []
-list_prometheus_metric_names(grafanacloud-prom, regex="up|grafanacloud.*")  ->  ["grafanacloud_feo11y_app_info"]
-```
-
-`grafanacloud-prom` holds only the Faro-derived frontend-observability metric.
-Nothing from Supabase is being ingested. So the connection/quota alert has **no
-data to evaluate against** and must not be created until the scrape below is
-live.
+> _History: before 2026-07-12 `grafanacloud-prom` held only
+> `grafanacloud_feo11y_app_info` (Faro-derived); no Supabase series. The scrape
+> job below fixed that._
 
 ## What to configure (secrets stay with you)
 
@@ -74,46 +65,49 @@ this repo or the dashboard/alert JSON.
 > to `grafanacloud-prom`. The hosted "Metrics Endpoint" integration is simpler
 > and needs nothing self-hosted.
 
-### 3. Confirm the metric names, THEN add the alert
+### 3. What the endpoint actually exposes (CONFIRMED 2026-07-13)
 
-After the first scrape, discover the real series (names vary by Supabase
-version, so confirm rather than trust this doc):
+Scrape is **live** (hosted "Metrics Endpoint" job `supabase-soundclash`, 60s);
+all series land in `grafanacloud-prom` labelled `scrape_job="supabase-soundclash"`.
+Verified against the live scrape (`count(up)=1`):
 
-```
-# via the read-only MCP once data lands:
-list_prometheus_metric_names(grafanacloud-prom, regex="realtime|client|connection")
-list_prometheus_metric_names(grafanacloud-prom, regex="pg_stat|max_connections")
-```
+**Key finding — the endpoint does NOT export a raw "Realtime concurrent
+WebSocket connections" gauge or a monthly-message-quota counter.** Those two
+numbers (the ~200 connection cap + the 2M msg/month quota) live only in the
+Supabase dashboard:
+<https://supabase.com/dashboard/project/jvfddxuaqcsrguibkymp/reports/realtime>.
 
-Supabase's endpoint bundles node_exporter + postgres_exporter + service metrics.
-Likely candidates for the two signals (verify names against your scrape):
+What IS exported (the useful signals):
 
-- **Realtime concurrent connections** — a Realtime service gauge such as
-  `realtime_connected_clients` / `realtime_channel_subscribers`, **or**, if
-  Realtime concurrency isn't exported on the free tier, the DB-side proxy
-  `sum(pg_stat_activity_count{...})` for the realtime role. Confirm which exists.
-- **Message quota** — Supabase does not export a monthly-quota counter directly;
-  approximate burn with the Realtime message-rate series if present
-  (`rate(realtime_messages_total[1h])`) and alert on sustained high rate. The
-  hard 2M-messages/month cap is best watched in the Supabase dashboard.
+| Metric | Meaning | Now (idle) |
+|---|---|---|
+| `realtime_postgres_changes_total_subscriptions` | Realtime postgres_changes subscription load — best available Realtime-load proxy | `0` |
+| `realtime_postgres_changes_client_subscriptions` | per-client subscription count | `0` |
+| `connection_stats_connection_count{username=…}` | Postgres backends by role (sum for total) | ~4 |
+| `max_connections_connection_count` | Postgres `max_connections` — **only 60** | `60` |
+| `pgbouncer_used_clients` / `pgbouncer_config_max_client_connections` | pooler client saturation | `1 / 200` |
 
-### 4. Alert rule to add once the metric name is confirmed
+Plus the full node_exporter/pgbouncer/Postgres set (CPU/mem/disk) — the
+integration installs its own dashboards for those (View Dashboards on the
+connection).
 
-Add this to `alerting-provisioning.yaml` (fix `<METRIC>` to the confirmed name)
-in the same `sound-clash-vitals` group. `~200` is the free-tier cap; page at
-`150` (75%).
+### 4. Alert rule (buildable + validated)
+
+The strong, precise signal is **DB connection saturation** — `max_connections`
+is only **60**, so a busy party can approach it and break *everything*. Add this
+to the `sound-clash-vitals` group (query validated live: it read `8.3` at idle):
 
 ```yaml
-      - uid: sc_realtime_connections_cap
-        title: "Sound Clash - Realtime connections near free-tier cap (>=150/200)"
+      - uid: sc_db_connection_saturation
+        title: "Sound Clash - Postgres connections saturating (>80% of 60)"
         condition: C
         for: 5m
         noDataState: OK
         execErrState: Error
-        labels: { team: sound-clash, severity: page, issue: realtime-cap }
+        labels: { team: sound-clash, severity: page, issue: db-connections }
         annotations:
-          summary: "Realtime connections at {{ humanize $values.B.Value }} of the ~200 free-tier cap."
-          description: "Sustained >=150 concurrent Realtime connections. Approaching the free-tier ceiling; new joins will start being refused near 200."
+          summary: "Postgres connections at {{ humanize $values.B.Value }}% of max_connections (60)."
+          description: "Sustained >80% DB connection usage. The ceiling is only 60; new queries start being refused near it and gameplay breaks."
         data:
           - refId: A
             relativeTimeRange: { from: 300, to: 0 }
@@ -121,12 +115,13 @@ in the same `sound-clash-vitals` group. `~200` is the free-tier cap; page at
             model:
               refId: A
               datasource: { type: prometheus, uid: grafanacloud-prom }
-              expr: 'max_over_time(<METRIC>[5m])'   # e.g. realtime_connected_clients
+              # Aggregate BOTH sides — sum(x)/max_connections... returns empty
+              # (no shared labels to match on); sum both -> label-free match.
+              expr: '100 * sum(connection_stats_connection_count) / sum(max_connections_connection_count)'
               instant: true
           - refId: B
             datasourceUid: __expr__
-            model: { refId: B, type: reduce, expression: A, reducer: last,
-                     datasource: { type: __expr__, uid: __expr__ } }
+            model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
           - refId: C
             datasourceUid: __expr__
             model:
@@ -134,14 +129,19 @@ in the same `sound-clash-vitals` group. `~200` is the free-tier cap; page at
               type: threshold
               expression: B
               datasource: { type: __expr__, uid: __expr__ }
-              conditions: [ { evaluator: { type: gt, params: [150] } } ]
+              conditions: [ { evaluator: { type: gt, params: [80] } } ]
 ```
 
-Route it to the same `email-benartzi` contact point (it already carries
-`team: sound-clash`, which the notification policy in
-`observability/README.md` matches).
+Route it to the same `email-benartzi` contact point (`team: sound-clash`).
 
-Once the scrape is live, the Vitals dashboard can also gain a "Realtime
-connections vs 200 cap" gauge — add a Prometheus panel to
-`generate_vitals_dashboard.py` pointed at `<METRIC>` with `max: 200` and
-thresholds at 150/190.
+**Realtime-load proxy alert (optional, needs calibration).** There's no true
+connection gauge, but `realtime_postgres_changes_total_subscriptions` climbs with
+crowd size. It reads `0` idle, so pick the threshold *during a real game*: run a
+big session, read the peak in Grafana Explore, and alert at ~1.5×. Same rule
+shape, `expr: 'realtime_postgres_changes_total_subscriptions'`, threshold
+`gt <peak×1.5>`.
+
+To add a gauge to the Vitals dashboard, drop a Prometheus stat/gauge panel into
+`generate_vitals_dashboard.py` pointed at
+`100 * sum(connection_stats_connection_count) / sum(max_connections_connection_count)`
+(unit percent, thresholds 60/80).
