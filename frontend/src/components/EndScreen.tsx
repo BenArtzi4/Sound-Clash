@@ -10,6 +10,12 @@ interface Props {
 const CONFETTI_COLORS = ["#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 const CONFETTI_COUNT = 40;
 
+// The final results screen shows only the top teams so the "who won" moment
+// isn't buried under a long list (issue #180). 5 keeps it consistent with the
+// live top-5 leaderboard story (#179) and is wide enough that the near-podium
+// teams still get their moment.
+const TOP_N = 5;
+
 interface ConfettiPiece {
   x: number;
   delay: number;
@@ -155,9 +161,9 @@ interface ScoreboardRow {
 }
 
 // Flatten groups into per-team rows with a dense rank (tied teams share a
-// rank, next rank is +1 — matches the podium's group indexing). Used by the
-// always-on full scoreboard so every team is individually visible regardless
-// of how ties collapse the podium.
+// rank, next rank is +1 — matches the podium's group indexing). Feeds the
+// top-N scoreboard so every listed team is individually visible regardless of
+// how ties collapse the podium.
 function flattenWithRanks(groups: Team[][]): ScoreboardRow[] {
   const rows: ScoreboardRow[] = [];
   groups.forEach((group, i) => {
@@ -167,6 +173,21 @@ function flattenWithRanks(groups: Team[][]): ScoreboardRow[] {
     }
   });
   return rows;
+}
+
+// Cap the dense-ranked rows to the top TOP_N teams for the final screen. A tie
+// straddling the cut line is never split: if the TOP_N-th team shares a rank
+// with the next one, the whole tied group is kept (they're all tied for that
+// place — game-rules.md §4). Everything beyond is summarized as "…and N more".
+function capScoreboard(rows: ScoreboardRow[]): {
+  visible: ScoreboardRow[];
+  hidden: number;
+} {
+  if (rows.length <= TOP_N) return { visible: rows, hidden: 0 };
+  let cut = TOP_N;
+  const boundaryRank = rows[TOP_N - 1]!.rank;
+  while (cut < rows.length && rows[cut]!.rank === boundaryRank) cut++;
+  return { visible: rows.slice(0, cut), hidden: rows.length - cut };
 }
 
 function PodiumCard({
@@ -209,7 +230,10 @@ function PodiumCard({
 
 export function EndScreen({ teams, gameCode }: Props) {
   const groups = useMemo(() => groupByScore(teams), [teams]);
-  const scoreboard = useMemo(() => flattenWithRanks(groups), [groups]);
+  const { visible: scoreboard, hidden: hiddenCount } = useMemo(
+    () => capScoreboard(flattenWithRanks(groups)),
+    [groups],
+  );
   const confetti = useMemo(() => generateConfetti(), []);
 
   const goldGroup = groups[0];
@@ -281,13 +305,14 @@ export function EndScreen({ teams, gameCode }: Props) {
             )}
           </div>
 
-          {/* Per-team scoreboard. Always rendered so every team is
-              individually visible — the podium collapses tied teams onto a
-              single card (and renders an invisible placeholder for any
-              missing rank), which made it look like teams were dropped
-              when scores tied. */}
+          {/* Top-N standings. Capped to the top teams (issue #180) so the
+              podium's "who won" moment isn't buried under a long list. Still
+              renders every top team individually — the podium collapses tied
+              teams onto a single card, which made it look like teams were
+              dropped when scores tied; this guarantees each is visible. Any
+              teams below the cut line are summarized as "…and N more". */}
           <div className={styles.scoreboard} data-testid="final-scoreboard">
-            <h2 className={styles.scoreboardTitle}>Full scoreboard</h2>
+            <h2 className={styles.scoreboardTitle}>Top teams</h2>
             <ol className={styles.scoreboardList}>
               {scoreboard.map(({ team, rank }) => (
                 <li
@@ -302,6 +327,11 @@ export function EndScreen({ teams, gameCode }: Props) {
                 </li>
               ))}
             </ol>
+            {hiddenCount > 0 ? (
+              <p className={styles.scoreboardMore} data-testid="final-scoreboard-more">
+                …and {hiddenCount} more {hiddenCount === 1 ? "team" : "teams"}
+              </p>
+            ) : null}
           </div>
         </>
       )}
