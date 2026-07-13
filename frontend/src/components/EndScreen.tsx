@@ -16,6 +16,16 @@ const CONFETTI_COUNT = 40;
 // teams still get their moment.
 const TOP_N = 5;
 
+// The score count-up is a JS animation, so the global CSS prefers-reduced-motion
+// policy (styles.css) can't reach it — honour the preference here directly.
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 interface ConfettiPiece {
   x: number;
   delay: number;
@@ -49,8 +59,13 @@ function CountUp({
   duration?: number;
   delay?: number;
 }) {
-  const [display, setDisplay] = useState(0);
+  const [display, setDisplay] = useState(() => (prefersReducedMotion() ? value : 0));
   useEffect(() => {
+    // Reduced-motion users get the final number immediately, no roll-up.
+    if (prefersReducedMotion()) {
+      setDisplay(value);
+      return;
+    }
     let raf = 0;
     let started = false;
     const startTimer = window.setTimeout(() => {
@@ -210,6 +225,10 @@ function PodiumCard({
         </span>
       ) : null}
       <div className={styles.medal}>{place}</div>
+      {/* Every team sharing this place is listed — a higher-scoring tied team is
+          never hidden while a lower-scoring team keeps its own card. The card
+          grows to fit them (min-height, no internal scroll — issue #180); a
+          realistic tie is a handful of teams. */}
       <div className={styles.podiumTeams}>
         {teams.map((t, i) => (
           <div key={t.id} className={styles.podiumTeam}>
@@ -312,7 +331,9 @@ export function EndScreen({ teams, gameCode }: Props) {
               dropped when scores tied; this guarantees each is visible. Any
               teams below the cut line are summarized as "…and N more". */}
           <div className={styles.scoreboard} data-testid="final-scoreboard">
-            <h2 className={styles.scoreboardTitle}>Top teams</h2>
+            <h2 className={styles.scoreboardTitle}>
+              {hiddenCount > 0 ? "Top teams" : "Final standings"}
+            </h2>
             <ol className={styles.scoreboardList}>
               {scoreboard.map(({ team, rank }) => (
                 <li

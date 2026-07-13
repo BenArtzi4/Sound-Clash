@@ -478,11 +478,27 @@ test("10 teams, up to 30 rounds: every scoring path, live scores, podium & archi
   );
   const rows = display.locator("[data-team-id]");
   await expect(rows.nth(0)).toHaveClass(/bigRowGold/);
-  await expect(rows.nth(1)).toHaveClass(/bigRowSilver/);
-  await expect(rows.nth(2)).toHaveClass(/bigRowBronze/);
   await expect(rows.nth(0)).toHaveAttribute("data-team-id", byName[leaderName]!);
-  // A non-podium row must not wear a medal.
-  await expect(rows.nth(3)).not.toHaveClass(/bigRowGold|bigRowSilver|bigRowBronze/);
+  // Medals follow the dense place (game-rules.md §4: tied teams share it):
+  // rank 1 gold, 2 silver, 3 bronze, rank 4+ none. A team tied for 3rd shares
+  // bronze, so assert each row's medal against its data-rank rather than its
+  // position (position-based medals broke when 3rd/4th tied).
+  const medalByRank: Record<string, RegExp> = {
+    "1": /bigRowGold/,
+    "2": /bigRowSilver/,
+    "3": /bigRowBronze/,
+  };
+  const rowCount = await rows.count();
+  for (let i = 0; i < rowCount; i++) {
+    const row = rows.nth(i);
+    const rank = (await row.getAttribute("data-rank"))!;
+    const medal = medalByRank[rank];
+    if (medal) {
+      await expect(row).toHaveClass(medal);
+    } else {
+      await expect(row).not.toHaveClass(/bigRowGold|bigRowSilver|bigRowBronze/);
+    }
+  }
 
   // ---- End the game: podium + winner ----
   const endBtn = manager.page.getByTestId("end-game");

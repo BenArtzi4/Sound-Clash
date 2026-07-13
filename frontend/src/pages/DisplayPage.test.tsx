@@ -418,6 +418,28 @@ describe("DisplayPage scoreboard layout", () => {
     expect(names).toEqual(["T1", "T2", "T3", "T4", "T5"]);
   });
 
+  it("gives tied teams the same dense rank (matches the final screen)", async () => {
+    const { container } = await renderBoard(
+      makeTeams([
+        { name: "Aa", score: 30 }, // rank 1
+        { name: "Bb", score: 20 }, // rank 2
+        { name: "Cc", score: 20 }, // rank 2 (tied on score)
+        { name: "Dd", score: 10 }, // rank 3 (dense: next distinct score is +1)
+      ]),
+    );
+    const rows = [...container.querySelectorAll("li[data-team-id]")];
+    // Dense ranking: tied teams share a place and the next score is +1, so the
+    // board reads 1,2,2,3 — the same numbering the EndScreen uses, so ranks
+    // don't visibly renumber the instant the game ends.
+    expect(rows.map((r) => r.getAttribute("data-rank"))).toEqual(["1", "2", "2", "3"]);
+    expect(rows.map((r) => r.querySelector("span:first-child")?.textContent)).toEqual([
+      "1",
+      "2",
+      "2",
+      "3",
+    ]);
+  });
+
   it("shows a '+N more teams' hint when more than 5 teams are playing", async () => {
     await renderBoard(
       makeTeams(Array.from({ length: 8 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),

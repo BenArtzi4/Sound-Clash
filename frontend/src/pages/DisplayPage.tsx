@@ -8,7 +8,7 @@ import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { fetchSongById } from "../lib/songMetadata";
-import type { Song } from "../lib/types";
+import type { Song, Team } from "../lib/types";
 import styles from "./DisplayPage.module.css";
 
 interface PointEvent {
@@ -29,6 +29,24 @@ const CODE_CHAR_RE = /[A-Z2-9]/g;
 
 function normalizeCode(raw: string): string {
   return (raw.toUpperCase().match(CODE_CHAR_RE) ?? []).join("").slice(0, 6);
+}
+
+// Dense ranks over score-sorted teams: teams tied on score share a place (…,2,2,4
+// → returned as 2,2,3 dense) and the next distinct score is +1. Matches the
+// final EndScreen so a team's rank/medal doesn't visibly renumber the instant
+// the game ends (game-rules.md §4: "tied teams share the win").
+function denseRanks(teams: Team[]): number[] {
+  const ranks: number[] = [];
+  let rank = 0;
+  let prevScore: number | null = null;
+  for (const t of teams) {
+    if (prevScore === null || t.score !== prevScore) {
+      rank += 1;
+      prevScore = t.score;
+    }
+    ranks.push(rank);
+  }
+  return ranks;
 }
 
 export function DisplayPage() {
@@ -179,6 +197,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   // frame as a single roomy "normal"-density column, so the old two-column
   // auto-fit that packed up to 20 teams onto a projector is no longer needed.
   const teams = rankedTeams.slice(0, MAX_BOARD_TEAMS);
+  const boardRanks = denseRanks(teams);
   const hiddenTeamCount = rankedTeams.length - teams.length;
   const density = "normal";
   const rowsPerColumn = Math.max(1, teams.length);
@@ -336,22 +355,24 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         ) : (
           <ol className={styles.bigList} style={{ "--rows": rowsPerColumn } as CSSProperties}>
             {teams.map((t, i) => {
-              // Podium colors for the top three — but only once a team has
-              // actually scored, so the board doesn't hand out medals while
-              // everyone is still tied at 0 at the start of the game.
+              const rank = boardRanks[i]!;
+              // Podium colors follow the dense place (tied teams share a color) —
+              // but only once a team has actually scored, so the board doesn't
+              // hand out medals while everyone is still tied at 0 at the start.
               const medal =
-                t.score > 0 && i < 3
-                  ? [styles.bigRowGold, styles.bigRowSilver, styles.bigRowBronze][i]
+                t.score > 0 && rank <= 3
+                  ? [styles.bigRowGold, styles.bigRowSilver, styles.bigRowBronze][rank - 1]
                   : "";
               return (
                 <li
                   key={t.id}
                   data-team-id={t.id}
+                  data-rank={rank}
                   className={`${styles.bigRow} ${medal} ${
                     t.id === game.buzzed_team_id ? styles.bigRowBuzzed : ""
                   }`}
                 >
-                  <span className={styles.bigRank}>{i + 1}</span>
+                  <span className={styles.bigRank}>{rank}</span>
                   <span className={styles.bigName}>{t.name}</span>
                   <span className={styles.bigScore}>{t.score}</span>
                 </li>
