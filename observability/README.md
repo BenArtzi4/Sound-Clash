@@ -89,9 +89,13 @@ Faro tags every signal `service_name="sound-clash-web"`,
 dropped-frame harness incident) and not the two 2-repair games.
 
 The second requested alert — **Realtime connections ≥150/200 + message quota** —
-is **blocked**: Supabase metrics are not scraped into `grafanacloud-prom`.
-The scrape job + alert design is in
-[`supabase-metrics-scrape.md`](supabase-metrics-scrape.md).
+turned out **not directly measurable**: Supabase doesn't export a raw
+connection-count or message-quota metric (those live only in the Supabase
+dashboard). The Supabase Prometheus endpoint **is now scraped** into
+`grafanacloud-prom` (job `supabase-soundclash`, since 2026-07-13), which instead
+enables a **DB-connection-saturation** alert (Postgres `max_connections` is only
+60) plus a Realtime-subscription load proxy — confirmed metrics + the buildable
+alert rule are in [`supabase-metrics-scrape.md`](supabase-metrics-scrape.md).
 
 ## 3. GitHub Action — durable #254 incident record
 
