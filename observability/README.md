@@ -106,20 +106,30 @@ The scrape job + alert design is in
 
 ### Secret to set
 
-Mint a **read-only (Viewer) service-account token** in Grafana
-(Administration → Service accounts → add, role **Viewer** → add token) and set it
-as a repo secret:
+Mint a **read-only service-account token** in Grafana
+(Administration → Users and access → Service accounts → add, role **Viewer** →
+add token) and set it as a repo secret:
 
 ```
-GRAFANA_READ_TOKEN   =  <the Viewer service-account token>
+GRAFANA_READ_TOKEN   =  <the service-account token>
 ```
 
 (`gh secret set GRAFANA_READ_TOKEN --repo BenArtzi4/Sound-Clash`)
 
+> ⚠️ **Also grant the SA `datasources:query` — the Viewer basic role alone does
+> NOT include it in this Grafana Cloud stack** (a plain Viewer token gets
+> `403 {"message":"Permissions needed: datasources:query"}` from the proxy).
+> Keep it read-only by granting **Query on just the Loki datasource**:
+> Connections → Data sources → `grafanacloud-…-logs` → **Permissions** →
+> **Add a permission** → **Service account** → your SA → role **Query** → Save.
+> (An Editor SA also works but is broader than needed.)
+
 The token only ever queries the Loki datasource through the proxy — no write
-scope. Validated: the exact proxy path
-`/api/datasources/proxy/uid/grafanacloud-logs/loki/api/v1/query` returns the
-same `3VX6QJ=3, AJJFJD=2, VHG4S4=2` result a Viewer token can read.
+scope. Validated on the runner 2026-07-13: with the datasource Query grant, the
+exact proxy path
+`/api/datasources/proxy/uid/grafanacloud-logs/loki/api/v1/query` returns
+`3VX6QJ=3, AJJFJD=2, VHG4S4=2`, and the dry-run correctly reports the `3VX6QJ`
+incident (3 repairs) while creating zero issues.
 
 ### Test before trusting the schedule
 
