@@ -31,7 +31,7 @@ describe("EndScreen", () => {
     expect(screen.getByText(/winner/i)).toBeInTheDocument();
   });
 
-  it("places top 3 teams on the podium and lists every team in the scoreboard", () => {
+  it("places top 3 on the podium and lists the top 5 in the scoreboard", () => {
     const teams: Team[] = [
       { ...baseTeam, id: "1", name: "Alice", score: 50 },
       { ...baseTeam, id: "2", name: "Bob", score: 40 },
@@ -40,12 +40,57 @@ describe("EndScreen", () => {
       { ...baseTeam, id: "5", name: "Eve", score: 10 },
     ];
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
-    expect(screen.getByText(/full scoreboard/i)).toBeInTheDocument();
+    expect(screen.getByText(/top teams/i)).toBeInTheDocument();
     const scoreboard = screen.getByTestId("final-scoreboard");
     expect(scoreboard.querySelectorAll("[data-team-id]")).toHaveLength(5);
     expect(scoreboard.textContent).toMatch(/Alice/);
     expect(scoreboard.textContent).toMatch(/Dave/);
     expect(scoreboard.textContent).toMatch(/Eve/);
+    // Exactly 5 teams -> nothing hidden, no "…and N more" note.
+    expect(screen.queryByTestId("final-scoreboard-more")).not.toBeInTheDocument();
+  });
+
+  it("caps the scoreboard at the top 5 and summarizes the rest", () => {
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 70 },
+      { ...baseTeam, id: "2", name: "Bob", score: 60 },
+      { ...baseTeam, id: "3", name: "Carol", score: 50 },
+      { ...baseTeam, id: "4", name: "Dave", score: 40 },
+      { ...baseTeam, id: "5", name: "Eve", score: 30 },
+      { ...baseTeam, id: "6", name: "Frank", score: 20 },
+      { ...baseTeam, id: "7", name: "Grace", score: 10 },
+    ];
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    const scoreboard = screen.getByTestId("final-scoreboard");
+    // Only the top 5 render as rows; the last two are summarized.
+    expect(scoreboard.querySelectorAll("[data-team-id]")).toHaveLength(5);
+    expect(scoreboard.querySelector('[data-team-id="6"]')).toBeNull();
+    expect(scoreboard.querySelector('[data-team-id="7"]')).toBeNull();
+    expect(screen.getByTestId("final-scoreboard-more")).toHaveTextContent(/and 2 more teams/i);
+  });
+
+  it("keeps a tie whole when it straddles the top-5 cut line", () => {
+    // Ranks 1-4 are distinct; two teams tie at rank 5 and one trails at rank 6.
+    // The rank-5 tie must not be split across the cut, so both tied teams show;
+    // only the rank-6 team is summarized.
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 50 },
+      { ...baseTeam, id: "2", name: "Bob", score: 40 },
+      { ...baseTeam, id: "3", name: "Carol", score: 30 },
+      { ...baseTeam, id: "4", name: "Dave", score: 20 },
+      { ...baseTeam, id: "5", name: "Eve", score: 10 },
+      { ...baseTeam, id: "6", name: "Frank", score: 10 },
+      { ...baseTeam, id: "7", name: "Grace", score: 5 },
+    ];
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    const scoreboard = screen.getByTestId("final-scoreboard");
+    // 6 rows: the two rank-5 teams are both kept.
+    expect(scoreboard.querySelectorAll("[data-team-id]")).toHaveLength(6);
+    expect(scoreboard.querySelector('[data-team-id="5"]')?.getAttribute("data-rank")).toBe("5");
+    expect(scoreboard.querySelector('[data-team-id="6"]')?.getAttribute("data-rank")).toBe("5");
+    expect(scoreboard.querySelector('[data-team-id="7"]')).toBeNull();
+    // One team below the cut -> singular "team".
+    expect(screen.getByTestId("final-scoreboard-more")).toHaveTextContent(/and 1 more team$/i);
   });
 
   it("sorts by score desc, ties broken by joined_at asc", () => {
