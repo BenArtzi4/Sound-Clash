@@ -70,12 +70,15 @@ _All three sub-items shipped together in PR #232 (maintainer-authorized CI chang
 - **I do:** give the rule set + a before/after buzz-p95 measurement plan (the extra hop must not blow the <200ms budget).
 - **Done =** WAF/rate-limit rules live, a bulk `select=*` is blocked, buzz p95 unaffected.
 
-### 8. ⬜ T1.7 / I-Alert / I-Vitals · Grafana Realtime alerts + latency dashboard
-- **What:** Grafana alerts on Realtime connections (~200 free-tier cap) + message quota; the I-Vitals dashboard once Faro sends web-vitals.
-- **Why not autonomous:** needs **Grafana dashboard access** (maintainer).
-- **You do:** grant/drive the Grafana dashboard + alert config.
-- **I do:** provide the exact PromQL/queries + alert thresholds + panel definitions.
-- **Done =** alerts fire on a synthetic breach; the vitals dashboard shows live data.
+### 8. 🟨 T1.7 / I-Vitals / I-Alert · Grafana dashboard + alerts — **BUILT, awaiting maintainer apply**
+- **What:** The whole observability layer is built and committed under [`observability/`](../../observability/) (see its `README.md`), with every query validated against live prod Faro data (2026-07-12). Three channels: the `Sound Clash - Vitals` dashboard, the native-email #254 alert, and a scheduled GitHub Action filing one issue per #254 incident.
+- **Why not autonomous to finish:** the repo's Grafana MCP is read-only, so applying the dashboard/alert to Grafana and setting the repo secret are **maintainer** steps.
+- **You do (3 quick things):**
+  1. Import `observability/dashboards/sound-clash-vitals.json` (Dashboards → Import).
+  2. Create the `email-benartzi` contact point + the `sc_stale_buzz_lock_254` rule from `observability/alerts/alerting-provisioning.yaml` (UI steps in `observability/README.md`).
+  3. Mint a **Viewer** Grafana service-account token and set repo secret **`GRAFANA_READ_TOKEN`**, then Run the `Stale buzz-lock scan` workflow with `dry_run=true, end_time=2026-07-12T20:00:00Z` to confirm it reports the `3VX6QJ` incident.
+- **Still blocked (needs your Supabase creds):** the Realtime connections ≥150/200 + message-quota alert — Supabase metrics aren't scraped into `grafanacloud-prom`. Scrape-job + alert design in [`observability/supabase-metrics-scrape.md`](../../observability/supabase-metrics-scrape.md).
+- **Done =** dashboard shows live data, the email rule fires on a synthetic breach, the Action files a deduped issue; (optionally) the Supabase scrape is wired and the connection-cap alert added.
 
 ---
 
