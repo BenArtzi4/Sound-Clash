@@ -221,7 +221,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 
 - Buzz button must respond in **<100ms** of tap (UI feedback): the actual lock confirmation comes via Realtime in <200ms. Optimistic UI: button shows "buzzing…" immediately, then "locked!" or "too slow" once the Realtime row update arrives.
 - Display screen must be readable at 3+ meters (large fonts; high contrast). The leaderboard shows only the **top 5 teams** (ranked by score, ties broken by earlier `joined_at`); a "+N more teams playing" line names how many are off the board (issue #179).
-- Team page should work on iOS Safari and Chrome Android. iPhone SE viewport is the smallest supported size. Each player's own **place + score** is shown on their buzzer screen from the moment they join (the waiting screen included) — just the place (e.g. "#3"), rank among all teams with the same tiebreak as the Display — and it updates live on every score change, so a team off the top-5 board always knows where it stands.
+- Team page should work on iOS Safari and Chrome Android. iPhone SE viewport is the smallest supported size. Each player's own **place + score** is shown on their buzzer screen from the moment they join (the waiting screen included) — just the place (e.g. "#3"), using the same dense ranking as the Display board and final screen (tied teams share a place) so it matches the board row exactly — and it updates live on every score change, so a team off the top-5 board always knows where it stands.
 - No notifications, no permissions prompts.
 
 ## 13. What is NOT a Game Rule

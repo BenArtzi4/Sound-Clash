@@ -305,6 +305,31 @@ describe("TeamGameplayPage", () => {
     expect(screen.getByTestId("standing-score")).toHaveTextContent("20 pts");
   });
 
+  it("shares a place with teams tied on score, matching the board's dense rank (#180)", async () => {
+    // Alpha 20, Bravo 10, Carol 10 (Carol joined last). The board shows dense
+    // ranks 1 / 2 / 2; our team Carol must read "#2", not the ordinal "#3".
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-3", name: "Carol" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [
+        makeTeam({ id: "team-1", name: "Alpha", score: 20, joined_at: "2026-05-05T12:00:00.000Z" }),
+        makeTeam({ id: "team-2", name: "Bravo", score: 10, joined_at: "2026-05-05T12:00:01.000Z" }),
+        makeTeam({ id: "team-3", name: "Carol", score: 10, joined_at: "2026-05-05T12:00:02.000Z" }),
+      ],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await screen.findByTestId("standings");
+    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#2");
+    expect(screen.getByTestId("standing-score")).toHaveTextContent("10 pts");
+  });
+
   it("shows the player standing while the game is still waiting to start (#271)", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",
