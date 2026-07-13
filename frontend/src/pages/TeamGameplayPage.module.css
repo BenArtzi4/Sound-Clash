@@ -95,12 +95,6 @@
   white-space: nowrap;
 }
 
-.standingOf {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: rgba(248, 250, 252, 0.72);
-}
-
 .standingScore {
   font-size: 0.78rem;
   font-weight: 700;

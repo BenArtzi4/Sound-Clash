@@ -299,11 +299,13 @@ describe("TeamGameplayPage", () => {
       await fireSubscribed();
     });
     await screen.findByTestId("standings");
-    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#2 of 3");
+    const rank = screen.getByTestId("standing-rank");
+    expect(rank).toHaveTextContent("#2");
+    expect(rank).not.toHaveTextContent("of");
     expect(screen.getByTestId("standing-score")).toHaveTextContent("20 pts");
   });
 
-  it("hides the player standing while the game is waiting to start", async () => {
+  it("shows the player standing while the game is still waiting to start (#271)", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",
       JSON.stringify({ id: "team-1", name: "Alpha" }),
@@ -317,7 +319,9 @@ describe("TeamGameplayPage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.queryByTestId("standings")).not.toBeInTheDocument();
+    await screen.findByTestId("standings");
+    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#1");
+    expect(screen.getByTestId("standing-score")).toHaveTextContent("0 pts");
   });
 
   it("updates the player's place live when a rival overtakes their score", async () => {
@@ -346,14 +350,52 @@ describe("TeamGameplayPage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#1 of 2");
+    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#1");
 
     // Bravo overtakes -> Alpha drops to #2, own score unchanged.
     act(() => {
       fireTeam(makePayload("game_teams", "UPDATE", { new: { ...bravo, score: 25 } }));
     });
-    await waitFor(() => expect(screen.getByTestId("standing-rank")).toHaveTextContent("#2 of 2"));
+    await waitFor(() => expect(screen.getByTestId("standing-rank")).toHaveTextContent("#2"));
     expect(screen.getByTestId("standing-score")).toHaveTextContent("10 pts");
+  });
+
+  it("updates the player's own place + score live when they are awarded points (#271)", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alpha" }),
+    );
+    const alpha = makeTeam({
+      id: "team-1",
+      name: "Alpha",
+      score: 0,
+      joined_at: "2026-05-05T12:00:00.000Z",
+    });
+    const bravo = makeTeam({
+      id: "team-2",
+      name: "Bravo",
+      score: 5,
+      joined_at: "2026-05-05T12:00:01.000Z",
+    });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [alpha, bravo],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#2");
+    expect(screen.getByTestId("standing-score")).toHaveTextContent("0 pts");
+
+    // A correct answer / +bonus lands on our own team -> the chip's score and
+    // place update immediately from the same game_teams row change.
+    act(() => {
+      fireTeam(makePayload("game_teams", "UPDATE", { new: { ...alpha, score: 14 } }));
+    });
+    await waitFor(() => expect(screen.getByTestId("standing-score")).toHaveTextContent("14 pts"));
+    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#1");
   });
 
   it("shows a bare '#1' with no 'of N' and singular 'pt' for a solo team on 1 point", async () => {
