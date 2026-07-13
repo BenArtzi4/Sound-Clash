@@ -273,6 +273,109 @@ describe("TeamGameplayPage", () => {
     expect(pill).toHaveTextContent("-3");
   });
 
+  // Issue #179: every player keeps their own place + score on their phone, so
+  // they stay in the game even when they're off the top-5 Display board.
+  it("shows the player's place and score during play", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-2", name: "Bravo" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [
+        makeTeam({ id: "team-1", name: "Alpha", score: 30, joined_at: "2026-05-05T12:00:00.000Z" }),
+        makeTeam({ id: "team-2", name: "Bravo", score: 20, joined_at: "2026-05-05T12:00:01.000Z" }),
+        makeTeam({
+          id: "team-3",
+          name: "Charlie",
+          score: 10,
+          joined_at: "2026-05-05T12:00:02.000Z",
+        }),
+      ],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await screen.findByTestId("standings");
+    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#2 of 3");
+    expect(screen.getByTestId("standing-score")).toHaveTextContent("20 pts");
+  });
+
+  it("hides the player standing while the game is waiting to start", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alpha" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "waiting" }),
+      teams: [makeTeam({ id: "team-1", name: "Alpha" })],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.queryByTestId("standings")).not.toBeInTheDocument();
+  });
+
+  it("updates the player's place live when a rival overtakes their score", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alpha" }),
+    );
+    const alpha = makeTeam({
+      id: "team-1",
+      name: "Alpha",
+      score: 10,
+      joined_at: "2026-05-05T12:00:00.000Z",
+    });
+    const bravo = makeTeam({
+      id: "team-2",
+      name: "Bravo",
+      score: 5,
+      joined_at: "2026-05-05T12:00:01.000Z",
+    });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [alpha, bravo],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByTestId("standing-rank")).toHaveTextContent("#1 of 2");
+
+    // Bravo overtakes -> Alpha drops to #2, own score unchanged.
+    act(() => {
+      fireTeam(makePayload("game_teams", "UPDATE", { new: { ...bravo, score: 25 } }));
+    });
+    await waitFor(() => expect(screen.getByTestId("standing-rank")).toHaveTextContent("#2 of 2"));
+    expect(screen.getByTestId("standing-score")).toHaveTextContent("10 pts");
+  });
+
+  it("shows a bare '#1' with no 'of N' and singular 'pt' for a solo team on 1 point", async () => {
+    // A score of exactly 1 is reachable (+4 bonus then a -3 wrong buzz), so the
+    // readout must read "1 pt", not "1 pts".
+    window.localStorage.setItem("game:ABCDEF:team", JSON.stringify({ id: "team-1", name: "Solo" }));
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [makeTeam({ id: "team-1", name: "Solo", score: 1 })],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const rank = await screen.findByTestId("standing-rank");
+    expect(rank).toHaveTextContent("#1");
+    expect(rank).not.toHaveTextContent("of");
+    // Anchored: a plain "1 pt" substring would also match "1 pts".
+    expect(screen.getByTestId("standing-score")).toHaveTextContent(/^1 pt$/);
+  });
+
   it("reads CONNECTING… before the channel subscribes", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",

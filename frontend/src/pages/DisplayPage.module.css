@@ -378,6 +378,17 @@
   margin-top: 1.25rem;
 }
 
+/* "+N more teams playing" — a quiet line under the top-5 board so the room
+   knows the standings run deeper than the five shown (issue #179). */
+.moreTeams {
+  margin: 0;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-mute);
+  letter-spacing: 0.01em;
+}
+
 .joinFooter {
   display: flex;
   justify-content: center;
@@ -493,14 +504,13 @@
   border-color: var(--color-success);
 }
 
-/* Auto-fit the scoreboard to a non-scrolling TV/projector frame (B-1).
+/* Auto-fit the top-5 scoreboard to a non-scrolling TV/projector frame (B-1).
    On a real display (wide + tall enough to be a monitor, not a phone) the
-   whole page becomes a fixed 100dvh frame that never scrolls. The standings
-   flow into one or two column-major columns (see DisplayPage.tsx) and each
-   row gets a fixed, legible height picked by the density tier — chosen from
-   how many rows land in the tallest column, so a two-column board at 10 teams
-   stays roomy while 20 teams tightens up. The trimmed top matter + footer
-   below leave enough of the frame for every row plus the QR to fit. */
+   whole page becomes a fixed 100dvh frame that never scrolls. Capping the
+   board at five teams (issue #179) means it's always a single roomy
+   "normal"-density column; the elastic 1fr row tracks below still shrink to
+   fit short/OS-scaled laptop frames, and the trimmed top matter + footer leave
+   enough of the frame for every row plus the QR. */
 @media (min-width: 769px) and (min-height: 640px) {
   .shell {
     height: 100dvh;
@@ -517,20 +527,6 @@
     --list-gap: 12px;
     --reveal-font: 1.3rem;
   }
-  .shell[data-density="compact"] {
-    --tv-gap: 0.7rem;
-    --row-h: 54px;
-    --row-font: 1.4rem;
-    --list-gap: 10px;
-    --reveal-font: 1.25rem;
-  }
-  .shell[data-density="dense"] {
-    --tv-gap: 0.6rem;
-    --row-h: 42px;
-    --row-font: 1.15rem;
-    --list-gap: 7px;
-    --reveal-font: 1.15rem;
-  }
 
   /* Trim the fixed top matter / footer so the scoreboard gets more of the
      frame. The reveal panel and QR shrink further via the density var / the
@@ -540,8 +536,8 @@
   }
   /* Keep the buzzed banner on ONE line ("Alpha buzzed in!  Round 1") so it
      doesn't grow to two lines and squeeze the fixed-height scoreboard below it
-     when a team locks — that squeeze is what would otherwise clip the top/last
-     rows on a full 20-team board mid-buzz. */
+     when a team locks — that squeeze is what would otherwise clip the top-5
+     rows mid-buzz on a short frame. */
   .banner {
     padding: 0.75rem 1.75rem;
     flex-direction: row;

@@ -240,11 +240,15 @@ test("10 teams, up to 30 rounds: every scoring path, live scores, podium & archi
   const displayCtx = await browser.newContext();
   const display = await displayCtx.newPage();
   await display.goto(`/display/${code}`);
-  for (const t of teams) {
-    await expect(display.locator(`[data-team-id]:has-text("${t.name}")`).first()).toBeVisible({
-      timeout: 20_000,
-    });
-  }
+  // Only the top 5 render on the board (issue #179); at 0-0 the tiebreak is
+  // earlier joined_at, so Team01-05 (the first to join) fill the board while the
+  // other five are named by the hint. Wait on the hint as the fully-hydrated
+  // gate, then confirm the board is capped at five rows.
+  await expect(display.getByTestId("more-teams")).toHaveText(
+    `+${TEAM_COUNT - 5} more teams playing`,
+    { timeout: 20_000 },
+  );
+  await expect(display.locator("[data-team-id]")).toHaveCount(5);
 
   const { byName, byId } = await teamIdMap(code);
   const expected: Record<string, number> = Object.fromEntries(teams.map((t) => [t.name, 0]));
@@ -444,9 +448,25 @@ test("10 teams, up to 30 rounds: every scoring path, live scores, podium & archi
     await expect(cont).toBeDisabled({ timeout: 10_000 });
   }
 
-  // ---- Final live scoreboard: every surviving team, exact total ----
-  for (const [name, total] of Object.entries(expected)) {
+  // ---- Final live scoreboard: the top 5 survivors show their exact totals on
+  //      the board; everyone below the cut is named by the "+N more" hint
+  //      (issue #179). Every survivor's total is still checked against the DB
+  //      via settle() each round, so board-invisibility loses no coverage. ----
+  const rankedSurvivors = Object.entries(expected).sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    // Earlier joiner wins ties; teams joined in TeamNN order, so the padded name
+    // sorts the same way the board's joined_at tiebreak does.
+    return a[0].localeCompare(b[0]);
+  });
+  for (const [name, total] of rankedSurvivors.slice(0, 5)) {
     await expectDisplayScore(display, name, total);
+  }
+  await expect(display.locator("[data-team-id]")).toHaveCount(5);
+  const hiddenSurvivors = rankedSurvivors.length - 5;
+  if (hiddenSurvivors > 0) {
+    await expect(display.getByTestId("more-teams")).toHaveText(
+      `+${hiddenSurvivors} more ${hiddenSurvivors === 1 ? "team" : "teams"} playing`,
+    );
   }
 
   // ---- Podium colors on the live display (gold/silver/bronze on ranks 1-3) ----

@@ -1,8 +1,11 @@
-// Display fit: the read-only scoreboard must show EVERY team, fully on screen
-// and with no page scroll, at every realistic display/laptop resolution — up to
-// 16 teams. This guards the B-1.1 regression where the fixed-height rows + tall
-// QR/top-matter starved the scoreboard on short (often OS-scaled) laptop frames
-// and clipped the middle rows (a 10-team board showed only ranks 3 and 8).
+// Display fit: the read-only top-5 board must render fully on screen with no
+// page scroll at every realistic display/laptop resolution. Issue #179 caps the
+// board at five teams, so the old many-team clip risk is gone — but this still
+// guards that five roomy rows plus the reveal panel, token chips, timer, the
+// "+N more teams" hint and the QR footer all fit without clipping or scrolling,
+// even on short (often OS-scaled) laptop frames. It also pins the cap itself: a
+// game with more than five teams shows exactly five rows and names the overflow
+// in the hint, never a sixth row.
 //
 // It measures the RENDERED layout (bounding boxes vs the viewport), which a
 // DOM-presence assertion can't catch. Game state is injected straight into the
@@ -132,22 +135,34 @@ const VIEWPORTS = [
   { w: 1024, h: 640 },
 ];
 
+const CAP = 5; // issue #179: the board shows only the top 5
+
 // A valid display code is [A-Z2-9]{6}; keep them letters-only for simplicity.
 const CASES: Array<{ code: string; teams: number }> = [
+  { code: "FITFOR", teams: 4 }, // below the cap: every team shows, no hint
   { code: "FITTEN", teams: 10 },
-  { code: "FITXIV", teams: 13 },
   { code: "FITSIX", teams: 16 },
 ];
 
 for (const { code, teams } of CASES) {
-  test(`display fits all ${teams} teams across resolutions (no clip, no scroll)`, async ({
+  const shown = Math.min(teams, CAP);
+  const hidden = teams - shown;
+  test(`display fits the top ${shown} of ${teams} teams across resolutions (no clip, no scroll)`, async ({
     page,
   }) => {
     test.setTimeout(120_000);
     await injectGame(code, teams);
     await page.goto(`/display/${code}`);
-    // Wait for the board to hydrate all teams before measuring.
-    await expect(page.locator("[data-team-id]")).toHaveCount(teams, { timeout: 20_000 });
+    // Only the top `shown` (by score) ever render; wait for that exact count.
+    await expect(page.locator("[data-team-id]")).toHaveCount(shown, { timeout: 20_000 });
+    // The overflow is named by the hint, not silently dropped.
+    if (hidden > 0) {
+      await expect(page.getByTestId("more-teams")).toHaveText(
+        `+${hidden} more ${hidden === 1 ? "team" : "teams"} playing`,
+      );
+    } else {
+      await expect(page.getByTestId("more-teams")).toHaveCount(0);
+    }
 
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.w, height: vp.h });
@@ -156,15 +171,15 @@ for (const { code, teams } of CASES) {
       await expect
         .poll(async () => (await measureFit(page)).clipped.length, {
           timeout: 8_000,
-          message: `${teams} teams @ ${vp.w}x${vp.h}: some rows are clipped off-screen`,
+          message: `top ${shown} of ${teams} @ ${vp.w}x${vp.h}: some rows are clipped off-screen`,
         })
         .toBe(0);
 
       const fit = await measureFit(page);
-      expect(fit.total, `${teams} teams @ ${vp.w}x${vp.h}: all rows rendered`).toBe(teams);
-      expect(fit.clipped, `${teams} teams @ ${vp.w}x${vp.h}: clipped rows`).toEqual([]);
-      expect(fit.pageScrolls, `${teams} teams @ ${vp.w}x${vp.h}: page must not scroll`).toBe(false);
-      expect(fit.emptyScores, `${teams} teams @ ${vp.w}x${vp.h}: rows with no score`).toEqual([]);
+      expect(fit.total, `top ${shown} @ ${vp.w}x${vp.h}: shown rows rendered`).toBe(shown);
+      expect(fit.clipped, `top ${shown} @ ${vp.w}x${vp.h}: clipped rows`).toEqual([]);
+      expect(fit.pageScrolls, `top ${shown} @ ${vp.w}x${vp.h}: page must not scroll`).toBe(false);
+      expect(fit.emptyScores, `top ${shown} @ ${vp.w}x${vp.h}: rows with no score`).toEqual([]);
     }
   });
 }

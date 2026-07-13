@@ -401,26 +401,44 @@ describe("DisplayPage scoreboard layout", () => {
     );
   });
 
-  it("splits into two compact columns around a dozen teams", async () => {
+  it("caps the board at the top 5 teams and stays a single normal-density column", async () => {
     const { container } = await renderBoard(
       makeTeams(Array.from({ length: 12 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),
     );
-    // 12 teams -> two columns -> six rows per column -> "compact".
-    expect(container.querySelector("main")).toHaveAttribute("data-density", "compact");
+    // Issue #179: only the top 5 render, so the board never leaves a single
+    // "normal"-density column no matter how many teams joined.
+    const rows = container.querySelectorAll("li[data-team-id]");
+    expect(rows).toHaveLength(5);
+    expect(container.querySelector("main")).toHaveAttribute("data-density", "normal");
     expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
-      "6",
+      "5",
     );
+    // The five shown are the five highest scorers, in order.
+    const names = [...rows].map((r) => r.querySelector("span:nth-child(2)")?.textContent);
+    expect(names).toEqual(["T1", "T2", "T3", "T4", "T5"]);
   });
 
-  it("tightens to a dense two-column layout at 18 teams", async () => {
-    const { container } = await renderBoard(
-      makeTeams(Array.from({ length: 18 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),
+  it("shows a '+N more teams' hint when more than 5 teams are playing", async () => {
+    await renderBoard(
+      makeTeams(Array.from({ length: 8 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),
     );
-    // 18 teams -> two columns -> nine rows per column -> "dense".
-    expect(container.querySelector("main")).toHaveAttribute("data-density", "dense");
-    expect((container.querySelector("ol") as HTMLElement).style.getPropertyValue("--rows")).toBe(
-      "9",
+    // 8 teams -> 3 are off the board.
+    expect(screen.getByTestId("more-teams")).toHaveTextContent("+3 more teams playing");
+  });
+
+  it("uses the singular 'team' in the hint when exactly one team is off the board", async () => {
+    await renderBoard(
+      makeTeams(Array.from({ length: 6 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),
     );
+    expect(screen.getByTestId("more-teams")).toHaveTextContent("+1 more team playing");
+  });
+
+  it("omits the more-teams hint at exactly 5 teams", async () => {
+    await renderBoard(
+      makeTeams(Array.from({ length: 5 }, (_, i) => ({ name: `T${i + 1}`, score: 100 - i }))),
+    );
+    expect(screen.queryByTestId("more-teams")).not.toBeInTheDocument();
+    expect(screen.getByText("T5")).toBeInTheDocument();
   });
 
   it("orders teams by score so the podium is the top three scorers", async () => {
