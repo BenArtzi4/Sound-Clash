@@ -151,20 +151,24 @@ export function TeamGameplayPage() {
   const game = state?.game;
 
   // Issue #179: with the public board capped at the top 5, give every player a
-  // persistent read on where they stand. Rank is ordinal with the same
-  // (score desc, earlier joined_at first) tiebreak the Display board uses, so a
-  // player's "#N" matches their row on the board exactly.
-  const standings = ((): { rank: number; total: number; score: number } | null => {
+  // persistent read on where they stand. Rank uses the same DENSE scheme the
+  // Display board + final EndScreen use (#180) — teams tied on score share a
+  // place — so a player's "#N" matches their board row exactly, ties included.
+  // Dense rank == 1 + the number of DISTINCT higher scores (no sort needed;
+  // joined_at only orders board rows, it never changes the rank number). Shown
+  // from the moment they join (the waiting screen included) and recomputed on
+  // every render, so it updates live whenever any team's score changes. The
+  // total-teams count was dropped as noise — just the place is shown (#271).
+  const standings = ((): { rank: number; score: number } | null => {
     if (!state) return null;
     const me = state.teams.get(stored.id);
     if (!me) return null;
-    const ranked = Array.from(state.teams.values()).sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.joined_at.localeCompare(b.joined_at);
-    });
+    const higherScores = new Set<number>();
+    for (const t of state.teams.values()) {
+      if (t.score > me.score) higherScores.add(t.score);
+    }
     return {
-      rank: ranked.findIndex((t) => t.id === stored.id) + 1,
-      total: ranked.length,
+      rank: higherScores.size + 1,
       score: me.score,
     };
   })();
@@ -236,13 +240,10 @@ export function TeamGameplayPage() {
         ) : null}
       </div>
 
-      {game && game.status !== "waiting" && standings ? (
+      {standings ? (
         <div className={styles.standingsOverlay} aria-label="Your standing" data-testid="standings">
           <span className={styles.standingRank} data-testid="standing-rank">
             #{standings.rank}
-            {standings.total > 1 ? (
-              <span className={styles.standingOf}> of {standings.total}</span>
-            ) : null}
           </span>
           <span className={styles.standingScore} data-testid="standing-score">
             {standings.score} {Math.abs(standings.score) === 1 ? "pt" : "pts"}
