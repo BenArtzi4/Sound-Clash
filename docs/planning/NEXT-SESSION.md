@@ -84,7 +84,7 @@ Buzzer hot path is a PL/pgSQL function called direct from the browser; **Python 
 
 ## Maintainer-only carryovers (not closable by a coding session)
 
-- **T1.7 / I-Alert** — Grafana alerts on Realtime connections (~200 free-tier cap) + message quota; **I-Vitals** dashboard once Faro sends.
+- **T1.7 / I-Vitals / I-Alert** — 🟨 **BUILT, awaiting maintainer apply.** Observability layer committed under `observability/` (Vitals dashboard JSON, native-email #254 alert, scheduled GitHub Action filing one issue per #254 incident) — every query validated against live prod Faro data. Maintainer applies: import the dashboard, create the contact point + alert rule, set repo secret `GRAFANA_READ_TOKEN` (Viewer SA token). The Realtime connections/quota alert stays blocked on the Supabase Prometheus scrape (design in `observability/supabase-metrics-scrape.md`). See `MAINTAINER-GATED-TASKS.md` §8.
 - **D-3 / T5.6** — Cloudflare edge + WAF (infra/ops).
 - **F-P2-5** — rate-limit fix ✅ shipped (PR #231); only your two-IP behavioral check is owed → issue #247.
 - **T5.1 / F-P2-4** — CSV formula-injection guard in the off-limits `tools/song-curation/*`.

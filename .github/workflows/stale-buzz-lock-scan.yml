@@ -1,0 +1,182 @@
+# Stale buzz-lock incident scan (issue #254 durable record).
+#
+# Scans Grafana Loki for the #254 signal (Faro warn log stale_buzz_lock_resynced
+# = a client self-healed a dropped Realtime buzz-lock event) and files ONE
+# GitHub issue per INCIDENT: a game_code that hit >=3 repairs inside a 30-minute
+# window. The Grafana native-email alert is the real-time page; this workflow is
+# the durable, detailed incident record (occurrence timestamps, stale/fresh team
+# pairs, affected session_ids, Grafana deep-link).
+#
+# Read path only: a READ-ONLY Grafana service-account token (repo secret
+# GRAFANA_READ_TOKEN, Viewer role) queries the Loki datasource through the
+# Grafana datasource proxy. Dedup is by exact issue title (label
+# stale-buzz-lock), so the overlapping cadence and manual reruns never double
+# file the same game+day.
+#
+# The email alert query and this query are identical, validated 2026-07-12: at
+# 20:00 UTC the 30m window returned 3VX6QJ=3, AJJFJD=2, VHG4S4=2, so only 3VX6QJ
+# crosses >=3. Test end-to-end first: Run workflow -> dry_run=true,
+# end_time=2026-07-12T20:00:00Z -> it should report exactly the 3VX6QJ incident.
+
+name: Stale buzz-lock scan
+
+on:
+  schedule:
+    # Every 15 min: 2x overlap on the 30m window so an incident is recorded
+    # promptly. Cheap (one Loki query + a couple gh calls). The email alert is
+    # the real-time page; this is the durable log.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report incidents without creating issues"
+        type: boolean
+        default: true
+      lookback_minutes:
+        description: "Sliding-window length for the >=3 threshold (minutes)"
+        default: "30"
+      end_time:
+        description: "Window end (RFC3339 UTC); blank = now. Use to replay a past incident."
+        default: ""
+
+permissions:
+  issues: write
+
+concurrency:
+  group: stale-buzz-lock-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GRAFANA_URL: https://prudentcurrant2518.grafana.net
+      LOKI_DS_UID: grafanacloud-logs
+      GRAFANA_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      THRESHOLD: "3"
+      WINDOW_MINUTES: ${{ github.event.inputs.lookback_minutes || '30' }}
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      END_TIME: ${{ github.event.inputs.end_time || '' }}
+    steps:
+      - name: Scan Loki for #254 incidents and file issues
+        run: |
+          set -euo pipefail
+          if [ -z "${GRAFANA_TOKEN:-}" ]; then
+            # Graceful skip (not a hard failure) so scheduled runs stay quiet
+            # until the secret is configured, instead of red-X'ing every 15 min.
+            echo "::warning::GRAFANA_READ_TOKEN secret is not set yet — skipping. Mint a Viewer service-account token in Grafana and set the repo secret to enable the #254 incident scan."
+            exit 0
+          fi
+
+          PROXY="$GRAFANA_URL/api/datasources/proxy/uid/$LOKI_DS_UID/loki/api/v1"
+          WIN="${WINDOW_MINUTES}m"
+          if [ -n "$END_TIME" ]; then
+            end_s=$(date -u -d "$END_TIME" +%s)
+          else
+            end_s=$(date -u +%s)
+          fi
+          start_s=$(( end_s - WINDOW_MINUTES * 60 ))
+          end_ns=$(( end_s * 1000000000 )); start_ns=$(( start_s * 1000000000 ))
+          end_ms=$(( end_s * 1000 ));       start_ms=$(( start_s * 1000 ))
+          win_date=$(date -u -d "@$end_s" +%F)
+          echo "Window: $(date -u -d @$start_s +%FT%TZ) .. $(date -u -d @$end_s +%FT%TZ)  threshold>=$THRESHOLD  dry_run=$DRY_RUN"
+
+          # --- 1. per-game repair count over the trailing window (the alert query)
+          Q='sum by (context_game_code) (count_over_time({service_name="sound-clash-web", kind="log"} |= "stale_buzz_lock_resynced" | logfmt ['"$WIN"']))'
+          resp=$(curl -sS --fail-with-body --max-time 30 --retry 3 --retry-delay 5 --retry-all-errors \
+            -G "$PROXY/query" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            --data-urlencode "query=$Q" \
+            --data-urlencode "time=$end_ns")
+
+          # tr -d '\r': normalize line endings so a CRLF jq build can't leave a
+          # stray CR on a game_code (breaks the later string compares/dedup).
+          mapfile -t incidents < <(jq -r --argjson thr "$THRESHOLD" \
+            '.data.result[] | select((.value[1]|tonumber) >= $thr) | .metric.context_game_code' <<<"$resp" | tr -d '\r' | sort -u)
+
+          echo "### Stale buzz-lock scan ($win_date)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${#incidents[@]}" -eq 0 ]; then
+            echo "No #254 incidents (no game hit >=$THRESHOLD repairs in $WIN)."
+            echo "No incidents in the trailing $WIN window." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Incident game_codes: ${incidents[*]}"
+
+          filed=0 skipped=0
+          # existing stale-buzz-lock issue titles for dedup
+          gh issue list --label stale-buzz-lock --state all --limit 300 \
+            --json title --jq '.[].title' > existing_titles.txt || : > existing_titles.txt
+
+          for code in "${incidents[@]}"; do
+            count=$(jq -r --arg c "$code" '.data.result[] | select(.metric.context_game_code==$c) | .value[1]' <<<"$resp")
+            title="Realtime dropped-event incident: game $code ($win_date)"
+
+            if grep -Fxq "$title" existing_titles.txt; then
+              echo "  - $code: already filed ($count repairs) -> skip"
+              skipped=$((skipped+1))
+              continue
+            fi
+
+            # --- 2. per-incident detail lines: ts \t stale \t fresh \t session \t page
+            DQ='{service_name="sound-clash-web", kind="log"} |= "stale_buzz_lock_resynced" | logfmt | context_game_code="'"$code"'" | line_format "{{.timestamp}}\t{{.context_stale_team}}\t{{.context_fresh_team}}\t{{.session_id}}\t{{.page_id}}"'
+            dresp=$(curl -sS --fail-with-body --max-time 30 --retry 3 --retry-delay 5 --retry-all-errors \
+              -G "$PROXY/query_range" \
+              -H "Authorization: Bearer $GRAFANA_TOKEN" \
+              --data-urlencode "query=$DQ" \
+              --data-urlencode "start=$start_ns" \
+              --data-urlencode "end=$end_ns" \
+              --data-urlencode "limit=1000" \
+              --data-urlencode "direction=forward")
+            jq -r '.data.result[].values[][1]' <<<"$dresp" | tr -d '\r' | sort > lines.tsv || : > lines.tsv
+
+            sessions=$(cut -f4 lines.tsv | sort -u | paste -sd', ' -)
+            first_ts=$(head -1 lines.tsv | cut -f1)
+            last_ts=$(tail -1 lines.tsv | cut -f1)
+
+            left=$(jq -cn --arg code "$code" --arg from "$start_ms" --arg to "$end_ms" \
+              '{datasource:"grafanacloud-logs",queries:[{expr:("{service_name=\"sound-clash-web\", kind=\"log\"} |= \"stale_buzz_lock_resynced\" | logfmt | context_game_code=\"\($code)\""),refId:"A"}],range:{from:$from,to:$to}}')
+            deeplink="$GRAFANA_URL/explore?left=$(jq -rn --arg v "$left" '$v|@uri')"
+
+            {
+              echo "A single game self-healed **$count** dropped Realtime buzz-lock events within a ${WINDOW_MINUTES}-minute window — the systemic issue #254 threshold (>=$THRESHOLD)."
+              echo
+              echo "Each \`stale_buzz_lock_resynced\` means a client never received a Realtime lock/clear frame and had to recover it from a full re-hydrate. Isolated ones are flaky phones; a cluster in one game points at Realtime delivery trouble for that session/network."
+              echo
+              echo "| Field | Value |"
+              echo "|---|---|"
+              echo "| Game code | \`$code\` |"
+              echo "| Repairs in window | **$count** |"
+              echo "| Window | \`$first_ts\` .. \`$last_ts\` UTC |"
+              echo "| Affected sessions | $sessions |"
+              echo "| Grafana | [open the 30m window in Explore]($deeplink) |"
+              echo
+              echo "**Occurrences** (time UTC · stale_team → fresh_team · session · page):"
+              echo
+              echo '```'
+              awk -F'\t' '{printf "%s  %s -> %s  %s  %s\n", $1, $2, $3, $4, $5}' lines.tsv
+              echo '```'
+              echo
+              echo "_Filed by \`.github/workflows/stale-buzz-lock-scan.yml\`. The real-time page is the Grafana email alert \`sc_stale_buzz_lock_254\`._"
+              echo "<!-- stale-buzz-lock:$code:$win_date -->"
+            } > issue_body.md
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "  - $code: [dry-run] WOULD FILE ($count repairs)"
+              echo "::group::[dry-run] issue body for $code"
+              cat issue_body.md
+              echo "::endgroup::"
+              echo "- [dry-run] $code — $count repairs (would file)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              gh label create stale-buzz-lock \
+                --description "Realtime dropped-event (#254) incident: a game with >=3 self-healed buzz-lock repairs in 30m" \
+                --color B60205 2>/dev/null || true
+              url=$(gh issue create --title "$title" --label stale-buzz-lock --body-file issue_body.md)
+              echo "  - $code: filed $url ($count repairs)"
+              echo "- $code — $count repairs — $url" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            filed=$((filed+1))
+          done
+
+          echo "Done: ${#incidents[@]} incident game(s), $filed new, $skipped already-filed."
