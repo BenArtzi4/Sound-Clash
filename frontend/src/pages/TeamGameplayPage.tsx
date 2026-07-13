@@ -149,6 +149,26 @@ export function TeamGameplayPage() {
   }
 
   const game = state?.game;
+
+  // Issue #179: with the public board capped at the top 5, give every player a
+  // persistent read on where they stand. Rank is ordinal with the same
+  // (score desc, earlier joined_at first) tiebreak the Display board uses, so a
+  // player's "#N" matches their row on the board exactly.
+  const standings = ((): { rank: number; total: number; score: number } | null => {
+    if (!state) return null;
+    const me = state.teams.get(stored.id);
+    if (!me) return null;
+    const ranked = Array.from(state.teams.values()).sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.joined_at.localeCompare(b.joined_at);
+    });
+    return {
+      rank: ranked.findIndex((t) => t.id === stored.id) + 1,
+      total: ranked.length,
+      score: me.score,
+    };
+  })();
+
   const lockedByMe = buzzer.lockedByMe;
   // Resolve the locking team from the hook's effective lock (provisional RPC
   // result OR the authoritative Realtime lock), so "SOMEONE ELSE BUZZED"
@@ -215,6 +235,20 @@ export function TeamGameplayPage() {
           </span>
         ) : null}
       </div>
+
+      {game && game.status !== "waiting" && standings ? (
+        <div className={styles.standingsOverlay} aria-label="Your standing" data-testid="standings">
+          <span className={styles.standingRank} data-testid="standing-rank">
+            #{standings.rank}
+            {standings.total > 1 ? (
+              <span className={styles.standingOf}> of {standings.total}</span>
+            ) : null}
+          </span>
+          <span className={styles.standingScore} data-testid="standing-score">
+            {standings.score} {Math.abs(standings.score) === 1 ? "pt" : "pts"}
+          </span>
+        </div>
+      ) : null}
 
       <div className={styles.buzzZone}>
         <BuzzButton

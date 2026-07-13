@@ -49,7 +49,9 @@
   background: rgba(15, 23, 42, 0.62);
   border-radius: var(--radius-pill);
   pointer-events: none;
-  max-width: calc(100vw - 1.2rem);
+  /* Held to the left half so it can't collide with the standings chip pinned
+     to the top-right corner (issue #179). */
+  max-width: 52vw;
   overflow: hidden;
 }
 
@@ -61,7 +63,50 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 60vw;
+  max-width: 42vw;
+}
+
+/* Your own place + score, mirrored to the top-right corner opposite the team
+   identity chip (issue #179). Persistent so every player keeps a sense of
+   where they stand even when they're off the top-5 board. */
+.standingsOverlay {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 40;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+  padding: 0.3rem 0.7rem;
+  background: rgba(15, 23, 42, 0.62);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+  max-width: 44vw;
+  text-align: right;
+}
+
+.standingRank {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.standingOf {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(248, 250, 252, 0.72);
+}
+
+.standingScore {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(248, 250, 252, 0.92);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .roundPill {

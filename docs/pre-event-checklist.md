@@ -36,7 +36,7 @@ This is the reusable distillation of the full validation run performed before th
 - The **4-hour expiry clock starts at game creation**, not the first round. Create the real game shortly before kickoff.
 - Song-pool exhaustion: Next round with no songs left → "All songs in your selected genres have been played…" toast and no advance. Pick enough genres (≥3) for 12+ rounds.
 - No "Kick team" button in the UI; kicking is a token-gated `DELETE /games/<code>/teams/<id>` API call.
-- Display auto-fits all teams (up to 20) on screens from 1080p down to short/OS-scaled laptops — regression-tested by `tests/e2e/display_fit.spec.ts`.
+- Display shows the **top 5 teams** (with a "+N more teams playing" hint below), auto-fitting screens from 1080p down to short/OS-scaled laptops — regression-tested by `tests/e2e/display_fit.spec.ts`. Every other team still sees its own place + score on its phone.
 
 ## 1. Pre-flight (agent)
 
