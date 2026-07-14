@@ -166,6 +166,18 @@ Run manually after each prod deploy.
 | `post_deploy.sh` | curl `/health`; create game (no auth) and capture `manager_token`; join 2 teams; start round (with token); end game (with token); cleanup |
 | `prod_realtime.spec.ts` | Playwright against prod URL; one buzzer race round end-to-end |
 
+### 4.6 Load tests: `tests/load/`
+
+Run manually (never in CI) against prod or a local stack to answer capacity
+questions: N concurrent games × M teams × R rounds. Protocol-level Node
+harness — REST for create/join/bonus/end/kick, direct PostgREST RPCs for the
+hot path, one Realtime WebSocket per simulated device — with seeded flow
+coverage of every manager button, expected-score ledger verification, latency
+percentiles, and Realtime delivery/miss measurement. Zero new dependencies
+(supabase-js borrowed from `frontend/node_modules`). See `tests/load/README.md`
+for scenarios, thresholds, and the one-IP / connection-quota caveats, and
+`tests/load/RUN-PROMPTS.md` for the canned run procedures.
+
 ## 5. Phase Schedule
 
 | Phase | Tests written | Coverage gates active? |
