@@ -61,8 +61,76 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 | 2026-07-14 | smoke #4 (--rt-budget 3) + #5 (full) | PASS | after matcher hardening: 0 misses both, RT p95 ~560-640ms, 0 reconnects | 0 |
 | 2026-07-14 | check1-5x10 (5×10×15, realistic, prod) | PASS | buzz_in p95 116ms / award p95 86ms / select p95 97ms; RT p95 ~611–619ms; 0/3555 RT misses; 60/0 subscribe; 0 violations; score_update p99 1688ms/max 2105ms tail (still 0 misses); pg_stat 13→28 backends | 0 |
 | 2026-07-14 | check4-1x30 (1×30×15, realistic, prod) | PASS | buzz_in p95 269ms (30-way race contention, vs 116ms @10-way) / award p95 94ms / select p95 220ms; RT lock_set p95 611ms / round_insert 880ms / score_update 579ms; 0/1888 RT misses; 32/0 subscribe; 0 violations; check1 score_update tail did NOT recur (p99 608ms); pg_stat flat 28→28 backends; Loki clean (no real users overlapped) | 0 |
+| 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) | FAIL (crashed) | harness node process died SILENTLY at round 84/150 during play (~10:36:50 UTC, ~5m45s in); no report, empty stderr, no Windows crash event, no OOM msg; errorCount 0 / violations 0 at last heartbeat; setup fully completed (10/10 games, 100/100 teams, 120 RT sockets); DB backends flat 29→29→29; Loki empty (no real users); 10 leftover games cleaned up HTTP 200 | 1 (below, open) |
 
 ## Findings
+
+### 2026-07-14 — check2-10x10 — harness node process died silently at round 84/150 (120-socket scale)
+- **Severity:** major (run failure — could not validate the 10-game / 120-socket
+  scale; root cause undetermined, most consistent with a client-side harness/Node
+  failure rather than a backend capacity limit)
+- **Symptom:** the detached `loadtest.mjs run` process terminated abnormally
+  and silently ~5m45s into the run, at **round 84/150** in the **play** phase.
+  No `report.md`/`report.json` was written (`status.json` frozen at
+  `done=false`, `roundsDone=84`, `now=2026-07-14T10:36:49.985Z`). The Monitor
+  flagged it as STALLED (status.json silent for 135s); investigation confirmed
+  the process was gone (no `node ... loadtest.mjs` in the process table — only
+  the unrelated Playwright-MCP node processes remained). All three of the
+  harness's independent `setInterval` timers (2s status heartbeat, 15s console
+  progress, sweeper) stopped firing at the same instant → the process died, it
+  did not merely pause.
+- **Evidence:**
+  - `results/check2-10x10-console.err.log` is **0 bytes** — the process wrote
+    nothing to stderr. The harness's normal error path
+    (`loadtest.mjs:481-483`, `.catch` → log + `process.exit(2)`) writes to
+    stderr, so this was **not** a caught `LoadError`. There is no
+    `unhandledRejection`/`uncaughtException` handler in the harness.
+  - `console.log` ended cleanly at `[+05:45] progress: phase=play rounds=80/150
+    errors=0 violations=0`; setup had completed fully at `[+03:45] setup
+    complete: 10/10 games ready` and `120 devices subscribe to Realtime (no
+    --rt-budget cap)`.
+  - No Windows **Application Error (1000)** / **Windows Error Reporting (1001)**
+    event for `node.exe` in the window (checked the Application log ±20 min) →
+    no recorded native crash / access violation. No `FATAL ERROR ... heap out
+    of memory` line anywhere → no logged Node OOM.
+  - **DB was never the bottleneck:** `pg_stat_activity` was flat across the
+    whole run — baseline 10:30:46 (idle 19 / null 8 / active 2 = 29), mid-run
+    10:35:14 (identical 29), post-run 10:41 (identical 29). No backend-pool
+    growth, matching checks 1 & 4 (PostgREST pooling keeps backend count flat).
+  - **Loki `{service_name="sound-clash-web"}` empty** 10:29–10:44 UTC → no real
+    party overlapped; the crash was not confounded by real users, and the run
+    had zero real-user impact. No Supabase/Prometheus metrics datasource exists
+    (only 3 Loki sources), so the Realtime concurrent-connection count could not
+    be read from Grafana — check the Supabase dashboard's Realtime report for
+    the 10:31–10:37 UTC window if a connection-quota event is suspected.
+  - **Scale context:** this is the **first check at 120 concurrent Realtime
+    sockets** (10 games × (10 teams + manager + display)). Check1 passed at 60
+    sockets, check4 at 32 — both clean, 0 misses. 120 is 2× the largest
+    previously-validated socket count and under the free-tier ~200 quota.
+- **Diagnosis (best current hypothesis):** a **client-side abnormal termination
+  of the harness Node process at the 120-socket scale**, not a backend capacity
+  failure. Supporting the client-side read: DB backends stayed flat, the last
+  heartbeat showed `errorCount=0`, and a genuine server capacity limit (Realtime
+  quota, rate-limit, DB pool) would have surfaced as in-report subscribe
+  failures / errors — not a process death. The specific cause is undetermined
+  from the corpse (empty stderr, no WER event, no core): candidates are a native
+  fault in the borrowed supabase-js Realtime / `ws` / `undici` layer under 120
+  concurrent sockets, or an unlogged Node OOM from growing per-device delivery-
+  expectation structures across 84 rounds × 10 concurrent games. Cannot yet
+  distinguish transient fluke from a reproducible 120-socket ceiling — that needs
+  one controlled re-run.
+- **Action:** leftover games cleaned up immediately
+  (`loadtest.mjs cleanup --dir tests/load/results/check2-10x10` → all 10 ended
+  HTTP 200; post-cleanup pg_stat confirmed no backend residue). Harness **not**
+  modified (per RUN-PROMPTS discipline: document, don't patch mid-check).
+  **Open follow-ups:** (1) re-run check2-10x10 once to establish
+  reproducibility (fluke vs 120-socket ceiling); (2) if reproducible, add
+  client-side crash instrumentation to the harness — `process.on('uncaughtException'
+  /'unhandledRejection', …)` logging + heap-usage lines in the 2s heartbeat +
+  a `--max-old-space-size` bump — so the next run captures the actual cause;
+  (3) if it turns out to be the Realtime WS layer, cross-check the Supabase
+  dashboard Realtime report for a connection spike/rejection at ~120 sockets.
+- **Status:** open
 
 ### 2026-07-14 — smoke — kicked device counted as false Realtime misses
 - **Severity:** minor (harness bug, not a product bug)
@@ -124,4 +192,7 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   race_wrong_race×1) → the 30-way buzz race still yields exactly one winner every
   time. Loki `{service_name="sound-clash-web"}` was empty over the run window
   (10:18–10:26 UTC), so no real party overlapped to confound the numbers.
-- **Status:** open (behavior to watch during remaining checks 2/3/5; checks 1 & 4 clean)
+- **check2-10x10 (2026-07-14):** NOT EVALUABLE — the run crashed at round
+  84/150 before writing a report (see the check2 crash finding above), so the
+  120-socket score_update fan-out behavior is still unmeasured. Re-run needed.
+- **Status:** open (behavior to watch during remaining checks 2/3/5; checks 1 & 4 clean; check2 crashed before it could be measured)
