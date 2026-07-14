@@ -49,7 +49,6 @@ tests/db/        pytest + testcontainers-postgres (needs Docker).
 tests/backend/   pytest + httpx against FastAPI.
 tests/e2e/       Playwright; separate package.json.
 tests/smoke/     Post-deploy manual checks.
-tests/load/      Manual capacity harness (N games x M teams); never in CI. See its README.
 docs/            The spec. Code that contradicts a doc must update the doc in the same PR.
 .github/workflows/  CI. Do not modify without asking (see ci-and-repo-config rule).
 ```
