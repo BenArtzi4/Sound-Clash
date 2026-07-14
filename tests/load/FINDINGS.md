@@ -60,6 +60,7 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 | 2026-07-14 | smoke #3 (1×3×11, --rt-budget 3, prod) | FAIL | one device's channel had a multi-second delivery gap: 6/129 misses, fake 6-7s lock_set tail | 2 (1 harness bug fixed; 1 info below) |
 | 2026-07-14 | smoke #4 (--rt-budget 3) + #5 (full) | PASS | after matcher hardening: 0 misses both, RT p95 ~560-640ms, 0 reconnects | 0 |
 | 2026-07-14 | check1-5x10 (5×10×15, realistic, prod) | PASS | buzz_in p95 116ms / award p95 86ms / select p95 97ms; RT p95 ~611–619ms; 0/3555 RT misses; 60/0 subscribe; 0 violations; score_update p99 1688ms/max 2105ms tail (still 0 misses); pg_stat 13→28 backends | 0 |
+| 2026-07-14 | check4-1x30 (1×30×15, realistic, prod) | PASS | buzz_in p95 269ms (30-way race contention, vs 116ms @10-way) / award p95 94ms / select p95 220ms; RT lock_set p95 611ms / round_insert 880ms / score_update 579ms; 0/1888 RT misses; 32/0 subscribe; 0 violations; check1 score_update tail did NOT recur (p99 608ms); pg_stat flat 28→28 backends; Loki clean (no real users overlapped) | 0 |
 
 ## Findings
 
@@ -109,4 +110,18 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   far under the 10s miss window, so not a delivery gap; consistent with a brief
   score-fanout queueing tail under concurrent play, worth watching at higher
   device counts (checks 2–4).
-- **Status:** open (behavior to watch during checks 2-5; check1 clean)
+- **check4-1x30 (2026-07-14):** clean at the single-game 32-socket / 30-team
+  scale — 0/1888 Realtime deliveries missed (round_insert 480, lock_set 704,
+  score_update 704), no `realtime:reconnects` / `realtime:channel_errors`
+  counter emitted (0 reconnects *with* 0 misses), 32/32 subscribes OK. The
+  check1 `score_update` tail did NOT reproduce here: score_update p99 608ms /
+  max 609ms — actually tighter than lock_set (p99 621ms / max 835ms), so the
+  30-way single-game fan-out did not queue score events. Separate observation
+  (latency, not delivery): `buzz_in` p95 rose to 269ms (p99 287 / max 293) under
+  30-way simultaneous races vs 116ms at 10-way — expected lock-contention
+  scaling on the one hot `active_games` row, still well under threshold, and 0
+  race-winner violations across all 6 race rounds (race_title×4, race_both×1,
+  race_wrong_race×1) → the 30-way buzz race still yields exactly one winner every
+  time. Loki `{service_name="sound-clash-web"}` was empty over the run window
+  (10:18–10:26 UTC), so no real party overlapped to confound the numbers.
+- **Status:** open (behavior to watch during remaining checks 2/3/5; checks 1 & 4 clean)
