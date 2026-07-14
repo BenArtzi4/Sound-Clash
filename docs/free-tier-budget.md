@@ -39,7 +39,9 @@ These numbers are pessimistic; real-world will be lower. Round up for safety.
 | Bandwidth | 5 GB | minimal | n/a | |
 | Edge function invocations | 500k / mo | 0 | n/a | Not used in MVP |
 
-**Binding constraint**: 200 concurrent peers = max **33 simultaneous games**. Anything beyond that needs Supabase Pro ($25/mo, 500 peers).
+**Binding constraint**: 200 concurrent peers = max **33 simultaneous games** at the 4-team/6-peer estimate above. For **10-team event games** (10 phones + manager + display = **12 peers**) the same cap means **~16 simultaneous games with full fan-out**. Anything beyond that needs Supabase Pro ($25/mo, 500 peers).
+
+**Measured (2026-07-14 load-test campaign — `tests/load/FINDINGS.md`)**: 180 concurrent Realtime sockets ran clean on the free tier (0 subscribe failures, 0 delivery misses out of 33,520 measured); 20 concurrent 10-team games, one 30-team game, and a 60-round soak all passed with hot-path p95s ~80–120ms (buzz_in 269ms only under 30-way race contention) and flat DB backends (~29 — PostgREST pooling). The 200-peer quota is the only ceiling the campaign approached.
 
 **Soft constraint**: 2M messages/mo = ~8,000 games. Realistically you'll hit the 200-peer ceiling first.
 

@@ -37,6 +37,7 @@ This is the reusable distillation of the full validation run performed before th
 - Song-pool exhaustion: Next round with no songs left → "All songs in your selected genres have been played…" toast and no advance. Pick enough genres (≥3) for 12+ rounds.
 - No "Kick team" button in the UI; kicking is a token-gated `DELETE /games/<code>/teams/<id>` API call.
 - Display shows the **top 5 teams** (with a "+N more teams playing" hint below), auto-fitting screens from 1080p down to short/OS-scaled laptops — regression-tested by `tests/e2e/display_fit.spec.ts`. Every other team still sees its own place + score on its phone.
+- **Validated capacity (2026-07-14 load-test campaign — `tests/load/FINDINGS.md`):** 20 concurrent 10-team games, one 30-team game, and a 60-round soak all passed clean on the free tier — 0 lost Realtime events, exactly one winner in every buzz race (incl. 30-way), no drift over long play. Plan around two ceilings: **~16 simultaneous 10-team games** (Supabase free-tier 200-connection cap at 12 devices/game; more rooms ⇒ Supabase Pro), and score updates may take up to ~2s to reach every screen under many concurrent games (benign p99 tail; buzz locks stay ~0.6s p95). For an unusually large event, dress-rehearse with the matching `tests/load` check (`tests/load/RUN-PROMPTS.md`).
 
 ## 1. Pre-flight (agent)
 

@@ -37,11 +37,13 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   useful for one thing: spotting impact on *real* users (e.g.
   `stale_buzz_lock_resynced` warns or error spikes from a live party in the
   same window).
-- **Supabase-side metrics** (Realtime concurrent connections, DB CPU/IO,
-  connection pool) live in the Supabase dashboard (Reports → Database /
-  Realtime). As of 2026-07-14 there is no Supabase metrics scrape into
-  Grafana Cloud (that wiring is a known owed item) — check
-  `list_datasources` before assuming.
+- **Supabase-side metrics**: the Prometheus scrape IS live since 2026-07-13
+  (PR #269 — job `supabase-soundclash` in the `grafanacloud-prom` datasource),
+  so DB CPU/connections ARE queryable from Grafana during a run. What is NOT
+  exported (per `observability/supabase-metrics-scrape.md` §3) is the Realtime
+  concurrent-WebSocket gauge and message-quota counters — for those the
+  Supabase dashboard (Reports → Realtime) remains the only view. (Correcting
+  the earlier version of this note, which predated the scrape.)
 - **DB-side ground truth** is available read-only and ungated:
   `supabase db query --linked "select state, count(*) from pg_stat_activity group by state"`
   before/during/after a run shows backend+PostgREST pool pressure (note:
@@ -50,6 +52,40 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 - The harness's own `report.json` (latency distributions, Realtime delivery
   misses, subscribe failures, 429 counts) is the primary instrument; external
   monitoring corroborates.
+
+## Campaign conclusions — 2026-07-14 (checks 1–5 complete)
+
+The full campaign (5×10, 10×10, 20×10, 1×30, 3×10×60-round soak — all
+realistic pace, all against prod on the free tier) passed with **zero
+invariant violations, zero unexpected errors, 0 Realtime delivery misses
+across 33,520 measured deliveries, zero subscribe failures, zero 429s**.
+
+**Validated capacity envelope (free tier, as of 2026-07-14):**
+
+- **20 concurrent 10-team games** (180 Realtime sockets under `--rt-budget`) —
+  clean; hot-path RPCs flat vs a single game (buzz_in p95 102ms).
+- **1 game × 30 teams** — clean; 30-way buzz races always yield exactly one
+  winner; buzz_in p95 rises to 269ms under 30-way lock contention (expected,
+  well within budget).
+- **60-round / ~14-min continuous play** — no drift: throughput, RPC
+  latencies, and pg_stat backends flat; the growing played-set does not slow
+  `select_next_song`.
+- **Free-tier binding constraint**: the ~200 concurrent Realtime connections
+  quota. A fully-connected 10-team game = 12 sockets ⇒ **~16 ten-team games
+  max with full fan-out** (200/12). 180 sockets were measured clean; beyond
+  ~16 rooms either upgrade to Supabase Pro (500 conns) or accept shed
+  displays/managers. See `docs/free-tier-budget.md` §2.1.
+- Backend/DB never pressured: PostgREST pooling kept pg_stat backends flat
+  (~29) at every scale tested.
+
+**Residual watch items** (no pre-emptive work — playbooks recorded below):
+
+1. check2 run-1 one-off silent harness crash at 120 sockets (retry clean) —
+   if it recurs, apply the hardening playbook in that entry.
+2. score_update fan-out p99 tail, bounded ~1.3–1.9s under multi-game play
+   (0 misses; not scaling with games or time) — accepted as benign.
+3. smoke-scale Realtime channel gap (never reproduced in checks 1–5) — the
+   product's hydrate/resync self-healing covers it if it ever occurs live.
 
 ## Run ledger
 
@@ -252,7 +288,10 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   the soak. No late-game failure: all 3 games completed rounds 40–60 and their
   final scores verified. ⇒ the score_update fan-out tail is a per-event
   queueing artifact that neither worsens nor drifts over a long run.
-- **Status:** open (behavior to watch; checks 1/2/3/4/5 measured — score_update
-  tail present under multi-game fan-out, bounded ~p99 1.3–1.9s across 5/10/20
-  games AND across a 60-round soak, 0 misses, not degrading with scale or over
-  time; single-game check4 clean)
+- **Status:** accepted (campaign complete — checks 1/2/3/4/5 all measured:
+  the smoke-scale channel gap never reproduced at any real scale, and the
+  score_update tail is a benign bounded ~p99 1.3–1.9s multi-game fan-out
+  queueing artifact — 0 misses everywhere, no growth with game count or over
+  a 60-round soak, single-game check4 clean. The product's hydrate + backstop
+  resync covers a real-world gap if one ever occurs. No further action unless
+  a future run shows misses.)
