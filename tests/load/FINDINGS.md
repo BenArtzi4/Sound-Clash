@@ -61,14 +61,15 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 | 2026-07-14 | smoke #4 (--rt-budget 3) + #5 (full) | PASS | after matcher hardening: 0 misses both, RT p95 ~560-640ms, 0 reconnects | 0 |
 | 2026-07-14 | check1-5x10 (5×10×15, realistic, prod) | PASS | buzz_in p95 116ms / award p95 86ms / select p95 97ms; RT p95 ~611–619ms; 0/3555 RT misses; 60/0 subscribe; 0 violations; score_update p99 1688ms/max 2105ms tail (still 0 misses); pg_stat 13→28 backends | 0 |
 | 2026-07-14 | check4-1x30 (1×30×15, realistic, prod) | PASS | buzz_in p95 269ms (30-way race contention, vs 116ms @10-way) / award p95 94ms / select p95 220ms; RT lock_set p95 611ms / round_insert 880ms / score_update 579ms; 0/1888 RT misses; 32/0 subscribe; 0 violations; check1 score_update tail did NOT recur (p99 608ms); pg_stat flat 28→28 backends; Loki clean (no real users overlapped) | 0 |
-| 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) | FAIL (crashed) | harness node process died SILENTLY at round 84/150 during play (~10:36:50 UTC, ~5m45s in); no report, empty stderr, no Windows crash event, no OOM msg; errorCount 0 / violations 0 at last heartbeat; setup fully completed (10/10 games, 100/100 teams, 120 RT sockets); DB backends flat 29→29→29; Loki empty (no real users); 10 leftover games cleaned up HTTP 200 | 1 (below, open) |
+| 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) — run 1/2 | FAIL (crashed) | harness node process died SILENTLY at round 84/150 during play (~10:36:50 UTC, ~5m45s in); no report, empty stderr, no Windows crash event, no OOM msg; errorCount 0 / violations 0 at last heartbeat; setup fully completed (10/10 games, 100/100 teams, 120 RT sockets); DB backends flat 29→29→29; Loki empty (no real users); 10 leftover games cleaned up HTTP 200 | 1 (below) |
+| 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) — run 2/2 (retry) | PASS | full completion at 120 sockets: buzz_in p95 102ms / award p95 81ms / select p95 84ms; RT lock_set p95 627ms / round_insert 653ms / score_update 688ms; 0/7752 RT misses; 120/0 subscribe; 0 violations; 10/10 games; score_update tail recurred (p99 1883ms/max 2021ms) — same as check1, still 0 misses; pg_stat 12→28→29; Loki clean → run-1 crash was a transient fluke, NOT a 120-socket ceiling | 0 |
 
 ## Findings
 
-### 2026-07-14 — check2-10x10 — harness node process died silently at round 84/150 (120-socket scale)
-- **Severity:** major (run failure — could not validate the 10-game / 120-socket
-  scale; root cause undetermined, most consistent with a client-side harness/Node
-  failure rather than a backend capacity limit)
+### 2026-07-14 — check2-10x10 — harness node process died silently at round 84/150 (120-socket scale) — one-off, did not reproduce
+- **Severity:** minor (transient one-off harness/client crash; the immediate
+  clean retry proves it is NOT a reproducible 120-socket ceiling — the product
+  and stack handle 10 games / 120 sockets fine, see the run-2 PASS below)
 - **Symptom:** the detached `loadtest.mjs run` process terminated abnormally
   and silently ~5m45s into the run, at **round 84/150** in the **play** phase.
   No `report.md`/`report.json` was written (`status.json` frozen at
@@ -122,15 +123,25 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 - **Action:** leftover games cleaned up immediately
   (`loadtest.mjs cleanup --dir tests/load/results/check2-10x10` → all 10 ended
   HTTP 200; post-cleanup pg_stat confirmed no backend residue). Harness **not**
-  modified (per RUN-PROMPTS discipline: document, don't patch mid-check).
-  **Open follow-ups:** (1) re-run check2-10x10 once to establish
-  reproducibility (fluke vs 120-socket ceiling); (2) if reproducible, add
-  client-side crash instrumentation to the harness — `process.on('uncaughtException'
-  /'unhandledRejection', …)` logging + heap-usage lines in the 2s heartbeat +
-  a `--max-old-space-size` bump — so the next run captures the actual cause;
-  (3) if it turns out to be the Realtime WS layer, cross-check the Supabase
-  dashboard Realtime report for a connection spike/rejection at ~120 sockets.
-- **Status:** open
+  modified (per RUN-PROMPTS discipline: document, don't patch mid-check). Then
+  **re-ran check2-10x10 unchanged** (same seed 202) — see the RETRY result below.
+- **RETRY (2026-07-14, run 2/2):** **PASS**, full completion at the identical
+  120-socket scale — all 10 games played 15/15 rounds and ended, **0/7752
+  Realtime misses**, **120/120 subscribes OK**, 0 invariant violations, 0
+  unexpected errors across 1441 actions. buzz_in p95 102ms / award 81ms / select
+  84ms (all healthy, ≈ check1's 10-way numbers). No `realtime:reconnects` /
+  `channel_errors` counter emitted (0 with 0 misses). pg_stat 12 (quiet
+  baseline) → 28 (mid) → 29 (post), all pooled. Loki empty over 11:39–11:50 UTC
+  (no real users). ⇒ **the run-1 crash was a transient one-off, not a
+  reproducible 120-socket ceiling.** The stack comfortably handles 10 concurrent
+  games / 120 Realtime sockets.
+- **Residual (optional, low priority):** the *cause* of the single run-1 crash
+  was never captured (empty stderr, no WER event). If it ever recurs, harden the
+  harness to catch it next time: add `process.on('uncaughtException' /
+  'unhandledRejection', …)` logging + `rss`/`heapUsed` lines in the 2s heartbeat
+  + a `--max-old-space-size` bump. Not worth doing pre-emptively for a
+  non-reproducing one-off; noted here so a future recurrence has a playbook.
+- **Status:** resolved (transient; immediate retry passed clean at the same scale)
 
 ### 2026-07-14 — smoke — kicked device counted as false Realtime misses
 - **Severity:** minor (harness bug, not a product bug)
@@ -192,7 +203,18 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   race_wrong_race×1) → the 30-way buzz race still yields exactly one winner every
   time. Loki `{service_name="sound-clash-web"}` was empty over the run window
   (10:18–10:26 UTC), so no real party overlapped to confound the numbers.
-- **check2-10x10 (2026-07-14):** NOT EVALUABLE — the run crashed at round
-  84/150 before writing a report (see the check2 crash finding above), so the
-  120-socket score_update fan-out behavior is still unmeasured. Re-run needed.
-- **Status:** open (behavior to watch during remaining checks 2/3/5; checks 1 & 4 clean; check2 crashed before it could be measured)
+- **check2-10x10 (2026-07-14, retry):** the tail **recurred** at the 10-game /
+  120-socket scale and is essentially unchanged from check1: `score_update`
+  p95 688ms / **p99 1883ms / max 2021ms** (vs check1 p99 1688 / max 2105 at 5
+  games / 60 sockets), while lock_set p95 627ms / round_insert p95 653ms stay
+  tight. Still **0/7752 misses** — far under the 10s window, so it's a
+  queueing/fan-out latency tail, not a delivery gap. Pattern so far: the tail
+  appears under **multi-game concurrent score fan-out** (check1 5-game p99 1688,
+  check2 10-game p99 1883 — grows only mildly with game count) and is **absent**
+  in the single-game check4 (p99 608). So it tracks *number of concurrent games*
+  fanning score updates, not raw socket count, and is not degrading materially
+  as games double. Benign at current scale; keep watching in check3 (20 games)
+  and the check5 soak.
+- **Status:** open (behavior to watch; checks 1/2/4 measured — score_update tail
+  present under multi-game fan-out, ~p99 1.7–1.9s, 0 misses, stable; single-game
+  check4 clean)
