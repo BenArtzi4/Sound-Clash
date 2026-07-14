@@ -64,6 +64,7 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 | 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) — run 1/2 | FAIL (crashed) | harness node process died SILENTLY at round 84/150 during play (~10:36:50 UTC, ~5m45s in); no report, empty stderr, no Windows crash event, no OOM msg; errorCount 0 / violations 0 at last heartbeat; setup fully completed (10/10 games, 100/100 teams, 120 RT sockets); DB backends flat 29→29→29; Loki empty (no real users); 10 leftover games cleaned up HTTP 200 | 1 (below) |
 | 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) — run 2/2 (retry) | PASS | full completion at 120 sockets: buzz_in p95 102ms / award p95 81ms / select p95 84ms; RT lock_set p95 627ms / round_insert 653ms / score_update 688ms; 0/7752 RT misses; 120/0 subscribe; 0 violations; 10/10 games; score_update tail recurred (p99 1883ms/max 2021ms) — same as check1, still 0 misses; pg_stat 12→28→29; Loki clean → run-1 crash was a transient fluke, NOT a 120-socket ceiling | 0 |
 | 2026-07-14 | check3-20x10 (20×10×15, realistic, prod, --rt-budget 180) | PASS | biggest concurrent-games window: 240 devices / 180 subscribed (60 shed by budget — 20 displays+20 managers+20 teams), 0 subscribe failures; buzz_in p95 102ms / award p95 82ms / select p95 88ms; RT lock_set p95 719ms / round_insert 721ms / score_update 750ms; 0/11313 RT misses; 180/0 subscribe; 0 violations; 20/20 games; score_update tail p99 1288ms/max 2451ms (did NOT grow with game count, still 0 misses); 0 reconnects/channel_errors; pg_stat 22→29→29; Loki clean (no real users) | 0 |
+| 2026-07-14 | check5-soak-3x10x60 (3×10×60, realistic, prod) | PASS | soak/drift check, ~14min continuous play (180 rounds / 3 concurrent games): NO drift — round throughput flat ~12–13 rounds/min start→finish, select_next_song stayed tight (p95 111ms/p99 149ms/max 262ms over 180 calls) even as each game's played-set grew to 60 songs; buzz_in p95 117ms / award p95 98ms; RT lock_set p95 608ms / round_insert 630ms / score_update 643ms; 0/9012 RT misses; 36/0 subscribe; 0 violations; 3/3 games 60/60 rounds, all late rounds (40–60) verified; score_update tail p99 1650ms/max 2192ms (same bounded ~1.3–1.9s band, still 0 misses, did NOT worsen over soak); 0 reconnects/channel_errors; pg_stat flat 29→29→29; Loki clean (no real users) | 0 |
 
 ## Findings
 
@@ -233,6 +234,25 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   finding). pg_stat flat 22→29→29 (PostgREST pooling, no blowout). Loki
   `{service_name="sound-clash-web"}` empty over 12:05–12:19 UTC (no real party
   overlapped). 0 REST 429s despite 240 device creations/joins from one IP.
-- **Status:** open (behavior to watch; checks 1/2/3/4 measured — score_update
+- **check5-soak-3x10x60 (2026-07-14):** the 60-round soak (180 rounds across 3
+  concurrent games, ~14 min of continuous play) is the **time-drift** test, and
+  the tail is **stable over time, not accumulating**. `score_update` p95 643ms /
+  **p99 1650ms / max 2192ms** — squarely in the same bounded ~1.3–1.9s band as
+  checks 1/2/3 (p99 1688/1883/1288), and at 3-game concurrency essentially
+  matching check1's 5-game figure. Still **0/9012 misses** (lock_set p95 608ms /
+  round_insert p95 630ms stayed tight), no `realtime:reconnects` /
+  `realtime:channel_errors` counter emitted (0 reconnects *with* 0 misses),
+  36/36 subscribes OK. **Drift verdict (the point of this check):** across the
+  ~14-min play window round throughput held flat at ~12–13 rounds/min (console
+  cadence 3→180 with no slowdown), `select_next_song` stayed tight (p95 111ms /
+  p99 149ms / max 262ms over 180 calls) **even as each game's `game_rounds`
+  played-set grew to 60 songs** — so the accumulating played-set does NOT slow
+  the random picker — and pg_stat backends were flat 29→29→29
+  (baseline 12:25:58 → mid 12:27:45 → late 12:41:36), no connection leak over
+  the soak. No late-game failure: all 3 games completed rounds 40–60 and their
+  final scores verified. ⇒ the score_update fan-out tail is a per-event
+  queueing artifact that neither worsens nor drifts over a long run.
+- **Status:** open (behavior to watch; checks 1/2/3/4/5 measured — score_update
   tail present under multi-game fan-out, bounded ~p99 1.3–1.9s across 5/10/20
-  games, 0 misses, not degrading with scale; single-game check4 clean)
+  games AND across a 60-round soak, 0 misses, not degrading with scale or over
+  time; single-game check4 clean)
