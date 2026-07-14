@@ -11,7 +11,6 @@ This is the executive summary of the system. It points to the deeper docs rather
 - For operational procedures, see **`runbook.md`**.
 - For local dev, see **`local-development.md`**.
 - For free-tier capacity planning, see **`free-tier-budget.md`**.
-- For visual diagrams (component map + service map + sequences), see **`diagrams/internal.md`** and **`diagrams/external.md`**.
 - For dev/CI tooling reference (workflows, CodeQL, Dependabot, Codecov, …), see **`tooling.md`**.
 
 ## 1. Goals

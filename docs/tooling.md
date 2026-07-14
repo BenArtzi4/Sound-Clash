@@ -2,8 +2,6 @@
 
 This is the guide to every tool that touches the repo or the development workflow. The runtime services that the live game depends on (Supabase, Render, Cloudflare Pages) are documented in [`tech-stack.md`](tech-stack.md). This file covers everything *else*: CI workflows, code health, dependency bots, coverage, deploy automation, monitoring, and what runs on every PR.
 
-For the visual map of how these tools connect to the rest of the system, see [`diagrams/external.md`](diagrams/external.md).
-
 ---
 
 ## 1. What runs on every PR

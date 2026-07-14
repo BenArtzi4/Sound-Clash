@@ -1,0 +1,37 @@
+# Open tasks — everything still on the list
+
+_The single backlog (consolidated 2026-07-14 from the former phase-8 + maintainer-gated files; shipped work lives in git history and `CHANGELOG.md`). Decisions in [DECISIONS.md](DECISIONS.md) are resolved — don't re-litigate. Every task ships per [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md): test at the right layer + CHANGELOG if user-visible + docs-as-spec in the same PR + the Full-Game Exit Gate._
+
+Legend: ⬜ not started · 🟡 in progress · 🟨 built, awaiting maintainer apply
+
+---
+
+## A. Features — each needs a maintainer green-light, then builds autonomously
+
+One session/PR per feature. **D-9 = small optimized binary assets in-repo** (confirm each binary commit). Frontend-only unless noted; anything DB-touching needs `run-stress`/`run-e2e` labels + in-prompt merge auth. Additive RPC columns go via `CREATE OR REPLACE` so PostgREST routing stays stable (mig-021 overload lesson); new durable data must respect the ephemerality model.
+
+- ⬜ **X-SFX · Display sound effects (buzz / correct / wrong)** `[S, high]` → [#244](https://github.com/BenArtzi4/Sound-Clash/issues/244). The TV is the room's shared speaker but is silent between clips; `DisplayPage` already detects the exact events (`buzzed_team_id` going non-null, per-team score deltas), so short buzzer/ding/fail cues are near-zero code for a big crowd-energy lift. Needs the D-9 audio-asset sign-off. **Must not slow the buzz** — display-only, never on the buzz path.
+- ⬜ **X-DarkRoom · Dark-room projector theme** `[S, medium]` → [#243](https://github.com/BenArtzi4/Sound-Clash/issues/243). Parties are dim; a high-contrast near-black theme with glowing oversized scores, as a toggle or via `prefers-color-scheme`. Pure CSS. Ready to build.
+- ⬜ **X-Recap · Shareable post-game recap card (PNG)** `[M, medium]` → [#245](https://github.com/BenArtzi4/Sound-Clash/issues/245). SongExport already gives an HTML list + YouTube playlist; nothing is shareable to a group chat. A client-side canvas/SVG card on the end screen — podium, winner, round count, top songs — styled like the OG link-preview card (`tools/og-image`), downloadable. D-9 (generated image). Drives organic reach.
+- ⬜ **X-GenreSpotlight · Per-round genre spotlight (+ optional roulette)** `[M, medium]` → [#246](https://github.com/BenArtzi4/Sound-Clash/issues/246). `select_next_song` picks a random genre then discards it; add the chosen genre to its `RETURNS TABLE` (purely additive `CREATE OR REPLACE`) so the display can announce "This round: 80s Rock"; roulette mode is a UI layer on top. **Owes a "why is it good?" value case before building**; DB migration.
+
+**Vetoed by the maintainer ("don't do it" — don't rebuild):** X-AutoRelease (auto lock-release when the answer countdown expires), X-Practice (solo/practice mode), X-Streaks (on-fire streak badge), X-Skip (declined in PR #186 — Next round + the persistent "Video unavailable" state already cover dead videos).
+
+**Out of scope for now (revisit deliberately, rationale kept so it isn't lost):** **X-Win** — win conditions (D-5; would be an optional additive setting, nullable `win_target_score`/`win_round_limit` mirroring `selected_decades`, default off; explain what a "win condition" is when revisited). **X-i18n** — Hebrew RTL UI (D-6; ~half the catalog is Hebrew but a full RTL UI touches all six pages + a translation workflow; maintainer does not want it).
+
+**Shipped (for orientation):** X-Presets (#241), X-Recovery (`HostRecoveryLink`), X-Extend (mig 039 + `ExpiryCountdown`; the standing "Ends at" hint was later removed in #276, the last-20-min banner remains), team rejoin/reconnect (#183 → PR #260, mig 046 `team_secrets`, `TeamRescueModal`).
+
+## B. Small autonomous residual
+
+- ⬜ **I-BuzzMetric · Split DB-lock latency from fan-out latency** `[S]` — `telemetry.ts` already emits `realtime.fanout_ms` (commit_timestamp → local receipt); still missing a `locked_at`-based emit so DB-lock latency separates from fan-out and the buzz span stops conflating RPC + WAL + fan-out.
+
+## C. Maintainer-gated — needs a decision, an infra/dashboard action, or off-limits tooling
+
+One item at a time; the coding side is done in-session, and the box isn't ticked until the item is shipped **and** validated.
+
+1. 🟨 **T1.7 / I-Vitals / I-Alert · Grafana dashboard + alerts — built, awaiting apply.** Everything is committed under [`observability/`](../../observability/) (see its `README.md`), every query validated against live prod Faro data. **You do:** (a) import `observability/dashboards/sound-clash-vitals.json`; (b) create the `email-benartzi` contact point + `sc_stale_buzz_lock_254` rule from `observability/alerts/alerting-provisioning.yaml`; (c) mint a Viewer service-account token, set repo secret `GRAFANA_READ_TOKEN`, and run the `Stale buzz-lock scan` workflow with `dry_run=true, end_time=2026-07-12T20:00:00Z` (should report the `3VX6QJ` incident). **Update 2026-07-13 (PR #269):** the Supabase metrics scrape is **live** (`supabase-soundclash` job in `grafanacloud-prom`), so the DB-connection-saturation alert designed in `observability/supabase-metrics-scrape.md` §4 is buildable now; the raw WebSocket-connections gauge + message-quota counter are still not exported (§3), so the original Realtime connection-cap alert stays blocked on those.
+2. ⬜ **T5.6 / D-3 · Cloudflare edge + WAF in front of Supabase.** Front the Supabase REST + Realtime hostnames with Cloudflare: per-IP rate limits, a WAF rule blocking bulk `select=*` on the ephemeral tables, DDoS mitigation. Infra + DNS, largely outside git — **you do** the Cloudflare/DNS config; the session supplies the rule set + a before/after buzz-p95 measurement plan (the extra hop must not blow the <200ms budget).
+3. ⬜ **T5.1 / F-P2-4 · CSV formula-injection guard (off-limits tooling).** In the `tools/song-curation` exporters' `csvCell`, prefix a leading `'` when a cell starts with `= + - @ \t \r` (verified still open 2026-07-14 — `review.js` only RFC-4180-quotes). The files are your uncommitted in-flight tooling — apply the one-liner yourself or explicitly authorize the edit.
+4. ⬜ **F-P2-5 · Owed two-IP rate-limit check** → [#247](https://github.com/BenArtzi4/Sound-Clash/issues/247). The code fix shipped + was edge-verified (PR #231 — limits key on the un-forgeable `CF-Connecting-IP`); only the two-network behavioral proof remains: ~11 rapid `POST /games` from a laptop → last 429s; then one from a phone on **cellular** → 201 proves independent buckets.
+5. ⬜ **Song curation · Hebrew + soundtracks batch (content).** ~25 net-new songs/genre via `tools/song-curation/PLAYBOOK.md` (off-limits in-flight tooling; global-genre expansion already shipped; prod ≈1027 songs). The session can generate the idempotent seed SQL from your reviewed CSV (the >100-row import bypasses the Render endpoint per lessons-learned).
+6. ⬜ **Secret rotation.** Optional DB password / `sb_secret_` key — plus the **owed prod `ADMIN_PASSWORD` rotation** (shared in-chat 2026-07-12): after rotating on Render, update **both** the GitHub `ADMIN_PASSWORD` repo secret (the weekly dead-video cron uses it) and `backend/.env`. Verify with prod smoke + a dead-video-scan `workflow_dispatch`.
