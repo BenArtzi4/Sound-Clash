@@ -7,7 +7,7 @@
  * localStorage keyed by youtube_id, so review can span multiple sittings.
  */
 
-// The 11 genre slugs the importer accepts (db/backups/genres-20260531.csv).
+// The 11 genre slugs the importer accepts.
 const GENRES = [
   ["rock", "Rock"],
   ["pop", "Pop"],

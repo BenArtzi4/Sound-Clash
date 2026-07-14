@@ -54,19 +54,18 @@ there** (tweak the artist lists / chart songs for the batch). Per-batch data
 
 - **Valid genre slugs (11):** `rock, pop, hip-hop, electronic, soundtracks,
   israeli-pop, israeli-cover, israeli-rock-pop, israeli-rap-hip-hop, mizrahit,
-  israeli-soundtracks` (`db/backups/genres-20260531.csv`).
+  israeli-soundtracks` (the slugs the importer accepts).
 - **Upload CSV columns** (`backend/app/services/csv_import.py`):
   `title,artist,youtube_id,start_time,genres` (`genres` = `;`-sep slugs;
   `youtube_id` = `^[A-Za-z0-9_-]{11}$`; `start_time` int seconds ≥ 0). A trailing
   `is_soundtrack` column is ignored (derived from genre, mig 028).
 - **Soundtrack convention:** `artist` = film/show name (the answer); `title` = cue,
   or just `title = artist`.
-- **Prod ref:** `jvfddxuaqcsrguibkymp`. Don't touch the ephemeral game tables.
-- **Upload:** >100 rows exceed Render's import timeout → idempotent SQL via
-  `supabase db query --linked` (mirror `db/seed/songs.sql`: `INSERT … WHERE NOT
-  EXISTS (youtube_id)` + `song_genres … ON CONFLICT DO NOTHING`). The
-  `/admin/songs/bulk-import` endpoint is only for a handful of rows. Nothing ships
-  until the user approves; add a `### Added` CHANGELOG line.
+- **Handoff, not upload:** this tool stops at an *approved CSV*. Importing that CSV
+  into the live catalog is a maintainer-only step and is intentionally **not**
+  documented here — no project ref, no credentials, and no import command live in
+  this repo. Export the CSV, hand it to a maintainer, and add a `### Added`
+  CHANGELOG line when it ships.
 
 ## 3. Environment gotchas (Windows) — READ THESE
 
@@ -81,14 +80,12 @@ there** (tweak the artist lists / chart songs for the batch). Per-batch data
 
 ## 4. The workflow, step by step
 
-**1 — Dedup baseline.** Dump the live catalog (sandbox off):
-```bash
-supabase db query --linked "select youtube_id, title, artist from songs"   # JSON → prod_catalog.csv
-```
-Per-genre coverage (find thin genres): `select g.slug, count(*) from genres g left
-join song_genres sg on sg.genre_id=g.id group by g.slug order by 2 desc;`
-**Also dump the current batch** (`candidates.js`) into the dedup set if you're adding
-to an existing batch — `fix.py`'s within-batch name-dedup is the backstop.
+**1 — Dedup baseline.** Get a current catalog export (`youtube_id,title,artist`) as
+`prod_catalog.csv` from a maintainer — this tool never connects to the live database
+itself. If that export includes genre slugs, count rows per slug to spot the thin
+genres. **Also fold the current batch** (`candidates.js`) into the dedup set if
+you're adding to an existing batch — `fix.py`'s within-batch name-dedup is the
+backstop.
 
 **2 — Source candidates** (see §6 for concrete sources):
 - *Global `rock/pop/hip-hop/electronic`*: Claude's recall of canonical official-video
@@ -108,7 +105,7 @@ PYTHONUTF8=1 .../python.exe parse_playlist.py <dump>.json --genre <slug> --sourc
 **4 — Verify (oEmbed + dedup + embeddability):**
 ```bash
 PYTHONUTF8=1 .../python.exe verify.py batches/<date>/master_all.csv \
-  --existing batches/<date>/prod_catalog.csv --existing .claude/example_upload.csv --out batches/<date>/_verified.js
+  --existing batches/<date>/prod_catalog.csv --out batches/<date>/_verified.js
 ```
 Status: `ok` = net-new + name matches; `duplicate` = already in catalog (dropped);
 `invalid` = dead/private/embed-disabled (re-search or drop); `check-*`/`mismatch` =
@@ -129,8 +126,9 @@ Tune the curated artist lists in `validate.py` (POP/ROCKPOP/MIZRAHIT) and `fix.p
 **7 — Human review.** `review.html` → play, set start time, approve/reject, fix
 genres, scan the **Flagged** filter, export CSV.
 
-**8 — Upload.** Idempotent SQL → `supabase db query --linked`. Dry-run on a local
-`supabase start` stack, re-apply to confirm 0 net new rows, then prod. CHANGELOG line.
+**8 — Handoff.** Export the approved CSV and hand it to a maintainer to import; the
+import (and all live-DB access) is deliberately out of scope for this tool. Add a
+`### Added` CHANGELOG line when it ships.
 
 ## 5. The Playwright scrape recipe (the workhorse)
 
@@ -243,12 +241,12 @@ acts: `"<artist> <song> official video"`.
 ```bash
 P="PYTHONUTF8=1 backend/.venv/Scripts/python.exe"; T=tools/song-curation; B=$T/batches/$(date +%F)
 mkdir -p $B/_dumps; cp $T/{validate,fix,audit,chart_songs}.py $B/   # copy templates from tool root
-# 1. dump catalog → $B/prod_catalog.csv (supabase, sandbox off)
+# 1. get a catalog export from a maintainer → $B/prod_catalog.csv
 # 2. scrape playlists (Playwright §5) → $B/_dumps/*.json   |  or WebFetch Mako chart + WebSearch ids
 $P $T/parse_playlist.py $B/_dumps/x.json --genre mizrahit --source "yt …" --out $B/israeli_in.csv
 # 5. consolidate *_in.csv → $B/master_all.csv (dedup youtube_id)
-$P $T/verify.py $B/master_all.csv --existing $B/prod_catalog.csv --existing .claude/example_upload.csv --out $B/_verified.js   # sandbox off
+$P $T/verify.py $B/master_all.csv --existing $B/prod_catalog.csv --out $B/_verified.js   # sandbox off
 $P $B/validate.py && $P $B/fix.py && $P $B/audit.py        # 6
 cp $B/candidates.js $T/candidates.js                       # 7. open review.html
-# 8. approved CSV → idempotent SQL → supabase db query --linked
+# 8. export approved CSV → hand to a maintainer to import (out of scope here)
 ```
