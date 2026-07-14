@@ -206,6 +206,14 @@ export function renderReportMd({ label, config, phases, verdict, metrics, games,
     ),
   );
   lines.push("");
+  lines.push("## Counters");
+  lines.push(
+    mdTable(
+      ["counter", "value"],
+      [...metrics.counters.entries()].sort().map(([k, v]) => [k, v]),
+    ),
+  );
+  lines.push("");
   lines.push("## Per-game results");
   lines.push(
     mdTable(

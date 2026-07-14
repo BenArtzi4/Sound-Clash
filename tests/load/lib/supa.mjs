@@ -82,10 +82,20 @@ export class Device {
         if (status === "SUBSCRIBED") {
           this.subscribedCount += 1;
           this.subState = "subscribed";
+          if (this.subscribedCount > 1) {
+            // A rejoin means a delivery gap — surface it so misses in the
+            // report are attributable to channel health, not mystery.
+            this.metrics.bump("realtime:reconnects");
+            this.metrics.addAnomaly(`${this.id} channel re-subscribed (reconnect #${this.subscribedCount - 1})`);
+          }
           // The real app re-hydrates over REST on every (re)subscribe.
           this.hydrate().catch(() => {});
           settle("subscribed");
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (this.subState === "subscribed" && !this.closed) {
+            this.metrics.bump("realtime:channel_errors");
+            this.metrics.addAnomaly(`${this.id} channel ${status} after being subscribed`);
+          }
           if (this.subState !== "subscribed") this.subState = "error";
           settle("error");
         } else if (status === "CLOSED") {

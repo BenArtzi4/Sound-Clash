@@ -48,6 +48,10 @@ function parseCli() {
       "create-rate": { type: "string", default: "9" }, // per minute (< backend's 10)
       "join-rate": { type: "string", default: "27" }, // per minute (< backend's 30)
       "mgr-rate": { type: "string", default: "80" }, // per minute (< backend's 100)
+      // Cap on concurrent Realtime subscriptions (0 = subscribe everything).
+      // Supabase free tier allows ~200 concurrent connections; big checks set
+      // e.g. 180 so the run never trips the plan quota by design.
+      "rt-budget": { type: "string", default: "0" },
     },
     allowPositionals: false,
   });
@@ -127,6 +131,41 @@ async function countSongPool(env, genreIds) {
   return new Set(rows.map((r) => r.song_id).filter((id) => !unavailable.has(id))).size;
 }
 
+// Distribute a Realtime-subscription budget across games. Shed order per
+// game: display first, then manager, then team devices round-robin (never
+// below 1 subscribed team per game) — measurement audiences shrink, but every
+// device still plays via RPC/REST so correctness runs at full size.
+function planSubscriptions(games, teams, budget) {
+  const total = games * (teams + 2);
+  if (!budget || budget <= 0 || total <= budget) return { plans: null, total, subscribed: total };
+  const plans = Array.from({ length: games }, () => ({ display: true, manager: true, teamSubs: teams }));
+  let excess = total - budget;
+  for (const p of plans) {
+    if (excess <= 0) break;
+    p.display = false;
+    excess--;
+  }
+  for (const p of plans) {
+    if (excess <= 0) break;
+    p.manager = false;
+    excess--;
+  }
+  while (excess > 0) {
+    let shed = 0;
+    for (const p of plans) {
+      if (excess <= 0) break;
+      if (p.teamSubs > 1) {
+        p.teamSubs--;
+        excess--;
+        shed++;
+      }
+    }
+    if (shed === 0) break; // keep at least one subscribed team per game
+  }
+  const subscribed = plans.reduce((s, p) => s + p.teamSubs + (p.manager ? 1 : 0) + (p.display ? 1 : 0), 0);
+  return { plans, total, subscribed };
+}
+
 async function warnIfLiveGames(env) {
   try {
     const rows = await pgrest(env, "active_games?select=game_code&status=eq.playing&ended_at=is.null&limit=10");
@@ -159,6 +198,7 @@ async function runLoadTest(values, { forcedFlows = null } = {}) {
     createRate: Number(values["create-rate"]),
     joinRate: Number(values["join-rate"]),
     mgrRate: Number(values["mgr-rate"]),
+    rtBudget: Number(values["rt-budget"]),
   };
   if (!cfg.label) throw new LoadError("--label is required for run");
   const env = resolveEnv(cfg.target);
@@ -216,7 +256,13 @@ async function runLoadTest(values, { forcedFlows = null } = {}) {
 
   log.info(`load test '${cfg.label}': ${cfg.games} game(s) x ${cfg.teams} teams x ${cfg.rounds} rounds, pace=${cfg.pace}, seed=${cfg.seed}, target=${cfg.target}`);
   const devicesTotal = cfg.games * (cfg.teams + 2);
-  log.info(`simulated devices: ${devicesTotal} (${cfg.teams} teams + manager + display per game), one Realtime socket each`);
+  const subPlan = planSubscriptions(cfg.games, cfg.teams, cfg.rtBudget);
+  log.info(`simulated devices: ${devicesTotal} (${cfg.teams} teams + manager + display per game)`);
+  if (subPlan.plans) {
+    log.info(`rt-budget ${cfg.rtBudget}: subscribing ${subPlan.subscribed}/${devicesTotal} devices to Realtime (shed display->manager->teams; all devices still play via RPC)`);
+  } else {
+    log.info(`all ${devicesTotal} devices subscribe to Realtime (no --rt-budget cap)`);
+  }
   const setupEtaS = Math.round((cfg.games * 60) / cfg.createRate + (cfg.games * cfg.teams * 60) / cfg.joinRate);
   log.info(`setup ETA ~${setupEtaS}s (REST create/join paced under the backend's per-IP rate limits: ${cfg.createRate}/min create, ${cfg.joinRate}/min join)`);
 
@@ -251,6 +297,7 @@ async function runLoadTest(values, { forcedFlows = null } = {}) {
         log,
         registry,
         seed: cfg.seed + (i + 1) * 7919,
+        rtPlan: subPlan.plans ? subPlan.plans[i] : null,
       }),
   );
 
@@ -330,7 +377,9 @@ async function runLoadTest(values, { forcedFlows = null } = {}) {
   const verdict = metrics.summarize({ games, totalActions });
   const notes = [
     `All traffic left one machine/IP: REST setup was paced under the backend's per-IP limits (create ${cfg.createRate}/min, join ${cfg.joinRate}/min) — real parties on distinct phones/IPs never share those buckets, so setup pacing here is a harness artifact, not a product limit. 429s seen: ${metrics.counters.get("rest:429") || 0}.`,
-    `Realtime devices attempted: ${devicesTotal}. Subscribe failures usually mean the Supabase plan's concurrent-connection quota, not an app bug.`,
+    subPlan.plans
+      ? `Realtime subscription budget ${cfg.rtBudget}: ${subPlan.subscribed}/${devicesTotal} devices subscribed (shed to respect the plan's concurrent-connection quota; ${metrics.counters.get("subscribe:skipped_budget") || 0} skipped). With the budget in place, any subscribe FAILURE is a real finding.`
+      : `Realtime devices attempted: ${devicesTotal}. Subscribe failures usually mean the Supabase plan's concurrent-connection quota, not an app bug.`,
     `Latencies include this machine's RTT to Supabase (Frankfurt) / Render; treat thresholds as advisory and read the distributions.`,
     liveGames > 0 ? `Preflight saw ${liveGames} live game(s) on the target — results may include a real party's traffic.` : `Preflight saw no live games on the target.`,
     `Hot-path RPC 429s are impossible by design (PostgREST direct, no backend limiter); only REST setup shares the one-IP buckets.`,

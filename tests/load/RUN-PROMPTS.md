@@ -16,7 +16,8 @@ rate-limit-paced setup):
 | 1 | `check1-5x10` — 5 games × 10 teams | ~10 min | baseline, matches a real multi-room event |
 | 2 | `check4-1x30` — 1 game × 30 teams | ~8 min | single-game fan-out + 30-way buzz races |
 | 3 | `check2-10x10` — 10 games × 10 teams | ~12 min | scale step |
-| 4 | `check3-20x10` — 20 games × 10 teams | ~18 min | ceiling probe (240 Realtime sockets — may exceed the Supabase plan's connection quota by design) |
+| 4 | `check3-20x10` — 20 games × 10 teams | ~18 min | biggest concurrent-games window (Realtime capped at 180 subscriptions for the free-tier quota) |
+| 5 | `check5-soak-3x10x60` — 3 games × 10 teams × 60 rounds | ~25 min | soak: catches drift/degradation over time that short checks miss |
 
 Run during a quiet window (the harness warns if a real game is `playing`).
 
@@ -106,14 +107,15 @@ Do not start any other load check in parallel. Do not modify the harness; if it 
 `<LABEL>` = `check3-20x10`, `<ARGS>` =
 
 ```
-"tests/load/loadtest.mjs","run","--label","check3-20x10","--games","20","--teams","10","--rounds","15","--seed","303"
+"tests/load/loadtest.mjs","run","--label","check3-20x10","--games","20","--teams","10","--rounds","15","--seed","303","--rt-budget","180"
 ```
 
-Note for the summary: this check opens 240 Realtime sockets. On the Supabase
-free tier the concurrent-connection quota is 200, so subscription failures
-here are the expected capacity finding — report how many failed and whether
-game correctness still held (it should: game control is RPC-driven, Realtime
-is fan-out only).
+Note for the summary: 240 devices play, but only 180 subscribe to Realtime
+(`--rt-budget 180` sheds all 20 displays, all 20 managers, and one team device
+per game) because the project runs on the Supabase free tier (~200 concurrent
+connections). With the budget in place, ANY subscribe failure is a real
+finding, not expected quota noise. Game control is RPC-driven, so all 20 games
+must still complete correctly regardless of Realtime.
 
 ## Check 4 — 1 game × 30 teams × 15 rounds
 
@@ -126,3 +128,20 @@ is fan-out only).
 Note for the summary: the interesting numbers are the 30-way buzz-race
 invariant (exactly one winner, every round) and lock-propagation p95 across
 32 subscribed devices.
+
+## Check 5 — soak: 3 games × 10 teams × 60 rounds
+
+`<LABEL>` = `check5-soak-3x10x60`, `<ARGS>` =
+
+```
+"tests/load/loadtest.mjs","run","--label","check5-soak-3x10x60","--games","3","--teams","10","--rounds","60","--seed","505"
+```
+
+Note for the summary: this is the drift check — beyond the standard verdicts,
+compare early-vs-late behavior: does Realtime delivery latency or the miss
+rate grow as rounds accumulate? Do reconnects climb? Does any game fail late
+(rounds 40+)? Use the report.json latency distributions plus the console log's
+periodic progress lines to judge whether performance was flat across the ~25
+minutes. Each game plays 60 distinct songs, so `game_rounds` rows accumulate —
+watch whether `select_next_song` latency trends upward as the played-set
+grows.

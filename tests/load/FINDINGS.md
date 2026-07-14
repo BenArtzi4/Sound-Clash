@@ -57,6 +57,8 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 |---|---|---|---|---|
 | 2026-07-14 | smoke #1 (1×3×11, fast, prod) | WARN | buzz_in p95 94ms; 2/220 RT misses; lock_set p95 2177ms | 1 (harness bug, fixed) |
 | 2026-07-14 | smoke #2 (1×3×11, fast, prod) | PASS | buzz_in p95 93ms; select p95 82ms; RT p95 ~610-630ms; 0/220 misses; all invariants green | 0 |
+| 2026-07-14 | smoke #3 (1×3×11, --rt-budget 3, prod) | FAIL | one device's channel had a multi-second delivery gap: 6/129 misses, fake 6-7s lock_set tail | 2 (1 harness bug fixed; 1 info below) |
+| 2026-07-14 | smoke #4 (--rt-budget 3) + #5 (full) | PASS | after matcher hardening: 0 misses both, RT p95 ~560-640ms, 0 reconnects | 0 |
 
 ## Findings
 
@@ -75,3 +77,26 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   up in the real checks, treat it as a genuine Realtime-latency finding, not a
   harness artifact.
 - **Status:** resolved
+
+### 2026-07-14 — smoke — transient Realtime per-channel delivery gap on prod (info)
+- **Severity:** info
+- **Symptom:** smoke #3 (only 3 Realtime connections — nowhere near quota):
+  one device missed 4 consecutive `round_insert` events plus 1 lock/score
+  event (~a several-second window); nothing in the harness or backend erred.
+  Two lock_set "deliveries" of 6.3s/7.7s in the same run turned out to be a
+  harness matcher false-match (a later round's buzz by the same winning team
+  satisfying the stale expectation), fixed by binding lock_set expectations to
+  `current_round_id` — after which reruns were clean (0 misses).
+- **Evidence:** `results/smoke-rtbudget-prev-*/report.json` (6/129 misses,
+  round_insert missRate 12.9% on a 3-device audience); reruns #4/#5 clean.
+- **Diagnosis:** consistent with a brief Supabase Realtime channel hiccup
+  (events during a gap are simply not replayed on a channel). The product
+  self-heals via hydrate-on-subscribe + 60s backstop resync, so players would
+  see at most seconds of staleness — but the raw channel is not lossless.
+  The harness now surfaces `realtime:reconnects` / `realtime:channel_errors`
+  counters so future gaps are attributable in the report.
+- **Action:** harness hardened (round-bound lock_set matcher + channel-health
+  counters). Watch the real checks: if misses recur with reconnects > 0,
+  that's the same phenomenon; if misses recur with 0 reconnects, dig deeper
+  (silent gap without rejoin would be a stronger finding).
+- **Status:** open (behavior to watch during checks 1-5)

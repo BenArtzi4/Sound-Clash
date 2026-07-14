@@ -15,9 +15,12 @@ const PACES = {
 };
 
 export class GameDriver {
-  constructor({ index, cfg, env, pacers, metrics, log, registry, seed }) {
+  constructor({ index, cfg, env, pacers, metrics, log, registry, seed, rtPlan = null }) {
     this.index = index;
     this.cfg = cfg;
+    // Realtime subscription plan for this game (null = subscribe everything):
+    // { display: bool, manager: bool, teamSubs: number } — see planSubscriptions.
+    this.rtPlan = rtPlan;
     this.env = env;
     this.pacers = pacers;
     this.metrics = metrics;
@@ -193,15 +196,34 @@ export class GameDriver {
         new Device({ id: s.id, role: s.role, gameCode: this.code, env: this.env, metrics: this.metrics, onEvent: this.onEvent }),
       );
     }
+    // Apply the Realtime budget plan: unsubscribed devices still play via
+    // RPC/REST, they just don't count in delivery-measurement audiences.
+    const plan = this.rtPlan || { display: true, manager: true, teamSubs: Infinity };
+    const toSubscribe = [];
+    let teamSlots = plan.teamSubs;
+    for (const dv of this.devices.values()) {
+      if (dv.role === "team") {
+        if (teamSlots > 0) {
+          toSubscribe.push(dv);
+          teamSlots--;
+        }
+      } else if ((dv.role === "manager" && plan.manager) || (dv.role === "display" && plan.display)) {
+        toSubscribe.push(dv);
+      }
+    }
+    const skipped = this.devices.size - toSubscribe.length;
+    if (skipped > 0) this.metrics.bump("subscribe:skipped_budget", skipped);
+
     // Stagger channel joins a little (a 240-subscribe stampede is not what a
     // real party does; phones trickle in over the lobby minute).
-    const outcomes = await mapLimit([...this.devices.values()], 6, async (dv) => {
+    const outcomes = await mapLimit(toSubscribe, 6, async (dv) => {
       await sleep(rngInt(this.rng, 0, 400));
       return dv.subscribe();
     });
     for (const o of outcomes) this.metrics.bump(o === "subscribed" ? "subscribe:ok" : "subscribe:failed");
     const failed = outcomes.filter((o) => o !== "subscribed").length;
     if (failed > 0) this.log.warn(`${this.tag()} ${failed}/${outcomes.length} realtime subscriptions failed`);
+    if (skipped > 0) this.log.info(`${this.tag()} ${skipped} device(s) not subscribed (rt-budget)`);
     if (this.cfg.resync) {
       // Each resync timer gets its OWN PRNG stream: sharing this.rng would let
       // wall-clock-timed ticks interleave with the play loop's draws and break

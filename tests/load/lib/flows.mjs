@@ -15,18 +15,22 @@ import { pick } from "./util.mjs";
 // possible. Invariant: exactly one caller gets locked=true; losers see the
 // winner's id. Returns the winning team.
 export async function volleyBuzz(d, teams) {
-  // The matcher must only accept THIS buzz's null->team transition: a correct
-  // award later bumps locked_at with buzzed_team_id still set (an echo that
-  // must not satisfy a stale expectation), and multi-buzz flows register
-  // several lock_set expectations per round. REPLICA IDENTITY FULL (mig 009)
-  // gives us the full old row to detect the fresh transition; the winner id
-  // is bound as soon as the race resolves.
+  // The matcher must only accept THIS buzz's null->team transition in THIS
+  // round: a correct award later bumps locked_at with buzzed_team_id still set
+  // (an echo), multi-buzz flows register several lock_set expectations per
+  // round, and a device that dropped this event must not match a LATER round's
+  // buzz by the same team (seconds later — it would masquerade as a slow
+  // delivery instead of a miss). REPLICA IDENTITY FULL (mig 009) gives the
+  // full old row for the fresh-transition check; the winner id is bound as
+  // soon as the race resolves.
   const ref = { teamId: null };
+  const expectedRoundId = d.roundId;
   d.expectRt(
     "lock_set",
     (table, p) =>
       table === "active_games" &&
       p.eventType === "UPDATE" &&
+      p.new?.current_round_id === expectedRoundId &&
       !!p.new?.buzzed_team_id &&
       !p.old?.buzzed_team_id &&
       (!ref.teamId || p.new.buzzed_team_id === ref.teamId),

@@ -28,8 +28,9 @@ WebSocket; this repo's machines run Node 24).
 node tests/load/loadtest.mjs smoke                       # tiny self-check: 1 game, 3 teams, every flow once
 node tests/load/loadtest.mjs run --label check1-5x10  --games 5  --teams 10 --rounds 15 --seed 101
 node tests/load/loadtest.mjs run --label check2-10x10 --games 10 --teams 10 --rounds 15 --seed 202
-node tests/load/loadtest.mjs run --label check3-20x10 --games 20 --teams 10 --rounds 15 --seed 303
+node tests/load/loadtest.mjs run --label check3-20x10 --games 20 --teams 10 --rounds 15 --seed 303 --rt-budget 180
 node tests/load/loadtest.mjs run --label check4-1x30  --games 1  --teams 30 --rounds 15 --seed 404
+node tests/load/loadtest.mjs run --label check5-soak-3x10x60 --games 3 --teams 10 --rounds 60 --seed 505   # long soak
 node tests/load/loadtest.mjs cleanup --dir tests/load/results/<label>   # end leftover games after a crash
 ```
 
@@ -38,7 +39,10 @@ Flags: `--pace realistic|fast` (default realistic: human-speed rounds),
 `--skip-resync`, `--genres rock,pop`, `--target prod|local`,
 `--create-rate/--join-rate/--mgr-rate` (per-minute REST pacing, defaults sit
 just under the backend's per-IP limits — only raise them if the backend's
-limits were temporarily raised too).
+limits were temporarily raised too), `--rt-budget N` (cap concurrent Realtime
+subscriptions; shed order display → manager → teams round-robin, everything
+still plays via RPC — use 180 on the Supabase free tier, whose quota is ~200
+concurrent connections).
 
 Endpoints come from `frontend/.env.production` (prod) or `frontend/.env.local`
 (local); `LOADTEST_SUPABASE_URL` / `LOADTEST_SUPABASE_ANON_KEY` /
@@ -111,9 +115,12 @@ flow exactly once.
 - **One machine, one IP.** REST setup shares the per-IP rate-limit buckets
   (real parties don't), and all latency includes this machine's RTT. Hot-path
   RPCs go straight to PostgREST and are not affected.
-- **Realtime quota**: N games × (teams+2) sockets. 240 devices (check 3)
-  exceeds the Supabase free-tier concurrent-connection quota (200) by design —
-  that check probes the ceiling.
+- **Realtime quota**: N games × (teams+2) sockets. The project runs on the
+  Supabase **free tier** (~200 concurrent Realtime connections), so check 3
+  (240 devices) runs with `--rt-budget 180` — the harness sheds display, then
+  manager, then one team device per game from the *measurement* audience while
+  every device still plays. With the budget set, any subscribe failure is a
+  real finding. Remove the budget only after upgrading the plan.
 - Runs create real (ephemeral, 4h TTL) games on the target and their swept
   rows land in the durable `game_history` archive; team names are prefixed
   `LT-` so they're recognizable. Every run ends its games; `cleanup` catches
