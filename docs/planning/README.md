@@ -1,52 +1,36 @@
 # Sound Clash — Improvement Plan
 
-This directory is the durable plan for taking Sound Clash from "a nice game that works" to **production-perfect: fast, smooth, resilient, and lag-free**. It is the memory that carries across Claude Code sessions — and since the 2026-07 reorg it is also the **only** roadmap (the original build roadmap/tasks shipped 100% and were removed; they live in git history).
-
-Built 2026-07-03/04 from a multi-agent review (11 subsystem maps + adversarial verification; 267 findings + 241 ideas consolidated here), re-validated against the code on 2026-07-07.
+This directory is the durable plan-and-status memory that carries across Claude Code sessions. The original build roadmap shipped 100%, and the improvement plan's completed artifacts — the per-category backlog files, the phase files for phases 1–7, and the `phases/` directory itself — were removed once every item in them was verified shipped (2026-07-14, 5-agent code audit). Their detail lives in git history and `CHANGELOG.md`.
 
 ## The north star
 
-Make the game **load fast, respond instantly, and never lag** — every button, every screen, every round — and be genuinely production-ready. The hard `<200ms` buzz-to-lock is network-bound (Supabase Frankfurt + Realtime fan-out), so "speed" work is really **time-to-playable** and **perceived smoothness** — which is what a user feels as fast. Items are tagged `buzz-latency` / `load` / `smoothness` so a paint fix is never mis-sold as a latency fix.
+Make the game **load fast, respond instantly, and never lag** — every button, every screen, every round — and be genuinely production-ready. The hard `<200ms` buzz-to-lock is network-bound (Supabase Frankfurt + Realtime fan-out), so "speed" work is really **time-to-playable** and **perceived smoothness**.
 
 ## Files
 
 | File | What it holds |
 |---|---|
-| [NEXT-SESSION.md](NEXT-SESSION.md) | **Start here** — ready-to-paste handoff for the next session (current state + next tasks + env traps) |
-| [phases/EXECUTION-CONTRACT.md](phases/EXECUTION-CONTRACT.md) | **Process** (the single process doc): session protocol, per-PR loop, merge authorization, exit gates, workflow policy |
-| [00-current-state.md](00-current-state.md) | How the whole system works + the review's conclusions (dated snapshot, 2026-07-04) |
-| [01-fixes.md](01-fixes.md) | Confirmed bugs, ranked P0/P1/P2, with evidence + fix sketch |
-| [02-improvements.md](02-improvements.md) | Resilience + ops improvements (perf sections §A–§C shipped and were pruned) |
-| [03-features.md](03-features.md) | New feature candidates, ranked by party-night impact vs cost (+ the maintainer-led catalog work) |
-| [04-tech-debt.md](04-tech-debt.md) | Code quality, tests, CI, residual docs drift, repo hygiene |
-| [05-decisions-needed.md](05-decisions-needed.md) | **Decision log — all resolved**; don't re-litigate |
-| [phases/README.md](phases/README.md) | The execution roadmap: ordered phases, each with tasks → subtasks → exit gate |
-| `phases/phase-N-*.md` | Per-phase detail (phases 1–3 done and removed) |
-
-`01`–`04` are the **backlog by category** (what + why + evidence). `phases/` **sequences** that backlog into execution order with exit gates. The phase file is the source of truth for *when* and *done-ness*.
+| [NEXT-SESSION.md](NEXT-SESSION.md) | **Start here** — ready-to-paste handoff for the next session (current state + what's next + env traps) |
+| [TASKS.md](TASKS.md) | **The backlog** — every open item: features awaiting green-light, small residuals, maintainer-gated work |
+| [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) | **Process** (the single process doc): session protocol, per-PR loop, merge authorization, exit gates |
+| [DECISIONS.md](DECISIONS.md) | **Decision log — all resolved**; don't re-litigate |
 
 ## Status snapshot
 
-_Updated: 2026-07-12 (Phases 1–7 ✅ done; Phase 8 in progress — remaining features tracked as GitHub issues; every claim below re-verified against code/git)._
+_Updated: 2026-07-14 (phases 1–7 ✅ done and live on prod; every claim below re-verified against code/git by a 5-agent audit on 2026-07-14)._
 
 | Phase | Theme | State |
 |---|---|---|
 | — | Planning + review | ✅ done |
-| 1 | Perf: load & time-to-playable | ✅ done (PRs #150–#158; exit gate passed 2026-07-05) |
-| 2 | Perf: perceived smoothness & buttons | ✅ done (PRs #159–#165; exit gate passed 2026-07-05) |
-| 3 | Perf: backend-path & Realtime economics | ✅ done (PRs #166–#174; mig 035–038 live; −27.5% Realtime msgs) |
-| 4 | Resilience: mid-game failure modes | ✅ done (PRs #185–#197; T4.1 de-scoped, T4.9 pre-shipped; exit gate passed 2026-07-10) |
-| 5 | Security & abuse hardening | ✅ code done (D-1/mig034, T5.3, T5.7, T5.2/#229, T5.4/#230); only **T5.6** Cloudflare (infra) + **T5.1** CSV guard (off-limits tooling) remain — both maintainer-gated |
-| 6 | Correctness & docs hygiene | ✅ done (T6.1/#199, T6.2/#200/#203, T6.3/#216) |
-| 7 | Tech-debt & test hardening | ✅ done (T7.1–T7.6; exit gate passed 2026-07-11; T7.6/#232) |
-| 8 | Features | 🟡 in progress — X-Presets (#241), X-Recovery, X-Extend ✅ shipped; X-AutoRelease/X-Practice/X-Streaks ❌ vetoed; remaining tracked as issues: X-SFX #244, X-DarkRoom #243, X-Recap #245, X-GenreSpotlight #246 |
+| 1–3 | Perf: load, smoothness, backend-path & Realtime economics | ✅ done (PRs #150–#174; migs 034–038; −27.5% Realtime msgs; exit gates passed 2026-07-05) |
+| 4 | Resilience: mid-game failure modes | ✅ done (PRs #185–#197; exit gate passed 2026-07-10) |
+| 5 | Security & abuse hardening | ✅ code done; only Cloudflare WAF (infra) + CSV guard (off-limits tooling) remain — [TASKS.md](TASKS.md) §C |
+| 6 | Correctness & docs hygiene | ✅ done (#199, #200/#203, #216) |
+| 7 | Tech-debt & test hardening | ✅ done (T7.1–T7.6; exit gate passed 2026-07-11) |
+| 8 | Features | 🟡 in progress — X-Presets (#241), X-Recovery, X-Extend, team rejoin (#183/PR #260) shipped; the rest is [TASKS.md](TASKS.md) §A |
 
-**Pre-event validation (2026-07-05/06):** a 10-team/40-person live-prod pass + a DB-verified 10-team/30-round e2e found two display-scaling bugs, both fixed and shipped (PRs #176/#178). No open blockers. The reusable checklist now lives at [`docs/pre-event-checklist.md`](../pre-event-checklist.md).
-
-**Maintainer-only carryovers (can't be closed by a coding session):** T1.7 Grafana Realtime alerts (+ I-Vitals dashboard); D-3/T5.6 Cloudflare edge + WAF; optional DB-password/`sb_secret_` rotation; T5.1 CSV formula-injection guard (off-limits `tools/song-curation/*`); finishing the song-curation batch (Hebrew + soundtracks — see `03-features.md` §Content). _(All open Dependabot PRs merged 2026-07-10.)_
-
-**Next action:** **Phases 1–7 are ✅ complete; Phase 8 is in progress.** Remaining **autonomous** work is now tracked as GitHub issues — features (X-SFX #244, X-DarkRoom #243, X-Recap #245, X-GenreSpotlight #246) and cleanups (I-Liveness #248, F-P2-5 two-IP check #247). Maintainer-gated infra/ops (T5.6 Cloudflare, T1.7 Grafana, T5.1 CSV guard, song curation, secret rotation) is in **[MAINTAINER-GATED-TASKS.md](MAINTAINER-GATED-TASKS.md)**; [NEXT-SESSION.md](NEXT-SESSION.md) is the latest handoff.
+**Everything still open — features, residuals, and maintainer-gated work — is in [TASKS.md](TASKS.md)** (features also tracked as GitHub issues #243–#247).
 
 ## The one rule
 
-Every phase ends with the **Full-Game Exit Gate** ([EXECUTION-CONTRACT.md](phases/EXECUTION-CONTRACT.md) §5): no phase is "done" until a complete game plays end-to-end — create → join → buzz → score → bonus → end → export — on real production, with Hebrew titles rendering and no console errors. This is a live app; a broken Saturday-night game outweighs any missing feature.
+Every feature/task cluster ends with the **Full-Game Exit Gate** ([EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) §5): nothing is "done" until a complete game plays end-to-end — create → join → buzz → score → bonus → end → export — on real production, with Hebrew titles rendering and no console errors. This is a live app; a broken Saturday-night game outweighs any missing feature.
