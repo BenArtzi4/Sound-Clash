@@ -55,6 +55,9 @@ Thumbs.db
 supabase/.branches/
 supabase/.temp/
 
+# Load-test run artifacts (reports + per-run game manager tokens)
+tests/load/results/
+
 # Playwright
 test-results/
 playwright-report/
