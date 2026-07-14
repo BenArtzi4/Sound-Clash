@@ -63,6 +63,7 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 | 2026-07-14 | check4-1x30 (1×30×15, realistic, prod) | PASS | buzz_in p95 269ms (30-way race contention, vs 116ms @10-way) / award p95 94ms / select p95 220ms; RT lock_set p95 611ms / round_insert 880ms / score_update 579ms; 0/1888 RT misses; 32/0 subscribe; 0 violations; check1 score_update tail did NOT recur (p99 608ms); pg_stat flat 28→28 backends; Loki clean (no real users overlapped) | 0 |
 | 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) — run 1/2 | FAIL (crashed) | harness node process died SILENTLY at round 84/150 during play (~10:36:50 UTC, ~5m45s in); no report, empty stderr, no Windows crash event, no OOM msg; errorCount 0 / violations 0 at last heartbeat; setup fully completed (10/10 games, 100/100 teams, 120 RT sockets); DB backends flat 29→29→29; Loki empty (no real users); 10 leftover games cleaned up HTTP 200 | 1 (below) |
 | 2026-07-14 | check2-10x10 (10×10×15, realistic, prod) — run 2/2 (retry) | PASS | full completion at 120 sockets: buzz_in p95 102ms / award p95 81ms / select p95 84ms; RT lock_set p95 627ms / round_insert 653ms / score_update 688ms; 0/7752 RT misses; 120/0 subscribe; 0 violations; 10/10 games; score_update tail recurred (p99 1883ms/max 2021ms) — same as check1, still 0 misses; pg_stat 12→28→29; Loki clean → run-1 crash was a transient fluke, NOT a 120-socket ceiling | 0 |
+| 2026-07-14 | check3-20x10 (20×10×15, realistic, prod, --rt-budget 180) | PASS | biggest concurrent-games window: 240 devices / 180 subscribed (60 shed by budget — 20 displays+20 managers+20 teams), 0 subscribe failures; buzz_in p95 102ms / award p95 82ms / select p95 88ms; RT lock_set p95 719ms / round_insert 721ms / score_update 750ms; 0/11313 RT misses; 180/0 subscribe; 0 violations; 20/20 games; score_update tail p99 1288ms/max 2451ms (did NOT grow with game count, still 0 misses); 0 reconnects/channel_errors; pg_stat 22→29→29; Loki clean (no real users) | 0 |
 
 ## Findings
 
@@ -215,6 +216,23 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   fanning score updates, not raw socket count, and is not degrading materially
   as games double. Benign at current scale; keep watching in check3 (20 games)
   and the check5 soak.
-- **Status:** open (behavior to watch; checks 1/2/4 measured — score_update tail
-  present under multi-game fan-out, ~p99 1.7–1.9s, 0 misses, stable; single-game
-  check4 clean)
+- **check3-20x10 (2026-07-14):** at the **20-game / 180-socket** scale (the
+  biggest concurrent-games window) the tail did **NOT** grow with game count —
+  `score_update` p95 750ms / **p99 1288ms / max 2451ms**, a *lower* p99 than
+  check2's 10-game p99 1883 (max only slightly higher, 2451 vs 2021). lock_set
+  p95 719ms / round_insert p95 721ms stayed tight. Still **0/11313 misses**, and
+  no `realtime:reconnects` / `realtime:channel_errors` counter emitted (0 misses
+  *with* 0 reconnects). **This is the decisive data point:** across 5→10→20
+  concurrent games the score_update p99 sits in a bounded **~1.3–1.9s band**
+  (check1 1688, check2 1883, check3 1288) rather than climbing with scale —
+  confirms the tail is a benign concurrent-fan-out queueing artifact, not a
+  degradation. Capacity note: **180/240 devices subscribed** with `--rt-budget
+  180` (shed 60: all 20 displays + 20 managers + 20 one-team-per-game),
+  `subscribe:ok=180 / failed=0` → **zero free-tier connection-quota pressure at
+  180 concurrent Realtime sockets** (the budget was never breached, so no
+  finding). pg_stat flat 22→29→29 (PostgREST pooling, no blowout). Loki
+  `{service_name="sound-clash-web"}` empty over 12:05–12:19 UTC (no real party
+  overlapped). 0 REST 429s despite 240 device creations/joins from one IP.
+- **Status:** open (behavior to watch; checks 1/2/3/4 measured — score_update
+  tail present under multi-game fan-out, bounded ~p99 1.3–1.9s across 5/10/20
+  games, 0 misses, not degrading with scale; single-game check4 clean)
