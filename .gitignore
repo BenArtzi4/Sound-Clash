@@ -55,8 +55,8 @@ Thumbs.db
 supabase/.branches/
 supabase/.temp/
 
-# Load-test run artifacts (reports + per-run game manager tokens)
-tests/load/results/
+# Internal load-test harness: kept local only, never tracked in this repo.
+tests/load/
 
 # Playwright
 test-results/
