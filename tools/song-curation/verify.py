@@ -14,7 +14,6 @@ run this with the sandbox disabled (the harness supports that).
 
 Usage:
     python verify.py candidates_in.csv \
-        --existing ../../.claude/example_upload.csv \
         --existing prod_catalog.csv \
         --out batches/2026-06-18/candidates.js
 """

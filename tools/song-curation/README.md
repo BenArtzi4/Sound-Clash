@@ -83,17 +83,12 @@ mizrahit, israeli-soundtracks`.
 
    ```bash
    python verify.py candidates_in.csv \
-       --existing ../../.claude/example_upload.csv \
        --existing prod_catalog.csv \
        --out batches/$(date +%F)/candidates.js
    ```
 
-   To dedup against production, first dump the live catalog:
-
-   ```bash
-   supabase link --project-ref jvfddxuaqcsrguibkymp
-   supabase db query --linked "copy (select youtube_id, title, artist from songs) to stdout with csv header" > prod_catalog.csv
-   ```
+   `prod_catalog.csv` is a current catalog export (`youtube_id,title,artist`) you
+   get from a maintainer — this tool never connects to the live database itself.
 
 2. **Review:** copy/symlink the generated `candidates.js` next to `review.html`
    (or generate straight into this folder) and open `review.html` in a browser.
@@ -101,10 +96,10 @@ mizrahit, israeli-soundtracks`.
 
 3. **Export:** click **⬇ Export approved CSV**.
 
-4. **Upload:** the catalog has hundreds of rows, which exceeds Render's import
-   timeout, so generate idempotent SQL (mirror `db/seed/songs.sql`) from the
-   exported CSV and apply with `supabase db query --linked`. The
-   `/admin/songs/bulk-import` endpoint is fine for small follow-up fixes.
+4. **Handoff:** export the approved CSV and hand it to a maintainer to import into
+   the live catalog. That import step — and all live-database access — is
+   intentionally out of scope for this tool: no project ref, credentials, or import
+   command live in this repo.
 
 ## Validate the export before uploading
 

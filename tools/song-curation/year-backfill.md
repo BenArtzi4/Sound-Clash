@@ -29,14 +29,11 @@ prod songs ──dump──> songs_catalog.csv
         db/backfill/release_years.sql   +   flagged.csv (human review)
 ```
 
-### 1. Dump the catalog
+### 1. Get the catalog export
 
-```bash
-supabase link --project-ref jvfddxuaqcsrguibkymp
-supabase db query --linked \
-  "COPY (SELECT youtube_id, title, artist FROM songs ORDER BY artist, title) \
-   TO STDOUT WITH CSV HEADER" > batches/<date>/songs_catalog.csv
-```
+Obtain a current catalog export (`youtube_id,title,artist`) as
+`batches/<date>/songs_catalog.csv` from a maintainer — this runbook never connects
+to the live database itself.
 
 ### 2. Partition
 
@@ -173,22 +170,14 @@ already covered by `flagged.csv`.
    rows first). A high match rate (≥ ~95%) clears the accepted set; each MISMATCH
    is a real correction — fix it like a flagged row (step 6) and re-run `build`.
 
-### 8. Apply
+### 8. Handoff
 
-```bash
-# dry-run on a throwaway local stack first
-supabase start
-supabase db query --db-url "$LOCAL_DB_URL" -f db/migrations/031_song_release_year.sql
-supabase db query --db-url "$LOCAL_DB_URL" -f db/backfill/release_years.sql   # note row count
-supabase db query --db-url "$LOCAL_DB_URL" -f db/backfill/release_years.sql   # re-apply: same count, no error
-
-# then prod (migration 031 must already be applied there)
-supabase db query --linked -f db/backfill/release_years.sql
-```
-
-Spot-check anchors afterwards: *Back in Black* → 1980; a known cover → the
-original's year. Add a `### Added` CHANGELOG line when the catalog gains years
-that the new decade filter (PR2) can use.
+`build` writes `db/backfill/release_years.sql` — an idempotent, keyed-on-youtube_id
+`UPDATE` you can dry-run against your own throwaway database. Applying it to the
+live catalog is a maintainer-only step and is intentionally out of scope here (no
+project ref or import command lives in this runbook). Spot-check anchors after a
+local apply: *Back in Black* → 1980; a known cover → the original's year. Add a
+`### Added` CHANGELOG line when the catalog gains years the decade filter can use.
 
 ## What's committed vs local
 
