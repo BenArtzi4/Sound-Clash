@@ -59,6 +59,7 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
 | 2026-07-14 | smoke #2 (1×3×11, fast, prod) | PASS | buzz_in p95 93ms; select p95 82ms; RT p95 ~610-630ms; 0/220 misses; all invariants green | 0 |
 | 2026-07-14 | smoke #3 (1×3×11, --rt-budget 3, prod) | FAIL | one device's channel had a multi-second delivery gap: 6/129 misses, fake 6-7s lock_set tail | 2 (1 harness bug fixed; 1 info below) |
 | 2026-07-14 | smoke #4 (--rt-budget 3) + #5 (full) | PASS | after matcher hardening: 0 misses both, RT p95 ~560-640ms, 0 reconnects | 0 |
+| 2026-07-14 | check1-5x10 (5×10×15, realistic, prod) | PASS | buzz_in p95 116ms / award p95 86ms / select p95 97ms; RT p95 ~611–619ms; 0/3555 RT misses; 60/0 subscribe; 0 violations; score_update p99 1688ms/max 2105ms tail (still 0 misses); pg_stat 13→28 backends | 0 |
 
 ## Findings
 
@@ -99,4 +100,13 @@ Rules (mirrors `.claude/rules/lessons-learned.md` discipline):
   counters). Watch the real checks: if misses recur with reconnects > 0,
   that's the same phenomenon; if misses recur with 0 reconnects, dig deeper
   (silent gap without rejoin would be a stronger finding).
-- **Status:** open (behavior to watch during checks 1-5)
+- **check1-5x10 (2026-07-14):** clean — 0/3555 Realtime deliveries missed
+  across 60 subscribed devices (round_insert 890, lock_set 1362, score_update
+  1303), and no `realtime:reconnects` / `realtime:channel_errors` counter was
+  emitted (harness omits zero counters), so 0 misses *with* 0 reconnects. No
+  channel gap reproduced at the 5-game / 60-socket scale. One benign tail:
+  `score_update` p99 1688ms / max 2105ms (vs ~635/707ms for lock_set) — still
+  far under the 10s miss window, so not a delivery gap; consistent with a brief
+  score-fanout queueing tail under concurrent play, worth watching at higher
+  device counts (checks 2–4).
+- **Status:** open (behavior to watch during checks 2-5; check1 clean)
