@@ -56,7 +56,7 @@ These numbers are pessimistic; real-world will be lower. Round up for safety.
 | Idle sleep | 15 min idle → sleep | Acceptable: FastAPI is off the buzzer hot path |
 | Cold start | ~30 s wake | Felt only on game creation after long idle |
 
-**Binding constraint**: cold-start UX. The first game-creation request after a >15min idle period stalls ~30s. Mitigation: cron-job.org pings `/health` every 14 minutes (free tier: 50 cron jobs).
+**Binding constraint**: cold-start UX. The first game-creation request after a >15min idle period stalls ~30s. Mitigation: two independent keepalives ping `/health` every 10 minutes — the external cron-job.org job (primary) and the in-repo `.github/workflows/render-keepalive.yml` GitHub Action (monitored backstop). See §2.7 for the full setup and the 2026-06/07 outage that motivated the second leg.
 
 ### 2.3 Cloudflare Pages
 
@@ -93,22 +93,48 @@ Free, no quotas relevant to this project.
 | Replays | 50 / mo | Use sparingly for debugging |
 | Team members | 1 | Solo maintainer |
 
-### 2.7 cron-job.org (Render keepalive)
+### 2.7 Render keepalive (two independent legs + a UI fallback)
 
 | Resource | Limit | Notes |
 |---|---|---|
-| Cron jobs | 50 | Use 1 |
-| Min interval | 1 minute | We use 14 min |
+| cron-job.org — cron jobs | 50 | Use 1 (jobId 7569155, account benartzi4@gmail.com) |
+| cron-job.org — min interval | 1 minute | We use **10 min** (`minutes:[0,10,20,30,40,50]`, Asia/Jerusalem) |
+| GitHub Actions — minutes | unlimited (public repo) | `render-keepalive.yml`, `*/10 * * * *` + manual dispatch |
 
-This 24/7 cron is the **primary** Render keepalive. The frontend `useKeepBackendWarm`
-hook (manager console only, while a game is `waiting`/`playing`) is a deliberate
-**visibility-aware fallback** on top of it (T-KeepWarm decision, Phase 3): it pings
-`/health` immediately on mount, on `visibilitychange → visible`, and every 10 min.
-The mount + on-visible pings cover the two cases the cron cannot: a host who
-deep-links straight into `/manager/game/<code>`, and a phone whose background timers
-were frozen while asleep and returns to a possibly-cold dyno right at Bonus/End.
-`/health` is unlimited + unauthenticated (§6), so the handful of extra GETs per game
-is free; if the cron is ever paused/misconfigured this is the safety net.
+The Render dyno sleeps after 15 min idle, so it stays warm as long as **any**
+ping lands inside each 15-min window. Two independent keepalives hit
+`GET /health` every 10 minutes:
+
+1. **cron-job.org (primary)** — an external 24/7 cron. This is the historical
+   keepalive but it is an *unmonitored* single point of failure: it silently
+   auto-disabled after repeated failures on **2026-06-23** and stayed dead for
+   **23 days** (nobody noticed until 2026-07-16), which was the root cause of the
+   "sometimes long loading" reports over that period. It was re-enabled 2026-07-16.
+   Its requests are also *intermittently* served **HTTP 503 by Render's own
+   Cloudflare edge** (Render fronts every service with Cloudflare; our DNS is
+   Namecheap, so there is no user-side Cloudflare zone to allowlist in) — the
+   block is per-egress-IP and comes and goes.
+2. **GitHub Actions `render-keepalive.yml` (monitored backstop)** — added
+   2026-07-16 for exactly this reason. It pings the same endpoint on the same
+   cadence from GitHub's runner IPs (a *different* egress pool, so its failures
+   are uncorrelated with cron-job.org's), and a lapse is **visible as a red run in
+   the Actions tab** — the monitoring the external cron lacks. A cold-start window
+   now requires *both* legs to miss simultaneously.
+
+On top of those, the frontend `useKeepBackendWarm` hook (manager console only,
+while a game is `waiting`/`playing`) is a deliberate **visibility-aware fallback**
+(T-KeepWarm decision, Phase 3): it pings `/health` on mount, on
+`visibilitychange → visible`, and every 10 min. The mount + on-visible pings cover
+the two cases a cron cannot: a host who deep-links straight into
+`/manager/game/<code>`, and a phone whose background timers were frozen while
+asleep and returns to a possibly-cold dyno right at Bonus/End. `/health` is
+unlimited + unauthenticated (§6), so the handful of extra GETs per game is free.
+
+**If "sometimes slow" ever returns, check in this order:** (a) the Actions tab —
+is `render-keepalive` running green every ~10 min? (b) cron-job.org —
+`curl -H "Authorization: Bearer $CRONJOB_API_KEY" https://api.cron-job.org/jobs`
+for `enabled`/`lastStatus` (1=OK, 4=HTTP error) on jobId 7569155, and
+`/jobs/7569155/history` for the recent run tally.
 
 ### 2.8 Domain (paid; not free)
 
