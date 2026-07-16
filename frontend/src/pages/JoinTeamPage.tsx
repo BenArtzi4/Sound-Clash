@@ -29,9 +29,12 @@ export function JoinTeamPage() {
   // Wake the Render backend now so the join POST (which goes through Render) is
   // warm by the time the player finishes typing.
   usePrewarmBackend();
-  // After ~2.5s of a pending join, tell the user the server is waking (cold
-  // start can take up to ~30s) instead of leaving "Joining…" hanging.
-  const wakingServer = useSlowPending(busy);
+  // Swap the button label from "Joining…" to "Getting you into the game…" once
+  // the join has stayed pending past ~2.5s (a cold start or a slow round-trip),
+  // and after ~30s add a calm reassurance line below the form. The copy never
+  // mentions the server/infrastructure — the player only cares about the game.
+  const slowPending = useSlowPending(busy);
+  const stillLoading = useSlowPending(busy, 30000);
 
   // Prefetch the gameplay chunk while the player types their name, so the jump
   // to /team/:code after a successful join is instant (React.lazy in App.tsx
@@ -172,9 +175,22 @@ export function JoinTeamPage() {
             Cancel
           </Link>
           <button type="submit" className="btn btn-primary" disabled={!submittable}>
-            {busy ? (wakingServer ? "Waking the server — up to 30s…" : "Joining…") : "Join game"}
+            {busy ? (
+              <>
+                <span className={styles.spinner} data-testid="submit-spinner" aria-hidden="true" />
+                {slowPending ? "Getting you into the game…" : "Joining…"}
+              </>
+            ) : (
+              "Join game"
+            )}
           </button>
         </div>
+
+        {stillLoading && (
+          <p className={styles.helper} role="status">
+            Still loading — hang tight, almost ready.
+          </p>
+        )}
       </form>
     </main>
   );

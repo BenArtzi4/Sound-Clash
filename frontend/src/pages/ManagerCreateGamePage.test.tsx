@@ -231,7 +231,7 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => expect(getHealth).toHaveBeenCalledTimes(1));
   });
 
-  it("switches the submit label to a waking-server hint after a slow pending create", async () => {
+  it("shows a spinner and swaps to the loading-songs label after a slow pending create", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
     // A create that never settles, so the slow-pending timer can fire.
     vi.mocked(createGame).mockReturnValueOnce(new Promise(() => {}));
@@ -242,11 +242,24 @@ describe("ManagerCreateGamePage", () => {
     vi.useFakeTimers();
     try {
       fireEvent.click(screen.getByRole("button", { name: /create game/i }));
-      expect(screen.getByRole("button", { name: /creating/i })).toBeInTheDocument();
+      // Phase 1: spinner + "Creating game…".
+      expect(screen.getByTestId("submit-spinner")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /creating game/i })).toBeInTheDocument();
+
+      // Phase 2 (>2.5s): the label swaps to "Loading songs…", spinner stays.
       act(() => {
         vi.advanceTimersByTime(2500);
       });
-      expect(screen.getByRole("button", { name: /waking the server/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /loading songs/i })).toBeInTheDocument();
+      expect(screen.getByTestId("submit-spinner")).toBeInTheDocument();
+      // No server/infrastructure wording anywhere.
+      expect(screen.queryByText(/waking the server/i)).not.toBeInTheDocument();
+
+      // Phase 3 (>30s): a calm, non-error reassurance line appears below the form.
+      act(() => {
+        vi.advanceTimersByTime(30000);
+      });
+      expect(screen.getByText(/still loading — hang tight/i)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
