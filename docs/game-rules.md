@@ -148,6 +148,7 @@ A separate manager action, independent of round and buzz state.
   - **(a)** clicks "Random song" → browser calls the `select_next_song` PL/pgSQL function direct via Supabase PostgREST RPC; it returns a random song from `songs` filtered by `selected_genres`, **excluding songs already played in this game**, OR
   - **(b)** picks manually from a search/browse UI (out of MVP scope; reserved).
 - "No repeats per game" is enforced inside the PL/pgSQL function by joining against `game_rounds` for the current `game_code`.
+- **Every eligible song is equally likely — no song has priority** (migration 047, "uniform per song"). A song is eligible if it belongs to *any* selected genre (and passes the optional decade filter and the dead-video skip); the pick is a single uniform random draw over that de-duplicated set. A song tagged in two selected genres is counted **once** (no double-weight), and a small genre does not get out-sized airtime — each genre's share of rounds is just its share of the eligible songs. (Before migration 047 the pick gave each *genre* equal weight — one genre chosen uniformly, then a song within it — which over-represented songs in small genres and songs tagged in multiple selected genres.)
 - If all matching songs are exhausted: the function raises `no_more_songs` (sqlstate `22023`); the manager UI surfaces a friendly "All songs in your selected genres have been played" toast.
 
 ## 6. Buzzer Rules
