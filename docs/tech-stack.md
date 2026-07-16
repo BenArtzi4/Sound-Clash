@@ -225,13 +225,13 @@ free tier has ample headroom. Credentials + rotation: `runbook.md` §3.6.
 
 ## 8. Render Keepalive: cron-job.org
 
-**External cron pings `https://api.soundclash.org/health` every 14 minutes** to defeat Render's 15-minute idle sleep.
+**External cron pings `https://api.soundclash.org/health` every 10 minutes** to defeat Render's 15-minute idle sleep.
 
 ### Why this approach
 
 - Free, no signup friction.
-- Truly external (running this from GitHub Actions schedules would burn minutes and is the wrong tool).
-- 14-minute interval keeps Render warm; 15-minute interval risks a sleep window.
+- Truly external (a GitHub Actions schedule is not a reliable substitute: in this repo scheduled workflows fire 49–204 min apart, so `render-keepalive.yml` serves only as an on-demand warm-up button and coarse monitor).
+- 10-minute interval keeps Render warm; a 15-minute interval risks a sleep window.
 
 ### Failure mode
 
