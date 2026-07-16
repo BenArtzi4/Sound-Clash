@@ -34,6 +34,12 @@ interface RequestOptions {
   managerToken?: string;
   adminPassword?: string;
   body?: unknown;
+  // Abort the request after this many ms via AbortSignal.timeout. Scoped to the
+  // two cold-start-prone Render POSTs (create game, join team) so a request that
+  // never returns surfaces as a retryable error instead of hanging the submit
+  // button forever. 45s sits above the ~30s cold-start ceiling so it never
+  // aborts a legitimate wake. All other calls stay untimed.
+  timeoutMs?: number;
 }
 
 // Collapse per-request identifiers (game codes, team/song ids, query strings)
@@ -75,14 +81,27 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
       method,
       headers,
       body,
+      signal: opts.timeoutMs !== undefined ? AbortSignal.timeout(opts.timeoutMs) : undefined,
     });
   // Trace every REST call except the frequent /health warm-up pings (they'd
   // drown out the meaningful create/join/bonus/end latencies). The route is
   // id-normalized so per-game codes don't explode span cardinality.
-  const response =
-    path === "/health"
-      ? await doFetch()
-      : await tracedFetch(method, normalizeRoute(method, path), doFetch);
+  let response: Response;
+  try {
+    response =
+      path === "/health"
+        ? await doFetch()
+        : await tracedFetch(method, normalizeRoute(method, path), doFetch);
+  } catch (err) {
+    // AbortSignal.timeout() rejects the fetch with a TimeoutError DOMException
+    // (older engines surface AbortError). Convert it to a friendly, retryable
+    // ApiError so the caller shows "please try again" and re-enables its submit
+    // button instead of propagating a raw DOMException string.
+    if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new ApiError("timeout", "This is taking longer than usual. Please try again.", 0);
+    }
+    throw err;
+  }
 
   if (response.status === 204) {
     return undefined as T;
@@ -150,7 +169,7 @@ export function __resetListGenresCacheForTests(): void {
 }
 
 export function joinTeam(gameCode: string, name: string): Promise<Team> {
-  return request("POST", `/games/${gameCode}/teams`, { body: { name } });
+  return request("POST", `/games/${gameCode}/teams`, { body: { name }, timeoutMs: 45000 });
 }
 
 // Reconnect to an existing team via its per-team rejoin token (issue #183).
@@ -176,7 +195,7 @@ export function createGame(body: {
   selected_genres: string[];
   selected_decades: number[];
 }): Promise<CreateGameResponse> {
-  return request("POST", "/games", { body });
+  return request("POST", "/games", { body, timeoutMs: 45000 });
 }
 
 export function awardBonus(
