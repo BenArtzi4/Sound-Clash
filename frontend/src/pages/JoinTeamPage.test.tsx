@@ -174,19 +174,34 @@ describe("JoinTeamPage", () => {
     expect(rejoinTeam).not.toHaveBeenCalled();
   });
 
-  it("switches the submit label to a waking-server hint after a slow pending join", () => {
+  it("shows a spinner and swaps the label as a pending join gets slow", () => {
     vi.useFakeTimers();
     try {
-      // A join that never settles, so the slow-pending timer can fire.
+      // A join that never settles, so the slow-pending timers can fire.
       vi.mocked(joinTeam).mockReturnValueOnce(new Promise(() => {}));
       renderAt("/join/ABCDEF");
       fireEvent.change(screen.getByLabelText(/team name/i), { target: { value: "Alice" } });
       fireEvent.click(screen.getByRole("button", { name: /join game/i }));
+      // Phase 1: spinner + "Joining…".
+      expect(screen.getByTestId("submit-spinner")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /joining/i })).toBeInTheDocument();
+
+      // Phase 2 (>2.5s): the label swaps to "Getting you into the game…".
       act(() => {
         vi.advanceTimersByTime(2500);
       });
-      expect(screen.getByRole("button", { name: /waking the server/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /getting you into the game/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("submit-spinner")).toBeInTheDocument();
+      // No server/infrastructure wording anywhere.
+      expect(screen.queryByText(/waking the server/i)).not.toBeInTheDocument();
+
+      // Phase 3 (>30s): a calm, non-error reassurance line appears below the form.
+      act(() => {
+        vi.advanceTimersByTime(30000);
+      });
+      expect(screen.getByText(/still loading — hang tight/i)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

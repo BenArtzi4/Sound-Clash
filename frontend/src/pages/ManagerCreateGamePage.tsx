@@ -86,8 +86,12 @@ export function ManagerCreateGamePage() {
   // Wake the Render backend so the create-game POST is warm. HomePage already
   // pre-warms on landing; this covers a direct deep-link to /manager/create.
   usePrewarmBackend();
-  // Surface a "waking the server…" hint if create stays pending past ~2.5s.
-  const wakingServer = useSlowPending(busy);
+  // Swap the button label from "Creating game…" to "Loading songs…" once the
+  // create has stayed pending past ~2.5s (a cold start or a slow round-trip),
+  // and after ~30s add a calm reassurance line below the form. The copy never
+  // mentions the server/infrastructure — the host only cares about the game.
+  const slowPending = useSlowPending(busy);
+  const stillLoading = useSlowPending(busy, 30000);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,9 +252,22 @@ export function ManagerCreateGamePage() {
             Cancel
           </Link>
           <button type="submit" className="btn btn-primary" disabled={selected.size === 0 || busy}>
-            {busy ? (wakingServer ? "Waking the server — up to 30s…" : "Creating…") : "Create game"}
+            {busy ? (
+              <>
+                <span className={styles.spinner} data-testid="submit-spinner" aria-hidden="true" />
+                {slowPending ? "Loading songs…" : "Creating game…"}
+              </>
+            ) : (
+              "Create game"
+            )}
           </button>
         </div>
+
+        {stillLoading && (
+          <p className={styles.helper} role="status">
+            Still loading — hang tight, almost ready.
+          </p>
+        )}
       </form>
     </main>
   );
