@@ -153,6 +153,42 @@ async def test_random_pick_excludes_already_played_songs(db: asyncpg.Connection)
 
 
 @pytest.mark.asyncio
+async def test_random_pick_uniform_spans_unequal_genres(db: asyncpg.Connection) -> None:
+    """Uniform-per-song pick (migration 047): with two unequal genres selected,
+    the random path draws from the DEDUPED UNION of both. Every distinct eligible
+    song -- including one tagged in BOTH genres, counted once -- is served exactly
+    once across successive rounds, then the pool exhausts with no_more_songs.
+
+    Locks the contract that the new `eligible` CTE enumerates exactly the set of
+    distinct eligible songs (no genre fan-out, no double-serving of the dual song)."""
+    game_code = await create_test_game(db, status="waiting")
+    token = await fetch_manager_token(db, game_code)
+    rock = (await _genre_ids(db, "rock"))[0]
+    pop = (await _genre_ids(db, "pop"))[0]
+    await _set_selected_genres(db, game_code, [rock, pop])
+
+    rock_songs = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(2)]
+    pop_songs = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(3)]
+    for sid in rock_songs:
+        await _attach_song_to_genre(db, sid, rock)
+    for sid in pop_songs:
+        await _attach_song_to_genre(db, sid, pop)
+    dual = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11])
+    await _attach_song_to_genre(db, dual, rock)
+    await _attach_song_to_genre(db, dual, pop)
+
+    expected = set(rock_songs) | set(pop_songs) | {dual}  # 6 distinct songs
+    served: set[uuid.UUID] = set()
+    for _ in range(len(expected)):
+        served.add((await _call(db, game_code, token))[0]["song_id"])
+    assert served == expected
+
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert "no_more_songs" in str(exc.value)
+
+
+@pytest.mark.asyncio
 async def test_manual_pick_uses_supplied_song(db: asyncpg.Connection) -> None:
     """Passing p_song_id forces that exact song, even if it's outside the
     selected genres -- mirrors the legacy REST manual-pick semantics."""

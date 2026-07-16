@@ -381,3 +381,108 @@ async def test_peek_returns_zero_rows_when_all_songs_unavailable(
 
     rows = await _peek(db, game_code, token)
     assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# Uniform-per-song distribution (migration 047, Option B)
+#
+# peek_next_song is READ-ONLY, so it is the distribution probe: calling it N
+# times without committing samples the picker's per-song probability directly.
+# These tests use >=2 UNEQUAL genres, where the old "equal-weight per genre"
+# two-stage pick and the new uniform-per-song pick diverge. The pre-047
+# algorithm inflated small-genre and multi-genre songs, so both tests fail
+# against it and pass only against the deduped single-draw pick.
+# ---------------------------------------------------------------------------
+
+
+async def _peek_counts(
+    conn: asyncpg.Connection,
+    game_code: str,
+    token: uuid.UUID,
+    draws: int,
+) -> dict[uuid.UUID, int]:
+    """Call peek_next_song `draws` times and tally per-song hits.
+
+    Each call is a separate invocation (a single generate_series/LATERAL query
+    would let the planner evaluate the uncorrelated set-returning function once
+    and reuse the row, defeating the sampling). peek is read-only, so no state
+    changes between draws and every call is an independent random draw.
+    """
+    counts: dict[uuid.UUID, int] = {}
+    for _ in range(draws):
+        row = await conn.fetchrow("SELECT song_id FROM peek_next_song($1, $2)", game_code, token)
+        assert row is not None, "peek returned no candidate for a non-empty pool"
+        counts[row["song_id"]] = counts.get(row["song_id"], 0) + 1
+    return counts
+
+
+@pytest.mark.asyncio
+async def test_uniform_per_song_distribution(db: asyncpg.Connection) -> None:
+    """Two unequal genres (2 songs vs 8 songs), all 10 distinct: every song must
+    be drawn with ~equal frequency (uniform per song).
+
+    Old algorithm (equal weight per genre): a small-genre song gets ~25% of
+    draws (0.5 genre * 0.5 within) vs the ~10% a uniform pick gives it, blowing
+    past the upper band -> this test fails pre-047. New algorithm: each of the
+    10 songs is ~1/10, comfortably inside the band.
+    """
+    game_code = await create_test_game(db, status="playing")
+    rock = (await _genre_ids(db, "rock"))[0]
+    pop = (await _genre_ids(db, "pop"))[0]
+    await _set_selected_genres(db, game_code, [rock, pop])
+    token = await fetch_manager_token(db, game_code)
+
+    small = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(2)]
+    large = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(8)]
+    for sid in small:
+        await _attach_song_to_genre(db, sid, rock)
+    for sid in large:
+        await _attach_song_to_genre(db, sid, pop)
+
+    draws = 1000
+    counts = await _peek_counts(db, game_code, token, draws)
+
+    # Every eligible song must actually appear.
+    assert set(counts) == set(small) | set(large)
+
+    expected = draws / 10  # 100 per song under a uniform pick
+    lo, hi = expected * 0.6, expected * 1.4  # [60, 140] -- ~4.2 sigma band
+    for sid, n in counts.items():
+        assert lo <= n <= hi, f"song {sid} drawn {n} times, outside uniform band [{lo}, {hi}]"
+
+
+@pytest.mark.asyncio
+async def test_multi_genre_song_not_boosted(db: asyncpg.Connection) -> None:
+    """A song tagged in BOTH selected genres must be no likelier than a
+    single-genre song.
+
+    Old algorithm: a dual-tagged song is reachable through either chosen genre,
+    so its probability is the SUM over both genres -> ~2x a single-genre song.
+    New algorithm counts it once (EXISTS dedup), so it matches the singles.
+    """
+    game_code = await create_test_game(db, status="playing")
+    rock = (await _genre_ids(db, "rock"))[0]
+    pop = (await _genre_ids(db, "pop"))[0]
+    await _set_selected_genres(db, game_code, [rock, pop])
+    token = await fetch_manager_token(db, game_code)
+
+    # 4 rock-only + 4 pop-only singles, plus one song tagged in BOTH.
+    rock_only = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(4)]
+    pop_only = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(4)]
+    for sid in rock_only:
+        await _attach_song_to_genre(db, sid, rock)
+    for sid in pop_only:
+        await _attach_song_to_genre(db, sid, pop)
+    dual = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11])
+    await _attach_song_to_genre(db, dual, rock)
+    await _attach_song_to_genre(db, dual, pop)
+
+    draws = 1200
+    counts = await _peek_counts(db, game_code, token, draws)
+
+    singles = rock_only + pop_only
+    assert set(counts) == set(singles) | {dual}
+    mean_single = sum(counts[sid] for sid in singles) / len(singles)
+    ratio = counts[dual] / mean_single
+    # Uniform pick -> ratio ~1.0; the old per-genre pick -> ~2.0. Band excludes 2.0.
+    assert 0.6 <= ratio <= 1.5, f"dual-genre song boosted: {ratio:.2f}x the mean single"
