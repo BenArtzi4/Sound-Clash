@@ -30,8 +30,9 @@ function decadeLabel(decade: number): string {
 // existing selection — no new payload field. `genreSlugs` are matched to genre
 // ids; slugs absent from the catalog are silently skipped, so a preset degrades
 // gracefully if the genre set ever changes. `allGenres` selects every loaded
-// genre. Song counts verified against prod (2026-07-11): Everything ~800,
-// Israeli ~497, Movie Night ~113, 80s–90s rock+pop ~83 — all ample for a game.
+// genre (optionally scoped to `decades`). Song counts verified against prod
+// (2026-07-16): Everything 1185, Israeli Mix 497, International 606, Hot Now 291,
+// Movie Night 137, 80s & 90s 313 — all ample for a game (~20-30 rounds).
 type Preset = {
   label: string;
   genreSlugs: readonly string[];
@@ -53,8 +54,25 @@ const PRESETS: readonly Preset[] = [
     ],
     decades: [],
   },
-  { label: "80s & 90s Party", genreSlugs: ["rock", "pop"], decades: [1980, 1990] },
+  {
+    label: "International",
+    genreSlugs: ["rock", "pop", "hip-hop", "electronic", "soundtracks"],
+    decades: [],
+  },
+  {
+    label: "Hot Now",
+    genreSlugs: [
+      "mizrahit",
+      "israeli-pop",
+      "pop",
+      "hip-hop",
+      "israeli-rap-hip-hop",
+      "israeli-rock-pop",
+    ],
+    decades: [2010, 2020],
+  },
   { label: "Movie Night", genreSlugs: ["soundtracks", "israeli-soundtracks"], decades: [] },
+  { label: "80s & 90s", genreSlugs: [], decades: [1980, 1990], allGenres: true },
 ];
 
 // Resolve a preset's genre slugs to the ids of the currently-loaded genres.

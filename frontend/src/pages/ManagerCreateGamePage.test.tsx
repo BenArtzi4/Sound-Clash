@@ -188,8 +188,8 @@ describe("ManagerCreateGamePage", () => {
       vi.mocked(createGame).mockResolvedValueOnce({
         game_code: "ZZZZZZ",
         status: "waiting",
-        selected_genres: ["g-rock", "g-pop"],
-        selected_decades: [1980, 1990],
+        selected_genres: ["g-ipop", "g-pop"],
+        selected_decades: [2010, 2020],
         started_at: "2026-05-05T12:00:00Z",
         expires_at: "2026-05-05T16:00:00Z",
         manager_token: "abc-token-123",
@@ -200,21 +200,24 @@ describe("ManagerCreateGamePage", () => {
       const submit = screen.getByRole("button", { name: /create game/i });
       expect(submit).toBeDisabled();
 
-      fireEvent.click(screen.getByRole("button", { name: /80s & 90s Party/i }));
+      // Hot Now = mizrahit + israeli-pop + pop + hip-hop + israeli-rap + israeli-rock-pop,
+      // scoped to 2010s + 2020s. Against this 4-genre catalog it resolves to the
+      // two present slugs (pop + israeli-pop); the rest are silently skipped.
+      fireEvent.click(screen.getByRole("button", { name: /hot now/i }));
 
-      // Rock + Pop on, the others off; 80s + 90s decades on.
-      expect(screen.getByLabelText(/rock/i)).toBeChecked();
+      // Pop + Israeli Pop on, Rock + Soundtracks off; 2010s + 2020s decades on.
       expect(screen.getByLabelText(/^pop$/i)).toBeChecked();
-      expect(screen.getByLabelText(/israeli pop/i)).not.toBeChecked();
-      expect(screen.getByLabelText(/^80s$/i)).toBeChecked();
-      expect(screen.getByLabelText(/^90s$/i)).toBeChecked();
+      expect(screen.getByLabelText(/israeli pop/i)).toBeChecked();
+      expect(screen.getByLabelText(/rock/i)).not.toBeChecked();
+      expect(screen.getByLabelText(/^2010s$/i)).toBeChecked();
+      expect(screen.getByLabelText(/^2020s$/i)).toBeChecked();
       expect(submit).toBeEnabled();
 
       fireEvent.click(submit);
       await waitFor(() => expect(createGame).toHaveBeenCalled());
       expect(createGame).toHaveBeenCalledWith({
-        selected_genres: ["g-rock", "g-pop"],
-        selected_decades: [1980, 1990],
+        selected_genres: ["g-ipop", "g-pop"],
+        selected_decades: [2010, 2020],
       });
     });
 
