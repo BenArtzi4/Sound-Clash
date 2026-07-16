@@ -268,16 +268,27 @@ Backwards transitions are NOT enforced at the database level; RPC functions reje
 
 ### `active_games.selected_genres`
 
-Postgres `uuid[]` array. Used by FastAPI when picking a random song:
+Postgres `uuid[]` array, set once at `POST /games`. The song pickers
+(`select_next_song` / `peek_next_song`, direct-RPC — see `rpc-functions.md`)
+draw an unplayed song **uniformly at random over the distinct eligible songs**
+(migration 047). A song is eligible when it belongs to *any* selected genre and
+has not been played in this game (and passes the optional `selected_decades`
+filter and the dead-video `unavailable_at IS NULL` skip). The genre test is an
+`EXISTS` against `song_genres`, so a song tagged in several selected genres is
+counted **once** — every eligible song is equally likely, no song has priority:
 ```sql
-SELECT s.* FROM songs s
-JOIN song_genres sg ON sg.song_id = s.id
-WHERE sg.genre_id = ANY($1)
+SELECT s.id FROM songs s
+WHERE EXISTS (
+        SELECT 1 FROM song_genres sg
+         WHERE sg.song_id = s.id AND sg.genre_id = ANY($1)
+      )
   AND s.id NOT IN (
     SELECT song_id FROM game_rounds WHERE game_code = $2 AND song_id IS NOT NULL
   )
 ORDER BY random() LIMIT 1;
 ```
+(Before migration 047 the pick gave each *genre* equal weight, over-representing
+small and multiply-tagged genres.)
 
 ### `active_games.selected_decades`
 
