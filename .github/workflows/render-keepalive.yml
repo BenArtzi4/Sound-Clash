@@ -1,30 +1,35 @@
-# Render keepalive — in-repo backstop for the free-tier cold start.
+# Render keepalive — on-demand warm button + coarse liveness monitor.
 #
 # Render's free web service sleeps after 15 minutes idle; the first request
 # after that stalls 2–30s (felt as "sometimes long loading" when a host creates
-# a game). An external cron-job.org job (jobId 7569155) pings /health every 10
-# minutes as the PRIMARY keepalive — but it silently auto-disabled after
-# failures on 2026-06-23 and stayed dead 23 days before anyone noticed, and its
-# requests are intermittently served HTTP 503 by Render's Cloudflare edge.
+# a game). The RELIABLE keepalive is an external cron-job.org job (jobId 7569155)
+# that pings /health every 10 minutes, on time — but it silently auto-disabled
+# after failures on 2026-06-23 and stayed dead 23 days before anyone noticed, and
+# its requests are intermittently served HTTP 503 by Render's Cloudflare edge.
 #
-# This workflow is the REDUNDANT second leg, pinging the same endpoint on the
-# same 10-minute cadence from GitHub's runner IPs (a different egress pool, so
-# the failure modes are uncorrelated). Because a Render sleep needs ~15 min with
-# zero successful pings, a cold-start window now requires BOTH keepalives to miss
-# simultaneously. Unlike cron-job.org, a lapse here is VISIBLE in the Actions tab
-# (a red run), which is the monitoring the external cron lacks.
+# This workflow is a SECONDARY safety net, NOT a reliable second keepalive leg.
+# Its nominal schedule is */10, but GitHub silently drops most scheduled triggers
+# on this repo — measured against the */15 stale-buzz-lock-scan.yml, real
+# scheduled runs land 49–204 min apart (avg ~90 min), far longer than Render's
+# 15-min sleep — so it cannot keep the dyno warm on its own. What it IS good for:
+#   (a) a reliable manual `workflow_dispatch` "warm it now" button, from GitHub's
+#       runner IPs (a different egress pool, so not co-blocked with cron-job.org);
+#   (b) a coarse liveness monitor — when a scheduled run does fire, a red run in
+#       the Actions tab flags an unreachable backend.
+# A genuinely reliable second leg would be a Supabase pg_cron + pg_net ping
+# (considered 2026-07-16, deferred: cron-job.org was healthy).
 #
 # It is an unauthenticated GET to a public health endpoint: no secrets, and if it
-# fails nothing happens to the live site (worst case is the status-quo cold
-# start). GitHub cron is best-effort and can lag 5–15 min past the boundary; that
-# is fine here — combined with cron-job.org's ticks it still closes the window.
+# fails nothing happens to the live site (worst case is the status-quo cold start).
 
 name: Render keepalive
 
 on:
   schedule:
-    # Every 10 minutes, matching the cron-job.org cadence. GitHub cron is
-    # best-effort and may run late; that is acceptable for a keepalive.
+    # Nominally every 10 min, but GitHub drops most scheduled triggers here (see
+    # header) — the reliable 10-min pinger is cron-job.org. This schedule is kept
+    # only for the occasional coarse liveness signal; `workflow_dispatch` is the
+    # dependable "warm it now" path.
     - cron: "*/10 * * * *"
   workflow_dispatch: {}
 
