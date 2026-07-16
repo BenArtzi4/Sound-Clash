@@ -116,6 +116,55 @@ describe("ManagerCreateGamePage", () => {
     });
   });
 
+  // Regression for the decade-pill tap flash fix (Task 3): the toggle logic
+  // itself is correct — the flash was purely a CSS sticky-hover artifact — so
+  // these lock the on/off/on state machine and the decade↔genre independence
+  // that the CSS change must not disturb. The CSS isn't unit-testable in jsdom.
+  it("toggles a decade on/off/on cleanly", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
+    renderPage();
+    await waitFor(() => screen.getByText("Rock"));
+
+    const eighties = screen.getByLabelText(/^80s$/i);
+    expect(eighties).not.toBeChecked();
+    fireEvent.click(eighties);
+    expect(eighties).toBeChecked();
+    fireEvent.click(eighties);
+    expect(eighties).not.toBeChecked();
+    fireEvent.click(eighties);
+    expect(eighties).toBeChecked();
+  });
+
+  it("keeps decade and genre selection independent", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([
+      { id: "g1", name: "Rock", slug: "rock" },
+      { id: "g2", name: "Pop", slug: "pop" },
+    ]);
+    renderPage();
+    await waitFor(() => screen.getByText("Rock"));
+
+    const rock = screen.getByLabelText(/rock/i);
+    const eighties = screen.getByLabelText(/^80s$/i);
+    fireEvent.click(rock);
+    fireEvent.click(eighties);
+    expect(rock).toBeChecked();
+    expect(eighties).toBeChecked();
+
+    // Toggling the decade off leaves the genre selected, and vice-versa.
+    fireEvent.click(eighties);
+    expect(eighties).not.toBeChecked();
+    expect(rock).toBeChecked();
+
+    fireEvent.click(rock);
+    expect(rock).not.toBeChecked();
+
+    // Re-selecting the decade doesn't resurrect the genre — no cross-talk.
+    fireEvent.click(eighties);
+    expect(eighties).toBeChecked();
+    expect(rock).not.toBeChecked();
+    expect(screen.getByLabelText(/^pop$/i)).not.toBeChecked();
+  });
+
   it("shows the error message when createGame fails", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
     vi.mocked(createGame).mockRejectedValueOnce(new Error("boom"));

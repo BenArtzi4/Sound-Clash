@@ -55,6 +55,10 @@
   gap: 0.5rem;
 }
 
+/* touch-action: manipulation + a transparent tap-highlight match the codebase's
+   own .btn convention (styles.css) so a tap doesn't paint the browser's default
+   gray overlay. The :hover feedback lives in the (hover: hover) block below so a
+   touch tap can't leave a sticky-hover flash on the way to "selected". */
 .preset {
   min-height: 44px;
   padding: 8px 16px;
@@ -65,18 +69,13 @@
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--color-text-dim);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     border-color 200ms ease,
     background 200ms ease,
     color 200ms ease,
     box-shadow 200ms ease;
-}
-
-.preset:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
 .preset:focus-visible {
@@ -90,12 +89,6 @@
   background: var(--color-primary);
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
-}
-
-.presetActive:hover {
-  border-color: var(--color-primary-strong);
-  background: var(--color-primary-strong);
-  color: #ffffff;
 }
 
 .genres {
@@ -152,18 +145,13 @@
   font-weight: 600;
   color: var(--color-text-dim);
   text-align: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     border-color 200ms ease,
     background 200ms ease,
     color 200ms ease,
     box-shadow 200ms ease;
-}
-
-.decade:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
 /* The checkbox is still the real input (kept for accessibility + form
@@ -195,12 +183,6 @@
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
 }
 
-.decadeSelected:hover {
-  border-color: var(--color-primary-strong);
-  background: var(--color-primary-strong);
-  color: #ffffff;
-}
-
 .genre {
   display: flex;
   align-items: center;
@@ -213,22 +195,13 @@
   user-select: none;
   font-weight: 600;
   color: var(--color-text-dim);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     border-color 200ms ease,
     background 200ms ease,
     color 200ms ease,
     box-shadow 200ms ease;
-}
-
-/* These chips never move. Feedback is colour/border/shadow only — no transform
-   in any state (:hover or :active). A translateY on :hover moved the chip out
-   from under the pointer and made it shake; a translateY on :active nudged it
-   down on every click, which also reads as a shake. Static is the requirement. */
-.genre:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
 /* Pin the checkbox to a fixed box. A native checkbox with width:auto renders a
@@ -271,6 +244,54 @@
   align-items: center;
   gap: 1rem;
   margin-top: 0.5rem;
+}
+
+/* Hover feedback is desktop-only. On a touch tap the browser applies a "sticky
+   hover" that made a pill flash through the hover fill (white → light-blue →
+   selected #3b82f6 → the later-declared *Selected:hover #2563eb, then back to
+   #3b82f6 when a subsequent tap cleared the sticky hover) with the 200ms
+   background transition animating every hop. Gating all five :hover rules behind
+   (hover: hover) removes that flash on touch while leaving the desktop look
+   unchanged (hover: hover matches on pointer devices). Keyboard :focus-visible
+   rules are deliberately OUTSIDE this block. The *Selected/*Active :hover rules
+   are kept after their base :hover so they still win at equal specificity. */
+@media (hover: hover) {
+  .preset:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  }
+
+  .presetActive:hover {
+    border-color: var(--color-primary-strong);
+    background: var(--color-primary-strong);
+    color: #ffffff;
+  }
+
+  .decade:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  }
+
+  .decadeSelected:hover {
+    border-color: var(--color-primary-strong);
+    background: var(--color-primary-strong);
+    color: #ffffff;
+  }
+
+  /* These chips never move. Feedback is colour/border/shadow only — no transform
+     in any state (:hover or :active). A translateY on :hover moved the chip out
+     from under the pointer and made it shake; a translateY on :active nudged it
+     down on every click, which also reads as a shake. Static is the requirement. */
+  .genre:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  }
 }
 
 @media (max-width: 600px) {
