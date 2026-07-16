@@ -181,7 +181,7 @@ Symptoms: manager presses "Create game", waits 30+ seconds, then it works.
 
 Cause: Render free tier sleeping after 15min idle. First request wakes it.
 
-Mitigation already in place: cron-job.org pings `/health` every 14 min.
+Mitigation already in place: cron-job.org pings `/health` every 10 min.
 
 If this is happening, check:
 1. cron-job.org dashboard → is the keepalive job running? Last execution time?

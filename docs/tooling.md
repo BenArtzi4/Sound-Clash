@@ -240,7 +240,7 @@ Both projects are skipped when their DSN env var is empty (so `pytest` runs and 
 
 ### 8.2 Render keepalive: cron-job.org
 
-The Render free tier sleeps after 15 min of idle. cron-job.org pings `https://api.soundclash.org/health` every 14 min to keep the worker warm.
+The Render free tier sleeps after 15 min of idle. cron-job.org pings `https://api.soundclash.org/health` every 10 min to keep the worker warm.
 
 Account credentials are kept out of the repo; see your password manager.
 
