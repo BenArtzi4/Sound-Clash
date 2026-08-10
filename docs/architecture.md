@@ -111,7 +111,7 @@ The catalog stores only `youtube_id` and `start_time`. The browser embeds the Yo
 
 | Trade-off | Why we accept it |
 |---|---|
-| 30s cold start on Render after idle | Only affects game creation, not gameplay; mitigated by 14-min keepalive ping |
+| 30s cold start on Render after idle | Only affects game creation, not gameplay; mitigated by 10-min keepalive ping |
 | Single-region Postgres | Free tier limitation; pick region matching primary user geography |
 | No game history persistence | By user choice; matches today's on-demand mode |
 | Per-game manager token + single-tenant catalog admin password | Hosting is open (anyone can run a game); the catalog stays gated. Supabase Auth is the multi-tenant escape hatch if accounts ever ship |
