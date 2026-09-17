@@ -1,21 +1,12 @@
 .skeleton {
   display: block;
-  background: linear-gradient(
-    90deg,
-    rgba(148, 163, 184, 0.14) 0%,
-    rgba(148, 163, 184, 0.28) 50%,
-    rgba(148, 163, 184, 0.14) 100%
-  );
-  background-size: 200% 100%;
+  background: var(--surface-2);
   border-radius: var(--radius-md);
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  animation: skeleton-pulse 1.6s var(--ease-move) infinite;
 }
 
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
   }
 }

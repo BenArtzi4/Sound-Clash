@@ -1,93 +1,52 @@
 .logo {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.45em;
+  color: var(--bone);
   user-select: none;
 }
 
 .text {
-  font-weight: 800;
-  background: linear-gradient(135deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
 }
 
-.small .text {
+/* The size lives on the root so the mark (1.15em) and the gap scale with
+   the wordmark instead of the page's 1rem. */
+.small {
   font-size: 1.25rem;
 }
-.medium .text {
+.medium {
   font-size: 2rem;
 }
-.large .text {
-  font-size: 3rem;
+.large {
+  font-size: 2.5rem;
 }
 
-@media (min-width: 1400px) {
-  .large .text {
-    font-size: 3.5rem;
-  }
+.mark {
+  display: inline-flex;
+  font-size: 1.15em;
 }
 
-.icon {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 40px;
+.mark svg path {
+  transform-origin: 50% 50%;
 }
 
-.small .icon {
-  height: 24px;
-  gap: 2px;
+/* The four bars are separate paths so they bounce in a stagger — the app's one
+   signature motion. The global reduced-motion rule in styles.css stops it. */
+.animated svg path {
+  animation: bar-bounce 1.2s var(--ease-move) infinite;
 }
-
-.large .icon {
-  height: 56px;
-  gap: 4px;
-}
-
-.bar {
-  display: block;
-  width: 6px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%);
-}
-
-.small .bar {
-  width: 3px;
-}
-.large .bar {
-  width: 8px;
-}
-
-.bar:nth-child(1) {
-  height: 50%;
-}
-.bar:nth-child(2) {
-  height: 80%;
-}
-.bar:nth-child(3) {
-  height: 100%;
-}
-.bar:nth-child(4) {
-  height: 65%;
-}
-
-.animated .bar {
-  animation: bar-bounce 1.2s ease-in-out infinite;
-}
-
-.animated .bar:nth-child(1) {
-  animation-delay: 0s;
-}
-.animated .bar:nth-child(2) {
+.animated svg path:nth-of-type(2) {
   animation-delay: 0.15s;
 }
-.animated .bar:nth-child(3) {
+.animated svg path:nth-of-type(3) {
   animation-delay: 0.3s;
 }
-.animated .bar:nth-child(4) {
+.animated svg path:nth-of-type(4) {
   animation-delay: 0.45s;
 }
 
@@ -99,4 +58,9 @@
   50% {
     transform: scaleY(0.55);
   }
+}
+
+/* A playing round on the team page pauses the mark (04 §5 row 30). */
+:global([data-round-live="true"]) .animated svg path {
+  animation-play-state: paused;
 }

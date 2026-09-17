@@ -4,44 +4,43 @@
   gap: 0.85rem;
   padding: 0.85rem 1.5rem;
   border-radius: var(--radius-pill);
-  background: #ffffff;
-  border: 2px solid var(--color-border);
-  box-shadow: var(--shadow-lg);
-  font-weight: 800;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-modal);
+  font-family: var(--font-display);
+  font-weight: 400;
   font-size: 1.4rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.02em;
   pointer-events: none;
   animation:
-    point-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    point-out 360ms ease-in 2140ms forwards;
+    point-in 280ms var(--ease-overshoot),
+    point-out 360ms var(--ease-exit) 2140ms forwards;
 }
 
 .team {
-  color: #0f172a;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-weight: 700;
   font-size: 1.2rem;
 }
 
 .delta {
   font-variant-numeric: tabular-nums;
   font-size: 1.65rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
 }
 
 .positive {
-  border-color: var(--color-success);
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: var(--positive);
 }
 .positive .delta {
-  color: #047857;
+  color: var(--positive);
 }
 
 .negative {
-  border-color: var(--color-danger);
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: var(--negative);
 }
 .negative .delta {
-  color: #b91c1c;
+  color: var(--negative);
 }
 
 @keyframes point-in {
