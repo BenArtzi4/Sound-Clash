@@ -8,9 +8,13 @@ interface ToastItem {
   id: number;
   message: string;
   variant: ToastVariant;
+  exiting?: boolean;
 }
 
 const DEFAULT_DURATION_MS = 3500;
+// How long a toast stays in the DOM with data-exiting="true" so its CSS exit
+// transition (Toast.module.css) can play before the node is removed.
+const EXIT_MS = 160;
 
 interface Props {
   children: ReactNode;
@@ -19,16 +23,28 @@ interface Props {
 export function ToastProvider({ children }: Props) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const nextIdRef = useRef(1);
+  // Auto-dismiss timers are keyed by the toast id; the exit-phase timer for
+  // the same toast is keyed by -id so the unmount cleanup clears both.
   const timersRef = useRef<Map<number, number>>(new Map());
 
-  const dismiss = useCallback((id: number) => {
+  const remove = useCallback((id: number) => {
     setItems((prev) => prev.filter((t) => t.id !== id));
-    const handle = timersRef.current.get(id);
-    if (handle !== undefined) {
-      window.clearTimeout(handle);
-      timersRef.current.delete(id);
-    }
+    timersRef.current.delete(-id);
   }, []);
+
+  const dismiss = useCallback(
+    (id: number) => {
+      const handle = timersRef.current.get(id);
+      if (handle !== undefined) {
+        window.clearTimeout(handle);
+        timersRef.current.delete(id);
+      }
+      setItems((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
+      const exit = window.setTimeout(() => remove(id), EXIT_MS);
+      timersRef.current.set(-id, exit);
+    },
+    [remove],
+  );
 
   const toast = useCallback<ToastApi["toast"]>(
     (message, opts) => {
@@ -64,6 +80,7 @@ export function ToastProvider({ children }: Props) {
                 key={t.id}
                 role="status"
                 aria-live="polite"
+                data-exiting={t.exiting ? "true" : undefined}
                 className={`${styles.toast} ${
                   t.variant === "success"
                     ? styles.success

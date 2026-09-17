@@ -118,6 +118,9 @@ export const CloseIcon = (p: IconProps) => (
 );
 export const EqualizerMark = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M5 15v-6M9.5 19V5M14 17V7M18.5 15v-6" strokeWidth="2.5" />
+    <path d="M5 15v-6" strokeWidth="2.5" />
+    <path d="M9.5 19V5" strokeWidth="2.5" />
+    <path d="M14 17V7" strokeWidth="2.5" />
+    <path d="M18.5 15v-6" strokeWidth="2.5" />
   </Icon>
 );

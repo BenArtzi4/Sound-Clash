@@ -2,7 +2,7 @@
   position: fixed;
   top: 1.25rem;
   right: 1.25rem;
-  z-index: 9999;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -10,22 +10,44 @@
   pointer-events: none;
 }
 
+/* Enter via @starting-style (250 ms arrive); exit via the data-exiting flag
+   ToastContext sets 160 ms before removal (04 §5 row 13). */
 .toast {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-modal);
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text);
   pointer-events: auto;
-  animation: toast-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
   overflow: hidden;
+  animation: none;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--dur-state) var(--ease-arrive),
+    transform var(--dur-state) var(--ease-arrive);
+}
+
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.toast[data-exiting="true"] {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 160ms var(--ease-exit),
+    transform 160ms var(--ease-exit);
 }
 
 .toast::before {
@@ -34,20 +56,20 @@
   top: 0;
   left: 0;
   bottom: 0;
-  width: 4px;
-  background: var(--color-primary);
+  width: 3px;
+  background: var(--accent);
 }
 
 .success::before {
-  background: var(--color-success);
+  background: var(--positive);
 }
 
 .error::before {
-  background: var(--color-danger);
+  background: var(--negative);
 }
 
 .info::before {
-  background: var(--color-primary);
+  background: var(--bone);
 }
 
 .message {
@@ -57,29 +79,21 @@
 }
 
 .close {
+  display: inline-flex;
   background: transparent;
   border: none;
-  color: var(--color-text-mute);
+  color: var(--text-muted);
   font-size: 1.4rem;
   line-height: 1;
   padding: 0 0.25rem;
   cursor: pointer;
-  transition: color 150ms ease;
+  transition: color var(--dur-micro) var(--ease-move);
   flex-shrink: 0;
 }
 
-.close:hover {
-  color: var(--color-text);
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+@media (hover: hover) {
+  .close:hover {
+    color: var(--text);
   }
 }
 

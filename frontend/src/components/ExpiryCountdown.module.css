@@ -5,23 +5,25 @@
   gap: 0.75rem;
   flex-wrap: wrap;
   padding: 0.75rem 1.1rem;
-  border: 2px solid var(--color-warning);
+  border: none;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(251, 191, 36, 0.08) 100%);
+  background: var(--warning);
+  color: var(--warning-ink);
 }
 
 .warningText {
   font-size: 1rem;
   font-weight: 600;
-  color: #92400e;
+  color: var(--warning-ink);
   /* The m:ss tail re-renders every second; tabular digits stop the text from
      jittering sideways as digit widths change. */
   font-variant-numeric: tabular-nums;
 }
 
 .extendBtn {
-  border-color: var(--color-warning);
-  color: #92400e;
+  background: var(--bg);
+  color: var(--warning);
+  border-color: var(--bg);
   font-weight: 700;
   white-space: nowrap;
 }
