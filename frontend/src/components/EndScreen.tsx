@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { Team } from "../lib/types";
 import styles from "./EndScreen.module.css";
+import { LaurelIcon } from "./icons";
 
 interface Props {
   teams: Team[];
@@ -88,69 +89,6 @@ function CountUp({
   return <>{display}</>;
 }
 
-function TrophyIcon() {
-  return (
-    <svg viewBox="0 0 64 64" width="80" height="80" aria-hidden="true">
-      <defs>
-        <linearGradient id="trophy-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fde68a" />
-          <stop offset="50%" stopColor="#f59e0b" />
-          <stop offset="100%" stopColor="#b45309" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M18 8h28v10c0 8-6 14-14 14s-14-6-14-14V8z"
-        fill="url(#trophy-grad)"
-        stroke="#92400e"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M14 12c-3 0-5 2-5 5s3 6 9 7"
-        fill="none"
-        stroke="#92400e"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M50 12c3 0 5 2 5 5s-3 6-9 7"
-        fill="none"
-        stroke="#92400e"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <rect
-        x="28"
-        y="32"
-        width="8"
-        height="10"
-        fill="url(#trophy-grad)"
-        stroke="#92400e"
-        strokeWidth="1.5"
-      />
-      <rect
-        x="20"
-        y="42"
-        width="24"
-        height="6"
-        rx="1"
-        fill="url(#trophy-grad)"
-        stroke="#92400e"
-        strokeWidth="1.5"
-      />
-      <rect
-        x="16"
-        y="48"
-        width="32"
-        height="6"
-        rx="1"
-        fill="url(#trophy-grad)"
-        stroke="#92400e"
-        strokeWidth="1.5"
-      />
-    </svg>
-  );
-}
-
 // Group teams by distinct score, highest first. Teams within a group share a
 // rank; game-rules.md §4: "tied teams share the win".
 function groupByScore(teams: Team[]): Team[][] {
@@ -221,7 +159,7 @@ function PodiumCard({
     <div className={`${styles.podiumCard} ${className}`}>
       {isWinner ? (
         <span className={styles.crown} aria-hidden="true">
-          ★
+          <LaurelIcon />
         </span>
       ) : null}
       <div className={styles.medal}>{place}</div>
@@ -283,7 +221,9 @@ export function EndScreen({ teams, gameCode }: Props) {
       </div>
 
       <header className={styles.heading}>
-        <TrophyIcon />
+        <span className={styles.trophy} aria-hidden="true">
+          <LaurelIcon />
+        </span>
         <h1 className={styles.title}>FINAL RESULTS</h1>
         <p className={styles.subtitle}>
           Game <span className={styles.codeText}>{gameCode}</span>
