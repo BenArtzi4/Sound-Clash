@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { DisplayIcon, ManagerIcon, TeamIcon } from "../components/RoleIcons";
+import { ArrowLeftIcon, SpeakerIcon } from "../components/icons";
 import styles from "./HowToPlayPage.module.css";
 
 type Step = { title: string; body: React.ReactNode };
@@ -188,7 +189,7 @@ export function HowToPlayPage() {
 
               <p className={styles.audioNote}>
                 <span className={styles.audioIcon} aria-hidden="true">
-                  🔊
+                  <SpeakerIcon />
                 </span>
                 <span>
                   <strong>Audio plays from the host's phone.</strong> Connect it to the room's
@@ -233,7 +234,7 @@ export function HowToPlayPage() {
 
             <div className={styles.backRow}>
               <Link to="/" className="btn btn-ghost">
-                <span aria-hidden="true">&lsaquo;</span> Back
+                <ArrowLeftIcon /> Back
               </Link>
             </div>
           </div>

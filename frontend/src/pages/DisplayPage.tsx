@@ -6,6 +6,7 @@ import { QRPanel } from "../components/QRPanel";
 import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
+import { CheckIcon, FilmIcon, MicIcon, NoteIcon } from "../components/icons";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { fetchSongById } from "../lib/songMetadata";
 import type { Song, Team } from "../lib/types";
@@ -281,7 +282,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
               data-testid="display-reveal-title"
             >
               <span className={styles.revealIcon} aria-hidden="true">
-                🎬
+                <FilmIcon />
               </span>
               <span className={styles.revealText}>
                 {/* Soundtrack rounds ask for the film/show name, which lives in
@@ -296,7 +297,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
                 data-testid="display-reveal-title"
               >
                 <span className={styles.revealIcon} aria-hidden="true">
-                  🎵
+                  <NoteIcon />
                 </span>
                 <span className={styles.revealText}>
                   {titleClaimedById && currentSong ? currentSong.title : "???"}
@@ -307,7 +308,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
                 data-testid="display-reveal-artist"
               >
                 <span className={styles.revealIcon} aria-hidden="true">
-                  🎤
+                  <MicIcon />
                 </span>
                 <span className={styles.revealText}>
                   {artistClaimedById && currentSong ? currentSong.artist : "???"}
@@ -323,14 +324,30 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           <span
             className={`${styles.tokenChip} ${titleClaimedById ? styles.tokenChipClaimed : ""}`}
             data-testid="display-token-title"
+            data-claimed={titleClaimedById ? "true" : "false"}
           >
-            Song {titleClaimedById ? `✓ ${titleClaimedByName ?? "?"}` : "open"}
+            Song{" "}
+            {titleClaimedById ? (
+              <>
+                <CheckIcon /> {titleClaimedByName ?? "?"}
+              </>
+            ) : (
+              "open"
+            )}
           </span>
           <span
             className={`${styles.tokenChip} ${artistClaimedById ? styles.tokenChipClaimed : ""}`}
             data-testid="display-token-artist"
+            data-claimed={artistClaimedById ? "true" : "false"}
           >
-            Artist {artistClaimedById ? `✓ ${artistClaimedByName ?? "?"}` : "open"}
+            Artist{" "}
+            {artistClaimedById ? (
+              <>
+                <CheckIcon /> {artistClaimedByName ?? "?"}
+              </>
+            ) : (
+              "open"
+            )}
           </span>
         </div>
       ) : null}

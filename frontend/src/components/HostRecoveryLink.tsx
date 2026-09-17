@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQrSvg } from "../hooks/useQrSvg";
 import { managerRecoveryUrl } from "../lib/managerToken";
 import styles from "./HostRecoveryLink.module.css";
+import { CheckIcon } from "./icons";
 
 // Backup host access (T4.10). The manager token lives only in this browser's
 // localStorage, so a dead phone or a cleared browser used to mean the game
@@ -94,7 +95,13 @@ function RecoveryPanel({ gameCode, managerToken }: Props) {
             onClick={() => void handleCopy()}
             data-testid="host-link-copy"
           >
-            {copyState === "copied" ? "Copied ✓" : "Copy link"}
+            {copyState === "copied" ? (
+              <>
+                <CheckIcon /> Copied
+              </>
+            ) : (
+              "Copy link"
+            )}
           </button>
           {copyState === "failed" ? (
             <span className={styles.copyFailed} role="status">

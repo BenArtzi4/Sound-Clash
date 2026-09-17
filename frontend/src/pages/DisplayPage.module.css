@@ -318,19 +318,6 @@
   color: #9a3412;
 }
 
-/* Medal emblem in front of the rank number — instantly legible across a room. */
-.bigRowGold .bigRank::before {
-  content: "🥇 ";
-}
-
-.bigRowSilver .bigRank::before {
-  content: "🥈 ";
-}
-
-.bigRowBronze .bigRank::before {
-  content: "🥉 ";
-}
-
 .bigRowBuzzed {
   border-color: var(--color-warning);
   background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, #ffffff 80%);
@@ -460,8 +447,9 @@
 }
 
 .revealIcon {
+  display: inline-flex;
   font-size: 1.5rem;
-  line-height: 1;
+  color: var(--text-muted);
 }
 
 .revealText {

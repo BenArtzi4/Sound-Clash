@@ -28,7 +28,7 @@ test("scenario 10: title toggle disables once title is claimed", async ({ browse
   // intentionally hides which team claimed each token; the chip just shows
   // a checkmark. The display screen still surfaces the team name for the
   // audience.
-  await expect(manager.page.getByTestId("token-chip-title")).toContainText("✓");
+  await expect(manager.page.getByTestId("token-chip-title")).toHaveAttribute("data-claimed", "true");
 });
 
 test("scenario 16: continue button disables once both tokens are claimed", async ({

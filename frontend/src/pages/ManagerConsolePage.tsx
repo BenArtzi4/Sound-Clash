@@ -9,6 +9,7 @@ import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { TeamRescueModal } from "../components/TeamRescueModal";
 import { YouTubePlayer } from "../components/YouTubePlayer";
+import { CheckIcon } from "../components/icons";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { useManagerToken } from "../hooks/useManagerToken";
@@ -336,16 +337,18 @@ export function ManagerConsolePage() {
               <span
                 className={`${styles.tokenChip} ${titleClaimedById ? styles.tokenChipClaimed : ""}`}
                 data-testid="token-chip-title"
+                data-claimed={titleClaimedById ? "true" : "false"}
               >
-                Song {titleClaimedById ? "✓" : "open"}
+                Song {titleClaimedById ? <CheckIcon /> : "open"}
               </span>
               <span
                 className={`${styles.tokenChip} ${
                   artistClaimedById ? styles.tokenChipClaimed : ""
                 }`}
                 data-testid="token-chip-artist"
+                data-claimed={artistClaimedById ? "true" : "false"}
               >
-                Artist {artistClaimedById ? "✓" : "open"}
+                Artist {artistClaimedById ? <CheckIcon /> : "open"}
               </span>
             </div>
           ) : null}
