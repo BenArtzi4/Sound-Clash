@@ -4,6 +4,7 @@ import { App } from "./App";
 import { installPreloadErrorHandler } from "./lib/preloadError";
 import { installErrorBuffer, loadSentry } from "./lib/sentry";
 import { initTelemetry } from "./lib/telemetry";
+import "./fonts.css";
 import "./styles.css";
 
 // Capture uncaught errors from the very first tick with cheap native handlers.
