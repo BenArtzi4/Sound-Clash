@@ -14,6 +14,7 @@ Make the game **load fast, respond instantly, and never lag** — every button, 
 | [TASKS.md](TASKS.md) | **The backlog** — every open item: features awaiting green-light, small residuals, maintainer-gated work |
 | [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) | **Process** (the single process doc): session protocol, per-PR loop, merge authorization, exit gates |
 | [DECISIONS.md](DECISIONS.md) | **Decision log — all resolved**; don't re-litigate |
+| [ui-redesign/README.md](ui-redesign/README.md) | **UI redesign plan (2026-09-17, planning only)** — design system anchored on Rogue Studio, motion spec, page-by-page spec, library verdicts, current-state audit, and the validation/regression plan |
 
 ## Status snapshot
 
