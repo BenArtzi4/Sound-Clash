@@ -16,6 +16,7 @@ _Created 2026-09-17. Status: **planning only — nothing implemented.** The main
 | [04-motion-and-transitions.md](04-motion-and-transitions.md) | Five motion principles, timing/easing tokens, the technique map, route-transition design, the 30-moment catalogue, hot-path guarantees, testability | Before any animation is written |
 | [05-page-by-page.md](05-page-by-page.md) | Shell + each of the nine routes: today vs new, what is kept as a contract, proposed copy | When implementing a page |
 | [06-validation-plan.md](06-validation-plan.md) | Baseline capture, the per-PR gate ladder, the regression surface rules, behaviour invariants per page, performance budget, accessibility gate, device matrix, the scripted Claude-in-Chrome prod pass, the full-game exit gate, rollback | Every PR, and after every merge |
+| [07-implementation-plan.md](07-implementation-plan.md) | **The build plan**: twelve tasks (one PR each) with the exact files, code, tests, commands and commit lines; a starter prompt for each implementation session | When implementing — one task per fresh session |
 | [baseline/2026-09-17-baseline.md](baseline/2026-09-17-baseline.md) | Test counts (521 vitest / 18 e2e), bundle sizes, fonts, emoji inventory as of `main` today | When comparing after-numbers |
 
 ## Scope
@@ -69,6 +70,10 @@ Implementation is unblocked; the next step is the implementation plan (see the l
 - **The big-bang tokens PR.** Reviewed on a local preview on real phones and the TV before merge; revertable in one commit.
 - **Buzz latency.** CSS-only changes on the buzz screen; the pointerdown → RPC measurement and the Grafana buzz span are compared before/after.
 
-## What happens after approval
+## How implementation runs (agreed 2026-09-17)
 
-Per the brainstorming → writing-plans flow: this folder is the spec; the next step is a step-by-step implementation plan (one task per PR above, with the exact files, tests, and verification commands), then implementation PR by PR with the gate ladder in [06-validation-plan.md](06-validation-plan.md).
+The spec is approved and the implementation plan is written ([07-implementation-plan.md](07-implementation-plan.md)). Implementation happens in **fresh sessions, one task (= one PR) per session**, so each PR gets a clean context and a review point in between. Start a session with the prompt at the end of `07` (replace N):
+
+> Read `docs/planning/ui-redesign/README.md`, `07-implementation-plan.md` (Task N), `06-validation-plan.md` §2 and `02-current-state-audit.md` §4. Implement Task N exactly as written on a new `feature/ui-N-…` branch from `main`, run the gate, open the PR (label `run-e2e` when the task says so), and stop. Do not merge. Report the gate output and the PR link.
+
+Order: Task 0 (fonts) → 1 (tokens, reviewed on a real phone before merge) → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. Tasks 4–6 are independent of each other once 1–3 are in; the rest are sequential. After Task 11: the Full-Game Exit Gate in [06-validation-plan.md](06-validation-plan.md) §9, then the OG image / PWA icon follow-up (decision 9).
