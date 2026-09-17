@@ -123,7 +123,10 @@ cp batches/<date>/candidates.js tools/song-curation/candidates.js
 Tune the curated artist lists in `validate.py` (POP/ROCKPOP/MIZRAHIT) and `fix.py`
 (KNOWN, ALLOW, DROP_ARTIST, JUNK) for the new batch's artists.
 
-**7 — Human review.** `review.html` → play, set start time, approve/reject, fix
+**7 — Human review.** Keep the cards lean: the maintainer wants **only the view
+count** as card metadata (e.g. `43M views` — set `notes` to just that in the
+batch's merge step; no rank / performer / upload date / evidence blobs) and a
+player wide enough to actually watch (480px). `review.html` → play, set start time, approve/reject, fix
 genres, scan the **Flagged** filter, export CSV.
 
 **8 — Handoff.** Export the approved CSV and hand it to a maintainer to import; the
