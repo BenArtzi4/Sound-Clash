@@ -23,6 +23,20 @@ export default [
     },
   },
   {
+    // Dev-tooling scripts (`node scripts/<name>.mjs`, run from frontend/) execute
+    // under Node, not the browser bundle, so they need the Node globals they use.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        console: "readonly",
+        fetch: "readonly",
+        process: "readonly",
+      },
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2022,

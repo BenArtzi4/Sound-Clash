@@ -14,6 +14,9 @@
          chrome). The service worker is registered from main.tsx and caches
          nothing — see frontend/public/sw.js. -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- The display face draws the BUZZ label and every headline; preload it so
+         it is resolved before first paint instead of swapping in mid-round. -->
+    <link rel="preload" href="/fonts/anton-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 
     <!-- Warm the two origins EVERY player hits before they can buzz: the

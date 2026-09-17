@@ -34,18 +34,19 @@
 - Modify: `frontend/src/main.tsx:7` (import the font CSS before `styles.css`)
 - Modify: `frontend/public/_headers` (add `/fonts/*`)
 - Modify: `frontend/index.html` (preload the display face)
+- Modify: `frontend/eslint.config.js` (`eslint .` lints `scripts/**/*.mjs`; give that block the Node globals `console`/`fetch`/`process`, mirroring the `public/sw.js` block)
 - Test: `frontend/src/fonts.test.ts`
 
 **Interfaces:**
 - Produces: `@font-face` families `"Anton"`, `"Instrument Sans"`, `"Secular One"`, `"Heebo"` available to every stylesheet; nothing references them yet.
 
-- [ ] **Step 1: Branch**
+- [x] **Step 1: Branch**
 
 ```bash
 git checkout main && git pull && git checkout -b feature/ui-0-fonts
 ```
 
-- [ ] **Step 2: Write the fetch script (dev tooling, not shipped)**
+- [x] **Step 2: Write the fetch script (dev tooling, not shipped)**
 
 Google Fonts serves per-script woff2 subsets when asked with a modern user agent; the script pulls the four families, keeps only the `latin` (Anton, Instrument Sans) and `hebrew` (Secular One, Heebo) blocks, and writes them under `public/fonts/`. All four are OFL.
 
@@ -80,7 +81,7 @@ for (const f of FAMILIES) {
 }
 ```
 
-- [ ] **Step 3: Run it and record the sizes + unicode ranges it prints**
+- [x] **Step 3: Run it and record the sizes + unicode ranges it prints**
 
 ```bash
 cd frontend && node scripts/fetch-fonts.mjs && ls -la public/fonts
@@ -88,15 +89,19 @@ cd frontend && node scripts/fetch-fonts.mjs && ls -la public/fonts
 
 Expected: four files, total ≤ 150 KB. Copy the printed `unicode-range` values into Step 4. If Heebo's variable file exceeds 40 KB, request `Heebo:wght@400;700` instead and write two files (`heebo-hebrew-400.woff2`, `heebo-hebrew-700.woff2`).
 
-- [ ] **Step 4: Write the failing test**
+- [x] **Step 4: Write the failing test**
 
 ```ts
 // frontend/src/fonts.test.ts
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("fonts.css", () => {
-  const css = readFileSync(new URL("./fonts.css", import.meta.url), "utf8");
+  // Resolve via import.meta.dirname rather than `new URL(..., import.meta.url)`:
+  // under the jsdom environment the global URL is jsdom's and resolves relative
+  // paths against http://localhost/, not the file base (verified 2026-09-17).
+  const css = readFileSync(join(import.meta.dirname, "fonts.css"), "utf8");
   it("declares the four self-hosted faces with swap and unicode-range", () => {
     for (const family of ["Anton", "Instrument Sans", "Secular One", "Heebo"]) {
       expect(css).toContain(`font-family: "${family}"`);
@@ -108,12 +113,12 @@ describe("fonts.css", () => {
 });
 ```
 
-- [ ] **Step 5: Run it to see it fail**
+- [x] **Step 5: Run it to see it fail**
 
 Run: `cd frontend && npx vitest run src/fonts.test.ts`
 Expected: FAIL (`fonts.css` does not exist).
 
-- [ ] **Step 6: Write `fonts.css`** (paste the ranges printed in Step 3; the ones below are Google's current latin/hebrew subsets and are correct as of 2026-09)
+- [x] **Step 6: Write `fonts.css`** (paste the ranges printed in Step 3; the ones below are Google's current latin/hebrew subsets and are correct as of 2026-09)
 
 ```css
 /* Self-hosted, OFL. Served from /fonts/* (same origin — the CSP has no font-src,
@@ -156,7 +161,7 @@ Expected: FAIL (`fonts.css` does not exist).
 }
 ```
 
-- [ ] **Step 7: Wire it in**
+- [x] **Step 7: Wire it in**
 
 `frontend/src/main.tsx` — add `import "./fonts.css";` on the line before `import "./styles.css";`.
 
@@ -176,7 +181,7 @@ Expected: FAIL (`fonts.css` does not exist).
     <link rel="preload" href="/fonts/anton-latin.woff2" as="font" type="font/woff2" crossorigin />
 ```
 
-- [ ] **Step 8: Run the test and the full gate**
+- [x] **Step 8: Run the test and the full gate**
 
 ```bash
 cd frontend && npx vitest run src/fonts.test.ts && npm run format:check && npm run lint && npm run typecheck && npm run test:run && npm run build
@@ -184,7 +189,7 @@ cd frontend && npx vitest run src/fonts.test.ts && npm run format:check && npm r
 
 Expected: all green; `dist/` build output unchanged in size except `index-*.css` (+~1 KB).
 
-- [ ] **Step 9: Commit and open the PR**
+- [x] **Step 9: Commit and open the PR**
 
 ```bash
 git add frontend/scripts/fetch-fonts.mjs frontend/public/fonts frontend/src/fonts.css frontend/src/fonts.test.ts frontend/src/main.tsx frontend/public/_headers frontend/index.html
