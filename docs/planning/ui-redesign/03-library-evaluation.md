@@ -57,9 +57,9 @@ Every route except `/` and `/join` is a lazy chunk behind one `Suspense`. If the
 
 ## 3. Recommendation
 
-**Option A — zero new dependencies — is the plan.** View Transitions for routes (via the hook), CSS transitions/keyframes and `@starting-style` for everything element-level, a ~40-line FLIP hook and a small count-up hook for the Display board. Every moment in the motion catalogue ([04-motion-and-transitions.md](04-motion-and-transitions.md)) is covered.
+**Option A for everything but the TV board.** View Transitions for routes (via the hook), CSS transitions/keyframes and `@starting-style` for everything element-level, a small count-up hook for scores. Every moment in the motion catalogue ([04-motion-and-transitions.md](04-motion-and-transitions.md)) is covered without a library except one.
 
-**Option B — one dependency — only if A disappoints in review**, scoped to a lazy chunk that never loads on a player's phone: `@formkit/auto-animate` (3.2 kB, Display board only) or `motion` under `LazyMotion` (19.6 kB, Display + EndScreen only, with the CSP and main-thread rules above). Either would be a separate, flagged PR.
+**`@formkit/auto-animate` for the Display board reorder — approved by the maintainer on 2026-09-17** (README decision 7): 3.2 kB gzip, zero transitive dependencies, WAAPI-based, CSP-clean, reduced-motion aware, inert in jsdom. Constraints that ship with it: imported **only** from `DisplayPage.tsx` (its own lazy chunk) so it never reaches the player or console bundles — enforced by the bundle guard in [06-validation-plan.md](06-validation-plan.md) §5; never applied to `EndScreen` (rendered on phones). `motion` is **not** planned; it remains documented above only as the answer if spring physics are ever wanted, with the CSP and main-thread rules that would apply.
 
 **Explicitly not doing:** any animation library in the player bundle; `motion` app-wide; smooth-scroll; a router-mode migration for the sake of `viewTransition`; GSAP.
 

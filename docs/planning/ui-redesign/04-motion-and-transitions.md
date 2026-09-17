@@ -41,11 +41,11 @@ Only these four easings exist; a PR that adds a fifth needs a reason in its desc
 | **CSS `@keyframes`** | none | pulse ring, first-paint stagger, reveal wipe, banner slide, podium rise, light sweep, skeleton pulse | none needed |
 | **`@starting-style`** (+ `transition-behavior: allow-discrete` on `visibility`/`opacity` only) | none | toast / modal / banner **enter** without JS; **exit** via an `exiting` state flag + timeout (Firefox does not transition `display`, so exits never depend on it) | Older browsers: element appears/disappears instantly — acceptable |
 | **View Transitions API** via a hand-written `useViewTransitionNavigate()` hook + `TransitionLink` wrapper | none | route changes; the wordmark kept in place via `view-transition-name` | Firefox < 144 / Safari < 18: instant swap, same DOM. Feature-detect `document.startViewTransition` in the hook; **no polyfill**. Note: react-router's own `viewTransition` prop is a silent no-op under this app's declarative `<BrowserRouter>` ([03](03-library-evaluation.md) §2.1), hence the hook |
-| **FLIP hook** (`useFlipList`, ~40 lines, `getBoundingClientRect` + `transform` + one `requestAnimationFrame`) | none | Display board row reorder; Final Results row reorder | Rows jump (today's behaviour) if `prefers-reduced-motion` |
+| **`@formkit/auto-animate`** (`useAutoAnimate` on the board `<ol>`) | **one approved dependency** (decision 7): 3.2 kB gzip, zero transitive deps, WAAPI, imported only by `DisplayPage.tsx` so it never loads on a phone | Display board row reorder | Bails out under `prefers-reduced-motion` by default; inert in jsdom (no `ResizeObserver`) |
 | **Count-up hook** (`useCountUp`, rAF, ≤ 600 ms) | none | Display score numerals; standing chip score | Number swaps instantly under reduced motion |
 | `motion` (`motion/react`, LazyMotion `m` components) | **one new dependency, NOT in the default plan** | only if the maintainer wants spring physics or shared-element morphs the CSS route can't do | — |
 
-Why the default is zero dependencies: everything in the moment catalogue below is achievable with the first six rows; the buzz screen must stay free of any JS-driven animation runtime; and the repo's dependency rule asks for a reason before every install. The one-dependency option is documented in `03` in case the maintainer prefers spring physics for the podium and board.
+Why the budget is one tiny, scoped dependency: everything in the moment catalogue below except the board reorder is plain CSS or a hand-written hook; the buzz screen and the console must stay free of any JS-driven animation runtime; and the repo's dependency rule asks for a reason before every install. The maintainer approved `@formkit/auto-animate` for the Display chunk on 2026-09-17 (decision 7) because it does the reorder in 3 kB with no `startViewTransition` freeze and no bespoke FLIP code to maintain. `motion` stays documented in `03` only as the answer if spring physics are ever wanted; it is not planned.
 
 ## 4. Route transitions
 
@@ -83,7 +83,7 @@ Why the default is zero dependencies: everything in the moment catalogue below i
 | 19 | Buzz banner in | Display | keyframes translateY(-100 %) → 0 | 240 ms `--ease-arrive` | Transform only |
 | 20 | Countdown bar | Display | `transform: scaleX()` driven by the existing timer | per tick, linear | Never animate `width` |
 | 21 | Reveal unmask (title / artist claimed) | Display | `clip-path: inset(0 100% 0 0)` → `inset(0)` | 320 ms `--ease-arrive` | Hebrew text: the wipe direction is layout-neutral (always left→right in the LTR card) |
-| 22 | **Board reorder** | Display, Final Results | `useFlipList` (transform) | 400 ms `--ease-move` | The single biggest "wow" on the TV; rows slide to their new rank |
+| 22 | **Board reorder** | Display | `@formkit/auto-animate` on the `<ol>` (transform + opacity via WAAPI) | ~400 ms, library default easing | The single biggest "wow" on the TV; rows slide to their new rank. Final Results rows never reorder live, so `EndScreen` (shared with phones) gets no library |
 | 23 | Score count-up | Display | `useCountUp` | 600 ms | Tabular numerals so the row doesn't shift width |
 | 24 | Row score highlight | Display | keyframes (background-color flash on the row) | 800 ms once | Small paint area, ≤ 5 rows; acceptable |
 | 25 | Board → podium | Display, Team, Console | crossfade (opacity) | 240 ms | Podium mounts once; ended → swept keeps the same component (existing rule) |
@@ -109,5 +109,5 @@ Why the default is zero dependencies: everything in the moment catalogue below i
 | CSS transitions/keyframes | invisible (css: false) — assert the class/attribute that triggers them | `document.getAnimations()` + `getComputedStyle` |
 | `@starting-style` + `exiting` flag | assert mount, the `data-exiting` attribute, and removal after the fake-timer advance | visual + `getAnimations()` |
 | View Transitions (hook) | jsdom lacks `startViewTransition`/`matchMedia` → the hook falls back to plain `navigate()`; stub `document.startViewTransition` in the hook's own tests to cover the transition branch, preload order, and reduced-motion bail-out | Chromium supports it; assert no console errors, the wordmark exists on both pages, and `contextOptions: { reducedMotion: "reduce" }` skips the transition |
-| `useFlipList` | unit-test the hook with fake `getBoundingClientRect` values and assert the inline transform it writes | visual |
+| `@formkit/auto-animate` | inert in jsdom (no `ResizeObserver`), so the existing `[data-team-id]` ordering assertions keep passing unchanged; nothing to mock | visual; assert the row order under `[data-team-id]` changes after a score push, and that `getAnimations()` on the list shows only transform/opacity |
 | `useCountUp` | fake timers + fake rAF | visual |
