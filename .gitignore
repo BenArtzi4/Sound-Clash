@@ -64,6 +64,8 @@ playwright-report/
 playwright/.cache/
 # Playwright MCP working cache (console + page-snapshot artifacts)
 .playwright-mcp/
+# Output of tests/smoke/ui_prod_pass.mjs (screenshots, throwaway-game token, report)
+tests/smoke/.prod-pass/
 
 # Generated UI snapshots: regenerable from the local dev stack via Playwright MCP.
 # Per .claude/rules/binary-assets.md, don't commit binaries without asking.

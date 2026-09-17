@@ -165,6 +165,7 @@ Run manually after each prod deploy.
 |---|---|
 | `post_deploy.sh` | curl `/health`; create game (no auth) and capture `manager_token`; join 2 teams; start round (with token); end game (with token); cleanup |
 | `prod_realtime.spec.ts` | Playwright against prod URL; one buzzer race round end-to-end |
+| `ui_prod_pass.mjs` | Node + headless chromium; the UI-redesign post-merge pass (`docs/planning/ui-redesign/06-validation-plan.md` §2.4 + §8): deploy markers, throwaway game, seven-route screenshots, console/CSP/font/animation gates, Display and console fit, reduced motion |
 
 ## 5. Phase Schedule
 
