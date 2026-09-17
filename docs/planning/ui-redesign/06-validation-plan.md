@@ -67,6 +67,14 @@ Never run the backend db pytest suite against the same local stack you are using
 - `Frontend / lint + type + test` green (includes the Prettier step and coverage thresholds).
 - CodeQL green.
 - If labelled `run-e2e`: the **labelled** run's own conclusion is what counts (`gh run view <id> --json status,conclusion`), not `gh pr checks` and not the watch exit code (lessons-learned 2026-07-08). The YouTube `data-ready` flake (#222) is known; rerun up to 3× only when the failures are exclusively `youtube-player`/`data-ready` across unrelated specs.
+- **Merge readiness — the step that makes the PR mergeable.** `main` has *required conversation resolution* (and no required checks, no required reviews). GitHub Advanced Security posts CodeQL findings as inline review threads authored by `github-advanced-security` (e.g. `js/http-to-file-access` on anything that fetches and writes, as on Task 0's font-fetch script), and one unresolved thread blocks the merge with "All comments must be resolved" even though `gh pr checks` is all-green; only `gh pr view <n> --json mergeStateStatus` shows the `BLOCKED`. After the **last** push (a new push re-runs CodeQL) and once the checks are complete, list and resolve:
+
+  ```
+  gh api graphql -f query='query { repository(owner:"BenArtzi4", name:"Sound-Clash") { pullRequest(number:N) { mergeStateStatus reviewThreads(first:20) { nodes { id isResolved path line comments(first:1) { nodes { author { login } body } } } } } } }'
+  gh api graphql -f query='mutation { resolveReviewThread(input:{threadId:"PRRT_…"}) { thread { isResolved } } }'
+  ```
+
+  Resolve only **bot-authored** threads (`github-advanced-security`, `dependabot`, `github-actions`); a maintainer's thread is answered, never resolved by the session. Re-query until `mergeStateStatus` is `CLEAN` — that is the definition of done for a session. The underlying code-scanning alert stays in the Security tab for the maintainer to dismiss ("used in tests" / "won't fix"); the session never dismisses alerts, and it never merges.
 
 ### 2.3 Preview before merge
 
@@ -256,4 +264,5 @@ create (a preset + a decade) → join from two real phones (one iPhone, one Andr
 - [ ] real-phone check: __ (device, OS)
 - [ ] prod pass (§8) done post-merge: console clean, emoji sweep 0, fonts ok, fit ok
 - [ ] CHANGELOG [Unreleased] line added
+- [ ] merge-ready: checks green, bot review threads resolved (§2.2), mergeStateStatus CLEAN
 ```
