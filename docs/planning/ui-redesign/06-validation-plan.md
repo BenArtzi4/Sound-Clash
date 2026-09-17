@@ -85,6 +85,12 @@ Never run the backend db pytest suite against the same local stack you are using
 ### 2.4 Post-merge prod verification (within 15 minutes of the deploy)
 
 ```
+node tests/smoke/ui_prod_pass.mjs all    # sandbox disabled; scripts this section + §8, exit 0 = every hard gate green
+```
+
+The script does the following by hand-equivalent steps (kept here so a failure can be reproduced piecewise):
+
+```
 curl -s "https://www.soundclash.org/?cb=$(date +%s)"    # cache-bust index.html; confirm NEW chunk hashes
 ```
 
@@ -221,7 +227,7 @@ Each row is a manual or scripted check; "How" names the fastest reliable way.
 
 ## 8. The Claude-in-Chrome visual pass (scripted checklist)
 
-Run after each merge on prod (`https://www.soundclash.org`, sandbox disabled for any Node-side calls). Steps:
+Run after each merge on prod (`https://www.soundclash.org`, sandbox disabled for any Node-side calls). **Scripted** since Task 1: `node tests/smoke/ui_prod_pass.mjs all` performs steps 1–13 headlessly (Playwright's chromium from `tests/e2e`), writes the screenshots and `report.json` to `tests/smoke/.prod-pass/`, and prints PASS/FAIL per hard gate; open the screenshots (or `setup` a game and visit it) in Chrome for the eyeball part. Items the checklist wants at zero but that stay non-zero until their task lands are printed as soft findings: the emoji sweep (Task 2), the finished zero-length `fade-in-up` page animations still listed under reduced motion on `/` and `/how-to-play` (Task 4), and the reveal row's missing `dir` attribute (Task 9). Steps:
 
 1. **Spin up a throwaway game** from the browser console (`javascript_tool`): read the Supabase URL + anon key out of `/assets/index-*.js`, `GET /rest/v1/genres`, `POST /games {selected_genres:[uuids]}`, join 4 teams, `POST /bonus` (≤ 50 points each) for distinct scores, `select_next_song`, `buzz_in` for one team; store `game:<code>:manager-token` and `game:<code>:team` in localStorage. Include an Israeli genre so a Hebrew title is drawn.
 2. **Screenshots** at 1280×800 and 1920×1080: `/`, `/join`, `/manager/create`, `/how-to-play`, `/display/<code>`, `/manager/game/<code>`, `/team/<code>` (Chrome's minimum window width blocks true 390 px — use DevTools device emulation or a real phone for the phone views).
