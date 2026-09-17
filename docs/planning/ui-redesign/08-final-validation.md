@@ -363,6 +363,14 @@ Expected: zero rows. End a straggler with `POST /games/<CODE>/end` + `X-Manager-
 
 Two layers: **machine checks** (Appendix E `audit-lib.mjs`, run by the static-route script in Appendix B and, for in-game states, by the game script in Appendix D) and a **looked-at-it review** of the screenshots against `05-page-by-page.md`, done by you with the Read tool on the PNGs. Every check carries the task tag it depends on for partial mode.
 
+- [ ] **E.0 The per-merge prod pass first.** If `tests/smoke/ui_prod_pass.mjs` exists (the scripted `06` §2.4 + §8 pass that each redesign merge runs), run it before anything else in this Part — sandbox disabled, from the repo root:
+
+```bash
+node tests/smoke/ui_prod_pass.mjs all
+```
+
+Expected: exit 0 and, in full mode, **zero SOFT findings** as well (the emoji sweep, reduced-motion counts and `dir="auto"` findings it labels "expected until Tasks 2/4/9 land" must all be zero once those tasks are merged — a non-zero soft finding here is a P2). Paste its summary into the report; E.1–E.6 then go deeper (four viewports, three engines, the contrast/focus/tap-target audits, in-game states, motion frames). If the script does not exist on `main`, say so in the report and continue with E.1.
+
 - [ ] **E.1 Static routes, all viewports, reduced motion, route transitions.** Write Appendix E to `scratchpad/audit-lib.mjs` and Appendix B to `scratchpad/redesign-audit.mjs`, then:
 
 ```bash
