@@ -65,8 +65,8 @@ h1 {
 }
 
 .player-shell {
-  width: 320px;
-  min-width: 320px;
+  width: 480px;
+  min-width: 480px;
   aspect-ratio: 16 / 9;
   background: #000;
   border-radius: 8px;
@@ -273,6 +273,12 @@ button.danger-ghost {
 .oembed .yt-link {
   color: var(--accent);
   text-decoration: none;
+}
+
+/* the only metadata a card shows besides the YouTube title: e.g. "43M views" */
+.notes {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .badges {

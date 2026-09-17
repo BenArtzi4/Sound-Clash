@@ -244,6 +244,7 @@ function cardHtml(c, idx) {
         channel: ${escHtml(c.oembed_author || "—")} ·
         <a class="yt-link" href="${escAttr(watch)}" target="_blank" rel="noreferrer">${escHtml(id)} ↗</a>
       </div>
+      ${c.notes ? `<div class="notes">${escHtml(c.notes)}</div>` : ""}
       <div class="badges"></div>
       <div class="genres">${genreBoxes}</div>
       <div class="card-actions">
