@@ -1,3 +1,4 @@
+import { FilmIcon } from "./icons";
 import styles from "./SoundtrackBadge.module.css";
 
 interface Props {
@@ -17,7 +18,7 @@ export function SoundtrackBadge({ size = "default" }: Props) {
       data-testid="soundtrack-badge"
     >
       <span className={styles.icon} aria-hidden="true">
-        🎬
+        <FilmIcon />
       </span>
       Soundtrack
     </span>

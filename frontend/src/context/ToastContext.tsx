@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Portal } from "../components/Portal";
+import { CloseIcon } from "../components/icons";
 import styles from "../components/Toast.module.css";
 import { ToastContext, type ToastApi, type ToastVariant } from "./toastContextValue";
 
@@ -78,7 +79,7 @@ export function ToastProvider({ children }: Props) {
                   aria-label="Dismiss"
                   onClick={() => dismiss(t.id)}
                 >
-                  ×
+                  <CloseIcon />
                 </button>
               </div>
             ))}

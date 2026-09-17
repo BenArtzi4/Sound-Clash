@@ -5,6 +5,7 @@ import type { Team } from "../lib/types";
 import { useQrSvg } from "../hooks/useQrSvg";
 import { Portal } from "./Portal";
 import styles from "./TeamRescueModal.module.css";
+import { ArrowLeftIcon, CheckIcon, CloseIcon } from "./icons";
 
 // Host-only team reconnect (issue #183). A team that lost its device (dead
 // phone, cleared storage, a different phone) can't self-serve a secure rejoin,
@@ -59,7 +60,7 @@ export function TeamRescueModal({ gameCode, managerToken, teams, onClose }: Prop
               aria-label="Close"
               data-testid="rescue-close"
             >
-              ×
+              <CloseIcon />
             </button>
           </div>
 
@@ -149,7 +150,7 @@ function TeamRejoinView({
         <p className={styles.hint}>Generating rejoin code…</p>
       )}
       <button type="button" className={`btn btn-ghost ${styles.back}`} onClick={onBack}>
-        ← Back to teams
+        <ArrowLeftIcon /> Back to teams
       </button>
     </div>
   );
@@ -200,7 +201,13 @@ function RejoinQr({ url, teamName }: { url: string; teamName: string }) {
           onClick={() => void handleCopy()}
           data-testid="rescue-copy"
         >
-          {copyState === "copied" ? "Copied ✓" : "Copy link"}
+          {copyState === "copied" ? (
+            <>
+              <CheckIcon /> Copied
+            </>
+          ) : (
+            "Copy link"
+          )}
         </button>
         {copyState === "failed" ? (
           <span className={styles.copyFailed} role="status">

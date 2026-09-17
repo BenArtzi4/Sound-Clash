@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { DisplayIcon, ManagerIcon, TeamIcon } from "../components/RoleIcons";
+import { ArrowRightIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
 import styles from "./HomePage.module.css";
 
@@ -72,7 +73,7 @@ export function HomePage() {
 
             <div className={styles.howToPlayLink}>
               <Link to="/how-to-play" className="btn btn-ghost">
-                How to Play <span aria-hidden="true">&rsaquo;</span>
+                How to Play <ArrowRightIcon />
               </Link>
             </div>
           </div>

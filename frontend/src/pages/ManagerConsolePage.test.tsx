@@ -1518,7 +1518,7 @@ describe("ManagerConsolePage", () => {
     await act(async () => {
       await fireSubscribed();
     });
-    expect(screen.getByTestId("token-chip-artist")).toHaveTextContent(/artist\s+✓/i);
+    expect(screen.getByTestId("token-chip-artist")).toHaveAttribute("data-claimed", "true");
     expect(screen.getByTestId("score-artist")).toBeDisabled();
   });
 
