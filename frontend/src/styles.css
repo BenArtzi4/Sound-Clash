@@ -1,49 +1,108 @@
+/* ==========================================================================
+   Sound Clash design tokens — dark only, Rogue-Studio-derived.
+   Spec: docs/planning/ui-redesign/01-design-system.md
+   ========================================================================== */
 :root {
-  --color-bg: #f8fafc;
-  --color-bg-elev: #ffffff;
-  --color-card: #ffffff;
-  --color-bg-tint: #f0f4ff;
-  --color-text: #0f172a;
-  --color-text-dim: #475569;
-  --color-text-mute: #94a3b8;
+  color-scheme: dark;
 
-  --color-primary: #3b82f6;
-  --color-primary-strong: #2563eb;
-  --color-primary-soft: rgba(59, 130, 246, 0.08);
-  --color-secondary: #10b981;
-  --color-secondary-strong: #059669;
-  --color-secondary-soft: rgba(16, 185, 129, 0.08);
-  --color-accent: #06b6d4;
-  --color-accent-strong: #0891b2;
-  --color-accent-soft: rgba(6, 182, 212, 0.08);
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-success: #10b981;
+  /* Colour */
+  --bg: #000000;
+  --surface: #121111;
+  --surface-2: #1c1a17;
+  --border: rgba(233, 228, 217, 0.14);
+  --border-strong: rgba(233, 228, 217, 0.32);
+  --text: #ffffff;
+  --text-muted: #b4a88f;
+  --text-dim: rgba(255, 255, 255, 0.42);
+  --accent: #ff7a00;
+  --accent-ink: #000000; /* never white on orange (2.6:1) */
+  --accent-soft: rgba(255, 122, 0, 0.14);
+  --bone: #e9e4d9;
+  --positive: #4ade80;
+  --positive-ink: #000000;
+  --negative: #f2352b;
+  --negative-ink: #ffffff; /* large text only */
+  --negative-soft: rgba(242, 53, 43, 0.12);
+  --warning: #f6cc00;
+  --warning-ink: #000000;
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
 
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
+  /* Type */
+  --font-display: "Anton", "Secular One", Impact, "Arial Narrow Bold", sans-serif;
+  --font-ui: "Instrument Sans", "Heebo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --text-display-xl: clamp(3rem, 14vw, 7rem);
+  --text-display-l: clamp(2.5rem, 5vw, 4.5rem);
+  --text-display-m: clamp(2rem, 4vw, 3.25rem);
+  --text-display-s: clamp(1.5rem, 2.5vw, 2.125rem);
+  --text-title: 1.125rem;
+  --text-body: 1rem;
+  --text-caption: 0.75rem;
 
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-pill: 999px;
+  /* Space / radius / z */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 9999px;
+  --z-overlay: 40;
+  --z-modal: 9000;
+  --z-toast: 9999;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.06);
+  /* Motion (04-motion-and-transitions.md §2) */
+  --dur-instant: 0ms;
+  --dur-micro: 150ms;
+  --dur-state: 250ms;
+  --dur-route: 240ms;
+  --dur-enter: 400ms;
+  --dur-reveal: 600ms;
+  --dur-intro: 800ms;
+  --ease-move: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --ease-arrive: cubic-bezier(0.155, 0.055, 0.14, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-overshoot: cubic-bezier(0.075, 0.82, 0.17, 1.34);
 
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 40px;
-  --space-2xl: 64px;
-
-  --font-display:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans",
-    "Droid Sans", "Helvetica Neue", sans-serif;
-
-  --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Legacy aliases — kept for one release so untouched modules render in the
+     new palette. Removed in the cleanup task. */
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--surface);
+  --color-card: var(--surface);
+  --color-bg-tint: var(--surface-2);
+  --color-text: var(--text);
+  --color-text-dim: var(--text-muted);
+  --color-text-mute: var(--text-dim);
+  --color-primary: var(--accent);
+  --color-primary-strong: var(--accent);
+  --color-primary-soft: var(--accent-soft);
+  --color-secondary: var(--positive);
+  --color-secondary-strong: var(--positive);
+  --color-secondary-soft: rgba(74, 222, 128, 0.12);
+  --color-accent: var(--bone);
+  --color-accent-strong: var(--bone);
+  --color-accent-soft: rgba(233, 228, 217, 0.1);
+  --color-warning: var(--warning);
+  --color-danger: var(--negative);
+  --color-success: var(--positive);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --space-xs: var(--space-1);
+  --space-sm: var(--space-2);
+  --space-md: var(--space-4);
+  --space-lg: var(--space-5);
+  --space-xl: var(--space-7);
+  --space-2xl: var(--space-8);
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --easing-spring: var(--ease-overshoot);
 }
 
 * {
@@ -58,73 +117,37 @@ body,
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
-    linear-gradient(180deg, #f8fafc 0%, #e0e7ff 60%, #dbeafe 100%);
-  background-size:
-    auto,
-    auto,
-    100% 200%;
-  background-position:
-    0 0,
-    0 0,
-    0 0;
-  background-attachment: fixed;
-  color: var(--color-text);
-  font-family: var(--font-display);
-  font-size: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* The background drift animates `background-position` on a `background-attachment:
-   fixed` gradient, which forces a full-viewport repaint every frame. That is a
-   cost worth paying for the ambient motion on a desktop, but on a phone (coarse
-   pointer) it competes with the buzz button's own paint for no felt benefit —
-   so we run it only where a fine pointer is present. `prefers-reduced-motion`
-   (handled globally below) still overrides this for anyone who opts out. */
-@media (pointer: fine) {
-  body {
-    animation: bg-drift 32s ease-in-out infinite alternate;
-  }
-}
-
-@keyframes bg-drift {
-  from {
-    background-position:
-      0 0,
-      0 0,
-      0 0;
-  }
-  to {
-    background-position:
-      0 0,
-      0 0,
-      0 50%;
-  }
-}
-
 h1,
 h2,
 h3 {
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1;
   margin: 0;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 h1 {
-  font-size: 2.4rem;
+  font-size: var(--text-display-m);
 }
-
 h2 {
-  font-size: 1.6rem;
+  font-size: var(--text-display-s);
 }
-
 h3 {
-  font-size: 1.2rem;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--text-title);
+  line-height: 1.3;
 }
 
 p {
@@ -132,12 +155,12 @@ p {
 }
 
 a {
-  color: var(--color-primary-strong);
+  color: var(--bone);
   text-decoration: none;
 }
-
 a:hover {
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 button {
@@ -149,137 +172,121 @@ input,
 select,
 textarea {
   font-family: inherit;
-  font-size: 1rem;
-  color: var(--color-text);
-  background: var(--color-bg-elev);
-  border: 2px solid var(--color-border);
+  font-size: var(--text-body);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  min-height: 48px;
   padding: 10px 14px;
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   transition:
-    border-color 200ms ease,
-    box-shadow 200ms ease,
-    background 200ms ease;
+    border-color var(--dur-micro) var(--ease-move),
+    outline-color var(--dur-micro) var(--ease-move);
 }
-
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--border-strong);
+  outline-color: var(--accent);
 }
-
 input:disabled,
 select:disabled,
 textarea:disabled {
-  opacity: 0.6;
+  opacity: 0.4;
   cursor: not-allowed;
 }
-
 ::placeholder {
-  color: var(--color-text-mute);
+  color: var(--text-dim);
 }
 
+/* Buttons — same four role classes as before. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm);
-  padding: 12px 22px;
-  font-size: 1rem;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 22px;
+  font-size: var(--text-title);
   font-weight: 600;
-  border: 2px solid var(--color-border);
+  line-height: 1.2;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-elev);
-  color: var(--color-text);
+  background: var(--surface);
+  color: var(--text);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition:
-    background 200ms ease,
-    border-color 200ms ease,
-    color 200ms ease,
-    box-shadow 200ms ease,
-    transform 80ms ease;
+    background-color var(--dur-micro) var(--ease-move),
+    border-color var(--dur-micro) var(--ease-move),
+    color var(--dur-micro) var(--ease-move),
+    transform var(--dur-micro) var(--ease-overshoot);
 }
-
-.btn:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-}
-
 .btn:active:not(:disabled) {
-  transform: translateY(1px);
-  /* Instant press-in; release eases back via the base .btn transition. */
-  transition-duration: 0ms;
+  transform: scale(0.98);
+  transition-duration: var(--dur-instant);
 }
-
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
-
 .btn-primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
 }
-
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-}
-
 .btn-ghost {
   background: transparent;
   border-color: transparent;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-  border-color: transparent;
-}
-
 .btn-danger {
   background: transparent;
-  color: var(--color-danger);
-  border-color: var(--color-danger);
+  color: var(--negative);
+  border-color: var(--negative);
 }
-
-.btn-danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.08);
-  color: var(--color-danger);
-  border-color: var(--color-danger);
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+    text-decoration: none;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #ff8f2b;
+    border-color: #ff8f2b;
+    color: var(--accent-ink);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: transparent;
+    color: var(--text);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: var(--negative-soft);
+  }
 }
 
 .card {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-lg);
-  box-shadow: var(--shadow-md);
+  padding: var(--space-5);
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-4);
 }
-
 .row {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-4);
 }
-
 .muted {
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
 
 .error {
@@ -287,16 +294,15 @@ textarea:disabled {
   align-items: center;
   gap: 0.55rem;
   align-self: flex-start;
-  color: #b91c1c;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.28);
-  border-radius: var(--radius-md);
+  color: var(--negative);
+  background: var(--negative-soft);
+  border: 1px solid var(--negative);
+  border-radius: var(--radius-sm);
   padding: 8px 12px;
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.3;
 }
-
 .error::before {
   content: "!";
   display: inline-flex;
@@ -305,23 +311,32 @@ textarea:disabled {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--negative);
+  color: var(--negative-ink);
   font-size: 0.75rem;
   font-weight: 800;
   flex-shrink: 0;
 }
 
 .code {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+}
+
+/* Section labels ("QUICK START", "GAME CODE") */
+.caption {
+  font-size: var(--text-caption);
+  font-weight: 500;
+  text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-weight: 700;
+  color: var(--text-muted);
 }
 
 .btn:focus-visible,
-.roleBtn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .visually-hidden {
@@ -336,6 +351,29 @@ textarea:disabled {
   border: 0;
 }
 
+/* Route transitions (Task 10 adds the hook; the CSS is inert until then). */
+::view-transition-old(root) {
+  animation: vt-out 100ms var(--ease-exit) both;
+}
+::view-transition-new(root) {
+  animation: vt-in var(--dur-route) var(--ease-arrive) both;
+}
+::view-transition-group(wordmark) {
+  animation-duration: var(--dur-route);
+  animation-timing-function: var(--ease-move);
+}
+@keyframes vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -344,5 +382,11 @@ textarea:disabled {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  /* The universal rule above does not reach the view-transition pseudo tree. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
