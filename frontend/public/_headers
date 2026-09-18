@@ -14,8 +14,8 @@
   Cache-Control: public, max-age=31536000, immutable
 
 # Un-hashed static assets: their URL is stable across deploys, so they can only
-# be busted by a new deploy, not a content hash. Cache for a day (a stale icon,
-# hero image, or manifest for under 24h is harmless, and index.html, which is
+# be busted by a new deploy, not a content hash. Cache for a day (a stale icon
+# or manifest for under 24h is harmless, and index.html, which is
 # never cached, still picks up a fresh deploy immediately). sw.js is
 # deliberately NOT listed: it must always be fetched fresh so a new deploy's
 # worker activates (see public/sw.js).
@@ -27,8 +27,6 @@
   Cache-Control: public, max-age=31536000, immutable
 
 /og-image.jpg
-  Cache-Control: public, max-age=86400
-/how-to-play-hero.*
   Cache-Control: public, max-age=86400
 /manifest.webmanifest
   Cache-Control: public, max-age=86400

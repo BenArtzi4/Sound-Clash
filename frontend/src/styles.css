@@ -380,6 +380,9 @@ a:focus-visible {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    /* Staggers use animation-delay + `both`; without this, content stays
+       hidden for the delay under reduced motion. */
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
