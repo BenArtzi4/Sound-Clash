@@ -20,7 +20,7 @@ afterEach(() => {
 describe("App router", () => {
   it("renders the home page at /", () => {
     render(<App />);
-    expect(screen.getByRole("heading", { name: /welcome to sound clash/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /name the song/i })).toBeInTheDocument();
   });
 
   it("renders /manager/create publicly (no password prompt)", async () => {

@@ -5,302 +5,144 @@
 }
 
 .header {
-  padding: 1.75rem 0;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(59, 130, 246, 0.1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.header::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #10b981 100%);
-  opacity: 0.6;
-}
-
-.container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 2rem;
-}
-
-.header .container {
-  display: flex;
-  justify-content: center;
+  padding: var(--space-5) var(--space-5) 0;
 }
 
 .main {
   flex: 1;
-  padding: 4rem 0 5rem;
-  position: relative;
-  z-index: 1;
-}
-
-.content {
-  display: flex;
-  flex-direction: column;
-  gap: 4rem;
+  width: 100%;
   max-width: 1100px;
   margin: 0 auto;
+  padding: var(--space-8) var(--space-5) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
 }
 
 .hero {
-  text-align: center;
-  padding: 1rem 0 1.5rem;
-  animation: fade-in-up 0.8s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: rise var(--dur-intro) var(--ease-arrive) both;
 }
 
 .title {
-  font-size: clamp(2.25rem, 5.5vw, 4rem);
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0 0 1rem 0;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-size: var(--text-display-m);
+  max-width: 14ch;
 }
 
 .subtitle {
-  font-size: clamp(1.3rem, 3.2vw, 1.9rem);
-  font-weight: 600;
-  background: linear-gradient(120deg, #3b82f6 0%, #06b6d4 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  margin: 0 0 1rem 0;
-  line-height: 1.3;
+  color: var(--text-muted);
+  font-size: var(--text-title);
+  max-width: 40ch;
 }
 
-.actions {
+.roles {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+
+.role {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.75rem;
-  width: 100%;
-  animation: fade-in-up 0.8s ease-out 0.15s both;
-}
-
-.roleBtn {
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: 3rem 1fr 2rem;
   align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  padding: 2.5rem 1.75rem;
-  border: 2px solid transparent;
-  border-radius: 20px;
-  background: #ffffff;
-  cursor: pointer;
-  transition: all 0.4s var(--easing-spring);
-  text-align: center;
-  width: 100%;
-  min-height: 220px;
-  box-shadow:
-    0 4px 20px rgba(15, 23, 42, 0.06),
-    0 1px 3px rgba(15, 23, 42, 0.04);
-  text-decoration: none;
+  gap: var(--space-4);
+  min-height: 88px;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border);
   color: inherit;
-  position: relative;
-  overflow: hidden;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  animation: rise var(--dur-intro) var(--ease-arrive) both;
+  animation-delay: calc(120ms + var(--i) * 60ms);
+  transition:
+    background-color var(--dur-micro) var(--ease-move),
+    transform var(--dur-micro) var(--ease-overshoot);
 }
 
-.roleBtn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.roleBtn > * {
-  position: relative;
-  z-index: 1;
-}
-
-.rolePrimary {
-  border-color: rgba(59, 130, 246, 0.18);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, #ffffff 100%);
-}
-.rolePrimary::before {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(96, 165, 250, 0.04) 100%);
-}
-
-.roleSecondary {
-  border-color: rgba(16, 185, 129, 0.18);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, #ffffff 100%);
-}
-.roleSecondary::before {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.04) 100%);
-}
-
-.roleAccent {
-  border-color: rgba(6, 182, 212, 0.18);
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.04) 0%, #ffffff 100%);
-}
-.roleAccent::before {
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(34, 211, 238, 0.04) 100%);
-}
-
-.roleBtn:hover {
-  transform: translateY(-6px);
-  box-shadow:
-    0 12px 40px rgba(15, 23, 42, 0.14),
-    0 4px 10px rgba(15, 23, 42, 0.08);
+/* Out-specifies the global `a:hover` underline in every pointer state
+   (sticky touch hover included) without a :hover rule of its own. */
+.roles .role {
   text-decoration: none;
 }
 
-.roleBtn:hover::before {
-  opacity: 1;
+.role:active {
+  transform: scale(0.995);
+  transition-duration: var(--dur-instant);
 }
 
-.rolePrimary:hover {
-  border-color: rgba(59, 130, 246, 0.45);
-}
-.roleSecondary:hover {
-  border-color: rgba(16, 185, 129, 0.45);
-}
-.roleAccent:hover {
-  border-color: rgba(6, 182, 212, 0.45);
+.roleIndex {
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
 }
 
-.roleBtn:active {
-  transform: translateY(-3px);
-  transition: transform 0.1s ease;
-}
-
-.roleIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 72px;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.1));
-  transition: transform 0.5s var(--easing-spring);
-}
-
-.roleIcon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.roleBtn:hover .roleIcon {
-  transform: scale(1.12) translateY(-4px) rotate(5deg);
-}
-
-.roleContent {
+.roleBody {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  align-items: center;
+  gap: 2px;
+  min-width: 0;
 }
 
 .roleTitle {
-  font-size: 1.7rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  font-family: var(--font-display);
+  font-size: var(--text-display-s);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text);
 }
 
-.rolePrimary .roleTitle {
-  color: #1e40af;
-}
-.rolePrimary:hover .roleTitle {
-  color: #1d4ed8;
-}
-.roleSecondary .roleTitle {
-  color: #047857;
-}
-.roleSecondary:hover .roleTitle {
-  color: #059669;
-}
-.roleAccent .roleTitle {
-  color: #0e7490;
-}
-.roleAccent:hover .roleTitle {
-  color: #0891b2;
+.roleDesc {
+  color: var(--text-muted);
+  font-size: var(--text-body);
 }
 
-.roleSubtitle {
-  font-size: 1.05rem;
-  font-weight: 500;
-  color: var(--color-text-dim);
-  line-height: 1.4;
+.roleArrow {
+  display: inline-flex;
+  font-size: 1.5rem;
+  color: var(--bone);
+  transition: transform var(--dur-micro) var(--ease-arrive);
 }
 
-.howToPlayLink {
-  display: flex;
-  justify-content: center;
-  margin-top: 0.5rem;
-  animation: fade-in-up 0.8s ease-out 0.3s both;
+.howTo {
+  animation: rise var(--dur-intro) var(--ease-arrive) both;
+  animation-delay: 360ms;
 }
 
-.howToPlayLink :global(.btn) {
-  font-size: 1.1rem;
-  padding: 14px 28px;
+.howTo a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
-@keyframes fade-in-up {
+@media (hover: hover) {
+  .role:hover {
+    background: var(--surface);
+  }
+  .role:hover .roleArrow {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+    transform: translateY(12px);
   }
 }
 
-@media (max-width: 1100px) {
-  .actions {
-    grid-template-columns: 1fr;
-    max-width: 480px;
-    margin: 0 auto;
-    gap: 1.25rem;
-  }
-  .roleBtn {
-    min-height: 180px;
-  }
-}
-
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .main {
-    padding: 3rem 0 4rem;
+    padding: var(--space-6) var(--space-4);
+    gap: var(--space-6);
   }
-  .content {
-    gap: 3rem;
-  }
-  .container {
-    padding: 0 1.5rem;
-  }
-  .roleBtn {
-    padding: 2rem 1.5rem;
-    min-height: 170px;
-  }
-  .roleIcon {
-    width: 60px;
-    height: 60px;
-  }
-  .roleTitle {
-    font-size: 1.55rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .container {
-    padding: 0 1.25rem;
-  }
-  .main {
-    padding: 2.5rem 0 3.5rem;
-  }
-  .content {
-    gap: 2.5rem;
+  .role {
+    min-height: 72px;
+    grid-template-columns: 2.5rem 1fr 1.5rem;
   }
 }
