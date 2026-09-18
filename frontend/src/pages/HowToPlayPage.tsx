@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
-import { DisplayIcon, ManagerIcon, TeamIcon } from "../components/RoleIcons";
-import { ArrowLeftIcon, SpeakerIcon } from "../components/icons";
+import { SetupSchematic } from "../components/SetupSchematic";
+import { ArrowLeftIcon, HostIcon, PhoneIcon, SpeakerIcon, TvIcon } from "../components/icons";
 import styles from "./HowToPlayPage.module.css";
 
 type Step = { title: string; body: React.ReactNode };
@@ -115,129 +115,117 @@ export function HowToPlayPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div className={styles.container}>
-          <Logo size="large" />
-        </div>
+        <Logo size="small" />
       </header>
 
       <main className={styles.main}>
-        <div className={styles.container}>
-          <div className={styles.content}>
-            <section className={styles.intro}>
-              <h1 className={styles.title}>How to Play</h1>
-              <p className={styles.subtitle}>
-                Roles, the quick setup, scoring, and the rules that come up most often.
-              </p>
-              <img
-                src="/how-to-play-hero.png"
-                alt="Three-screen setup: host's phone showing the Game Manager console, a TV displaying the scoreboard and join QR code, and team phones with the BUZZ button."
-                className={styles.heroImage}
-                width={1600}
-                height={900}
-              />
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Roles</h2>
-              <div className={styles.roles}>
-                <article className={`${styles.roleCard} ${styles.rolePrimary}`}>
-                  <span className={styles.roleIcon} aria-hidden="true">
-                    <ManagerIcon />
-                  </span>
-                  <h3 className={styles.roleTitle}>Host</h3>
-                  <p className={styles.roleText}>
-                    Picks genres, runs each round, and awards points.
-                  </p>
-                </article>
-
-                <article className={`${styles.roleCard} ${styles.roleSecondary}`}>
-                  <span className={styles.roleIcon} aria-hidden="true">
-                    <TeamIcon />
-                  </span>
-                  <h3 className={styles.roleTitle}>Team</h3>
-                  <p className={styles.roleText}>
-                    Joins on a phone with a 6-letter code and hits the buzzer.
-                  </p>
-                </article>
-
-                <article className={`${styles.roleCard} ${styles.roleAccent}`}>
-                  <span className={styles.roleIcon} aria-hidden="true">
-                    <DisplayIcon />
-                  </span>
-                  <h3 className={styles.roleTitle}>Display</h3>
-                  <p className={styles.roleText}>
-                    Shows the scoreboard and plays the YouTube clip on the big screen.
-                  </p>
-                </article>
-              </div>
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Steps to run a game</h2>
-
-              <div className={styles.phaseLabel}>
-                <span className={styles.phaseName}>Set up</span>
-                <span className={styles.phaseMeta}>once, about 2 min</span>
-              </div>
-              <StepFlow steps={SETUP_STEPS} startAt={1} variant="setup" />
-
-              <div className={`${styles.phaseLabel} ${styles.phaseLabelPlay}`}>
-                <span className={styles.phaseName}>Play</span>
-                <span className={styles.phaseMeta}>every round</span>
-              </div>
-              <StepFlow steps={PLAY_STEPS} startAt={5} variant="play" />
-
-              <p className={styles.audioNote}>
-                <span className={styles.audioIcon} aria-hidden="true">
-                  <SpeakerIcon />
-                </span>
-                <span>
-                  <strong>Audio plays from the host's phone.</strong> Connect it to the room's
-                  speakers, or keep the host near everyone.
-                </span>
-              </p>
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Scoring</h2>
-              <ul className={styles.scoringList}>
-                <li className={styles.scoringRow}>
-                  <span className={`${styles.chip} ${styles.chipGood}`}>+10</span>
-                  <span>Correct song</span>
-                </li>
-                <li className={styles.scoringRow}>
-                  <span className={`${styles.chip} ${styles.chipGood}`}>+5</span>
-                  <span>Correct artist</span>
-                </li>
-                <li className={styles.scoringRow}>
-                  <span className={`${styles.chip} ${styles.chipBad}`}>&minus;3</span>
-                  <span>Wrong buzz (cannot combine with title or artist)</span>
-                </li>
-                <li className={styles.scoringRow}>
-                  <span className={`${styles.chip} ${styles.chipBonus}`}>+4</span>
-                  <span>Manager bonus. The host can award +4 to any team at any time.</span>
-                </li>
-              </ul>
-            </section>
-
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Rules &amp; FAQ</h2>
-              <dl className={styles.faqList}>
-                {FAQ.map(({ term, def }) => (
-                  <div key={term} className={styles.faqRow}>
-                    <dt className={styles.faqTerm}>{term}</dt>
-                    <dd className={styles.faqDef}>{def}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-
-            <div className={styles.backRow}>
-              <Link to="/" className="btn btn-ghost">
-                <ArrowLeftIcon /> Back
-              </Link>
-            </div>
+        <section className={styles.intro}>
+          <h1 className={styles.title}>How to Play</h1>
+          <p className={styles.subtitle}>
+            Roles, the quick setup, scoring, and the rules that come up most often.
+          </p>
+          <div className={styles.hero}>
+            <SetupSchematic />
           </div>
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Roles</h2>
+          <div className={styles.roles}>
+            <article className={styles.roleCard}>
+              <span className={styles.roleIcon} aria-hidden="true">
+                <HostIcon />
+              </span>
+              <h3 className={styles.roleTitle}>Host</h3>
+              <p className={styles.roleText}>Picks genres, runs each round, and awards points.</p>
+            </article>
+
+            <article className={styles.roleCard}>
+              <span className={styles.roleIcon} aria-hidden="true">
+                <PhoneIcon />
+              </span>
+              <h3 className={styles.roleTitle}>Team</h3>
+              <p className={styles.roleText}>
+                Joins on a phone with a 6-letter code and hits the buzzer.
+              </p>
+            </article>
+
+            <article className={styles.roleCard}>
+              <span className={styles.roleIcon} aria-hidden="true">
+                <TvIcon />
+              </span>
+              <h3 className={styles.roleTitle}>Display</h3>
+              <p className={styles.roleText}>
+                Shows the scoreboard and plays the YouTube clip on the big screen.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Steps to run a game</h2>
+
+          <div className={styles.phaseLabel}>
+            <span className={styles.phaseName}>Set up</span>
+            <span className={styles.phaseMeta}>once, about 2 min</span>
+          </div>
+          <StepFlow steps={SETUP_STEPS} startAt={1} variant="setup" />
+
+          <div className={`${styles.phaseLabel} ${styles.phaseLabelPlay}`}>
+            <span className={styles.phaseName}>Play</span>
+            <span className={styles.phaseMeta}>every round</span>
+          </div>
+          <StepFlow steps={PLAY_STEPS} startAt={5} variant="play" />
+
+          <p className={styles.audioNote}>
+            <span className={styles.audioIcon} aria-hidden="true">
+              <SpeakerIcon />
+            </span>
+            <span>
+              <strong>Audio plays from the host's phone.</strong> Connect it to the room's speakers,
+              or keep the host near everyone.
+            </span>
+          </p>
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Scoring</h2>
+          <ul className={styles.scoringList}>
+            <li className={styles.scoringRow}>
+              <span className={`${styles.chip} ${styles.chipGood}`}>+10</span>
+              <span>Correct song</span>
+            </li>
+            <li className={styles.scoringRow}>
+              <span className={`${styles.chip} ${styles.chipGood}`}>+5</span>
+              <span>Correct artist</span>
+            </li>
+            <li className={styles.scoringRow}>
+              <span className={`${styles.chip} ${styles.chipBad}`}>&minus;3</span>
+              <span>Wrong buzz (cannot combine with title or artist)</span>
+            </li>
+            <li className={styles.scoringRow}>
+              <span className={`${styles.chip} ${styles.chipBonus}`}>+4</span>
+              <span>Manager bonus. The host can award +4 to any team at any time.</span>
+            </li>
+          </ul>
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Rules &amp; FAQ</h2>
+          <dl className={styles.faqList}>
+            {FAQ.map(({ term, def }) => (
+              <div key={term} className={styles.faqRow}>
+                <dt className={styles.faqTerm}>{term}</dt>
+                <dd className={styles.faqDef}>{def}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <div className={styles.backRow}>
+          <Link to="/" className="btn btn-ghost">
+            <ArrowLeftIcon /> Back
+          </Link>
         </div>
       </main>
     </div>

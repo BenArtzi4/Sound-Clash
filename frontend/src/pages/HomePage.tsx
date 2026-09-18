@@ -1,10 +1,37 @@
 import { useEffect } from "react";
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
-import { DisplayIcon, ManagerIcon, TeamIcon } from "../components/RoleIcons";
 import { ArrowRightIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
 import styles from "./HomePage.module.css";
+
+// The visible title is the short role word (decision 4); `name` is the
+// accessible name, kept as the long phrase so every role/name query in
+// HomePage.test, App.test and the e2e manager fixture still resolves.
+const ROLES = [
+  {
+    to: "/manager/create",
+    index: "01",
+    title: "Host",
+    desc: "Pick genres, run the rounds, score the room.",
+    name: "Host a game",
+  },
+  {
+    to: "/join",
+    index: "02",
+    title: "Play",
+    desc: "Join from your phone with the code on the TV.",
+    name: "Join a game",
+  },
+  {
+    to: "/display",
+    index: "03",
+    title: "Display",
+    desc: "Put the scoreboard and the QR code on the big screen.",
+    name: "Display screen",
+  },
+] as const;
 
 export function HomePage() {
   useEffect(() => {
@@ -26,58 +53,42 @@ export function HomePage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div className={styles.container}>
-          <Logo size="large" />
-        </div>
+        <Logo size="small" />
       </header>
-
       <main className={styles.main}>
-        <div className={styles.container}>
-          <div className={styles.content}>
-            <section className={styles.hero}>
-              <h1 className={styles.title}>Welcome to Sound Clash</h1>
-              <p className={styles.subtitle}>The ultimate music trivia buzzer game</p>
-            </section>
-
-            <section className={styles.actions}>
-              <Link to="/manager/create" className={`${styles.roleBtn} ${styles.rolePrimary}`}>
-                <span className={styles.roleIcon} aria-hidden="true">
-                  <ManagerIcon />
-                </span>
-                <span className={styles.roleContent}>
-                  <span className={styles.roleTitle}>Host a game</span>
-                  <span className={styles.roleSubtitle}>Pick genres and start playing</span>
-                </span>
-              </Link>
-
-              <Link to="/join" className={`${styles.roleBtn} ${styles.roleSecondary}`}>
-                <span className={styles.roleIcon} aria-hidden="true">
-                  <TeamIcon />
-                </span>
-                <span className={styles.roleContent}>
-                  <span className={styles.roleTitle}>Join a game</span>
-                  <span className={styles.roleSubtitle}>Play on your phone</span>
-                </span>
-              </Link>
-
-              <Link to="/display" className={`${styles.roleBtn} ${styles.roleAccent}`}>
-                <span className={styles.roleIcon} aria-hidden="true">
-                  <DisplayIcon />
-                </span>
-                <span className={styles.roleContent}>
-                  <span className={styles.roleTitle}>Display screen</span>
-                  <span className={styles.roleSubtitle}>Show scoreboard</span>
-                </span>
-              </Link>
-            </section>
-
-            <div className={styles.howToPlayLink}>
-              <Link to="/how-to-play" className="btn btn-ghost">
-                How to Play <ArrowRightIcon />
-              </Link>
-            </div>
-          </div>
-        </div>
+        <section className={styles.hero}>
+          <h1 className={styles.title}>Name the song. Buzz first.</h1>
+          <p className={styles.subtitle}>
+            Real-time music trivia for a room full of people and one TV.
+          </p>
+        </section>
+        <nav className={styles.roles} aria-label="Choose your role">
+          {ROLES.map((r, i) => (
+            <Link
+              key={r.to}
+              to={r.to}
+              className={styles.role}
+              aria-label={r.name}
+              style={{ "--i": i } as CSSProperties}
+            >
+              <span className={styles.roleIndex} aria-hidden="true">
+                {r.index}
+              </span>
+              <span className={styles.roleBody}>
+                <span className={styles.roleTitle}>{r.title}</span>
+                <span className={styles.roleDesc}>{r.desc}</span>
+              </span>
+              <span className={styles.roleArrow} aria-hidden="true">
+                <ArrowRightIcon />
+              </span>
+            </Link>
+          ))}
+        </nav>
+        <p className={styles.howTo}>
+          <Link to="/how-to-play">
+            How to play <ArrowRightIcon />
+          </Link>
+        </p>
       </main>
     </div>
   );

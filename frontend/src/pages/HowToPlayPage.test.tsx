@@ -80,7 +80,7 @@ describe("HowToPlayPage", () => {
       </MemoryRouter>,
     );
     const hero = screen.getByRole("img", { name: /three-screen setup/i });
-    expect(hero).toHaveAttribute("src", "/how-to-play-hero.png");
+    expect(hero.tagName.toLowerCase()).toBe("svg");
   });
 
   it("links back to the home page", () => {
