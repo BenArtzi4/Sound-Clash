@@ -45,8 +45,14 @@
   padding: 0.3rem 0.7rem;
   /* No backdrop-filter: blur() here — it forces a compositing layer that reads
      back the pixels behind it every frame, one of the most expensive effects on
-     mobile. A slightly more opaque flat fill keeps the name legible for free. */
-  background: rgba(0, 0, 0, 0.55);
+     mobile. A flat fill keeps the name legible for free.
+     --surface at 80% + a --border hairline (05 §3), so the chip reads as the
+     same object as every other surface in the redesign and keeps a defined
+     edge against the bright idle/winner/locked tones — a raw black scrim just
+     darkens the tone with no edge. Literal rgba because --surface is #121111
+     and nothing else in the app uses color-mix. */
+  background: rgba(18, 17, 17, 0.8);
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   pointer-events: none;
   /* Held to the left half so it can't collide with the standings chip pinned
@@ -79,7 +85,9 @@
   align-items: flex-end;
   gap: 0.05rem;
   padding: 0.3rem 0.7rem;
-  background: rgba(0, 0, 0, 0.55);
+  /* Matches .identityOverlay opposite it — see the note there. */
+  background: rgba(18, 17, 17, 0.8);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   pointer-events: none;
   max-width: 44vw;
