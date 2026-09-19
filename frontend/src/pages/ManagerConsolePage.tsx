@@ -9,7 +9,7 @@ import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { TeamRescueModal } from "../components/TeamRescueModal";
 import { YouTubePlayer } from "../components/YouTubePlayer";
-import { CheckIcon } from "../components/icons";
+import { CheckIcon, RefreshIcon } from "../components/icons";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { useManagerToken } from "../hooks/useManagerToken";
@@ -281,6 +281,7 @@ export function ManagerConsolePage() {
             onClick={() => setRescueOpen(true)}
             data-testid="rescue-open"
           >
+            <RefreshIcon />
             Reconnect a team
           </button>
         ) : null}

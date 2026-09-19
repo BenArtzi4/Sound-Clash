@@ -154,7 +154,7 @@ Each row is a manual or scripted check; "How" names the fastest reliable way.
 
 | Invariant | How |
 |---|---|
-| All six actions (Song / Artist / Wrong / Bonus / Continue / Next) + End game above the fold at 390×844, 375×667, 360×640; page does not scroll during a round | The #177 harness: `[data-testid]` bottoms ≤ `innerHeight`; `document.documentElement.scrollHeight <= innerHeight` |
+| All six actions (Song / Artist / Wrong / Bonus / Continue / Next) + End game above the fold at 390×844, 375×667, 360×640, 412×915, 430×932; page does not scroll during a round | The #177 harness: `[data-testid]` bottoms ≤ `innerHeight`; `document.documentElement.scrollHeight <= innerHeight` |
 | Optimistic toast fires before the RPC resolves; disabled states while pending | `ManagerConsolePage.test.tsx` (2284 lines — the largest safety net in the repo; must stay green untouched or with listed edits) |
 | YouTube player double-buffer (`youtube-player` + `youtube-player-preload`) both stay mounted and visible (never `display:none`) | e2e `manager_cleanup_yt_csp.spec.ts`; DOM check |
 | Backup host link + Reconnect a team flows unchanged | e2e `host_recovery.spec.ts`, `team_rejoin.spec.ts` |
