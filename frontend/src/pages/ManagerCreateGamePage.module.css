@@ -113,15 +113,23 @@
     border-color var(--dur-micro) var(--ease-move);
 }
 
+/* The invisible checkbox covers the whole tile and takes the pointer itself
+   (opacity 0, no pointer-events: none): a 1px off-screen box would leave the
+   check span as the hit target, and Playwright's check() on the labelled input
+   — fixtures/manager-context.ts:51, every manager spec — then times out with
+   "intercepts pointer events". Clicking the input toggles it natively. */
 .genre input {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   padding: 0;
   border: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Keyboard focus still needs a visible ring; :has lets the tile carry the ring
@@ -225,16 +233,20 @@
 }
 
 /* The checkbox is still the real input (accessibility + form semantics); the
-   filled segment is the visual indicator, so the box itself is hidden. */
+   filled segment is the visual indicator, so the box itself is invisible but
+   covers the segment as the hit target (same reason as .genre input). */
 .decade input {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   padding: 0;
   border: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .decade:has(input:focus-visible) {
