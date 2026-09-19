@@ -1,121 +1,187 @@
+/* The sticky action bar is in flow (it settles at the end of the form), so the
+   shell needs no extra room beneath it: a symmetric 32px keeps the page from
+   scrolling on a laptop just to reveal empty padding. */
 .shell {
   min-height: 100%;
-  padding: 2.5rem var(--space-lg);
+  padding: var(--space-6) var(--space-4);
   max-width: 800px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-}
-
-.shell > header h1 {
-  font-size: 2rem;
-  color: #0f172a;
-  letter-spacing: -0.02em;
+  gap: var(--space-6);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  gap: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 1.5rem 1.5rem;
-  box-shadow: var(--shadow-md);
+  padding: var(--space-5);
+  box-shadow: none;
 }
 
-.label {
-  font-size: 0.8rem;
+.label,
+.presetsLabel {
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--color-text-dim);
-  font-weight: 700;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
-/* One-tap presets (X-Presets). A light "quick start" row above the genre grid:
-   secondary styling so it reads as a shortcut, not the primary control. */
+/* One-tap presets (X-Presets): a horizontally scrollable chip row (scroll-snap,
+   no scrollbar) above the genre grid, so it reads as a shortcut rather than the
+   primary control. */
 .presets {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-}
-
-.presetsLabel {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-dim);
-  font-weight: 700;
+  gap: var(--space-3);
 }
 
 .presetRow {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 2px;
 }
 
-/* touch-action: manipulation + a transparent tap-highlight match the codebase's
-   own .btn convention (styles.css) so a tap doesn't paint the browser's default
-   gray overlay. The :hover feedback lives in the (hover: hover) block below so a
-   touch tap can't leave a sticky-hover flash on the way to "selected". */
+.presetRow::-webkit-scrollbar {
+  display: none;
+}
+
+/* touch-action: manipulation + a transparent tap-highlight keep the #282 fix:
+   a tap paints no browser overlay, and every :hover rule lives in the
+   (hover: hover) block at the end of the file so a touch tap cannot leave a
+   sticky-hover flash on the way to "selected". */
 .preset {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
   min-height: 44px;
-  padding: 8px 16px;
-  background: #ffffff;
-  border: 2px solid var(--color-border);
+  padding: 0 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  cursor: pointer;
+  color: var(--text);
+  font-size: var(--text-body); /* buttons don't inherit size; match the tiles */
   font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--color-text-dim);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition:
-    border-color 200ms ease,
-    background 200ms ease,
-    color 200ms ease,
-    box-shadow 200ms ease;
+    background-color var(--dur-micro) var(--ease-move),
+    border-color var(--dur-micro) var(--ease-move),
+    color var(--dur-micro) var(--ease-move);
 }
 
-.preset:focus-visible {
-  outline: 2px solid var(--color-primary-strong);
-  outline-offset: 2px;
-}
-
-/* A solid fill marks the preset whose selection is currently applied. */
+/* A solid accent fill marks the preset whose selection is currently applied. */
 .presetActive {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .genres {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2);
 }
 
-/* Decades are a small, well-known closed set, so they read best as a justified
-   row of toggle pills (the Spotify/Apple-Music filter-bar pattern) rather than a
-   ragged checkbox grid. The row breaks are defined in the markup (two .decadeRow
-   groups, 4 + 3) instead of by fluid wrapping, so a lonely orphan pill is
-   impossible at any width — fluid wrap on a 7-item (prime) set strands the last
-   chip on its own line at certain narrow widths (e.g. a 320px / Z-Fold cover). */
+/* Toggle tiles. The native checkbox stays in the DOM (visually hidden) so the
+   label↔input pairs the tests and assistive tech rely on are untouched; the
+   tile is the visual, and the check icon draws in when the genre is picked. */
+.genre {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--dur-micro) var(--ease-move),
+    border-color var(--dur-micro) var(--ease-move);
+}
+
+.genre input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Keyboard focus still needs a visible ring; :has lets the tile carry the ring
+   even though the focused element is the hidden input. */
+.genre:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.genreCheck {
+  display: inline-flex;
+  flex: none; /* a two-line genre name must not squeeze the box below 20px */
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  color: var(--accent-ink);
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.genreCheck svg path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  transition: stroke-dashoffset var(--dur-micro) var(--ease-arrive);
+}
+
+.genreSelected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.genreSelected .genreCheck {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.genreSelected .genreCheck svg path {
+  stroke-dashoffset: 0;
+}
+
+/* Decades are a small closed set, so they read as a segmented control: one
+   bordered row per markup row (4 + 3 on a phone, see DECADE_ROWS), the selected
+   segment filled. Above the mobile breakpoint the two rows dissolve
+   (display: contents) into one line of separate pills. */
 .decades {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .decadeRow {
   display: flex;
-  gap: 0.5rem;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
-/* Above the mobile breakpoint the two rows dissolve (display: contents) so all
-   seven pills become one justified line again — the desktop look is unchanged. */
 @media (min-width: 601px) {
   .decades {
     flex-direction: row;
@@ -125,10 +191,6 @@
   }
 }
 
-/* flex: 1 1 0 makes every pill stretch to share its row's width equally, so each
-   row is fully justified (4 across on top, 3 across below on a phone; all 7 in a
-   line on desktop). min-width:auto floors each pill at its content width, so the
-   longest label ("2000s") can never clip. */
 .decade {
   flex: 1 1 0;
   position: relative;
@@ -136,27 +198,34 @@
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  padding: 10px 12px;
-  background: #ffffff;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
-  font-weight: 600;
-  color: var(--color-text-dim);
-  text-align: center;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition:
-    border-color 200ms ease,
-    background 200ms ease,
-    color 200ms ease,
-    box-shadow 200ms ease;
+  border-right: 1px solid var(--border);
 }
 
-/* The checkbox is still the real input (kept for accessibility + form
-   semantics); the filled pill is the visual indicator, so hide the box itself
-   off-screen rather than rendering it inside the pill. */
+/* Phone only: the last segment of a row has no divider. Scoped so the higher
+   specificity of :last-child cannot strip the right border off the desktop
+   pills below. */
+@media (max-width: 600px) {
+  .decade:last-child {
+    border-right: 0;
+  }
+}
+
+@media (min-width: 601px) {
+  .decade {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* The checkbox is still the real input (accessibility + form semantics); the
+   filled segment is the visual indicator, so the box itself is hidden. */
 .decade input {
   position: absolute;
   width: 1px;
@@ -168,88 +237,54 @@
   pointer-events: none;
 }
 
-/* Keyboard focus still needs a visible ring; pointer clicks don't (:has lets the
-   pill carry the ring even though the focused element is the hidden input). */
 .decade:has(input:focus-visible) {
-  outline: 2px solid var(--color-primary-strong);
-  outline-offset: 2px;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
-/* A solid fill reads unambiguously as "on" without a checkbox to lean on. */
 .decadeSelected {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
-.genre {
+/* Sticky action bar on a phone: Create game is full-width at the bottom of the
+   screen, Cancel a ghost link beside it; on wider screens the bar sits under
+   the sections as before. */
+.actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 0.6rem;
-  padding: 12px 14px;
-  background: #ffffff;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  user-select: none;
-  font-weight: 600;
-  color: var(--color-text-dim);
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    border-color 200ms ease,
-    background 200ms ease,
-    color 200ms ease,
-    box-shadow 200ms ease;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
 }
 
-/* Pin the checkbox to a fixed box. A native checkbox with width:auto renders a
-   different intrinsic size when checked vs unchecked (~16px unchecked, ~13px
-   checked), and because the checkbox and label text share a flex row, that size
-   change shoved the text sideways on every toggle — the "text shaking" on check.
-   Explicit width/height + flex:none keep the footprint constant in both states. */
-.genre input {
-  flex: none;
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  margin: 0;
-  accent-color: var(--color-primary);
+.actions :global(.btn-primary) {
+  flex: 1;
 }
 
-/* Clicking a chip focuses its native checkbox, which paints the browser's
-   default blue focus ring around the box. Drop it for pointer interaction but
-   keep a visible ring for keyboard users (:focus-visible) so we don't strip
-   accessibility along with the cosmetic fix. */
-.genre input:focus:not(:focus-visible) {
-  outline: none;
+@media (min-width: 601px) {
+  .actions {
+    position: static;
+    border-top: 0;
+  }
+  .actions :global(.btn-primary) {
+    flex: 0 0 auto;
+  }
 }
 
-.genre input:focus-visible {
-  outline: 2px solid var(--color-primary-strong);
-  outline-offset: 2px;
-}
-
-.genreSelected {
-  border-color: var(--color-primary);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, var(--color-primary-soft) 100%);
-  color: var(--color-primary-strong);
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.18);
-}
-
-/* Inline submit-button spinner (Fix 1a) + the >30s reassurance line (Fix 1b).
-   CSS-only, no dependency: .btn is already an inline-flex row with a gap, so the
-   spinner sits left of the label and scales with the button's font size via em.
-   It's decorative (aria-hidden); the button text carries the actual state. The
-   global prefers-reduced-motion rule freezes the rotation for motion-sensitive
-   users, leaving a static ring — the text still communicates progress. */
+/* Inline submit-button spinner + the >30s reassurance line (same rules as the
+   Join screen). The spinner is decorative (aria-hidden); the button text carries
+   the state, and the global reduced-motion rule freezes the rotation. */
 .spinner {
   display: inline-block;
   width: 1em;
   height: 1em;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #ffffff;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-top-color: var(--accent-ink);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -260,75 +295,28 @@
   }
 }
 
-/* A calm, non-error reassurance shown only after ~30s of a pending submit. */
 .helper {
-  margin: 0;
   text-align: center;
   font-size: 0.9rem;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
 
-.actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-
-/* Hover feedback is desktop-only. On a touch tap the browser applies a "sticky
-   hover" that made a pill flash through the hover fill (white → light-blue →
-   selected #3b82f6 → the later-declared *Selected:hover #2563eb, then back to
-   #3b82f6 when a subsequent tap cleared the sticky hover) with the 200ms
-   background transition animating every hop. Gating all five :hover rules behind
-   (hover: hover) removes that flash on touch while leaving the desktop look
-   unchanged (hover: hover matches on pointer devices). Keyboard :focus-visible
-   rules are deliberately OUTSIDE this block. The *Selected/*Active :hover rules
-   are kept after their base :hover so they still win at equal specificity. */
+/* Hover feedback is pointer-only (#282): on a touch tap the browser's sticky
+   hover would otherwise flash the chip through the hover state on the way to
+   "selected". Keyboard :focus-visible rules stay outside this block. */
 @media (hover: hover) {
-  .preset:hover {
-    border-color: var(--color-primary);
-    background: var(--color-primary-soft);
-    color: var(--color-primary-strong);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
-  }
-
-  .presetActive:hover {
-    border-color: var(--color-primary-strong);
-    background: var(--color-primary-strong);
-    color: #ffffff;
-  }
-
+  .preset:hover,
+  .genre:hover,
   .decade:hover {
-    border-color: var(--color-primary);
-    background: var(--color-primary-soft);
-    color: var(--color-primary-strong);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+    border-color: var(--border-strong);
   }
-
-  .decadeSelected:hover {
-    border-color: var(--color-primary-strong);
-    background: var(--color-primary-strong);
-    color: #ffffff;
+  /* A selected tile / active preset keeps its accent border under the pointer
+     (the plain :hover above would otherwise out-rank the selected rule). */
+  .genreSelected:hover {
+    border-color: var(--accent);
   }
-
-  /* These chips never move. Feedback is colour/border/shadow only — no transform
-     in any state (:hover or :active). A translateY on :hover moved the chip out
-     from under the pointer and made it shake; a translateY on :active nudged it
-     down on every click, which also reads as a shake. Static is the requirement. */
-  .genre:hover {
-    border-color: var(--color-primary);
-    background: var(--color-primary-soft);
-    color: var(--color-primary-strong);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
-  }
-}
-
-@media (max-width: 600px) {
-  .shell {
-    padding: 1.5rem var(--space-md);
-  }
-  .field {
-    padding: 1.25rem;
+  .presetActive:hover {
+    background: #ff8f2b;
+    border-color: #ff8f2b;
   }
 }
