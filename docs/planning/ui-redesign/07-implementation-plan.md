@@ -1413,7 +1413,7 @@ Note the `(hover: hover)` gate keeps the #282 fix.
 
 `pending` needs no rule (the `.pressed` brightness covers it; `data-tone="pending"` is still emitted by the component).
 
-- [ ] **Step 3: TeamGameplayPage.module.css** — replace the `rgba(15,23,42,…)` chip fills with `rgba(0,0,0,0.55)`, `#f8fafc` with `var(--bone)`; `.standingRank { font-family: var(--font-display); }`; `.statusEnded { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); box-shadow: none; }`. Add nothing continuous.
+- [ ] **Step 3: TeamGameplayPage.module.css** — replace the `rgba(15,23,42,…)` chip fills with `rgba(18,17,17,0.8)` + `1px solid var(--border)` (`--surface` at 80%, per `05` §3 — Step 3 originally said a plain `rgba(0,0,0,0.55)` scrim, which shipped in #312 and was changed to the bordered surface on the maintainer's call), `#f8fafc` with `var(--bone)`; `.standingRank { font-family: var(--font-display); }`; `.statusEnded { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); box-shadow: none; }`. Add nothing continuous.
 
 - [ ] **Step 4: Guards spec**
 
