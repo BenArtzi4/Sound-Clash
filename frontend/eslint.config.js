@@ -75,6 +75,7 @@ export default [
         HTMLDivElement: "readonly",
         HTMLIFrameElement: "readonly",
         HTMLInputElement: "readonly",
+        HTMLOListElement: "readonly",
         KeyboardEvent: "readonly",
         Event: "readonly",
         ErrorEvent: "readonly",
