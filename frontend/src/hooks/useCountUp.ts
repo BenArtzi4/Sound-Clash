@@ -25,14 +25,20 @@ interface CountUpOptions {
 export function useCountUp(value: number, opts: CountUpOptions = {}): number {
   const { duration = 600, delay = 0, from } = opts;
   const [display, setDisplay] = useState(() => (from !== undefined && canAnimate() ? from : value));
-  const fromRef = useRef(display);
+  // Mirrors whatever number is currently on screen, so an animation always
+  // starts from what the viewer can see. Updated wherever `display` is set,
+  // never during render, and — the part that matters — never by the cleanup:
+  // StrictMode mounts every effect twice, and a cleanup that jumped this to
+  // the target would make the second run see "already there", bail, and
+  // strand the display on its opening value.
+  const displayRef = useRef(display);
   useEffect(() => {
     if (!canAnimate()) {
-      fromRef.current = value;
+      displayRef.current = value;
       setDisplay(value);
       return;
     }
-    const start = fromRef.current;
+    const start = displayRef.current;
     if (start === value) return;
     let raf = 0;
     const timer = window.setTimeout(() => {
@@ -40,19 +46,16 @@ export function useCountUp(value: number, opts: CountUpOptions = {}): number {
       const tick = (t: number) => {
         const p = Math.min(1, (t - t0) / duration);
         const eased = 1 - Math.pow(1 - p, 3);
-        setDisplay(Math.round(start + (value - start) * eased));
-        if (p < 1) {
-          raf = requestAnimationFrame(tick);
-        } else {
-          fromRef.current = value;
-        }
+        const n = Math.round(start + (value - start) * eased);
+        displayRef.current = n;
+        setDisplay(n);
+        if (p < 1) raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
     }, delay);
     return () => {
       window.clearTimeout(timer);
       cancelAnimationFrame(raf);
-      fromRef.current = value;
     };
   }, [value, duration, delay]);
   return display;

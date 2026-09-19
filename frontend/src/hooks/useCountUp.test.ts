@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useCountUp } from "./useCountUp";
@@ -98,5 +99,38 @@ describe("useCountUp", () => {
   it("ignores `from` when motion is unavailable (jsdom): the total shows at once", () => {
     const { result } = renderHook(() => useCountUp(42, { from: 0 }));
     expect(result.current).toBe(42);
+  });
+
+  // StrictMode mounts, unmounts and re-mounts every effect. If the cleanup
+  // advances the animation's start point to the target, the second run sees
+  // "already there" and bails — leaving the podium reading 0pts forever, which
+  // is exactly what full_game.spec.ts caught.
+  it("still animates when the effect is mounted twice (StrictMode)", () => {
+    mockMotion(false);
+    vi.useFakeTimers();
+    let now = 0;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const frames: Array<(t: number) => void> = [];
+    window.requestAnimationFrame = ((cb: (t: number) => void) => {
+      frames.push(cb);
+      return frames.length;
+    }) as unknown as typeof window.requestAnimationFrame;
+
+    const { result } = renderHook(() => useCountUp(30, { from: 0, duration: 900 }), {
+      wrapper: StrictMode,
+    });
+    expect(result.current).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    now = 900;
+    act(() => {
+      // Both mounts queue a frame; running them all must land on the target,
+      // never leave the display stranded at `from`.
+      for (const f of frames.splice(0)) f(now);
+    });
+    expect(result.current).toBe(30);
+    nowSpy.mockRestore();
   });
 });
