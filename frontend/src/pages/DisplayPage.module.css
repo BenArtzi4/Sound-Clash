@@ -22,64 +22,92 @@
   max-width: min(92vw, 520px);
 }
 
+/* Code entry (/display): the same column, card, six-cell code field and
+   counter as the Join screen (Task 5). Page is the card on phones; the
+   --surface card appears from 601px. */
 .entry {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100%;
-  padding: var(--space-xl) var(--space-lg);
+  padding: var(--space-7) var(--space-4);
 }
 
 .entryCard {
   width: 100%;
-  max-width: 460px;
-  padding: 2.5rem 2.25rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  max-width: 420px;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  box-shadow: var(--shadow-lg);
-  position: relative;
-  overflow: hidden;
+  gap: var(--space-5);
+  /* Query container so the code field can size its cells from the card width (cqw). */
+  container-type: inline-size;
 }
 
-.entryCard::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 100%);
+@media (min-width: 601px) {
+  .entryCard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-6);
+  }
 }
 
 .entryCard h1 {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.02em;
+  font-size: var(--text-display-m);
 }
 
+/* One input, six drawn cells: the cell boxes are a repeating gradient-free
+   background image built from a 1px border colour, so the DOM stays a single
+   <input maxLength=6>. Each cell is a sixth of the padding box (100cqw minus
+   the two 1px borders); a glyph of Anton is ~1ch, so the tracking is one cell
+   minus one glyph and the indent centres the first glyph in the first cell.
+   Typed characters fill the cells left to right. The em values are the
+   fallback where container units are unsupported. */
 .entryInput {
-  letter-spacing: 0.5em;
-  text-align: center;
-  font-size: 1.75rem;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  padding: 0;
+  text-align: left;
+  letter-spacing: 0.6em;
+  letter-spacing: calc((100cqw - 2px) / 6 - 1ch);
+  text-indent: 0.6em;
+  text-indent: calc(((100cqw - 2px) / 6 - 1ch) / 2);
   text-transform: uppercase;
-  color: var(--color-primary-strong);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--bone);
+  background-color: var(--surface-2);
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(100% / 6 - 1px),
+    var(--border) calc(100% / 6 - 1px) calc(100% / 6)
+  );
+  min-height: 64px;
 }
 
+.entryInput::placeholder {
+  color: var(--text-dim);
+  letter-spacing: 0.6em;
+  letter-spacing: calc((100cqw - 2px) / 6 - 1ch);
+}
+
+/* Sits directly under the input: pull it up so the input→counter gap matches
+   the Join field's --space-2 despite the card's --space-5 column gap. */
 .entryCounter {
   align-self: flex-end;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-mute);
+  margin-top: calc(-1 * var(--space-4));
+  font-size: var(--text-caption);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  margin-top: -0.5rem;
+}
+
+.entryCard :global(.btn-primary) {
+  width: 100%;
+}
+
+@media (min-width: 601px) {
+  .entryCard :global(.btn-primary) {
+    width: auto;
+    align-self: flex-end;
+  }
 }
 
 .header {

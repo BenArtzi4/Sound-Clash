@@ -3,136 +3,119 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-xl) var(--space-lg);
+  padding: var(--space-7) var(--space-4);
 }
-
 .card {
   width: 100%;
-  max-width: 460px;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 2.5rem 2.25rem;
+  max-width: 420px;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  box-shadow: var(--shadow-lg);
-  position: relative;
-  overflow: hidden;
+  gap: var(--space-5);
 }
-
-.card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #10b981 100%);
+@media (min-width: 601px) {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-6);
+  }
 }
-
 .title {
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-  margin: 0;
+  font-size: var(--text-display-m);
 }
-
 .subtitle {
-  color: var(--color-text-dim);
-  font-size: 1rem;
-  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  margin-top: var(--space-2);
 }
-
+/* Query container so the code field can size its cells from the field width (cqw). */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
+  container-type: inline-size;
 }
-
 .label {
-  font-size: 0.8rem;
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--color-text-dim);
-  font-weight: 700;
+  color: var(--text-muted);
+  font-weight: 500;
 }
-
+/* One input, six drawn cells: the cell boxes are a repeating gradient-free
+   background image built from a 1px border colour, so the DOM stays a single
+   <input maxLength=6> (tests + QR prefill depend on it). Each cell is a sixth
+   of the padding box (100cqw minus the two 1px borders); a glyph of Anton is
+   ~1ch, so the tracking is one cell minus one glyph and the indent centres the
+   first glyph in the first cell. Typed characters fill the cells left to
+   right. The em values are the fallback where container units are unsupported. */
 .codeInput {
-  letter-spacing: 0.5em;
-  text-align: center;
-  font-size: 1.75rem;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  padding: 0;
+  text-align: left;
+  letter-spacing: 0.6em;
+  letter-spacing: calc((100cqw - 2px) / 6 - 1ch);
+  text-indent: 0.6em;
+  text-indent: calc(((100cqw - 2px) / 6 - 1ch) / 2);
   text-transform: uppercase;
-  color: var(--color-primary-strong);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--bone);
+  background-color: var(--surface-2);
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(100% / 6 - 1px),
+    var(--border) calc(100% / 6 - 1px) calc(100% / 6)
+  );
+  min-height: 64px;
 }
-
+.codeInput::placeholder {
+  color: var(--text-dim);
+  letter-spacing: 0.6em;
+  letter-spacing: calc((100cqw - 2px) / 6 - 1ch);
+}
 .counter {
   align-self: flex-end;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-mute);
+  font-size: var(--text-caption);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  margin-top: -0.25rem;
 }
-
 .hint {
-  font-size: 0.8rem;
-  color: var(--color-text-dim);
-  margin: 0.25rem 0 0;
-  line-height: 1.35;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
-
-/* Inline submit-button spinner (Fix 1a) + the >30s reassurance line (Fix 1b).
-   CSS-only, no dependency: .btn is already an inline-flex row with a gap, so the
-   spinner sits left of the label and scales with the button's font size via em.
-   It's decorative (aria-hidden); the button text carries the actual state. The
-   global prefers-reduced-motion rule freezes the rotation for motion-sensitive
-   users, leaving a static ring — the text still communicates progress. */
 .spinner {
   display: inline-block;
   width: 1em;
   height: 1em;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #ffffff;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-top-color: var(--accent-ink);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
-
-/* A calm, non-error reassurance shown only after ~30s of a pending submit. */
 .helper {
-  margin: 0;
   text-align: center;
   font-size: 0.9rem;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
-
 .actions {
   display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-  align-items: center;
-  margin-top: 0.5rem;
+  flex-direction: column-reverse;
+  gap: var(--space-3);
 }
-
-@media (max-width: 480px) {
-  .card {
-    padding: 2rem 1.5rem;
+.actions :global(.btn-primary) {
+  width: 100%;
+}
+@media (min-width: 601px) {
+  .actions {
+    flex-direction: row;
+    justify-content: flex-end;
   }
-  .title {
-    font-size: 1.5rem;
-  }
-  .codeInput {
-    font-size: 1.5rem;
-    letter-spacing: 0.4em;
+  .actions :global(.btn-primary) {
+    width: auto;
   }
 }
