@@ -1,6 +1,6 @@
 .shell {
   min-height: 100%;
-  padding: 1.75rem var(--space-lg);
+  padding: 1.75rem var(--space-5);
   max-width: 1200px;
   margin: 0 auto;
   display: flex;
@@ -14,11 +14,11 @@
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 1rem 1.5rem;
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 .codeBlock {
@@ -28,46 +28,44 @@
 }
 
 .codeLabel {
-  font-size: 0.7rem;
+  font-size: var(--text-caption);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-dim);
-  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 .code {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-display);
   font-size: 1.85rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: var(--bone);
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
 }
 
 .statusPill {
+  font-family: var(--font-ui);
   padding: 6px 14px;
   border-radius: var(--radius-pill);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--text-caption);
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   border: 1px solid currentColor;
 }
 
 .statusWaiting {
-  color: var(--color-warning);
-  background: rgba(245, 158, 11, 0.1);
+  color: var(--bone);
+  background: transparent;
+  border-color: var(--bone);
 }
 .statusPlaying {
-  color: var(--color-success);
-  background: rgba(16, 185, 129, 0.1);
-}
-.statusEnded {
-  color: var(--color-text-dim);
-  background: rgba(148, 163, 184, 0.12);
-  border-color: var(--color-border-strong);
+  color: var(--positive-ink);
+  background: var(--positive);
+  border-color: var(--positive);
 }
 
 .headerMeta {
@@ -75,12 +73,6 @@
   align-items: center;
   gap: 0.85rem;
   flex-wrap: wrap;
-}
-
-.headerActions {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
 }
 
 /* Quiet host tools row: the backup host link + the "reconnect a team" rescue
@@ -93,22 +85,32 @@
   gap: 0.6rem;
 }
 
+/* Departure from the plan's `.hostTools :global(button)`: that selector also
+   matches the "Copy link" .btn inside the opened backup-host panel and, at
+   higher specificity than .btn, strips its border, background and padding.
+   The toggle's own twin rule lives in HostRecoveryLink.module.css instead. */
 .rescueTrigger {
   border: none;
   background: none;
   padding: 0;
   font: inherit;
+  font-family: var(--font-ui);
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-text-mute);
+  color: var(--text-muted);
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
   -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-micro) var(--ease-move);
 }
 
-.rescueTrigger:hover {
-  color: var(--color-primary-strong);
+@media (hover: hover) {
+  .rescueTrigger:hover {
+    color: var(--bone);
+  }
 }
 
 .endGameFooter {
@@ -116,7 +118,7 @@
   justify-content: center;
   margin-top: 1rem;
   padding-top: 0.5rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border);
 }
 
 .column {
@@ -134,12 +136,15 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .playerLayer {
   position: absolute;
   inset: 0;
-  transition: opacity 200ms ease;
+  transition: opacity 200ms var(--ease-move);
 }
 
 .playerActive {
@@ -154,24 +159,13 @@
 }
 
 .card {
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 1.5rem;
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
   position: relative;
   overflow: hidden;
-}
-
-.card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
-  opacity: 0.85;
 }
 
 .songBlock {
@@ -179,88 +173,19 @@
 }
 
 .songLine {
-  font-size: 1.2rem;
-  font-weight: 800;
-  color: #0f172a;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--text);
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
   word-break: break-word;
 }
 
 .songMeta {
   font-size: 0.95rem;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
   margin: 0.2rem 0 0;
-}
-
-.timerWrap {
-  --timer-pct: 100%;
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.timerRing {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: conic-gradient(
-    var(--color-warning) var(--timer-pct),
-    rgba(245, 158, 11, 0.18) var(--timer-pct)
-  );
-  flex-shrink: 0;
-  transition: background 600ms linear;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
-}
-
-.timerRing::after {
-  content: "";
-  position: absolute;
-  inset: 5px;
-  background: #ffffff;
-  border-radius: 50%;
-}
-
-.timerValue {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  font-size: 1.3rem;
-  color: var(--color-warning);
-  z-index: 1;
-}
-
-.timerLow {
-  animation: timer-pulse 0.7s ease-in-out infinite;
-}
-
-.timerLow .timerRing {
-  background: conic-gradient(
-    var(--color-danger) var(--timer-pct),
-    rgba(239, 68, 68, 0.18) var(--timer-pct)
-  );
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.28);
-}
-
-.timerLow .timerValue {
-  color: var(--color-danger);
-}
-
-@keyframes timer-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.06);
-    opacity: 0.85;
-  }
 }
 
 /* Reserved status strip. Always mounted during play at a fixed min-height so
@@ -273,93 +198,37 @@
   align-items: center;
   min-height: 3.25rem;
   padding: 0.75rem 1.1rem;
-  border: 2px solid transparent;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-muted);
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.85rem;
   transition:
-    background 200ms ease,
-    border-color 200ms ease,
-    color 200ms ease;
+    background-color var(--dur-state) var(--ease-move),
+    border-color var(--dur-state) var(--ease-move),
+    color var(--dur-state) var(--ease-move);
 }
 
 .statusStripLocked {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(251, 191, 36, 0.08) 100%);
-  border-color: var(--color-warning);
-  color: #92400e;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
+/* The waiting tone IS the base strip (surface-2 + muted ink); the modifier
+   exists only so the class key stays in the module. */
 .statusStripWaiting {
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--color-text-mute);
+  background: var(--surface-2);
+  color: var(--text-muted);
 }
 
 .lockedTeam {
-  font-weight: 800;
-  color: #b45309;
-}
-
-.checkRow {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
-  margin-bottom: 1rem;
-}
-
-@media (max-width: 480px) {
-  .checkRow {
-    grid-template-columns: 1fr;
-  }
-}
-
-.checkLabel {
-  display: flex;
-  gap: 0.55rem;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-  padding: 12px 14px;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: #ffffff;
-  text-align: center;
-  transition:
-    border-color 200ms ease,
-    background 200ms ease,
-    color 200ms ease,
-    transform 100ms ease;
-}
-
-.checkLabel:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-}
-
-.checkLabel input {
-  padding: 0;
-  width: auto;
-  accent-color: var(--color-primary);
-}
-
-.checkChecked {
-  border-color: var(--color-success);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0.04) 100%);
-  color: #065f46;
-}
-
-.checkChecked:hover {
-  border-color: var(--color-success);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24) 0%, rgba(16, 185, 129, 0.08) 100%);
-  color: #065f46;
-}
-
-.checkRow[aria-disabled="true"] .checkLabel {
-  opacity: 0.55;
-  cursor: not-allowed;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .scoreRow {
@@ -382,39 +251,33 @@
   justify-content: center;
   gap: 0.2rem;
   padding: 12px 10px;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
   font: inherit;
+  font-family: var(--font-ui);
   font-weight: 600;
   cursor: pointer;
   text-align: center;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition:
-    border-color 200ms ease,
-    background 200ms ease,
-    color 200ms ease,
-    transform 100ms ease,
-    box-shadow 200ms ease;
+    background-color var(--dur-micro) var(--ease-move),
+    border-color var(--dur-micro) var(--ease-move),
+    transform var(--dur-micro) var(--ease-overshoot);
   min-height: 64px;
 }
 
 .scoreBtn:disabled {
-  opacity: 0.55;
+  opacity: 0.4;
   cursor: not-allowed;
-}
-
-.scoreBtn:not(:disabled):hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
 }
 
 .scoreBtn:not(:disabled):active {
   transform: scale(0.98);
   /* Instant press-in; release eases back via the base .scoreBtn transition. */
-  transition-duration: 0ms;
+  transition-duration: var(--dur-instant);
 }
 
 .scoreLabel {
@@ -425,50 +288,62 @@
 
 .scorePoints {
   font-size: 1.05rem;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
 
+/* Correct Song / Correct Artist / Correct (soundtrack): green outline that
+   fills on press. The points value carries the colour while the button is at
+   rest; on press the fill becomes green, so BOTH children must flip to the
+   ink colour or they'd render green-on-green (a child rule beats the
+   inherited colour from the button). */
+.scorePositive {
+  border-color: var(--positive);
+}
+
 .scorePositive .scorePoints {
-  color: var(--color-success);
+  color: var(--positive);
 }
 
-.scoreNegative .scorePoints {
-  color: var(--color-danger);
+/* Wrong is a one-click commit action (not a toggle): red outline at rest,
+   solid red on press so it reads as a final verdict. Pressed ink is black,
+   not --negative-ink white: these labels are 13.6-16.8 px, and white on
+   #F2352B measures 3.9:1 (AA needs 4.5:1 below 24 px) while black measures
+   5.3:1. */
+.wrongBtn {
+  background: transparent;
+  border-color: var(--negative);
+  color: var(--negative);
+  box-shadow: none;
 }
 
-.scoreBonus {
-  /* Bonus is always actionable while teams exist (no buzz required), so
-     give it a permanent amber tint instead of the neutral white the other
-     three judgement buttons use when disabled. Keeps it readable as the
-     "always on" action even when its row-mates sit greyed-out. */
-  border-color: var(--color-warning);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0.04) 100%);
-  color: #92400e;
+.wrongBtn .scoreLabel,
+.wrongBtn .scorePoints {
+  color: var(--negative);
 }
 
-.scoreBonus:not(:disabled):hover {
-  border-color: var(--color-warning);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.26) 0%, rgba(245, 158, 11, 0.08) 100%);
-  color: #92400e;
+/* Bonus is always actionable while teams exist (no buzz required), so it keeps
+   a bone outline instead of the neutral surface the judgement buttons use —
+   it reads as the "always on" action even when its row-mates sit greyed out.
+   scoreActiveBonus is the open-picker state. */
+.scoreBonus,
+.scoreActiveBonus {
+  background: transparent;
+  border-color: var(--bone);
+  color: var(--bone);
+  box-shadow: none;
 }
 
-.scoreBonus .scorePoints {
-  color: var(--color-warning);
+.scoreBonus .scoreLabel,
+.scoreBonus .scorePoints,
+.scoreActiveBonus .scoreLabel,
+.scoreActiveBonus .scorePoints {
+  color: var(--bone);
 }
 
 .scoreActiveBonus {
-  border-color: var(--color-warning);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0.04) 100%);
-  color: #92400e;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.22);
-}
-
-.scoreActiveBonus:not(:disabled):hover {
-  border-color: var(--color-warning);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.26) 0%, rgba(245, 158, 11, 0.08) 100%);
-  color: #92400e;
+  background: rgba(233, 228, 217, 0.1);
 }
 
 /* The slot reserves vertical space whether the picker is open or not, so
@@ -487,15 +362,15 @@
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.85rem 1rem;
-  border: 1px dashed var(--color-warning);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
-  background: rgba(245, 158, 11, 0.06);
+  background: var(--surface-2);
 }
 
 .bonusPickerHint {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #92400e;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -517,10 +392,6 @@
   word-break: break-word;
 }
 
-/* Continue / Next-round sit below the four scoring buttons and now match
-   their grid: a 2-column row of equal-sized cells so the two rows feel
-   like one coherent control surface. min-height + padding mirror the
-   .scoreBtn dimensions; the per-button gradients stay below. */
 /* Continue / Next stay a 2-up row at every width (see the mobile one-screen-fit
    block below) — stacking them to a single column cost a whole button-row of
    height and pushed Next below the fold on a phone (issue #177). */
@@ -537,60 +408,94 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.95rem;
   letter-spacing: 0.01em;
 }
 
 .awardBtn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-color: transparent;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.28);
-}
-
-.awardBtn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  border-color: transparent;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
 }
 
 .continueBtn {
-  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.28);
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: none;
 }
 
-.continueBtn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.4);
+@media (hover: hover) {
+  .scoreBtn:not(:disabled):hover {
+    border-color: var(--border-strong);
+  }
+  .scorePositive:not(:disabled):hover {
+    border-color: var(--positive);
+  }
+  .wrongBtn:not(:disabled):hover {
+    border-color: var(--negative);
+    background: var(--negative-soft);
+  }
+  .scoreBonus:not(:disabled):hover,
+  .scoreActiveBonus:not(:disabled):hover {
+    border-color: var(--bone);
+    background: rgba(233, 228, 217, 0.1);
+  }
+  .awardBtn:hover:not(:disabled) {
+    background: #ff8f2b;
+    border-color: #ff8f2b;
+    color: var(--accent-ink);
+  }
+  .continueBtn:hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
 }
 
-/* Wrong is a one-click commit action (not a toggle). Solid red fill so it
-   reads as a final verdict, not a checkbox. Used in both the score-row
-   and the mobile sticky bar. */
-.wrongBtn {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.28);
+/* Pressed fills. These MUST come after the @media (hover: hover) block: a
+   mouse press is also a hover, and `.x:not(:disabled):hover` and
+   `.x:not(:disabled):active` have identical specificity (0,3,0), so source
+   order decides. Declared earlier, the hover wash won while the button was
+   held down and the Wrong button rendered black-on-dark-red at 1.23:1.
+   Each rule flips the children too, because `.wrongBtn .scorePoints` (0,2,0)
+   beats the colour inherited from the button. */
+.scorePositive:not(:disabled):active {
+  background: var(--positive);
+  border-color: var(--positive);
+  color: var(--positive-ink);
 }
 
-.wrongBtn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.42);
+.scorePositive:not(:disabled):active .scoreLabel,
+.scorePositive:not(:disabled):active .scorePoints {
+  color: var(--positive-ink);
 }
 
-.wrongBtn .scorePoints {
-  color: rgba(255, 255, 255, 0.92);
+.wrongBtn:not(:disabled):active {
+  background: var(--negative);
+  border-color: var(--negative);
+  color: var(--bg);
 }
 
-.wrongBtn .scoreLabel {
-  color: #ffffff;
+.wrongBtn:not(:disabled):active .scoreLabel,
+.wrongBtn:not(:disabled):active .scorePoints {
+  color: var(--bg);
+}
+
+.scoreBonus:not(:disabled):active,
+.scoreActiveBonus:not(:disabled):active {
+  background: var(--bone);
+  border-color: var(--bone);
+  color: var(--bg);
+}
+
+.scoreBonus:not(:disabled):active .scoreLabel,
+.scoreBonus:not(:disabled):active .scorePoints,
+.scoreActiveBonus:not(:disabled):active .scoreLabel,
+.scoreActiveBonus:not(:disabled):active .scorePoints {
+  color: var(--bg);
 }
 
 .tokenChips {
@@ -603,20 +508,27 @@
 
 .tokenChip {
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 4px 10px;
   border-radius: var(--radius-pill);
-  background: rgba(148, 163, 184, 0.18);
-  color: var(--color-text-dim);
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition:
+    background-color var(--dur-micro) var(--ease-move),
+    border-color var(--dur-micro) var(--ease-move),
+    color var(--dur-micro) var(--ease-move);
 }
 
 .tokenChipClaimed {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.05) 100%);
-  color: #065f46;
-  border-color: var(--color-success);
+  background: var(--accent-soft);
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .skeletonStack {
@@ -628,20 +540,13 @@
 
 @media (max-width: 600px) {
   .shell {
-    padding: 1.25rem var(--space-md);
+    padding: 1.25rem var(--space-4);
   }
   .header {
     padding: 0.85rem 1rem;
   }
   .code {
     font-size: 1.5rem;
-  }
-  .timerRing {
-    width: 56px;
-    height: 56px;
-  }
-  .timerValue {
-    font-size: 1.1rem;
   }
 }
 
@@ -671,7 +576,7 @@
    ============================================================================ */
 @media (max-width: 600px) {
   .shell {
-    padding: 0.7rem var(--space-md);
+    padding: 0.7rem var(--space-4);
     gap: 0.6rem;
     min-height: 100dvh;
   }
@@ -753,11 +658,14 @@
   }
 }
 
-/* Extra squeeze for short phones (e.g. 360x640) so the six action buttons still
-   clear the fold; taller phones keep the roomier metrics above. */
-@media (max-width: 600px) and (max-height: 660px) {
+/* Extra squeeze for short phones (e.g. 360x640, 375x667) so the six action
+   buttons AND End game still clear the fold; taller phones keep the roomier
+   metrics above. The ceiling is 700px, not the original 660px: a 375x667
+   iPhone SE/8 sat 7px above the old breakpoint, missed the squeeze entirely
+   and overflowed by 25px (measured on main, pre-existing). */
+@media (max-width: 600px) and (max-height: 700px) {
   .shell {
-    padding: 0.5rem var(--space-md);
+    padding: 0.5rem var(--space-4);
     gap: 0.45rem;
   }
   .column {
@@ -789,5 +697,9 @@
   .awardBtn,
   .continueBtn {
     min-height: 48px;
+  }
+  .endGameFooter {
+    margin-top: 0.4rem;
+    padding-top: 0.3rem;
   }
 }

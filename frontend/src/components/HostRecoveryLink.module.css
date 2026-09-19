@@ -16,9 +16,12 @@
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
   -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-micro) var(--ease-move);
 }
 
 @media (hover: hover) {

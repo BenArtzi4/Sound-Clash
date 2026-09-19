@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQrSvg } from "../hooks/useQrSvg";
 import { managerRecoveryUrl } from "../lib/managerToken";
 import styles from "./HostRecoveryLink.module.css";
-import { CheckIcon } from "./icons";
+import { CheckIcon, LinkIcon } from "./icons";
 
 // Backup host access (T4.10). The manager token lives only in this browser's
 // localStorage, so a dead phone or a cleared browser used to mean the game
@@ -31,6 +31,7 @@ export function HostRecoveryLink({ gameCode, managerToken }: Props) {
         aria-controls="host-recovery-panel"
         data-testid="host-link-toggle"
       >
+        <LinkIcon />
         {open ? "Hide backup host link" : "Backup host link"}
       </button>
       {open ? <RecoveryPanel gameCode={gameCode} managerToken={managerToken} /> : null}
