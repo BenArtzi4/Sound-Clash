@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { CheckIcon } from "../components/icons";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
@@ -233,6 +234,9 @@ export function ManagerCreateGamePage() {
                     className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
                   >
                     <input type="checkbox" checked={isSel} onChange={() => toggleGenre(g.id)} />
+                    <span className={styles.genreCheck} aria-hidden="true">
+                      <CheckIcon />
+                    </span>
                     {g.name}
                   </label>
                 );
