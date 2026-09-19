@@ -46,7 +46,7 @@
   /* No backdrop-filter: blur() here — it forces a compositing layer that reads
      back the pixels behind it every frame, one of the most expensive effects on
      mobile. A slightly more opaque flat fill keeps the name legible for free. */
-  background: rgba(15, 23, 42, 0.62);
+  background: rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-pill);
   pointer-events: none;
   /* Held to the left half so it can't collide with the standings chip pinned
@@ -58,7 +58,7 @@
 .teamName {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--bone);
   letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
@@ -79,7 +79,7 @@
   align-items: flex-end;
   gap: 0.05rem;
   padding: 0.3rem 0.7rem;
-  background: rgba(15, 23, 42, 0.62);
+  background: rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-md);
   pointer-events: none;
   max-width: 44vw;
@@ -87,10 +87,11 @@
 }
 
 .standingRank {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #f8fafc;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: var(--bone);
+  letter-spacing: 0.02em;
   line-height: 1.1;
   white-space: nowrap;
 }
@@ -98,7 +99,7 @@
 .standingScore {
   font-size: 0.78rem;
   font-weight: 700;
-  color: rgba(248, 250, 252, 0.92);
+  color: rgba(233, 228, 217, 0.92);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -108,8 +109,8 @@
   align-items: center;
   padding: 1px 8px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.2);
-  color: #f8fafc;
+  background: rgba(233, 228, 217, 0.18);
+  color: var(--bone);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -119,12 +120,12 @@
   text-align: center;
   padding: 1rem 1.25rem;
   border-radius: var(--radius-md);
-  background: rgba(148, 163, 184, 0.12);
-  border: 2px solid var(--color-border-strong);
-  font-weight: 700;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-weight: 600;
   font-size: 1.05rem;
-  color: var(--color-text-dim);
-  box-shadow: var(--shadow-sm);
+  color: var(--text-muted);
+  box-shadow: none;
   margin: 0.75rem;
 }
 
@@ -135,10 +136,21 @@
   display: flex;
 }
 
-/* The BuzzButton's default 28px rounding would expose viewport corners when
-   it fills the screen, and its `height: 100%` needs a parent whose height
-   is fully resolved — the flex stretch from .buzzZone delivers that. */
+/* The BuzzButton's default rounding would expose viewport corners when it
+   fills the screen, and its `height: 100%` needs a parent whose height is
+   fully resolved — the flex stretch from .buzzZone delivers that. */
 .buzzZone > button {
   border-radius: 0;
   flex: 1 1 auto;
+}
+
+/* Hot-path guarantee (04-motion-and-transitions.md §6): while a round is live
+   the only continuous animation on this page is the buzz button's pulse ring.
+   Everything outside .buzzZone is capped at a single iteration, so a looping
+   animation added here later cannot quietly start competing with the buzz
+   press for the compositor. The buzz subtree is untouched. */
+.shell[data-round-live="true"] *:not(.buzzZone, .buzzZone *),
+.shell[data-round-live="true"] *:not(.buzzZone, .buzzZone *)::before,
+.shell[data-round-live="true"] *:not(.buzzZone, .buzzZone *)::after {
+  animation-iteration-count: 1;
 }

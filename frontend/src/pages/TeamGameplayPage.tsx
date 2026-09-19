@@ -218,7 +218,7 @@ export function TeamGameplayPage() {
   })();
 
   return (
-    <main className={styles.shell}>
+    <main className={styles.shell} data-round-live={game?.status === "playing" ? "true" : "false"}>
       <div className={styles.pointStack} aria-live="polite">
         {pointEvents.map((ev) => (
           <PointChange

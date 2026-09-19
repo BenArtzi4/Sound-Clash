@@ -1,4 +1,12 @@
+/* Buzz-path CSS. Tone colours live on a ::before layer that crossfades with
+   opacity (compositor) instead of transitioning background (paint). The label
+   sits above it (z-index 1), the pulse ring on ::after. No JS changes. */
 .button {
+  --tone: var(--accent);
+  --tone-ink: var(--accent-ink);
+  /* Ink for the small subtitle. Defaults to the label's ink and is overridden
+     only where the label ink is legal at display size but not at 15 px. */
+  --tone-ink-soft: var(--tone-ink);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -8,144 +16,130 @@
   width: 100%;
   height: 100%;
   min-height: 0;
-  border-radius: 28px;
+  border-radius: var(--radius-lg);
   border: none;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: #fff;
+  background: var(--accent);
+  color: var(--tone-ink);
   font-family: var(--font-display);
-  font-size: clamp(2.8rem, 12vw, 6.5rem);
-  font-weight: 900;
-  letter-spacing: 0.04em;
+  font-size: var(--text-display-xl);
+  font-weight: 400;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
+  line-height: 0.95;
   text-align: center;
   padding: 1.5rem;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4);
-  transition:
-    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
-    filter 200ms ease,
-    background 200ms ease;
+  transition: filter var(--dur-micro) var(--ease-move);
 }
 
-/* Composited "live" pulse: a ring on ::after that scales + fades via transform
-   and opacity (GPU-composited, one layer) instead of animating box-shadow
-   spread on the button itself, which repainted the whole button every frame —
-   contention on the buzz path exactly when the phone should feel snappiest. */
+.button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--tone);
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--ease-move);
+}
+
 .button::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  border: 3px solid rgba(16, 185, 129, 0.6);
+  border: 3px solid rgba(0, 0, 0, 0.35);
   opacity: 0;
   z-index: 0;
   pointer-events: none;
-  animation: buzz-pulse 2s ease-out infinite;
+  animation: buzz-pulse 2s var(--ease-arrive) infinite;
 }
 
-.button:hover:not(:disabled) {
-  filter: brightness(1.06);
-  box-shadow: 0 15px 50px rgba(16, 185, 129, 0.5);
-}
-
-/* Press-in is instant (transition-duration:0ms while :active/.pressed);
-   releasing reverts to the base rule's eased transition — a hand on a phone
-   feels the press register on the same frame, then settle smoothly. */
 .button:active:not(:disabled),
 .pressed {
-  filter: brightness(0.94);
-  box-shadow:
-    inset 0 0 0 6px rgba(255, 255, 255, 0.18),
-    0 5px 20px rgba(16, 185, 129, 0.55);
-  transition-duration: 0ms;
+  filter: brightness(0.92);
+  transform: scale(0.985);
+  transition-duration: var(--dur-instant);
+}
+
+.button:not(:active):not(.pressed) {
+  transition:
+    filter var(--dur-micro) var(--ease-move),
+    transform var(--dur-micro) var(--ease-overshoot);
 }
 
 .button:focus-visible {
-  outline: none;
-  box-shadow:
-    0 10px 40px rgba(16, 185, 129, 0.4),
-    0 0 0 6px rgba(255, 255, 255, 0.95),
-    0 0 0 10px rgba(16, 185, 129, 0.6);
+  outline: 4px solid var(--bone);
+  outline-offset: -8px;
 }
 
 .button:disabled {
   cursor: not-allowed;
-  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-  color: #f9fafb;
-  box-shadow: 0 6px 18px rgba(75, 85, 99, 0.3);
   opacity: 1;
 }
 
-/* No idle pulse once the button is locked out (winner / locked-other /
-   waiting) — the tone colour carries the state instead. */
 .button:disabled::after {
   animation: none;
   opacity: 0;
 }
 
-.toneLockedOther:disabled {
-  background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%);
-  color: #ffffff;
-  box-shadow:
-    0 8px 28px rgba(239, 68, 68, 0.45),
-    0 0 0 6px rgba(239, 68, 68, 0.18);
-  opacity: 1;
-}
-
-.toneWaiting:disabled {
-  background: linear-gradient(135deg, #94a3b8 0%, #475569 100%);
-  color: #f8fafc;
-  box-shadow:
-    0 6px 20px rgba(71, 85, 105, 0.35),
-    0 0 0 4px rgba(148, 163, 184, 0.18);
-  opacity: 1;
-}
-
 .toneWinner {
-  animation: winner-celebrate 700ms cubic-bezier(0.34, 1.56, 0.64, 1) 1;
+  --tone: var(--positive);
+  --tone-ink: var(--positive-ink);
+  animation: winner-flash 480ms var(--ease-arrive) 1;
 }
 
-.toneWinner:disabled {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  color: #ffffff;
-  box-shadow:
-    0 12px 40px rgba(59, 130, 246, 0.55),
-    0 0 0 8px rgba(59, 130, 246, 0.22);
+/* 01 §2 scopes --negative-ink (white) to large text only ("BUZZ locked-other
+   … label is >= 3rem", and the token row says >= 24px / 4.0:1). The label
+   qualifies at 54.6-112px and measures 3.95:1. The subtitle is 15.2px on a
+   phone and measured 3.2:1 white-on-red, below the 4.5:1 AA floor for small
+   text — and it carries real information (which team got it). It takes the
+   palette's black ink instead: 4.78:1 at the same 0.85 opacity. */
+.toneLockedOther {
+  --tone: var(--negative);
+  --tone-ink: var(--negative-ink);
+  --tone-ink-soft: var(--accent-ink);
+}
+
+.toneWaiting {
+  --tone: var(--surface-2);
+  --tone-ink: var(--text-muted);
+}
+
+.toneWinner::before,
+.toneLockedOther::before,
+.toneWaiting::before {
   opacity: 1;
 }
 
-@keyframes winner-celebrate {
-  0% {
-    filter: brightness(1);
-  }
+@keyframes winner-flash {
   40% {
-    filter: brightness(1.25) saturate(1.2);
-  }
-  100% {
-    filter: brightness(1);
+    filter: brightness(1.2);
   }
 }
 
 .label {
   position: relative;
   z-index: 1;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   max-width: 100%;
-  line-height: 1.05;
   word-break: break-word;
   hyphens: none;
 }
 
 .subtitle {
+  position: relative;
+  z-index: 1;
+  color: var(--tone-ink-soft);
+  font-family: var(--font-ui);
   font-size: clamp(0.95rem, 2.4vw, 1.4rem);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: none;
-  opacity: 0.92;
-  text-align: center;
+  opacity: 0.85;
   padding: 0 1rem;
   line-height: 1.3;
 }
@@ -158,5 +152,11 @@
   100% {
     transform: scale(1.06);
     opacity: 0;
+  }
+}
+
+@media (hover: hover) {
+  .button:hover:not(:disabled) {
+    filter: brightness(1.06);
   }
 }
