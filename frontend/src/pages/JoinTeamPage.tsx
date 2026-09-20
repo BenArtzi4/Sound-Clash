@@ -7,6 +7,8 @@ import { parseRejoinHash, setStoredTeam } from "../lib/teamStorage";
 import styles from "./JoinTeamPage.module.css";
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
+const CODE_CELLS = [0, 1, 2, 3, 4, 5];
+const CODE_PLACEHOLDER = "ABCDEF";
 const CODE_CHAR_RE = /[A-Z2-9]/g;
 
 function normalizeCode(raw: string): string {
@@ -140,17 +142,37 @@ export function JoinTeamPage() {
           <label className={styles.label} htmlFor="game-code">
             Game code
           </label>
-          <input
-            id="game-code"
-            className={styles.codeInput}
-            value={code}
-            onChange={(e) => setCode(normalizeCode(e.target.value))}
-            placeholder="ABCDEF"
-            autoComplete="off"
-            inputMode="text"
-            maxLength={6}
-            required
-          />
+          <div className={styles.codeBox}>
+            <input
+              id="game-code"
+              className={styles.codeInput}
+              value={code}
+              onChange={(e) => setCode(normalizeCode(e.target.value))}
+              placeholder="ABCDEF"
+              autoComplete="off"
+              inputMode="text"
+              maxLength={6}
+              required
+            />
+            {/* The characters you see. aria-hidden: the input above is the
+                real control and already announces its own value. */}
+            <div className={styles.codeCells} aria-hidden="true">
+              {CODE_CELLS.map((i) => (
+                <span
+                  key={i}
+                  className={[
+                    styles.codeCell,
+                    code[i] ? "" : styles.codeCellEmpty,
+                    i === code.length ? styles.codeCellNext : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {code[i] ?? (code.length === 0 ? CODE_PLACEHOLDER[i] : "")}
+                </span>
+              ))}
+            </div>
+          </div>
           <span className={styles.counter} aria-hidden="true">
             {code.length}/6
           </span>
