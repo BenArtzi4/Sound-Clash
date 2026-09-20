@@ -59,9 +59,11 @@
   width: 100%;
 }
 
-/* --hue is the card's role colour; every coloured part reads from it. */
+/* --hue is the card's role colour; every coloured part reads from it.
+   --fill-dur is overridden for touch below. */
 .role {
   --hue: var(--role-host);
+  --fill-dur: 200ms;
   position: relative;
   overflow: hidden;
   display: block;
@@ -111,7 +113,19 @@
   inset: 0;
   background: var(--hue);
   clip-path: polygon(0 0, 0 0, -34% 100%, -34% 100%);
-  transition: clip-path 200ms var(--ease-move);
+  transition: clip-path var(--fill-dur) var(--ease-move);
+}
+
+/* Touch is not hover. A pointer rests on a card for as long as the user likes,
+   so 200ms of travel reads as deliberate; a tap is over in ~80-120ms, so the
+   same 200ms reads as lag chasing the finger. Halving it on devices that have
+   no hover keeps the gesture legible without making it feel sluggish.
+   Keyed on (hover: none) rather than width: it is the absence of hover, not a
+   narrow screen, that makes the fill press-driven. */
+@media (hover: none) {
+  .role {
+    --fill-dur: 100ms;
+  }
 }
 
 .roleFill .roleTitle,
