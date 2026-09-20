@@ -1,0 +1,157 @@
+name: Preview teardown
+
+# Deletes the Cloudflare Pages preview deployments belonging to closed PRs.
+#
+# This lives in its own workflow file rather than in frontend.yml, and that is
+# the whole point of the file. The teardown job originally sat in frontend.yml
+# under that workflow's `concurrency: frontend-${{ github.ref }}` +
+# `cancel-in-progress: true`. On a merge, GitHub creates the `pull_request`
+# (closed) run and the `push` (to main) run in the SAME second, and the close
+# run was cancelled ~1s later with `steps: 0` - killed while still queued, so
+# teardown never executed once. Observed identically on the merges of #319 and
+# #320. A separate workflow gets its own concurrency scope and cannot be
+# superseded by the main-branch deploy.
+#
+# Two triggers on purpose:
+#   * pull_request/closed - the fast path, cleans up within a minute.
+#   * schedule            - the safety net. It re-derives state from scratch
+#                           (every preview whose PR is no longer open), so it
+#                           repairs anything the fast path missed, including
+#                           previews stranded by the bug above. If the fast
+#                           path is ever cancelled again, this still converges.
+#
+# Deleting a preview is pure hygiene - Cloudflare's free plan allows unlimited
+# *active* preview deployments - so every failure here is a warning and the job
+# still exits 0. Nothing about a merged PR should go red over cleanup.
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    # Daily. Note GitHub drops most scheduled triggers on a low-traffic repo
+    # (measured on this one: a nominal */15 fired every 49-204 min), so treat
+    # this as "roughly daily" - fine for cleanup, and why the fast path exists.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to tear down (blank = sweep every closed PR)"
+        required: false
+        type: string
+
+concurrency:
+  # Deliberately NOT keyed on github.ref: a merge's push-to-main run must never
+  # be able to share this group. cancel-in-progress is false so a sweep is
+  # never killed halfway through a delete loop.
+  group: preview-teardown
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  teardown:
+    name: delete previews for closed PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete
+        env:
+          CF_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CF_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_FROM_EVENT: ${{ github.event.number }}
+          PR_FROM_INPUT: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CF_TOKEN}" ] || [ -z "${CF_ACCOUNT}" ]; then
+            echo "::warning::Cloudflare credentials not set; nothing to tear down"
+            exit 0
+          fi
+
+          api="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/pages/projects/sound-clash/deployments"
+          # per_page maxes out at 25 on this endpoint. 26 or more makes the
+          # whole call fail with "Invalid list options provided", which the
+          # first version of this script hit (it asked for 100) and then
+          # swallowed as a warning - a silent no-op that looked like success.
+          per_page=25
+
+          # Collect every preview deployment as "<id><TAB><branch>".
+          rows=""
+          page=1
+          while [ "${page}" -le 40 ]; do
+            resp=$(curl -sS -H "Authorization: Bearer ${CF_TOKEN}" "${api}?page=${page}&per_page=${per_page}")
+            if [ "$(printf '%s' "${resp}" | jq -r '.success')" != "true" ]; then
+              echo "::warning::Listing deployments failed: $(printf '%s' "${resp}" | jq -c '.errors')"
+              exit 0
+            fi
+            n=$(printf '%s' "${resp}" | jq '.result | length')
+            if [ "${n}" -eq 0 ]; then break; fi
+            page_rows=$(printf '%s' "${resp}" | jq -r '.result[] | select(.environment == "preview")
+              | "\(.id)\t\(.deployment_trigger.metadata.branch // "")"')
+            if [ -n "${page_rows}" ]; then
+              rows="${rows}${page_rows}"$'\n'
+            fi
+            if [ "${n}" -lt "${per_page}" ]; then break; fi
+            page=$((page + 1))
+          done
+
+          branches=$(printf '%s\n' "${rows}" | awk -F'\t' 'NF==2 && $2 ~ /^pr-[0-9]+$/ {print $2}' | sort -u)
+          if [ -z "${branches}" ]; then
+            echo "No pr-<N> preview deployments exist. Nothing to do."
+            exit 0
+          fi
+          echo "Preview branches found: $(printf '%s' "${branches}" | tr '\n' ' ')"
+
+          # Which branches are in scope for this run?
+          target=""
+          if [ "${EVENT}" = "pull_request" ]; then
+            target="pr-${PR_FROM_EVENT}"
+          elif [ "${EVENT}" = "workflow_dispatch" ] && [ -n "${PR_FROM_INPUT}" ]; then
+            target="pr-${PR_FROM_INPUT}"
+          fi
+          if [ -n "${target}" ]; then
+            echo "Scope: ${target}"
+            branches=$(printf '%s\n' "${branches}" | grep -Fx "${target}" || true)
+            if [ -z "${branches}" ]; then
+              echo "No deployments for ${target}; nothing to delete."
+              exit 0
+            fi
+          else
+            echo "Scope: sweep (every preview whose PR is no longer open)"
+          fi
+
+          deleted=0
+          failed=0
+          for br in ${branches}; do
+            num="${br#pr-}"
+            state=$(gh api "repos/${REPO}/pulls/${num}" --jq '.state' 2>/dev/null || echo "unknown")
+            if [ "${state}" = "open" ]; then
+              echo "keep ${br}: PR #${num} is still open"
+              continue
+            fi
+            if [ "${state}" = "unknown" ]; then
+              # Never guess. A transient API failure must not delete a live preview.
+              echo "::warning::keep ${br}: could not read PR #${num} state"
+              continue
+            fi
+            for id in $(printf '%s\n' "${rows}" | awk -F'\t' -v b="${br}" '$2 == b {print $1}'); do
+              # force=true is required while a deployment still holds the
+              # branch alias; a plain delete is rejected for those.
+              out=$(curl -sS -X DELETE -H "Authorization: Bearer ${CF_TOKEN}" "${api}/${id}?force=true")
+              if [ "$(printf '%s' "${out}" | jq -r '.success')" = "true" ]; then
+                echo "deleted ${br} ${id} (PR #${num} ${state})"
+                deleted=$((deleted + 1))
+              else
+                echo "::warning::failed to delete ${br} ${id}: $(printf '%s' "${out}" | jq -c '.errors')"
+                failed=$((failed + 1))
+              fi
+            done
+          done
+
+          echo "Deleted ${deleted} deployment(s); ${failed} failure(s)."
+          echo "Deleted ${deleted} preview deployment(s), ${failed} failure(s)." >> "$GITHUB_STEP_SUMMARY"
