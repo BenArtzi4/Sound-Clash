@@ -257,7 +257,15 @@ jobs:
 
           count=$(printf '%s' "${ids}" | grep -c . || true)
           if [ "${count}" -eq 0 ]; then
-            echo "No preview deployments found for branch ${branch}"
+            # Either there was genuinely nothing to delete, or Direct Upload
+            # deployments don't carry the branch where we look for it. Print the
+            # branches we DID see so the difference is visible in the log rather
+            # than looking like a successful no-op.
+            echo "No preview deployments matched branch ${branch}."
+            echo "Branches seen on page 1 (empty => branch metadata is elsewhere):"
+            curl -sS -H "Authorization: Bearer ${CF_TOKEN}" "${api}?per_page=100" \
+              | jq -r '[.result[].deployment_trigger.metadata.branch] | unique | .[]' \
+              | sed 's/^/  /'
             exit 0
           fi
           echo "Deleting ${count} preview deployment(s) for ${branch}"
