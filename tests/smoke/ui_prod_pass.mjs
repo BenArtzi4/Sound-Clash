@@ -102,9 +102,9 @@ async function verifyDeploy() {
   console.log(`[deploy] index.html -> ${css}  ${js}`);
   const theme = html.match(/<meta name="theme-color" content="([^"]+)"/)?.[1];
   const scheme = html.match(/<meta name="color-scheme" content="([^"]+)"/)?.[1];
-  gate("deploy: theme-color #000000 / color-scheme dark", theme === "#000000" && scheme === "dark", `${theme} / ${scheme}`);
+  gate("deploy: theme-color #14120e / color-scheme dark", theme === "#14120e" && scheme === "dark", `${theme} / ${scheme}`);
   const cssBody = await fetch(SITE + css).then((r) => r.text());
-  for (const marker of ["--accent:#ff7a00", "--bg:#000", "Anton", "Instrument Sans", "color-scheme:dark"]) {
+  for (const marker of ["--accent:#ff7a00", "--bg:#14120e", "Anton", "Instrument Sans", "color-scheme:dark"]) {
     gate(`deploy: css contains ${marker}`, cssBody.includes(marker));
   }
   for (const banned of ["bg-drift", "#f8fafc"]) gate(`deploy: css free of ${banned}`, !cssBody.includes(banned));

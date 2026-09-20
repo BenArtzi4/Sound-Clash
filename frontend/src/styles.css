@@ -5,10 +5,15 @@
 :root {
   color-scheme: dark;
 
-  /* Colour */
-  --bg: #000000;
-  --surface: #121111;
-  --surface-2: #1c1a17;
+  /* Colour.
+     The ground is a warm near-black, not pure #000: every comparable product
+     measured (Jeopardy #121319, Jackbox #1A1F26, Spotify #191414, Linear
+     #08090A, Sofar #1C1C1C) biases its ground, and pure #000 beside pure #FFF
+     is the classic "unfinished" tell. The lift over #000 is 1.12:1 —
+     imperceptible as brightness, felt as warmth. See 09-home-colour-and-fill.md. */
+  --bg: #14120e;
+  --surface: #1d1a14;
+  --surface-2: #26221a;
   --border: rgba(233, 228, 217, 0.14);
   --border-strong: rgba(233, 228, 217, 0.32);
   --text: #ffffff;
@@ -25,7 +30,19 @@
   --negative-soft: rgba(242, 53, 43, 0.12);
   --warning: #f6cc00;
   --warning-ink: #000000;
+  --periwinkle: #a9b4ff;
   --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  /* Role hues for Home's three entry points. Aliases, not new colours: only
+     --periwinkle is a new value. Naming the decorative use keeps it honest —
+     --positive still means "correct" in the game, and this says so out loud.
+     Worst-case separation across protanopia/deuteranopia/tritanopia is
+     30.9 / 103.2 / 67.1 ΔE, all clear of the ~25 convergence threshold.
+     (Butter #FFC94A was the first choice and was dropped: ΔE 18.0 against
+     orange under deuteranopia — Host and Play read as one colour.) */
+  --role-host: var(--accent);
+  --role-play: var(--positive);
+  --role-display: var(--periwinkle);
 
   /* Type */
   --font-display: "Anton", "Secular One", Impact, "Arial Narrow Bold", sans-serif;

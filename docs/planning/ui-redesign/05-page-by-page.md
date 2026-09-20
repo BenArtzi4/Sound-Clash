@@ -34,7 +34,7 @@ The shared rules first, then each route in the order a player meets them.
 
 **New:**
 
-- **Hero.** Wordmark top-left (small). One editorial headline in the display face, left-aligned on desktop, e.g. **"Name the song. Buzz first."** with a single-line subhead in `--text-muted`: "Real-time music trivia for a room full of people and one TV." (copy is a proposal; see README open questions). No gradient text, no "Welcome to".
+- **Hero.** _Amended 2026-09-20 by [09-home-colour-and-fill.md](09-home-colour-and-fill.md): the wordmark is now `size="hero"`, centred, and stacked above the mark on phones; the three rows are three coloured cards; the composition is vertically centred._ Originally: wordmark top-left (small). One editorial headline in the display face, left-aligned on desktop, e.g. **"Name the song. Buzz first."** with a single-line subhead in `--text-muted`: "Real-time music trivia for a room full of people and one TV." (copy is a proposal; see README open questions). No gradient text, no "Welcome to".
 - **Role list instead of icon cards.** Three full-width rows in a single column, each a `<Link>`:
 
   ```
@@ -83,7 +83,7 @@ The shared rules first, then each route in the order a player meets them.
 - **Winner** = a single 480 ms brightness flash (as today) plus the standing chip pulsing once when the score changes.
 - **Identity chip / standing chip** restyled to `--surface` at 80 % opacity over the tone, 1 px `--border`, tabular numerals. Same test ids.
 - **Point pill** (`PointChange`) keeps its spring in/out (the one place the spring easing survives) but uses `--positive`/`--negative` on `--surface`.
-- **Waiting screen** gets the wordmark centred above the "WAITING" button and a one-line "for the game to start" subtitle (as today).
+- **Waiting screen** gets the wordmark centred above the "WAITING" button (**built 2026-09-20**, [09](09-home-colour-and-fill.md); it had been specified here since the plan was written but never implemented) and a one-line "for the game to start" subtitle (as today).
 - **Keep (behaviour):** everything — pointerdown firing, provisional lock TTL, reconciler, `data-tone`, labels, `aria-live` on the point stack.
 
 ---
