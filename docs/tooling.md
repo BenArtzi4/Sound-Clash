@@ -53,9 +53,9 @@ Runs after `test` succeeds, only on push to `main`. `curl -fsSL -X POST $RENDER_
 
 ### 2.2 `frontend.yml`
 
-**Triggers**: push to `main` or PR with changes under `frontend/**` or the workflow file. The `pull_request` trigger lists `closed` alongside the default `opened`/`synchronize`/`reopened` so the preview teardown can fire; each job guards on `github.event.action` so only teardown runs on a close.
+**Triggers**: push to `main` or PR with changes under `frontend/**` or the workflow file.
 
-**Jobs**: `test` (every push/PR), `deploy` (push to `main` only), `preview` (PR only, `needs: test`), `teardown-preview` (PR close only). The two preview jobs are described in §7.2.
+**Jobs**: `test` (every push/PR), `deploy` (push to `main` only), `preview` (PR only, `needs: test`). Preview cleanup is a separate workflow, `preview-teardown.yml` — see §7.2 for why.
 
 **Job: `test`**
 1. Checkout
@@ -217,7 +217,21 @@ Triggered by the `deploy` job in `backend.yml` on push to `main`. The job curls 
 https://pr-<PR number>.sound-clash.pages.dev
 ```
 
-The URL is deterministic from the PR number and stable across pushes — the job posts no PR comment. It is built with `npm run build:preview` (`vite build --mode preview`, reading `frontend/.env.preview`), and `needs: test`, so a preview only exists for a PR whose whole gate is green. The `teardown-preview` job deletes the deployments when the PR closes.
+The URL is deterministic from the PR number and stable across pushes — the job posts no PR comment. It is built with `npm run build:preview` (`vite build --mode preview`, reading `frontend/.env.preview`), and `needs: test`, so a preview only exists for a PR whose whole gate is green. Cleanup is handled by a **separate workflow**, `.github/workflows/preview-teardown.yml`.
+
+It has to be separate. Teardown originally lived in `frontend.yml`, under that workflow's `concurrency: frontend-${{ github.ref }}` with `cancel-in-progress: true`. On a merge GitHub creates the `pull_request`/`closed` run and the `push`-to-`main` run in the *same second*, and the close run was cancelled about a second later with `steps: 0` — killed while still queued, so teardown never executed once. Confirmed identically on the merges of #319 and #320. Its own workflow file gets its own concurrency scope and cannot be superseded by the main-branch deploy.
+
+It runs on three triggers:
+
+| Trigger | Scope |
+|---|---|
+| `pull_request` / `closed` | just that PR's `pr-<N>` deployments — the fast path |
+| `schedule` (daily) | every preview whose PR is no longer open — the safety net |
+| `workflow_dispatch` | a given PR number, or blank to sweep everything |
+
+The scheduled sweep re-derives state from scratch rather than trusting an event, so it repairs anything the fast path missed. Use the manual dispatch with a blank PR number to force an immediate full sweep.
+
+Two details that bit the first implementation and are worth preserving: the deployments endpoint caps `per_page` at **25** (26+ fails the whole call with `Invalid list options provided`), and deleting a deployment that still holds the branch alias requires `?force=true`. A PR whose state can't be read is always kept, never guessed at — a transient API error must not delete a live preview.
 
 A preview talks to the **production** API and Supabase project. Two consequences worth knowing:
 
