@@ -53,7 +53,9 @@ Runs after `test` succeeds, only on push to `main`. `curl -fsSL -X POST $RENDER_
 
 ### 2.2 `frontend.yml`
 
-**Triggers**: push to `main` or PR with changes under `frontend/**` or the workflow file.
+**Triggers**: push to `main` or PR with changes under `frontend/**` or the workflow file. The `pull_request` trigger lists `closed` alongside the default `opened`/`synchronize`/`reopened` so the preview teardown can fire; each job guards on `github.event.action` so only teardown runs on a close.
+
+**Jobs**: `test` (every push/PR), `deploy` (push to `main` only), `preview` (PR only, `needs: test`), `teardown-preview` (PR close only). The two preview jobs are described in §7.2.
 
 **Job: `test`**
 1. Checkout
@@ -208,6 +210,21 @@ Triggered by the `deploy` job in `backend.yml` on push to `main`. The job curls 
 ### 7.2 Frontend → Cloudflare Pages
 
 `frontend.yml` calls `npx wrangler@latest pages deploy dist --project-name=sound-clash --branch=main` on push to `main`. Wrangler authenticates via `CF_API_TOKEN` and `CF_ACCOUNT_ID`.
+
+**Per-PR previews.** The same workflow's `preview` job deploys every frontend PR to a branch alias, so a change can be reviewed on a real URL before merge:
+
+```
+https://pr-<PR number>.sound-clash.pages.dev
+```
+
+The URL is deterministic from the PR number and stable across pushes — the job posts no PR comment. It is built with `npm run build:preview` (`vite build --mode preview`, reading `frontend/.env.preview`), and `needs: test`, so a preview only exists for a PR whose whole gate is green. The `teardown-preview` job deletes the deployments when the PR closes.
+
+A preview talks to the **production** API and Supabase project. Two consequences worth knowing:
+
+- FastAPI admits the preview origin only because `CORS_ORIGIN_REGEX` is set on Render (see [`api-contracts.md`](api-contracts.md) §5). If a preview can't create a game and the console shows a CORS error, check that env var first.
+- `.env.preview` blanks `VITE_FARO_URL` and `VITE_SENTRY_DSN` **on purpose**. Faro feeds Loki, and `stale-buzz-lock-scan.yml` files a GitHub issue per #254 incident it finds there — a preview wired to the prod collector would let ordinary review clicking manufacture fake incidents.
+
+Cost and the reasoning behind pointing previews at prod are in [`free-tier-budget.md`](free-tier-budget.md) §2.3.
 
 Pages serves from:
 - `https://sound-clash.pages.dev` (Cloudflare-issued)
