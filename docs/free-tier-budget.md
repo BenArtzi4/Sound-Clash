@@ -73,7 +73,7 @@ These numbers are pessimistic; real-world will be lower. Round up for safety.
 
 #### Per-PR preview deployments
 
-`frontend.yml` deploys every frontend PR to `https://pr-<N>.sound-clash.pages.dev` and deletes it when the PR closes. **This costs nothing**, which is the whole reason it is structured this way:
+`frontend.yml` deploys every frontend PR to `https://pr-<N>.sound-clash.pages.dev`, and `preview-teardown.yml` deletes it once the PR closes. **This costs nothing**, which is the whole reason it is structured this way:
 
 - Cloudflare's free plan documents an *unlimited* number of active preview deployments, so an open PR backlog has no cost.
 - We build in GitHub Actions and push with `wrangler pages deploy` (a Direct Upload) rather than letting Cloudflare build from Git. Cloudflare's docs do not state whether a Direct Upload counts against the 500-builds/month quota; either way this repo's deploy rate is an order of magnitude below that cap.
