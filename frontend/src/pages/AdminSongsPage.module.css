@@ -1,17 +1,17 @@
 .shell {
   max-width: 960px;
   margin: 0 auto;
-  padding: var(--space-xl) var(--space-md);
+  padding: var(--space-7) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: var(--space-5);
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
+  gap: var(--space-4);
 }
 
 .header h1 {
@@ -23,17 +23,17 @@
   margin: 10vh auto 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-4);
 }
 
 .gate p {
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
 
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm);
+  gap: var(--space-2);
   align-items: center;
 }
 
@@ -46,15 +46,15 @@
 .toolbar .right {
   margin-left: auto;
   display: flex;
-  gap: var(--space-sm);
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .tableWrap {
   overflow-x: auto;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--color-card);
+  background: var(--surface);
 }
 
 /* Dim the existing rows while a refetch is in flight (stale-while-revalidate)
@@ -75,19 +75,19 @@
 .table td {
   text-align: left;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border);
 }
 
 .table th {
-  background: var(--color-bg-tint);
+  background: var(--surface-2);
   font-weight: 600;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
   position: sticky;
   top: 0;
 }
 
 .table tbody tr:hover {
-  background: var(--color-primary-soft);
+  background: var(--accent-soft);
 }
 
 .table tbody tr:last-child td {
@@ -97,12 +97,12 @@
 .ytId {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   letter-spacing: 0.04em;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
 
 .startTime {
   font-variant-numeric: tabular-nums;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -116,15 +116,15 @@
   font-size: 0.78rem;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: var(--color-bg-elev);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .rowActions {
   display: flex;
-  gap: var(--space-xs);
+  gap: var(--space-1);
   justify-content: flex-end;
 }
 
@@ -134,20 +134,19 @@
 }
 
 .empty {
-  padding: var(--space-xl);
+  padding: var(--space-7);
   text-align: center;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
 
 .formPanel {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-lg);
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-4);
 }
 
 .formPanel h2 {
@@ -157,7 +156,7 @@
 .formGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-md);
+  gap: var(--space-4);
 }
 
 @media (max-width: 600px) {
@@ -174,7 +173,7 @@
 
 .field span {
   font-size: 0.85rem;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
   font-weight: 600;
 }
 
@@ -182,28 +181,10 @@
   grid-column: 1 / -1;
 }
 
-.soundtrackToggle {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.soundtrackToggle input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-}
-
-.soundtrackToggle span {
-  font-size: 0.9rem;
-  color: var(--color-text);
-  font-weight: 500;
-}
-
 .genres {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
+  gap: var(--space-1);
 }
 
 .genreChip {
@@ -211,9 +192,9 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  background: var(--color-bg-elev);
+  background: var(--surface);
   cursor: pointer;
   font-size: 0.9rem;
   user-select: none;
@@ -224,14 +205,14 @@
 }
 
 .genreSelected {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-  color: var(--color-primary-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .formActions {
   display: flex;
-  gap: var(--space-sm);
+  gap: var(--space-2);
   justify-content: flex-end;
 }
 
@@ -239,9 +220,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-md);
+  gap: var(--space-4);
   font-size: 0.9rem;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
 
 .pagination button {
