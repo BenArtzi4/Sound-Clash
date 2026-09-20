@@ -28,7 +28,7 @@ _Created 2026-09-17. Status (2026-09-20): **shipped — Tasks 0–11 are merged 
 
 ## PR sequence — all shipped
 
-Every row below merged between 2026-09-17 and 2026-09-20; the PR numbers are #303 (0), #304 (1), #307 (2), #308 (3), #309 (4), #310 (5), #311 (6), #312 (7), #313 (8), #315 (9), #316 (10), #318 (11), plus #314 (buzz-screen chip fill) and #317 (the game-code field rebuilt as a six-column grid — `letter-spacing` cannot fill fixed cells in a proportional face). Each task's measured departures from the plan are recorded inline in `07-implementation-plan.md`.
+Every row below merged between 2026-09-17 and 2026-09-20; the PR numbers are #303 (0), #304 (1), #307 (2), #308 (3), #309 (4), #310 (5), #311 (6), #312 (7), #313 (8), #315 (9), #316 (10), #320 (11), plus #314 (buzz-screen chip fill) and #317 (the game-code field rebuilt as a six-column grid — `letter-spacing` cannot fill fixed cells in a proportional face). Each task's measured departures from the plan are recorded inline in `07-implementation-plan.md`.
 
 **Still owed, and no session can do it:** the cross-browser pass for Task 10 — a real Chrome (transition plays, wordmark morphs, Back is instant), a real Firefox (instant swap, no errors, no layout shift) and Safari / iOS. Headless Chromium proved the mechanics; it cannot stand in for the other two engines.
 

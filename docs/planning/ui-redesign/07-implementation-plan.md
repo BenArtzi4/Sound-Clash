@@ -1854,7 +1854,7 @@ Add `ViewTransition: "readonly"` and `MouseEvent: "readonly"` to `eslint.config.
 
 ### Task 11: Cleanup
 
-> **Built 2026-09-20 (PR #318).** Five departures from the text below, each measured on `main` 677b096 first.
+> **Built 2026-09-20 (PR #320).** Five departures from the text below, each measured on `main` 677b096 first.
 >
 > 1. **Scope was 42 references in exactly three files**, not "every `*.module.css`": `RouteFallback.module.css` (1), `YouTubePlayer.module.css` (2), `AdminSongsPage.module.css` (39). Tasks 1–10 had already retokenised everything else.
 > 2. **`--radius-*` are NOT aliases.** They are real tokens (`styles.css` `--radius-xs/sm/md/lg/pill`, 64 uses). Step 1 says to drop the `styles.test.ts` alias assertion, but that assertion mixes `--radius-md:` in with the aliases, so dropping it would stop asserting a live token. It was **split** instead: one test that the real space/radius scales exist, one that the aliases are **gone** (`not.toContain`) — the second is the guard that keeps a stray `var(--color-*)` from coming back.
