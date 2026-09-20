@@ -2,7 +2,7 @@
 
 _The single backlog (consolidated 2026-07-14 from the former phase-8 + maintainer-gated files; shipped work lives in git history and `CHANGELOG.md`). Decisions in [DECISIONS.md](DECISIONS.md) are resolved — don't re-litigate. Every task ships per [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md): test at the right layer + CHANGELOG if user-visible + docs-as-spec in the same PR + the Full-Game Exit Gate._
 
-Legend: ⬜ not started · 🟡 in progress · 🟨 built, awaiting maintainer apply
+Legend: ⬜ not started · 🟡 in progress · 🟨 built, awaiting maintainer apply · ✅ delivered
 
 ---
 
@@ -11,7 +11,7 @@ Legend: ⬜ not started · 🟡 in progress · 🟨 built, awaiting maintainer a
 One session/PR per feature. **D-9 = small optimized binary assets in-repo** (confirm each binary commit). Frontend-only unless noted; anything DB-touching needs `run-stress`/`run-e2e` labels + in-prompt merge auth. Additive RPC columns go via `CREATE OR REPLACE` so PostgREST routing stays stable (mig-021 overload lesson); new durable data must respect the ephemerality model.
 
 - ⬜ **X-SFX · Display sound effects (buzz / correct / wrong)** `[S, high]` → [#244](https://github.com/BenArtzi4/Sound-Clash/issues/244). The TV is the room's shared speaker but is silent between clips; `DisplayPage` already detects the exact events (`buzzed_team_id` going non-null, per-team score deltas), so short buzzer/ding/fail cues are near-zero code for a big crowd-energy lift. Needs the D-9 audio-asset sign-off. **Must not slow the buzz** — display-only, never on the buzz path.
-- ⬜ **X-DarkRoom · Dark-room projector theme** `[S, medium]` → [#243](https://github.com/BenArtzi4/Sound-Clash/issues/243). Parties are dim; a high-contrast near-black theme with glowing oversized scores, as a toggle or via `prefers-color-scheme`. Pure CSS. Ready to build.
+- ✅ **X-DarkRoom · Dark-room projector theme** `[S, medium]` → [#243](https://github.com/BenArtzi4/Sound-Clash/issues/243). **Delivered 2026-09-20 by the UI redesign's base theme** (decision 2 in `docs/planning/ui-redesign/README.md`: dark only, all pages). Every route now ships a pure-black ground (`--bg: #000000`) with `color-scheme: dark`, and the Display board's scores are oversized and elastic to the frame height (`clamp(1.35rem, 3.4vh, 2.75rem)`), which is what the issue asked for. No toggle and no `prefers-color-scheme` branch: there is no light theme to switch back to, so the dark room is the only mode. Close #243.
 - ⬜ **X-Recap · Shareable post-game recap card (PNG)** `[M, medium]` → [#245](https://github.com/BenArtzi4/Sound-Clash/issues/245). SongExport already gives an HTML list + YouTube playlist; nothing is shareable to a group chat. A client-side canvas/SVG card on the end screen — podium, winner, round count, top songs — styled like the OG link-preview card (`tools/og-image`), downloadable. D-9 (generated image). Drives organic reach.
 - ⬜ **X-GenreSpotlight · Per-round genre spotlight (+ optional roulette)** `[M, medium]` → [#246](https://github.com/BenArtzi4/Sound-Clash/issues/246). `select_next_song` picks a random genre then discards it; add the chosen genre to its `RETURNS TABLE` (purely additive `CREATE OR REPLACE`) so the display can announce "This round: 80s Rock"; roulette mode is a UI layer on top. **Owes a "why is it good?" value case before building**; DB migration.
 
