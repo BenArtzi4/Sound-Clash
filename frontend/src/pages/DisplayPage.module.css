@@ -1,6 +1,6 @@
 .shell {
   min-height: 100%;
-  padding: 2rem var(--space-xl);
+  padding: 2rem var(--space-7);
   display: flex;
   flex-direction: column;
   gap: 2rem;
@@ -13,7 +13,7 @@
   top: 1.25rem;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 50;
+  z-index: var(--z-overlay);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -110,16 +110,17 @@
   }
 }
 
+/* ---------------------------------------------------------------- board -- */
+
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 1rem 1.5rem;
-  box-shadow: var(--shadow-md);
+  padding: 0.75rem 1.5rem;
 }
 
 .headerActions {
@@ -129,20 +130,28 @@
 }
 
 .header h1 {
+  font-family: var(--font-display);
   font-size: 2rem;
-  background: linear-gradient(135deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  letter-spacing: -0.02em;
+  color: var(--bone);
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  letter-spacing: 0.02em;
 }
 
+/* The code is typed from across the room, so it is the loudest thing in the
+   header: display face, wide tracking, on its own chip. */
 .code {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-display);
   font-size: 2.2rem;
-  letter-spacing: 0.18em;
-  font-weight: 800;
-  color: var(--color-primary-strong);
+  letter-spacing: 0.16em;
+  font-weight: 400;
+  color: var(--bone);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.5em 0.1em 0.66em;
+  font-variant-numeric: tabular-nums;
 }
 
 .banner {
@@ -151,20 +160,20 @@
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 1.5rem 1.75rem;
-  font-size: 1.75rem;
-  font-weight: 800;
+  padding: 1.25rem 1.75rem;
+  font-family: var(--font-display);
+  font-size: var(--text-display-s);
+  font-weight: 400;
   text-align: center;
-  background: #ffffff;
+  background: var(--surface-2);
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-dim);
-  box-shadow: var(--shadow-md);
-  letter-spacing: -0.01em;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
   transition:
-    background 280ms ease,
-    border-color 280ms ease,
-    color 280ms ease;
+    background-color var(--dur-state) var(--ease-move),
+    border-color var(--dur-state) var(--ease-move),
+    color var(--dur-state) var(--ease-move);
 }
 
 .bannerText {
@@ -174,41 +183,42 @@
 .bannerSubhead {
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
+  padding: 2px 12px;
   border-radius: var(--radius-pill);
-  background: rgba(15, 23, 42, 0.06);
-  color: var(--color-text);
-  font-size: 0.95rem;
-  font-weight: 700;
+  background: rgba(0, 0, 0, 0.22);
+  color: currentcolor;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
+/* A buzz takes the whole bar orange. It slides down into place once instead of
+   pulsing forever — a looping transform on a projector that may sit on this
+   screen all evening is exactly the repaint the motion spec bans. */
 .bannerLocked {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(251, 191, 36, 0.1) 100%);
-  border-color: var(--color-warning);
-  color: #92400e;
-  animation: locked-pulse 1s ease-in-out infinite;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  animation: banner-in var(--dur-state) var(--ease-arrive);
 }
 
-@keyframes locked-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.015);
+@keyframes banner-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
   }
 }
 
 .bannerEnded {
-  color: var(--color-text-dim);
-  background: rgba(148, 163, 184, 0.12);
-  border-color: var(--color-border-strong);
+  color: var(--text-muted);
+  background: var(--surface);
+  border-color: var(--border-strong);
 }
 
 /* Fixed-height reservation for the countdown so the scoreboard never jumps
    when a buzz lands and the timer mounts. Sized comfortably above the rendered
-   .timer height (padding + the 2rem value line + border); a couple px of extra
+   .timer height (padding + the value line + border); a couple px of extra
    whitespace is invisible on a TV, an undershoot would reintroduce the jump. */
 .timerSlot {
   display: flex;
@@ -222,18 +232,17 @@
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  padding: 1rem 1.5rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-sm);
 }
 
 .timerBar {
   flex: 1;
-  height: 14px;
-  background: rgba(245, 158, 11, 0.18);
-  border-radius: 999px;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
@@ -242,43 +251,33 @@
   width: 100%;
   transform-origin: left;
   transform: scaleX(var(--timer-scale, 1));
-  background: var(--color-warning);
-  border-radius: 999px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
   transition:
     transform 950ms linear,
-    background 200ms ease;
+    background-color var(--dur-micro) var(--ease-move);
 }
 
 .timerValue {
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
   font-size: 2rem;
-  color: var(--color-warning);
+  color: var(--accent);
   min-width: 2.5em;
   text-align: right;
 }
 
 .timerLow .timerFill {
-  background: var(--color-danger);
+  background: var(--negative);
 }
 
 .timerLow .timerValue {
-  color: var(--color-danger);
-  animation: timer-pulse-display 0.7s ease-in-out infinite;
-}
-
-@keyframes timer-pulse-display {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.06);
-  }
+  color: var(--negative);
 }
 
 .scores {
   flex: 1;
+  min-width: 0;
 }
 
 .bigList {
@@ -290,90 +289,93 @@
   gap: 18px;
 }
 
+/* --rf is the row's type size; --ring is derived from it as a LENGTH (not an
+   em) so the rank ring and its grid column resolve identically even though
+   they are on different elements with different font-sizes. Every breakpoint
+   and the elastic TV grid set --rf only; everything else follows. */
 .bigRow {
+  --rf: 2rem;
+  --ring: calc(var(--rf) * 1.9);
   display: grid;
-  grid-template-columns: 100px 1fr auto;
+  grid-template-columns: var(--ring) 1fr auto;
   align-items: center;
   gap: 1.5rem;
-  padding: 2rem 2.5rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  padding: 1.5rem 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  font-size: 2rem;
-  box-shadow: var(--shadow-sm);
+  font-size: var(--rf);
   transition:
-    background 250ms ease,
-    border-color 250ms ease,
-    transform 250ms ease,
-    box-shadow 250ms ease;
+    background-color var(--dur-state) var(--ease-move),
+    border-color var(--dur-state) var(--ease-move);
 }
 
-/* Podium colors for the top three teams (display only). Declared BEFORE the
+/* Podium colours for the top three (display only). Declared BEFORE the
    .bigRowBuzzed rules so a live buzz still takes over the row's highlight, and
-   only applied once a team has scored (see DisplayPage.tsx). Border stays 1px
-   (recolored) so medal rows don't shift against the rest of the column. */
+   only applied once a team has scored (see DisplayPage.tsx). The row keeps the
+   same surface and 1px border as every other row — the place is carried by the
+   rank ring and, for the leader, one inset accent edge. */
 .bigRowGold {
-  background: linear-gradient(90deg, rgba(250, 204, 21, 0.4) 0%, #ffffff 72%);
-  border-color: #eab308;
-  box-shadow: 0 6px 20px rgba(234, 179, 8, 0.28);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.bigRowSilver {
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.4) 0%, #ffffff 72%);
-  border-color: #94a3b8;
-}
-
+.bigRowSilver,
 .bigRowBronze {
-  background: linear-gradient(90deg, rgba(205, 127, 50, 0.34) 0%, #ffffff 72%);
-  border-color: #c2703a;
-}
-
-.bigRowGold .bigRank,
-.bigRowSilver .bigRank,
-.bigRowBronze .bigRank {
-  font-weight: 900;
+  background: var(--surface);
 }
 
 .bigRowGold .bigRank {
-  color: #a16207;
+  border-color: var(--accent);
 }
 
-.bigRowSilver .bigRank {
-  color: #475569;
-}
-
+.bigRowSilver .bigRank,
 .bigRowBronze .bigRank {
-  color: #9a3412;
+  border-color: var(--bone);
 }
 
 .bigRowBuzzed {
-  border-color: var(--color-warning);
-  background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, #ffffff 80%);
-  transform: scale(1.02);
-  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: none;
+  box-shadow: none;
 }
 
 .bigRank {
-  font-weight: 800;
-  color: var(--color-text-mute);
+  width: var(--ring);
+  height: var(--ring);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: calc(var(--rf) * 0.9);
+  line-height: 1;
+  color: var(--bone);
   font-variant-numeric: tabular-nums;
-  font-size: 2.4rem;
 }
 
 .bigRowBuzzed .bigRank {
-  color: var(--color-warning);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .bigName {
-  font-weight: 700;
-  color: #0f172a;
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--text);
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bigScore {
-  font-weight: 800;
-  font-size: 3rem;
+  font-family: var(--font-display);
+  font-size: calc(var(--rf) * 1.4);
   font-variant-numeric: tabular-nums;
-  color: var(--color-primary-strong);
+  color: var(--bone);
 }
 
 .emptyBoard {
@@ -381,16 +383,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.5rem;
-  padding: 4.5rem 3rem;
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.04) 0%, transparent 100%);
-  border: 1px dashed var(--color-border-strong);
+  gap: 1rem;
+  padding: 3rem 2rem;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
   text-align: center;
-}
-
-.emptyBoardQR {
-  margin-top: 1.25rem;
 }
 
 /* "+N more teams playing" — a quiet line under the top-5 board so the room
@@ -398,44 +396,41 @@
 .moreTeams {
   margin: 0;
   text-align: center;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-text-mute);
-  letter-spacing: 0.01em;
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Everything that is not the standings. Below the TV breakpoint the wrapper
+   un-wraps so its children stack in the page's own column; `order` keeps the
+   QR last, where it was before the sidebar existed. */
+.side {
+  display: contents;
 }
 
 .joinFooter {
   display: flex;
   justify-content: center;
   align-items: center;
+  order: 10;
   margin-top: auto;
   padding-top: 1.5rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border);
 }
 
 .emptyBoardTitle {
   margin: 0;
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--color-text);
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: var(--text-display-s);
+  color: var(--bone);
 }
 
 .emptyBoardHint {
   margin: 0;
-  color: var(--color-text-dim);
-  font-size: 1.35rem;
-}
-
-.emptyBoardCode {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  padding: 0 0.15em;
+  color: var(--text-muted);
+  font-size: var(--text-title);
 }
 
 .skeletonRows {
@@ -444,18 +439,14 @@
   gap: 14px;
 }
 
-.bigRowBuzzed .bigScore {
-  color: #b45309;
-}
-
 .revealPanel {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1rem 1.5rem;
+  padding: 1rem 1.25rem;
   border-radius: var(--radius-md);
-  background: rgba(15, 23, 42, 0.04);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   text-align: center;
 }
 
@@ -464,27 +455,77 @@
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
+  min-width: 0;
   font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--color-text-dim);
+  font-weight: 600;
+  color: var(--text-muted);
   letter-spacing: -0.01em;
 }
 
 .revealRowOpen {
-  color: #0f172a;
+  color: var(--text);
 }
 
 .revealIcon {
   display: inline-flex;
-  font-size: 1.5rem;
+  flex: none;
+  font-size: 1.1em;
   color: var(--text-muted);
+}
+
+.revealRowOpen .revealIcon {
+  color: var(--accent);
 }
 
 .revealText {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80vw;
+  min-width: 0;
+}
+
+/* The unclaimed answer is a row of blocks standing in for the hidden words
+   (README decision 8) — no literal "???" text for a screen reader to read out
+   (the row carries a visually-hidden caption instead). */
+.revealMask {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.revealMask i {
+  display: block;
+  height: 0.9em;
+  width: 2.2em;
+  /* Shrinkable: the sidebar column is narrower than the five blocks' natural
+     width once the reveal type scales up on a big frame. */
+  flex: 0 1 auto;
+  min-width: 0;
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+}
+
+.revealMask i:nth-child(2) {
+  width: 1.4em;
+}
+
+.revealMask i:nth-child(4) {
+  width: 3em;
+}
+
+.revealRowOpen .revealText {
+  animation: unmask var(--dur-enter) var(--ease-arrive);
+}
+
+@keyframes unmask {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
 }
 
 .tokenChips {
@@ -493,95 +534,163 @@
   gap: 0.6rem;
   align-items: center;
   justify-content: center;
-  margin-top: -0.25rem;
 }
 
 .soundtrackBadgeRow {
   display: flex;
   justify-content: center;
-  margin-top: -0.5rem;
 }
 
 .tokenChip {
-  font-size: 1rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: var(--text-caption);
+  font-weight: 600;
   padding: 6px 14px;
   border-radius: var(--radius-pill);
-  background: rgba(148, 163, 184, 0.15);
-  color: var(--color-text-dim);
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  letter-spacing: 0.04em;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .tokenChipClaimed {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.06) 100%);
-  color: #047857;
-  border-color: var(--color-success);
+  background: var(--accent-soft);
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 /* Auto-fit the top-5 scoreboard to a non-scrolling TV/projector frame (B-1).
    On a real display (wide + tall enough to be a monitor, not a phone) the
-   whole page becomes a fixed 100dvh frame that never scrolls. Capping the
-   board at five teams (issue #179) means it's always a single roomy
-   "normal"-density column; the elastic 1fr row tracks below still shrink to
-   fit short/OS-scaled laptop frames, and the trimmed top matter + footer leave
-   enough of the frame for every row plus the QR. */
+   whole page becomes a fixed 100dvh frame that never scrolls: the standings
+   own the left column and everything else (reveal, chips, timer, QR) moves
+   into a right-hand sidebar, which is what frees the vertical room the rows
+   need. Scoped to [data-density] — only the live board sets it, so the
+   ended / swept / loading shells keep the plain flex column and never get
+   auto-placed into these grid areas. */
 @media (min-width: 769px) and (min-height: 640px) {
-  .shell {
+  .shell[data-density] {
     height: 100dvh;
     min-height: 100dvh;
     overflow: hidden;
-    gap: var(--tv-gap, 0.85rem);
-    padding: 1rem var(--space-xl);
+    padding: 1rem var(--space-6);
+    display: grid;
+    gap: var(--tv-gap, 0.85rem) var(--space-6);
+    grid-template-columns: minmax(0, 1fr) clamp(240px, 26vw, 340px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "header header"
+      "banner banner"
+      "scores side"
+      "more   side";
   }
 
+  /* Sized from the frame height, not fixed: moving the reveal panel, chips,
+     timer and QR into the sidebar hands the board a whole column, so the old
+     78px / 1.8rem pair (tuned for the stacked layout, where the standings got
+     only the leftover middle) left a 1080p TV more than half empty. The board
+     is the thing the room reads from across it — these grow with the frame and
+     shrink back to roughly the old numbers at the 640px floor. */
   .shell[data-density="normal"] {
     --tv-gap: 0.85rem;
-    --row-h: 78px;
-    --row-font: 1.8rem;
+    --row-h: clamp(78px, 13vh, 150px);
+    --row-font: clamp(1.35rem, 3.4vh, 2.75rem);
     --list-gap: 12px;
-    --reveal-font: 1.3rem;
+    --reveal-font: clamp(1.05rem, 2.8vh, 2.3rem);
   }
 
-  /* Trim the fixed top matter / footer so the scoreboard gets more of the
-     frame. The reveal panel and QR shrink further via the density var / the
-     size prop passed to QRPanel. */
   .header {
-    padding: 0.6rem 1.5rem;
+    grid-area: header;
+  }
+  .banner {
+    grid-area: banner;
+  }
+  .scores {
+    grid-area: scores;
+  }
+  .moreTeams {
+    grid-area: more;
+  }
+
+  /* Centred rather than top-aligned: during a round the answer card's flex:1
+     eats every spare pixel so this has no effect, but on the waiting screen —
+     where the QR is the only thing in the column and the only thing anyone
+     needs — it puts the join code in the middle of the panel instead of
+     stranded in the bottom corner. */
+  .side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--tv-gap, 0.85rem);
+    min-height: 0;
+  }
+
+  /* Trim the fixed top matter so the scoreboard gets more of the frame. */
+  .header {
+    padding: 0.5rem 1.25rem;
   }
   /* Keep the buzzed banner on ONE line ("Alpha buzzed in!  Round 1") so it
      doesn't grow to two lines and squeeze the fixed-height scoreboard below it
      when a team locks — that squeeze is what would otherwise clip the top-5
      rows mid-buzz on a short frame. */
   .banner {
-    padding: 0.75rem 1.75rem;
+    padding: 0.6rem 1.5rem;
     flex-direction: row;
     flex-wrap: wrap;
     gap: 0.25rem 0.75rem;
   }
+  /* The answer card takes the sidebar's slack rather than leaving a column of
+     black between the timer and the QR: it is the one thing besides the
+     standings that the room actually reads, so it gets the room. */
   .revealPanel {
-    padding: 0.6rem 1.5rem;
-    gap: 0.35rem;
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    gap: 0.5rem;
+    min-height: 0;
   }
   .revealRow {
     font-size: var(--reveal-font, 1.3rem);
   }
+  /* In the sidebar a long Hebrew title has a ~260px column, not the page
+     width, so the single-line ellipsis the phone layout uses would eat half
+     of it. The card has vertical room to spare — wrap instead, capped at
+     three lines so a pathological title cannot push the chips, timer and QR
+     out of the frame. */
+  .revealText {
+    white-space: normal;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+  }
+  .revealPanel {
+    overflow: hidden;
+  }
   /* The countdown reservation and the timer are both shrunk here; the slot
-     stays a hair taller than the rendered timer so the scoreboard never jumps
-     down when a buzz lands. */
+     stays a hair taller than the rendered timer so the sidebar never jumps
+     when a buzz lands. */
   .timerSlot {
     min-height: 52px;
   }
   .timer {
-    padding: 0.5rem 1.25rem;
-    gap: 1rem;
+    padding: 0.4rem 1rem;
+    gap: 0.75rem;
   }
   .timerValue {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
   }
+  /* In the sidebar the QR sits at the bottom of its own column, so it needs
+     neither the separator nor the reserved gap it had as a page footer. */
   .joinFooter {
-    padding-top: 0.6rem;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
   }
 
   /* The scoreboard owns the flexible middle of the frame and centers its
@@ -625,34 +734,33 @@
   /* Font scales with the per-row height (≈ 100cqh / rows of the list height),
      capped at the tier's roomy size and floored for legibility, so text fits
      whether a row is 78px (few teams, tall frame) or 30px (16 teams, short
-     laptop) — never overflowing and never clipping a whole row. */
+     laptop) — never overflowing and never clipping a whole row. The rank ring
+     follows --rf, so it can never outgrow its own row either. */
   .bigRow {
     --rf: clamp(0.72rem, calc(42cqh / var(--rows, 1)), var(--row-font, 1.8rem));
     padding: 0 clamp(0.6rem, 1.6cqw, 2rem);
-    font-size: var(--rf);
+    gap: clamp(0.5rem, 1.2cqw, 1.5rem);
     line-height: 1.05;
     min-height: 0;
     overflow: hidden;
-  }
-  .bigRank {
-    font-size: calc(var(--rf) * 1.08);
-  }
-  .bigScore {
-    font-size: calc(var(--rf) * 1.32);
   }
 }
 
 /* Laptop / OS-scaled displays: the shorter the frame, the more we trim the
    FIXED top matter + QR footer so the scoreboard keeps a usable share of the
    height. (The rows already shrink-to-fit via the 1fr grid above; these rules
-   just stop the header/banner/reveal/QR from squeezing them down to a sliver.) */
+   just stop the header/banner/reveal/QR from squeezing them down to a sliver.)
+   The gap is trimmed through --tv-gap, not `gap`, so the grid keeps its
+   column gutter. */
 @media (min-width: 769px) and (max-height: 860px) {
-  .shell {
-    gap: 0.5rem;
-    padding: 0.6rem var(--space-lg);
+  .shell[data-density] {
+    padding: 0.6rem var(--space-5);
+  }
+  .shell[data-density] {
+    --tv-gap: 0.5rem;
   }
   .header {
-    padding: 0.4rem 1.25rem;
+    padding: 0.35rem 1rem;
   }
   .header h1 {
     font-size: 1.5rem;
@@ -661,50 +769,50 @@
     font-size: 1.6rem;
   }
   .banner {
-    padding: 0.5rem 1.25rem;
+    padding: 0.4rem 1.25rem;
     font-size: 1.3rem;
   }
   .revealPanel {
-    padding: 0.4rem 1rem;
+    padding: 0.4rem 0.85rem;
     gap: 0.25rem;
   }
   .timerSlot {
     min-height: 40px;
   }
   .timer {
-    padding: 0.4rem 1rem;
+    padding: 0.3rem 0.85rem;
   }
   .timerValue {
     font-size: 1.2rem;
   }
-  .joinFooter {
-    padding-top: 0.4rem;
-  }
 }
 
 @media (min-width: 769px) and (max-height: 700px) {
-  .shell {
-    gap: 0.4rem;
-    padding: 0.45rem var(--space-md);
+  .shell[data-density] {
+    padding: 0.45rem var(--space-4);
   }
   /* Reclaim inter-row gap for row height on very short frames. The attribute
      selector matches the per-density rule's specificity and comes later in the
      source, so it wins. */
   .shell[data-density] {
+    --tv-gap: 0.4rem;
     --list-gap: 6px;
   }
   .header {
-    padding: 0.3rem 1rem;
+    padding: 0.25rem 0.85rem;
   }
   .header h1 {
     font-size: 1.3rem;
   }
+  .code {
+    font-size: 1.4rem;
+  }
   .banner {
-    padding: 0.35rem 1rem;
+    padding: 0.3rem 1rem;
     font-size: 1.15rem;
   }
   .revealPanel {
-    padding: 0.3rem 0.75rem;
+    padding: 0.3rem 0.7rem;
   }
   .timerSlot {
     min-height: 30px;
@@ -713,7 +821,7 @@
 
 @media (max-width: 768px) {
   .shell {
-    padding: 1.25rem var(--space-md);
+    padding: 1.25rem var(--space-4);
   }
   .header h1 {
     font-size: 1.5rem;
@@ -726,14 +834,11 @@
     padding: 1rem 1.25rem;
   }
   .bigRow {
-    padding: 1rem 1.25rem;
-    grid-template-columns: 56px 1fr auto;
+    --rf: 1.25rem;
+    padding: 0.85rem 1.1rem;
+    gap: 1rem;
+  }
+  .revealRow {
     font-size: 1.25rem;
-  }
-  .bigRank {
-    font-size: 1.5rem;
-  }
-  .bigScore {
-    font-size: 1.85rem;
   }
 }

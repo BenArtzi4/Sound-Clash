@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo } from "react";
+import { useCountUp } from "../hooks/useCountUp";
 import type { Team } from "../lib/types";
 import styles from "./EndScreen.module.css";
 import { LaurelIcon } from "./icons";
@@ -8,85 +9,18 @@ interface Props {
   gameCode: string;
 }
 
-const CONFETTI_COLORS = ["#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
-const CONFETTI_COUNT = 40;
-
 // The final results screen shows only the top teams so the "who won" moment
 // isn't buried under a long list (issue #180). 5 keeps it consistent with the
 // live top-5 leaderboard story (#179) and is wide enough that the near-podium
 // teams still get their moment.
 const TOP_N = 5;
 
-// The score count-up is a JS animation, so the global CSS prefers-reduced-motion
-// policy (styles.css) can't reach it — honour the preference here directly.
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
-interface ConfettiPiece {
-  x: number;
-  delay: number;
-  duration: number;
-  rotateEnd: number;
-  color: string;
-  size: number;
-}
-
-function generateConfetti(): ConfettiPiece[] {
-  const pieces: ConfettiPiece[] = [];
-  for (let i = 0; i < CONFETTI_COUNT; i++) {
-    pieces.push({
-      x: Math.random() * 100,
-      delay: Math.random() * 4,
-      duration: 3.5 + Math.random() * 2.5,
-      rotateEnd: 360 + Math.random() * 720,
-      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length]!,
-      size: 6 + Math.random() * 8,
-    });
-  }
-  return pieces;
-}
-
-function CountUp({
-  value,
-  duration = 900,
-  delay = 0,
-}: {
-  value: number;
-  duration?: number;
-  delay?: number;
-}) {
-  const [display, setDisplay] = useState(() => (prefersReducedMotion() ? value : 0));
-  useEffect(() => {
-    // Reduced-motion users get the final number immediately, no roll-up.
-    if (prefersReducedMotion()) {
-      setDisplay(value);
-      return;
-    }
-    let raf = 0;
-    let started = false;
-    const startTimer = window.setTimeout(() => {
-      started = true;
-      const start = performance.now();
-      const tick = (t: number) => {
-        const elapsed = t - start;
-        const progress = Math.min(1, elapsed / duration);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        setDisplay(Math.round(value * eased));
-        if (progress < 1) raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
-    }, delay);
-    return () => {
-      window.clearTimeout(startTimer);
-      if (started) cancelAnimationFrame(raf);
-    };
-  }, [value, duration, delay]);
-  return <>{display}</>;
+// The podium total rolls up from zero. The shared hook honours reduced motion
+// (and jsdom's missing matchMedia) by rendering the final number on first
+// paint instead — the global CSS policy can't reach a JS animation.
+function Score({ value, delay }: { value: number; delay: number }) {
+  const n = useCountUp(value, { from: 0, duration: 900, delay });
+  return <>{n}</>;
 }
 
 // Group teams by distinct score, highest first. Teams within a group share a
@@ -172,7 +106,7 @@ function PodiumCard({
           <div key={t.id} className={styles.podiumTeam}>
             <div className={styles.teamName}>{t.name}</div>
             <div className={styles.teamScore}>
-              <CountUp value={t.score} delay={startDelayMs + i * 150} />
+              <Score value={t.score} delay={startDelayMs + i * 150} />
               <span className={styles.scoreUnit}>pts</span>
             </div>
           </div>
@@ -191,7 +125,6 @@ export function EndScreen({ teams, gameCode }: Props) {
     () => capScoreboard(flattenWithRanks(groups)),
     [groups],
   );
-  const confetti = useMemo(() => generateConfetti(), []);
 
   const goldGroup = groups[0];
   const silverGroup = groups[1];
@@ -200,26 +133,6 @@ export function EndScreen({ teams, gameCode }: Props) {
 
   return (
     <div className={styles.shell}>
-      <div className={styles.confettiLayer} aria-hidden="true">
-        {confetti.map((p, i) => (
-          <span
-            key={i}
-            className={styles.confettiPiece}
-            style={
-              {
-                left: `${p.x}vw`,
-                width: `${p.size}px`,
-                height: `${p.size * 1.4}px`,
-                background: p.color,
-                animationDelay: `${p.delay}s`,
-                animationDuration: `${p.duration}s`,
-                "--rotate-end": `${p.rotateEnd}deg`,
-              } as CSSProperties
-            }
-          />
-        ))}
-      </div>
-
       <header className={styles.heading}>
         <span className={styles.trophy} aria-hidden="true">
           <LaurelIcon />

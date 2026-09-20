@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/check-bundle.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
@@ -19,6 +19,7 @@
     "test:e2e": "cd ../tests/e2e && npx playwright test"
   },
   "dependencies": {
+    "@formkit/auto-animate": "^0.10.0",
     "@grafana/faro-web-sdk": "^2.7.1",
     "@grafana/faro-web-tracing": "^2.7.1",
     "@sentry/react": "^8.40.0",
