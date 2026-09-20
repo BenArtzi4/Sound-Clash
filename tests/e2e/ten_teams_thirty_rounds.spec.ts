@@ -613,19 +613,24 @@ test("soundtrack round: single +15 token, 🎬 badge + film reveal, scores corre
     await expect(display.getByTestId("soundtrack-badge")).toBeVisible();
     await expect(display.getByTestId("display-reveal-title")).toHaveCount(1);
     await expect(display.getByTestId("display-reveal-artist")).toHaveCount(0);
-    // Before the answer is claimed, the film name is hidden.
-    await expect(display.getByTestId("display-reveal-title")).toContainText("???");
+    // Before the answer is claimed, the film name is masked.
+    await expect(display.getByTestId("display-reveal-title")).toHaveAttribute(
+      "data-revealed",
+      "false",
+    );
 
     const team = st[(r - 1) % st.length]!;
     await buzzAndExpectWinner(team);
     await manager.page.getByTestId("score-soundtrack").click();
     expected[team.name]! += 15;
 
-    // Score lands on the display, and the film name is now revealed (no "???").
+    // Score lands on the display, and the film name is now revealed.
     await expectDisplayScore(display, team.name, expected[team.name]!);
-    await expect(display.getByTestId("display-reveal-title")).not.toContainText("???", {
-      timeout: 10_000,
-    });
+    await expect(display.getByTestId("display-reveal-title")).toHaveAttribute(
+      "data-revealed",
+      "true",
+      { timeout: 10_000 },
+    );
 
     if (r < rounds) await advanceRound(manager.page);
   }

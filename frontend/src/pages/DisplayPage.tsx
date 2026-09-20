@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
@@ -7,6 +15,7 @@ import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { CheckIcon, FilmIcon, MicIcon, NoteIcon } from "../components/icons";
+import { useCountUp } from "../hooks/useCountUp";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { fetchSongById } from "../lib/songMetadata";
 import type { Song, Team } from "../lib/types";
@@ -48,6 +57,77 @@ function denseRanks(teams: Team[]): number[] {
     ranks.push(rank);
   }
   return ranks;
+}
+
+// One reveal row. Unclaimed shows a masked placeholder (README decision 8):
+// blocks of varying width standing in for the hidden words, aria-hidden with a
+// visually-hidden caption for screen readers. `data-revealed` is the machine
+// contract that replaced the literal "???" text. `dir="auto"` lets a Hebrew
+// title run right-to-left inside an otherwise LTR page.
+function RevealRow({
+  testId,
+  icon,
+  text,
+  revealed,
+}: {
+  testId: string;
+  icon: ReactNode;
+  text: string;
+  revealed: boolean;
+}) {
+  return (
+    <div
+      className={`${styles.revealRow} ${revealed ? styles.revealRowOpen : ""}`}
+      data-testid={testId}
+      data-revealed={revealed ? "true" : "false"}
+      dir="auto"
+    >
+      <span className={styles.revealIcon} aria-hidden="true">
+        {icon}
+      </span>
+      {revealed ? (
+        <span className={styles.revealText}>{text}</span>
+      ) : (
+        <>
+          <span className={styles.revealMask} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="visually-hidden">Not revealed yet</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// One board row. Split out of the list so each score can own a count-up hook
+// (display-only easing between the previous and new total).
+function BoardRow({
+  team,
+  rank,
+  medal,
+  buzzed,
+}: {
+  team: Team;
+  rank: number;
+  medal: string;
+  buzzed: boolean;
+}) {
+  const score = useCountUp(team.score);
+  return (
+    <li
+      data-team-id={team.id}
+      data-rank={rank}
+      className={`${styles.bigRow} ${medal} ${buzzed ? styles.bigRowBuzzed : ""}`}
+    >
+      <span className={styles.bigRank}>{rank}</span>
+      <span className={styles.bigName}>{team.name}</span>
+      <span className={styles.bigScore}>{score}</span>
+    </li>
+  );
 }
 
 export function DisplayPage() {
@@ -96,6 +176,11 @@ function DisplayEntry() {
 
 function DisplayBoard({ gameCode }: { gameCode: string }) {
   const { state, status, finalBoard } = useGameChannel(gameCode);
+  // Board reorders animate (WAAPI transform/opacity, ~400ms). auto-animate is
+  // imported here and nowhere else — it must never reach the player or console
+  // bundles (README decision 7); frontend/scripts/check-bundle.mjs enforces it.
+  // It no-ops under prefers-reduced-motion on its own.
+  const [boardRef] = useAutoAnimate<HTMLOListElement>({ duration: 400 });
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   // Track the frame height so the QR footer can shrink on short / OS-scaled
@@ -268,100 +353,104 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         {showRoundSubhead ? <span className={styles.bannerSubhead}>{roundLabel}</span> : null}
       </div>
 
-      {round && game.status === "playing" && isSoundtrackRound ? (
-        <div className={styles.soundtrackBadgeRow}>
-          <SoundtrackBadge size="large" />
-        </div>
-      ) : null}
+      {/* Everything that is not the standings: on a TV (>=769px) this is the
+          right-hand column of the frame; below that it un-wraps (display:
+          contents) and the pieces stack in source order with the QR last. */}
+      <aside className={styles.side}>
+        {round && game.status === "playing" && isSoundtrackRound ? (
+          <div className={styles.soundtrackBadgeRow}>
+            <SoundtrackBadge size="large" />
+          </div>
+        ) : null}
 
-      {round && game.status === "playing" ? (
-        <div className={styles.revealPanel} aria-label="Song reveal">
-          {isSoundtrackRound ? (
-            <div
-              className={`${styles.revealRow} ${titleClaimedById ? styles.revealRowOpen : ""}`}
-              data-testid="display-reveal-title"
+        {round && game.status === "playing" ? (
+          <div className={styles.revealPanel} aria-label="Song reveal">
+            {isSoundtrackRound ? (
+              /* Soundtrack rounds ask for the film/show name, which lives in
+                 `artist` (title holds the song/clip name). */
+              <RevealRow
+                testId="display-reveal-title"
+                icon={<FilmIcon />}
+                text={currentSong?.artist ?? ""}
+                revealed={Boolean(titleClaimedById && currentSong)}
+              />
+            ) : (
+              <>
+                <RevealRow
+                  testId="display-reveal-title"
+                  icon={<NoteIcon />}
+                  text={currentSong?.title ?? ""}
+                  revealed={Boolean(titleClaimedById && currentSong)}
+                />
+                <RevealRow
+                  testId="display-reveal-artist"
+                  icon={<MicIcon />}
+                  text={currentSong?.artist ?? ""}
+                  revealed={Boolean(artistClaimedById && currentSong)}
+                />
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {round && game.status === "playing" && !isSoundtrackRound ? (
+          <div className={styles.tokenChips} aria-label="Round token state">
+            <span
+              className={`${styles.tokenChip} ${titleClaimedById ? styles.tokenChipClaimed : ""}`}
+              data-testid="display-token-title"
+              data-claimed={titleClaimedById ? "true" : "false"}
             >
-              <span className={styles.revealIcon} aria-hidden="true">
-                <FilmIcon />
-              </span>
-              <span className={styles.revealText}>
-                {/* Soundtrack rounds ask for the film/show name, which lives in
-                    `artist` (title holds the song/clip name). Reveal the answer. */}
-                {titleClaimedById && currentSong ? currentSong.artist : "???"}
-              </span>
-            </div>
-          ) : (
-            <>
-              <div
-                className={`${styles.revealRow} ${titleClaimedById ? styles.revealRowOpen : ""}`}
-                data-testid="display-reveal-title"
-              >
-                <span className={styles.revealIcon} aria-hidden="true">
-                  <NoteIcon />
-                </span>
-                <span className={styles.revealText}>
-                  {titleClaimedById && currentSong ? currentSong.title : "???"}
-                </span>
-              </div>
-              <div
-                className={`${styles.revealRow} ${artistClaimedById ? styles.revealRowOpen : ""}`}
-                data-testid="display-reveal-artist"
-              >
-                <span className={styles.revealIcon} aria-hidden="true">
-                  <MicIcon />
-                </span>
-                <span className={styles.revealText}>
-                  {artistClaimedById && currentSong ? currentSong.artist : "???"}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-      ) : null}
+              Song{" "}
+              {titleClaimedById ? (
+                <>
+                  <CheckIcon /> {titleClaimedByName ?? "?"}
+                </>
+              ) : (
+                "open"
+              )}
+            </span>
+            <span
+              className={`${styles.tokenChip} ${artistClaimedById ? styles.tokenChipClaimed : ""}`}
+              data-testid="display-token-artist"
+              data-claimed={artistClaimedById ? "true" : "false"}
+            >
+              Artist{" "}
+              {artistClaimedById ? (
+                <>
+                  <CheckIcon /> {artistClaimedByName ?? "?"}
+                </>
+              ) : (
+                "open"
+              )}
+            </span>
+          </div>
+        ) : null}
 
-      {round && game.status === "playing" && !isSoundtrackRound ? (
-        <div className={styles.tokenChips} aria-label="Round token state">
-          <span
-            className={`${styles.tokenChip} ${titleClaimedById ? styles.tokenChipClaimed : ""}`}
-            data-testid="display-token-title"
-            data-claimed={titleClaimedById ? "true" : "false"}
-          >
-            Song{" "}
-            {titleClaimedById ? (
-              <>
-                <CheckIcon /> {titleClaimedByName ?? "?"}
-              </>
-            ) : (
-              "open"
-            )}
-          </span>
-          <span
-            className={`${styles.tokenChip} ${artistClaimedById ? styles.tokenChipClaimed : ""}`}
-            data-testid="display-token-artist"
-            data-claimed={artistClaimedById ? "true" : "false"}
-          >
-            Artist{" "}
-            {artistClaimedById ? (
-              <>
-                <CheckIcon /> {artistClaimedByName ?? "?"}
-              </>
-            ) : (
-              "open"
-            )}
-          </span>
-        </div>
-      ) : null}
-
-      {/* Reserve the countdown row's height for the whole playing phase so the
-          scoreboard below doesn't jump down the moment a team buzzes and the
-          timer appears. The timer itself only renders while a buzz is held. */}
-      {game.status === "playing" ? (
-        <div className={styles.timerSlot}>
-          {timerActive && lockedAt ? (
-            <RoundCountdown lockedAt={lockedAt} durationSec={ANSWER_DURATION_SEC} styles={styles} />
-          ) : null}
-        </div>
-      ) : null}
+        {/* Reserve the countdown row's height for the whole playing phase so the
+            scoreboard below doesn't jump down the moment a team buzzes and the
+            timer appears. The timer itself only renders while a buzz is held. */}
+        {game.status === "playing" ? (
+          <div className={styles.timerSlot}>
+            {timerActive && lockedAt ? (
+              <RoundCountdown
+                lockedAt={lockedAt}
+                durationSec={ANSWER_DURATION_SEC}
+                styles={styles}
+              />
+            ) : null}
+          </div>
+        ) : null}
+        {/* Always-visible join footer so a late player can scan after the round
+            has started. (Hidden on the end-game podium via the early-return
+            above when game.status === "ended".) */}
+        <footer className={styles.joinFooter}>
+          <QRPanel
+            gameCode={gameCode}
+            joinUrl={`${window.location.origin}/join/${gameCode}`}
+            size={qrSize}
+          />
+        </footer>
+      </aside>
 
       <div className={styles.scores}>
         {teams.length === 0 ? (
@@ -370,7 +459,11 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
             <p className={styles.emptyBoardHint}>Scan the code below or enter it on your phone.</p>
           </div>
         ) : (
-          <ol className={styles.bigList} style={{ "--rows": rowsPerColumn } as CSSProperties}>
+          <ol
+            ref={boardRef}
+            className={styles.bigList}
+            style={{ "--rows": rowsPerColumn } as CSSProperties}
+          >
             {teams.map((t, i) => {
               const rank = boardRanks[i]!;
               // Podium colors follow the dense place (tied teams share a color) —
@@ -378,21 +471,16 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
               // hand out medals while everyone is still tied at 0 at the start.
               const medal =
                 t.score > 0 && rank <= 3
-                  ? [styles.bigRowGold, styles.bigRowSilver, styles.bigRowBronze][rank - 1]
+                  ? [styles.bigRowGold, styles.bigRowSilver, styles.bigRowBronze][rank - 1]!
                   : "";
               return (
-                <li
+                <BoardRow
                   key={t.id}
-                  data-team-id={t.id}
-                  data-rank={rank}
-                  className={`${styles.bigRow} ${medal} ${
-                    t.id === game.buzzed_team_id ? styles.bigRowBuzzed : ""
-                  }`}
-                >
-                  <span className={styles.bigRank}>{rank}</span>
-                  <span className={styles.bigName}>{t.name}</span>
-                  <span className={styles.bigScore}>{t.score}</span>
-                </li>
+                  team={t}
+                  rank={rank}
+                  medal={medal}
+                  buzzed={t.id === game.buzzed_team_id}
+                />
               );
             })}
           </ol>
@@ -407,17 +495,6 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           +{hiddenTeamCount} more {hiddenTeamCount === 1 ? "team" : "teams"} playing
         </p>
       ) : null}
-
-      {/* Always-visible join footer so a late player can scan after the round
-          has started. (Hidden on the end-game podium via the early-return
-          above when game.status === "ended".) */}
-      <footer className={styles.joinFooter}>
-        <QRPanel
-          gameCode={gameCode}
-          joinUrl={`${window.location.origin}/join/${gameCode}`}
-          size={qrSize}
-        />
-      </footer>
     </main>
   );
 }

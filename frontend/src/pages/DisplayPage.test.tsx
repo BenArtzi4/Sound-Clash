@@ -227,7 +227,7 @@ describe("DisplayPage board", () => {
     expect(pill).toHaveTextContent("-3");
   });
 
-  it("hides song title and artist behind ??? while no token is claimed", async () => {
+  it("masks song title and artist while no token is claimed", async () => {
     setSongFetch({
       id: "song-1",
       title: "Careless Whisper",
@@ -252,8 +252,8 @@ describe("DisplayPage board", () => {
     });
     const titleRow = await screen.findByTestId("display-reveal-title");
     const artistRow = await screen.findByTestId("display-reveal-artist");
-    expect(titleRow).toHaveTextContent("???");
-    expect(artistRow).toHaveTextContent("???");
+    expect(titleRow).toHaveAttribute("data-revealed", "false");
+    expect(artistRow).toHaveAttribute("data-revealed", "false");
   });
 
   it("reveals the song title once the title token is claimed", async () => {
@@ -282,7 +282,8 @@ describe("DisplayPage board", () => {
     await waitFor(() =>
       expect(screen.getByTestId("display-reveal-title")).toHaveTextContent("Careless Whisper"),
     );
-    expect(screen.getByTestId("display-reveal-artist")).toHaveTextContent("???");
+    expect(screen.getByTestId("display-reveal-title")).toHaveAttribute("data-revealed", "true");
+    expect(screen.getByTestId("display-reveal-artist")).toHaveAttribute("data-revealed", "false");
   });
 
   it("retries a failed song-metadata fetch so the reveal recovers within the round", async () => {
@@ -314,13 +315,14 @@ describe("DisplayPage board", () => {
       await act(async () => {
         await fireSubscribed();
       });
-      // The first attempt failed, so the claimed title still hides behind ???.
-      expect(screen.getByTestId("display-reveal-title")).toHaveTextContent("???");
+      // The first attempt failed, so the claimed title is still masked.
+      expect(screen.getByTestId("display-reveal-title")).toHaveAttribute("data-revealed", "false");
       // The first backoff retry (500ms) lands and fills the reveal.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(500);
       });
       expect(screen.getByTestId("display-reveal-title")).toHaveTextContent("Careless Whisper");
+      expect(screen.getByTestId("display-reveal-title")).toHaveAttribute("data-revealed", "true");
     } finally {
       vi.useRealTimers();
     }

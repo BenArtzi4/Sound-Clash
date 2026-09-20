@@ -9,45 +9,6 @@
   overflow: hidden;
 }
 
-.confettiLayer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 0;
-}
-
-.confettiPiece {
-  position: absolute;
-  top: -20px;
-  border-radius: 2px;
-  animation-name: confetti-fall;
-  /* Finite, not infinite: the Display page can sit on this screen for the rest
-     of the event, so the confetti falls for a celebratory ~15s then settles
-     instead of repainting forever on a projector. */
-  animation-iteration-count: 3;
-  animation-fill-mode: forwards;
-  animation-timing-function: linear;
-  opacity: 0.85;
-}
-
-@keyframes confetti-fall {
-  0% {
-    transform: translate3d(0, -10vh, 0) rotate(0deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate3d(0, 110vh, 0) rotate(var(--rotate-end, 720deg));
-    opacity: 0;
-  }
-}
-
 .heading {
   position: relative;
   z-index: 1;
@@ -55,12 +16,12 @@
   flex-direction: column;
   align-items: center;
   gap: 0.6rem;
-  animation: heading-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: heading-in var(--dur-enter) var(--ease-arrive);
 }
 
 .trophy {
   display: inline-flex;
-  font-size: 80px;
+  font-size: 72px;
   line-height: 1;
   color: var(--accent);
 }
@@ -68,31 +29,32 @@
 @keyframes heading-in {
   from {
     opacity: 0;
-    transform: translateY(-12px) scale(0.92);
+    transform: translateY(-12px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 .title {
   margin: 0;
-  font-size: clamp(2.2rem, 6vw, 4rem);
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 35%, #f59e0b 70%, #b45309 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 6px 18px rgba(245, 158, 11, 0.18);
+  font-family: var(--font-display);
+  font-size: var(--text-display-l);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: var(--bone);
+  text-shadow: none;
 }
 
 .subtitle {
   margin: 0;
-  font-size: 1.05rem;
-  color: var(--color-text-dim);
-  font-weight: 600;
+  font-size: var(--text-body);
+  color: var(--text-muted);
+  font-weight: 500;
   letter-spacing: 0.02em;
   display: inline-flex;
   align-items: center;
@@ -100,17 +62,17 @@
 }
 
 .codeText {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: var(--bone);
 }
 
 .dot {
-  color: var(--color-text-mute);
+  color: var(--text-dim);
 }
 
 .podium {
@@ -130,12 +92,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.4rem;
+  gap: 0.5rem;
   padding: 1.5rem 1rem;
   border-radius: var(--radius-lg);
-  background: #ffffff;
-  border: 2px solid var(--color-border);
-  box-shadow: var(--shadow-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: none;
   opacity: 0;
   animation-fill-mode: forwards;
 }
@@ -148,33 +110,53 @@
 /* min-height (not a fixed height) gives the usual 1st > 2nd > 3rd staircase
    while letting a card grow to fit tied teams — issue #180: never hide teams
    behind an internal scroll. The top-N cap (EndScreen.tsx) keeps the number of
-   teams that can land on any card small, so cards stay compact in practice. */
+   teams that can land on any card small, so cards stay compact in practice.
+   The cards rise in staggered (bronze, silver, gold) and the winner takes one
+   light sweep — that is the whole celebration now; the confetti is gone. */
 .gold {
-  background: linear-gradient(160deg, #fef3c7 0%, #fde68a 50%, #fbbf24 100%);
-  border-color: #f59e0b;
+  border-color: var(--accent);
+  box-shadow: inset 0 3px 0 var(--accent);
   min-height: 320px;
-  box-shadow:
-    0 18px 50px rgba(245, 158, 11, 0.35),
-    0 0 0 6px rgba(245, 158, 11, 0.18);
-  animation:
-    podium-rise 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 700ms forwards,
-    /* Pulse a handful of times then settle — the box-shadow animation forces a
-       full repaint each frame, so it must not run forever on an idle projector. */
-    gold-glow 2.4s ease-in-out 1300ms 6 alternate;
+  animation: podium-rise var(--dur-enter) var(--ease-arrive) 240ms forwards;
+  /* Contain the light sweep. `overflow: hidden` would also cut the crown,
+     which deliberately overhangs the top edge, so clip the three sides the
+     band can escape from and leave the top open (a negative inset expands the
+     clip region on that side). */
+  clip-path: inset(-32px 0 0 0);
+}
+
+/* One light pass over the winner card: a diagonal band translated across it
+   once, then parked off the right edge where .gold's clip-path hides it. */
+.gold::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    transparent 40%,
+    rgba(233, 228, 217, 0.22) 50%,
+    transparent 60%
+  );
+  transform: translateX(-100%);
+  animation: sweep 900ms var(--ease-move) 900ms 1 forwards;
+  pointer-events: none;
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .silver {
-  background: linear-gradient(160deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
-  border-color: #94a3b8;
   min-height: 250px;
-  animation: podium-rise 550ms cubic-bezier(0.34, 1.56, 0.64, 1) 350ms forwards;
+  animation: podium-rise var(--dur-enter) var(--ease-arrive) 120ms forwards;
 }
 
 .bronze {
-  background: linear-gradient(160deg, #fef3c7 0%, #fbbf24 30%, #d97706 100%);
-  border-color: #b45309;
   min-height: 200px;
-  animation: podium-rise 500ms cubic-bezier(0.34, 1.56, 0.64, 1) 0ms forwards;
+  animation: podium-rise var(--dur-enter) var(--ease-arrive) 0ms forwards;
 }
 
 @keyframes podium-rise {
@@ -188,19 +170,6 @@
   }
 }
 
-@keyframes gold-glow {
-  0% {
-    box-shadow:
-      0 18px 50px rgba(245, 158, 11, 0.35),
-      0 0 0 6px rgba(245, 158, 11, 0.18);
-  }
-  100% {
-    box-shadow:
-      0 24px 60px rgba(245, 158, 11, 0.55),
-      0 0 0 10px rgba(245, 158, 11, 0.28);
-  }
-}
-
 .crown {
   position: absolute;
   top: -18px;
@@ -211,13 +180,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%);
-  color: #92400e;
+  background: var(--accent);
+  color: var(--accent-ink);
   border-radius: 50%;
-  font-size: 1.5rem;
-  font-weight: 900;
-  border: 3px solid #ffffff;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  border: 3px solid var(--bg);
+  box-shadow: none;
 }
 
 .medal {
@@ -227,27 +194,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-display);
   font-size: 1.6rem;
-  font-weight: 900;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  font-weight: 400;
+  color: var(--bone);
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  text-shadow: none;
 }
 
 .gold .medal {
-  background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+  border-color: var(--accent);
   font-size: 2rem;
   width: 72px;
   height: 72px;
 }
 
-.silver .medal {
-  background: linear-gradient(135deg, #94a3b8 0%, #475569 100%);
-}
-
+.silver .medal,
 .bronze .medal {
-  background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
+  border-color: var(--bone);
 }
 
 .podiumTeams {
@@ -269,67 +234,60 @@
 
 .podiumTeams > .podiumTeam + .podiumTeam {
   padding-top: 0.55rem;
-  border-top: 1px dashed rgba(15, 23, 42, 0.18);
+  border-top: 1px solid var(--border);
 }
 
 .teamName {
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: #0f172a;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--text);
   word-break: break-word;
   max-width: 100%;
 }
 
 .gold .teamName {
-  font-size: 1.55rem;
-  color: #78350f;
+  font-size: 1.7rem;
 }
 
 .teamScore {
   display: inline-flex;
   align-items: baseline;
   gap: 0.35rem;
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
-  font-weight: 900;
+  font-weight: 400;
   font-size: 2rem;
-  color: #0f172a;
+  color: var(--bone);
 }
 
 .gold .teamScore {
   font-size: 2.6rem;
-  color: #78350f;
-}
-
-.silver .teamScore {
-  color: #1e293b;
-}
-
-.bronze .teamScore {
-  color: #78350f;
 }
 
 .scoreUnit {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.75;
+  color: var(--text-muted);
 }
 
 .gold .scoreUnit {
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .winnerLabel {
   margin-top: 0.5rem;
+  font-family: var(--font-ui);
   font-size: 0.8rem;
   letter-spacing: 0.2em;
-  font-weight: 800;
-  color: #92400e;
-  background: rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+  color: var(--accent);
+  background: transparent;
   padding: 4px 10px;
-  border-radius: var(--radius-pill);
 }
 
 .scoreboard {
@@ -340,11 +298,12 @@
 }
 
 .scoreboardTitle {
-  font-size: 0.85rem;
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  font-weight: 700;
-  color: var(--color-text-dim);
+  font-weight: 600;
+  color: var(--text-muted);
   text-align: center;
   margin: 0 0 1rem;
 }
@@ -364,25 +323,14 @@
   align-items: center;
   gap: 1rem;
   padding: 0.85rem 1.1rem;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .scoreboardRow[data-rank="1"] {
-  border-color: #f59e0b;
-  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-}
-
-.scoreboardRow[data-rank="2"] {
-  border-color: #94a3b8;
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-}
-
-.scoreboardRow[data-rank="3"] {
-  border-color: #b45309;
-  background: linear-gradient(135deg, #fffbeb 0%, #fde68a 100%);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .scoreboardRank {
@@ -392,27 +340,26 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  color: #ffffff;
-  background: var(--color-text-mute);
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--bone);
+  background: var(--surface-2);
+  border: 2px solid var(--border);
   font-variant-numeric: tabular-nums;
 }
 
 .scoreboardRow[data-rank="1"] .scoreboardRank {
-  background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+  border-color: var(--accent);
 }
 
-.scoreboardRow[data-rank="2"] .scoreboardRank {
-  background: linear-gradient(135deg, #94a3b8 0%, #475569 100%);
-}
-
+.scoreboardRow[data-rank="2"] .scoreboardRank,
 .scoreboardRow[data-rank="3"] .scoreboardRank {
-  background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
+  border-color: var(--bone);
 }
 
 .scoreboardName {
-  font-weight: 700;
-  color: var(--color-text);
+  font-weight: 600;
+  color: var(--text);
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -420,33 +367,34 @@
 }
 
 .scoreboardScore {
-  font-weight: 800;
-  color: var(--color-primary-strong);
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--bone);
   font-variant-numeric: tabular-nums;
-  font-size: 1.15rem;
+  font-size: 1.3rem;
 }
 
 .scoreboardMore {
   margin: 0.85rem 0 0;
   text-align: center;
   font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-text-dim);
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .thanks {
   position: relative;
   z-index: 1;
   margin: 0;
-  font-size: 1.1rem;
-  color: var(--color-text-dim);
-  font-weight: 600;
-  animation: heading-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1) 1500ms backwards;
+  font-size: var(--text-body);
+  color: var(--text-muted);
+  font-weight: 500;
+  animation: heading-in var(--dur-enter) var(--ease-arrive) 1000ms backwards;
 }
 
 .noTeams {
   margin: 1rem 0;
-  color: var(--color-text-dim);
+  color: var(--text-muted);
 }
 
 @media (max-width: 720px) {
@@ -475,7 +423,7 @@
     font-size: 1.7rem;
   }
   .gold .teamName {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
   }
   .gold .teamScore {
     font-size: 2rem;
