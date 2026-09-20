@@ -231,16 +231,29 @@ async function run(game) {
         report.pages[`${r} @${w}`] = await page.evaluate(pageProbe);
       }
       if (w === 1280) {
-        // step 11: route transition click-through
+        // step 11: route transition click-through.
+        //
+        // Wait for the URL, not just an <h1>: since Task 10 a link click routes
+        // through useViewTransitionNavigate, which awaits the chunk preload and
+        // then commits inside startViewTransition — so `location` lags the click
+        // by tens of ms, and every page here has an <h1> already, which makes
+        // waitForSelector("h1") resolve instantly on the OLD page. Swallowing the
+        // timeout keeps a genuinely dropped click reporting as a red gate below
+        // (the path simply never changes) rather than as a thrown exception that
+        // would lose the rest of the run's output.
+        const arrive = async (path) => {
+          await page.waitForURL((u) => new URL(u).pathname === path, { timeout: 5000 }).catch(() => {});
+          await page.waitForSelector("h1");
+        };
         await page.goto(SITE + "/", { waitUntil: "load" });
         await page.click('a[href="/manager/create"]');
-        await page.waitForSelector("h1");
+        await arrive("/manager/create");
         const afterClick = await page.evaluate(() => ({ path: location.pathname, scrollY, hasContent: document.body.innerText.length > 50 }));
         await page.goBack();
-        await page.waitForSelector("h1");
+        await arrive("/");
         const afterBack = await page.evaluate(() => ({ path: location.pathname, scrollY }));
         await page.click('a[href="/join"]');
-        await page.waitForSelector("h1");
+        await arrive("/join");
         const join = await page.evaluate(() => ({ path: location.pathname, hasContent: document.body.innerText.length > 50 }));
         report.routeTransition = { afterClick, afterBack, join };
       }

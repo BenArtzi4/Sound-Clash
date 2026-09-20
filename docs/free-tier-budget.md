@@ -67,8 +67,24 @@ These numbers are pessimistic; real-world will be lower. Round up for safety.
 | Concurrent builds | 1 | Builds queue but don't fail |
 | Custom domains | 100 | We use 1 |
 | File count per deployment | 20,000 | Vite builds well under this |
+| Active preview deployments | unlimited | One per open PR; see below |
 
 **No binding constraint** at any realistic usage.
+
+#### Per-PR preview deployments
+
+`frontend.yml` deploys every frontend PR to `https://pr-<N>.sound-clash.pages.dev` and deletes it when the PR closes. **This costs nothing**, which is the whole reason it is structured this way:
+
+- Cloudflare's free plan documents an *unlimited* number of active preview deployments, so an open PR backlog has no cost.
+- We build in GitHub Actions and push with `wrangler pages deploy` (a Direct Upload) rather than letting Cloudflare build from Git. Cloudflare's docs do not state whether a Direct Upload counts against the 500-builds/month quota; either way this repo's deploy rate is an order of magnitude below that cap.
+- The repo is public, so the extra Actions minutes are unmetered (§2.5).
+
+Previews point at the **production** API and Supabase project, so no second database is provisioned and nothing is billed per-environment. What that trades away is isolation: a preview game writes real rows into `active_games` / `game_teams` / `game_rounds`. Those are swept by `pg_cron` 4 hours after creation, game creation is already unauthenticated in production, and the durable catalog needs `X-Admin-Password`, so the blast radius is a handful of self-deleting rows.
+
+Two things deliberately *not* done, because they are the parts that cost money:
+
+- **Per-PR backend.** Render Preview Environments require a **Pro workspace plan** ($19+/user/month) and bill preview services at normal rates. Not worth it: frontend changes outnumber backend changes in this repo by well over an order of magnitude, and a preview frontend against the real API covers them.
+- **Per-PR database.** Supabase branching requires a paid plan. A second *free* project would be $0 but pauses after 7 days idle and has to be kept migrated in lockstep — the same drift that killed the old preview project (see the 2026-05-07 entry in `.claude/rules/lessons-learned.md`).
 
 ### 2.4 Cloudflare DNS
 
