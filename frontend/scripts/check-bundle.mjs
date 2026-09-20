@@ -12,12 +12,22 @@
 // library. A chunk without a sourcemap is a hard failure rather than a silent
 // pass. The one code-level check left is `startViewTransition`, a DOM property
 // access that survives minification intact.
+//
+// `startViewTransition` is banned from the two latency-critical route chunks. A
+// running view transition suspends pointer hit-testing document-wide for its
+// duration (03-library-evaluation.md 2.2), so it must never wrap a buzz, a
+// scoring click, or a Realtime update. Both pages navigate — the console's
+// terminal states link home — but only through the shared hook in
+// `index-*.js`; the string appearing INSIDE either page chunk means the hook
+// was inlined there, i.e. that page became its only caller, which is exactly
+// the change that deserves a second look.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 
 const dir = "dist/assets";
 const BANNED = ["framer-motion", "lenis", "gsap"];
 const SCOPED = "@formkit/auto-animate";
 const SCOPED_CHUNK = "DisplayPage-";
+const NO_VIEW_TRANSITION_CHUNKS = ["TeamGameplayPage-", "ManagerConsolePage-"];
 
 const files = readdirSync(dir).filter((f) => f.endsWith(".js"));
 if (files.length === 0) {
@@ -59,10 +69,12 @@ for (const f of files) {
   }
 
   if (
-    f.startsWith("TeamGameplayPage-") &&
+    NO_VIEW_TRANSITION_CHUNKS.some((p) => f.startsWith(p)) &&
     readFileSync(`${dir}/${f}`, "utf8").includes("startViewTransition")
   ) {
-    console.error(`check-bundle: ${f} calls startViewTransition (banned on the buzz screen)`);
+    console.error(
+      `check-bundle: ${f} calls startViewTransition (banned on the buzz and scoring screens)`,
+    );
     failed = true;
   }
 }
