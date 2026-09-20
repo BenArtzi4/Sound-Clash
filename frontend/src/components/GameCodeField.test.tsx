@@ -49,19 +49,6 @@ function moveCaret(input: HTMLInputElement, start: number, end = start) {
   fireEvent.keyUp(input, { key: "ArrowLeft" });
 }
 
-/** A typed character, as the browser reports it before it edits anything. */
-function typeChar(input: HTMLInputElement, data: string): boolean {
-  return fireEvent(
-    input,
-    new InputEvent("beforeinput", {
-      inputType: "insertText",
-      data,
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
-}
-
 /** What the browser leaves behind after an edit: a new value and a caret. */
 function editRaw(input: HTMLInputElement, raw: string, caret: number) {
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -140,12 +127,11 @@ describe("GameCodeField", () => {
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, 6]);
   });
 
-  // maxLength would swallow this keystroke, which is why a wrong character
-  // used to be unfixable without deleting one first.
+  // The keystroke used to be dropped outright, which is why a wrong character
+  // was unfixable without deleting one first.
   it("replaces the character at the caret when the code is full", () => {
     const { input, cells } = setup("ABCDEF");
-    moveCaret(input, 2);
-    expect(typeChar(input, "X")).toBe(false); // the field handled it itself
+    editRaw(input, "ABXCDEF", 3); // the browser inserted X at the caret
     expect(input).toHaveValue("ABXDEF");
     expect([input.selectionStart, input.selectionEnd]).toEqual([3, 3]);
     expect(caretAt(cells())).toBe("|||before||");
@@ -154,42 +140,41 @@ describe("GameCodeField", () => {
   it("replaces the character the tap selected", () => {
     const { input } = setup("ABCDEF");
     fireEvent.click(input, { clientX: cellX(0) });
-    // A range is the browser's to replace; the field must not step in.
-    expect(typeChar(input, "X")).toBe(true);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 1]);
+    editRaw(input, "XBCDEF", 1); // the browser replaced the selected character
+    expect(input).toHaveValue("XBCDEF");
   });
 
-  it("lets a plain insert through while there is still room", () => {
+  it("inserts rather than overwrites while there is still room", () => {
     const { input } = setup("ABC");
-    moveCaret(input, 1);
-    expect(typeChar(input, "X")).toBe(true);
-    expect(input).toHaveValue("ABC");
+    editRaw(input, "AXBC", 2);
+    expect(input).toHaveValue("AXBC");
+    expect([input.selectionStart, input.selectionEnd]).toEqual([2, 2]);
   });
 
   it("changes nothing when the caret is past the last cell of a full code", () => {
     const { input } = setup("ABCDEF");
-    moveCaret(input, 6);
-    expect(typeChar(input, "X")).toBe(true);
+    editRaw(input, "ABCDEFX", 7);
     expect(input).toHaveValue("ABCDEF");
+    expect([input.selectionStart, input.selectionEnd]).toEqual([6, 6]);
   });
 
   it("does not write a character outside the code alphabet over a full code", () => {
     const { input } = setup("ABCDEF");
-    moveCaret(input, 2);
-    expect(typeChar(input, "0")).toBe(true);
+    editRaw(input, "AB0CDEF", 3);
     expect(input).toHaveValue("ABCDEF");
+    expect([input.selectionStart, input.selectionEnd]).toEqual([2, 2]);
   });
 
   it("uppercases a replacement typed over a full code", () => {
     const { input } = setup("ABCDEF");
-    moveCaret(input, 0);
-    typeChar(input, "x");
+    editRaw(input, "xABCDEF", 1);
     expect(input).toHaveValue("XBCDEF");
   });
 
   it("pastes over a full code from the caret", () => {
     const { input } = setup("ABCDEF");
-    moveCaret(input, 2);
-    fireEvent.paste(input, { clipboardData: { getData: () => "xy" } });
+    editRaw(input, "ABxyCDEF", 4); // two characters pasted at the caret
     expect(input).toHaveValue("ABXYEF");
     expect([input.selectionStart, input.selectionEnd]).toEqual([4, 4]);
   });

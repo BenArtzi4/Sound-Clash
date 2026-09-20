@@ -80,7 +80,6 @@ export default [
         HTMLInputElement: "readonly",
         HTMLOListElement: "readonly",
         KeyboardEvent: "readonly",
-        InputEvent: "readonly",
         Event: "readonly",
         ErrorEvent: "readonly",
         PromiseRejectionEvent: "readonly",
