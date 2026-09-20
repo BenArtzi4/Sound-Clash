@@ -25,7 +25,11 @@ describe("TransitionLink", () => {
     const link = screen.getByRole("link", { name: "Play" });
     expect(link).toHaveAttribute("href", "/join");
     await userEvent.click(link);
-    expect(screen.getByText("joined")).toBeInTheDocument();
+    // findByText, not getByText: TransitionLink fires `void go(...)`, which
+    // awaits the preload before navigating, so the route commits in a later
+    // microtask than the click. A synchronous assertion races it and flakes
+    // only under load.
+    expect(await screen.findByText("joined")).toBeInTheDocument();
   });
 
   it("awaits the preload before navigating", async () => {
@@ -37,7 +41,7 @@ describe("TransitionLink", () => {
     );
     await userEvent.click(screen.getByRole("link", { name: "Play" }));
     expect(preload).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("joined")).toBeInTheDocument();
+    expect(await screen.findByText("joined")).toBeInTheDocument();
   });
 
   it("calls the caller's onClick and honours preventDefault", async () => {
