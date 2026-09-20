@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
+import { Logo } from "../components/Logo";
 import { PointChange } from "../components/PointChange";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { isGameExpired, useGameChannel } from "../hooks/useGameChannel";
@@ -248,6 +249,12 @@ export function TeamGameplayPage() {
           <span className={styles.standingScore} data-testid="standing-score">
             {standings.score} {Math.abs(standings.score) === 1 ? "pt" : "pts"}
           </span>
+        </div>
+      ) : null}
+
+      {game?.status !== "playing" ? (
+        <div className={styles.waitingMark}>
+          <Logo size="medium" />
         </div>
       ) : null}
 

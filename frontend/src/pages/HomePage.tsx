@@ -1,21 +1,24 @@
 import { useEffect } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { Logo } from "../components/Logo";
 import { TransitionLink } from "../components/TransitionLink";
-import { ArrowRightIcon } from "../components/icons";
+import { ArrowRightIcon, HostIcon, PhoneIcon, TvIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
 import styles from "./HomePage.module.css";
 
 // The visible title is the short role word (decision 4); `name` is the
 // accessible name, kept as the long phrase so every role/name query in
 // HomePage.test, App.test and the e2e manager fixture still resolves.
+// `role` selects the card's hue via --role-* (09-home-colour-and-fill.md).
 const ROLES = [
   {
     to: "/manager/create",
-    index: "01",
+    role: "host",
     title: "Host",
     desc: "Pick genres, run the rounds, score the room.",
+    cue: "Start here",
     name: "Host a game",
+    icon: <HostIcon />,
     // Warm the destination's lazy chunk before the route transition starts, so
     // it never animates to the Suspense fallback. /join is eager (it is the QR
     // landing page), so it needs no preload.
@@ -23,46 +26,79 @@ const ROLES = [
   },
   {
     to: "/join",
-    index: "02",
+    role: "play",
     title: "Play",
     desc: "Join from your phone with the code on the TV.",
+    cue: "Join",
     name: "Join a game",
+    icon: <PhoneIcon />,
     preload: undefined,
   },
   {
     to: "/display",
-    index: "03",
+    role: "display",
     title: "Display",
     desc: "Put the scoreboard and the QR code on the big screen.",
+    cue: "Open",
     name: "Display screen",
+    icon: <TvIcon />,
     preload: () => import("./DisplayPage"),
   },
 ] as const;
 
+// Rendered twice per card: once as the resting face, once inside the clipped
+// fill layer with the ink inverted. Two copies are what let the text flip at
+// the wipe edge instead of cross-fading — a background-color transition
+// cannot do that, because the fill and the ink would animate independently.
+function RoleFace({
+  icon,
+  title,
+  desc,
+  cue,
+}: {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+  cue: string;
+}) {
+  return (
+    <>
+      <span className={styles.roleIcon}>{icon}</span>
+      <span className={styles.roleTitle}>{title}</span>
+      <span className={styles.roleDesc}>{desc}</span>
+      <span className={styles.roleCue}>
+        {cue} <ArrowRightIcon />
+      </span>
+    </>
+  );
+}
+
+// Touch has no hover, so the fill is driven by an attribute instead. Setting it
+// on the node rather than in React state keeps this off the render path, and an
+// attribute cleared on up/cancel/leave cannot strand a card mid-fill the way a
+// sticky :hover does on touch (the PR #282 failure on the decade pills).
+function flashOn(e: PointerEvent<HTMLAnchorElement>) {
+  e.currentTarget.setAttribute("data-tapped", "true");
+}
+function flashOff(e: PointerEvent<HTMLAnchorElement>) {
+  e.currentTarget.removeAttribute("data-tapped");
+}
+
 export function HomePage() {
   useEffect(() => {
     // Pre-warm on landing so the next step is fast. Two background requests:
-    //   1. getHealth() wakes the Render backend. Its free-tier container spins
-    //      down after ~15 min idle, so the create-game / join POST would
-    //      otherwise stall the user 2-30s on cold start; pinging /health now
-    //      warms the container ahead of that click.
-    //   2. listGenres() seeds the genre cache. Genres load straight from
-    //      Supabase (not Render), so it's already fast and cold-start-free;
-    //      prefetching here just means the "Host a game" picker is already in
-    //      memory on arrival.
-    // Errors are ignored — a failed pre-warm just means the user hits the same
-    // path they would have anyway. No worse, often much better.
+    //   1. getHealth() wakes the Render backend, which cold-starts in 2-30s on
+    //      the free tier, so POST /games is warm by the time the host submits.
+    //   2. listGenres() seeds the genre cache the create page needs.
     void getHealth().catch(() => undefined);
     void listGenres().catch(() => undefined);
   }, []);
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <Logo size="small" />
-      </header>
       <main className={styles.main}>
         <section className={styles.hero}>
+          <Logo size="hero" />
           <h1 className={styles.title}>Name the song. Buzz first.</h1>
           <p className={styles.subtitle}>
             Real-time music trivia for a room full of people and one TV.
@@ -76,17 +112,18 @@ export function HomePage() {
               preload={r.preload}
               className={styles.role}
               aria-label={r.name}
+              data-role={r.role}
               style={{ "--i": i } as CSSProperties}
+              onPointerDown={flashOn}
+              onPointerUp={flashOff}
+              onPointerCancel={flashOff}
+              onPointerLeave={flashOff}
             >
-              <span className={styles.roleIndex} aria-hidden="true">
-                {r.index}
+              <span className={styles.roleFace}>
+                <RoleFace icon={r.icon} title={r.title} desc={r.desc} cue={r.cue} />
               </span>
-              <span className={styles.roleBody}>
-                <span className={styles.roleTitle}>{r.title}</span>
-                <span className={styles.roleDesc}>{r.desc}</span>
-              </span>
-              <span className={styles.roleArrow} aria-hidden="true">
-                <ArrowRightIcon />
+              <span className={styles.roleFill} aria-hidden="true">
+                <RoleFace icon={r.icon} title={r.title} desc={r.desc} cue={r.cue} />
               </span>
             </TransitionLink>
           ))}
