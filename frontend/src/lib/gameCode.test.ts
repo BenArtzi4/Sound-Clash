@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   CODE_LENGTH,
+  applyEdit,
   caretAfterNormalize,
   cellFromPointerX,
   normalizeCode,
-  overwriteAt,
 } from "./gameCode";
 
 describe("normalizeCode", () => {
@@ -69,18 +69,37 @@ describe("cellFromPointerX", () => {
   });
 });
 
-describe("overwriteAt", () => {
-  it("writes one character over the one at the index", () => {
-    expect(overwriteAt("ABCDEF", 2, "X")).toBe("ABXDEF");
-    expect(overwriteAt("ABCDEF", 0, "X")).toBe("XBCDEF");
-    expect(overwriteAt("ABCDEF", 5, "X")).toBe("ABCDEX");
+describe("applyEdit", () => {
+  it("strips and uppercases an ordinary edit", () => {
+    expect(applyEdit("ab1c", 4)).toEqual({ value: "ABC", caret: 3 });
   });
 
-  it("writes a run over the characters it covers", () => {
-    expect(overwriteAt("ABCDEF", 2, "XY")).toBe("ABXYEF");
+  it("inserts while there is still room", () => {
+    // "ABC" with an X typed at index 1.
+    expect(applyEdit("AXBC", 2)).toEqual({ value: "AXBC", caret: 2 });
   });
 
-  it("keeps the code six long when the run runs off the end", () => {
-    expect(overwriteAt("ABCDEF", 4, "XYZW")).toBe("ABCDXY");
+  // The whole point: six cells are all there is, so an insert into a full code
+  // drops what it pushed rightwards rather than what is at the end.
+  it("overwrites the character at the caret when the code was already full", () => {
+    expect(applyEdit("ABXCDEF", 3)).toEqual({ value: "ABXDEF", caret: 3 });
+    expect(applyEdit("XABCDEF", 1)).toEqual({ value: "XBCDEF", caret: 1 });
+    expect(applyEdit("ABCDEXF", 6)).toEqual({ value: "ABCDEX", caret: 6 });
+  });
+
+  it("overwrites a run when several characters arrive at once", () => {
+    expect(applyEdit("ABxyCDEF", 4)).toEqual({ value: "ABXYEF", caret: 4 });
+  });
+
+  it("changes nothing when the caret is past the last cell", () => {
+    expect(applyEdit("ABCDEFX", 7)).toEqual({ value: "ABCDEF", caret: 6 });
+  });
+
+  it("keeps the caret where a rejected character was typed", () => {
+    expect(applyEdit("AB0CDE", 3)).toEqual({ value: "ABCDE", caret: 2 });
+  });
+
+  it("caps an oversized paste", () => {
+    expect(applyEdit("ABCDEFGHIJ", 10)).toEqual({ value: "ABCDEF", caret: 6 });
   });
 });

@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ChangeEvent, ClipboardEvent, MouseEvent } from "react";
-import {
-  CODE_LENGTH,
-  CODE_PLACEHOLDER,
-  caretAfterNormalize,
-  cellFromPointerX,
-  normalizeCode,
-  overwriteAt,
-} from "../lib/gameCode";
+import type { ChangeEvent, MouseEvent } from "react";
+import { CODE_LENGTH, CODE_PLACEHOLDER, applyEdit, cellFromPointerX } from "../lib/gameCode";
 import styles from "./GameCodeField.module.css";
 
 const CELLS = [0, 1, 2, 3, 4, 5];
@@ -37,9 +30,9 @@ type Props = {
  *  - the caret is invisible (the input is transparent), so we draw it, from
  *    the input's real selection rather than from "the next empty cell";
  *  - a tap has to land on the cell under the finger, which needs geometry;
- *  - a full code has no room to insert into, so `maxLength` swallows the
- *    keystroke and nothing happens at all. When full, a typed character
- *    overwrites the one the caret is on.
+ *  - a full code has no room to insert into, so the keystroke is dropped and
+ *    nothing happens at all. When full, a typed character overwrites the one
+ *    the caret is on (`applyEdit`).
  *
  * Everything else stays native: Backspace, Delete, arrows, Home/End,
  * Shift+arrow, select-all, drag-select, paste and autofill are the browser's.
@@ -90,29 +83,6 @@ export function GameCodeField({ value, onChange, id, ariaLabel, autoFocus, requi
     }
   }, [value]);
 
-  // Overwrite-when-full. The native `beforeinput` event is what carries
-  // `inputType`; React's synthetic `onBeforeInput` does not, so it can't tell a
-  // typed character from a paste or a deletion.
-  useEffect(() => {
-    const node = inputRef.current;
-    if (!node) return;
-    function onBeforeInput(e: Event) {
-      if (!node) return;
-      const input = e as InputEvent;
-      if (input.inputType !== "insertText") return;
-      if (value.length < CODE_LENGTH) return; // room to insert: leave it native
-      const start = node.selectionStart ?? 0;
-      if (start !== (node.selectionEnd ?? start)) return; // a range replaces natively
-      if (start >= CODE_LENGTH) return; // past the last cell: nothing to overwrite
-      const chars = normalizeCode(input.data ?? "");
-      if (!chars) return; // not a code character: let it be rejected as usual
-      e.preventDefault();
-      commit(overwriteAt(value, start, chars), Math.min(start + chars.length, CODE_LENGTH));
-    }
-    node.addEventListener("beforeinput", onBeforeInput);
-    return () => node.removeEventListener("beforeinput", onBeforeInput);
-  }, [value, commit]);
-
   // The caret can also move without an input event — arrows, Home/End, a drag,
   // a touch handle. `selectionchange` is the only event that reports all of it.
   useEffect(() => {
@@ -124,7 +94,8 @@ export function GameCodeField({ value, onChange, id, ariaLabel, autoFocus, requi
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const el = e.currentTarget;
     const raw = el.value;
-    commit(normalizeCode(raw), caretAfterNormalize(raw, el.selectionStart ?? raw.length));
+    const edit = applyEdit(raw, el.selectionStart ?? raw.length);
+    commit(edit.value, edit.caret);
   }
 
   // Put the caret where the tap landed, by grid geometry. Tapping a character
@@ -149,20 +120,6 @@ export function GameCodeField({ value, onChange, id, ariaLabel, autoFocus, requi
     setCaret(next);
   }
 
-  // Same rule as typing: with the code full and the caret on a cell, a paste
-  // writes over it rather than being dropped by maxLength.
-  function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
-    const el = inputRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? 0;
-    if (value.length < CODE_LENGTH) return;
-    if (start !== (el.selectionEnd ?? start) || start >= CODE_LENGTH) return;
-    const chars = normalizeCode(e.clipboardData.getData("text"));
-    if (!chars) return;
-    e.preventDefault();
-    commit(overwriteAt(value, start, chars), Math.min(start + chars.length, CODE_LENGTH));
-  }
-
   const collapsed = caret.start === caret.end;
 
   return (
@@ -175,7 +132,6 @@ export function GameCodeField({ value, onChange, id, ariaLabel, autoFocus, requi
         value={value}
         onChange={handleChange}
         onClick={handleClick}
-        onPaste={handlePaste}
         onSelect={readCaret}
         onKeyUp={readCaret}
         onFocus={() => {
@@ -189,7 +145,10 @@ export function GameCodeField({ value, onChange, id, ariaLabel, autoFocus, requi
         autoCapitalize="characters"
         spellCheck={false}
         inputMode="text"
-        maxLength={CODE_LENGTH}
+        /* No maxLength on purpose: WebKit truncates at it BEFORE dispatching
+           any input event, which makes a full code silently unfixable on
+           Safari and iOS. The six-character limit is applied by applyEdit,
+           which also turns an insert into a full code into an overwrite. */
         autoFocus={autoFocus}
         required={required}
       />
