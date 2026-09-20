@@ -37,6 +37,8 @@ const MAX_BOARD_TEAMS = 5;
 
 const CODE_RE = /^[A-Z2-9]{6}$/;
 const CODE_CHAR_RE = /[A-Z2-9]/g;
+const CODE_CELLS = [0, 1, 2, 3, 4, 5];
+const CODE_PLACEHOLDER = "ABCDEF";
 
 function normalizeCode(raw: string): string {
   return (raw.toUpperCase().match(CODE_CHAR_RE) ?? []).join("").slice(0, 6);
@@ -155,15 +157,35 @@ function DisplayEntry() {
       <form className={styles.entryCard} onSubmit={handleSubmit}>
         <h1>Display</h1>
         <p className="muted">Enter the game code to open a read-only scoreboard.</p>
-        <input
-          className={styles.entryInput}
-          value={code}
-          onChange={(e) => setCode(normalizeCode(e.target.value))}
-          placeholder="ABCDEF"
-          maxLength={6}
-          autoFocus
-          required
-        />
+        <div className={styles.entryBox}>
+          <input
+            className={styles.entryInput}
+            value={code}
+            onChange={(e) => setCode(normalizeCode(e.target.value))}
+            placeholder="ABCDEF"
+            maxLength={6}
+            autoFocus
+            required
+          />
+          {/* The characters you see. aria-hidden: the input above is the
+              real control and already announces its own value. */}
+          <div className={styles.entryCells} aria-hidden="true">
+            {CODE_CELLS.map((i) => (
+              <span
+                key={i}
+                className={[
+                  styles.entryCell,
+                  code[i] ? "" : styles.entryCellEmpty,
+                  i === code.length ? styles.entryCellNext : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {code[i] ?? (code.length === 0 ? CODE_PLACEHOLDER[i] : "")}
+              </span>
+            ))}
+          </div>
+        </div>
         <span className={styles.entryCounter} aria-hidden="true">
           {code.length}/6
         </span>

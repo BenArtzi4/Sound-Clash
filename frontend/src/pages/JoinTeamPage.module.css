@@ -27,12 +27,10 @@
   color: var(--text-muted);
   margin-top: var(--space-2);
 }
-/* Query container so the code field can size its cells from the field width (cqw). */
 .field {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  container-type: inline-size;
 }
 .label {
   font-size: var(--text-caption);
@@ -41,36 +39,82 @@
   color: var(--text-muted);
   font-weight: 500;
 }
-/* One input, six drawn cells: the cell boxes are a repeating gradient-free
-   background image built from a 1px border colour, so the DOM stays a single
-   <input maxLength=6> (tests + QR prefill depend on it). Each cell is a sixth
-   of the padding box (100cqw minus the two 1px borders); a glyph of Anton is
-   ~1ch, so the tracking is one cell minus one glyph and the indent centres the
-   first glyph in the first cell. Typed characters fill the cells left to
-   right. The em values are the fallback where container units are unsupported. */
+/* One input, six cells — and the characters are drawn by the cells, not by the
+   input.
+
+   The earlier version positioned the glyphs inside a single <input> with
+   `letter-spacing: calc(cell - 1ch)` and a matching `text-indent`. That model
+   only holds if every glyph advances exactly 1ch, and Anton is proportional
+   (I 7.3px, M 23.9px, mean 15.3px against a 15.8px 1ch at 32px). So the run
+   is wider than the field for most codes — measured 15px for ABCDEF, 22px for
+   234567, 70px for MMMMMM — and on the SIXTH character the browser scrolled
+   the input to keep the caret in view, which slid all six glyphs sideways.
+   A trailing letter-space after the last glyph makes it structural: the
+   advance is always half a tracking unit past the field even with perfect
+   1ch glyphs.
+
+   A grid cannot drift: each cell is exactly 1/6 of the field and centres its
+   own character, for every glyph and every code, with nothing to scroll. The
+   <input> stays the one real control — same id, label, placeholder, maxLength
+   and value — and covers the whole box so it keeps focus, hit-testing and
+   every test contract; it is transparent, and the cells render what you typed.
+   The active cell carries the caret. */
+.codeBox {
+  position: relative;
+  display: grid;
+  min-height: 64px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-2);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition:
+    border-color var(--dur-micro) var(--ease-move),
+    outline-color var(--dur-micro) var(--ease-move);
+}
+.codeBox:focus-within {
+  border-color: var(--border-strong);
+  outline-color: var(--accent);
+}
+/* Covers the whole box with no `pointer-events: none`, so a tap anywhere in
+   the field lands on the input and focuses it natively. */
 .codeInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  opacity: 0;
+  cursor: text;
+}
+.codeCells {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   font-family: var(--font-display);
   font-size: 2rem;
-  padding: 0;
-  text-align: left;
-  letter-spacing: 0.6em;
-  letter-spacing: calc((100cqw - 2px) / 6 - 1ch);
-  text-indent: 0.6em;
-  text-indent: calc(((100cqw - 2px) / 6 - 1ch) / 2);
-  text-transform: uppercase;
+  line-height: 1;
   color: var(--bone);
-  background-color: var(--surface-2);
-  background-image: repeating-linear-gradient(
-    90deg,
-    transparent 0 calc(100% / 6 - 1px),
-    var(--border) calc(100% / 6 - 1px) calc(100% / 6)
-  );
-  min-height: 64px;
+  text-transform: uppercase;
+  pointer-events: none;
 }
-.codeInput::placeholder {
+.codeCell {
+  display: grid;
+  place-items: center;
+  border-left: 1px solid var(--border);
+}
+.codeCell:first-child {
+  border-left: 0;
+}
+.codeCellEmpty {
   color: var(--text-dim);
-  letter-spacing: 0.6em;
-  letter-spacing: calc((100cqw - 2px) / 6 - 1ch);
+}
+/* Stands in for the text caret the transparent input no longer shows. */
+.codeBox:focus-within .codeCellNext {
+  box-shadow: inset 0 -3px 0 var(--accent);
 }
 .counter {
   align-self: flex-end;
