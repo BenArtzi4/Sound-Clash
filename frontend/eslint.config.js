@@ -69,6 +69,8 @@ export default [
         FormData: "readonly",
         File: "readonly",
         Blob: "readonly",
+        Document: "readonly",
+        MutationObserver: "readonly",
         HTMLElement: "readonly",
         HTMLAnchorElement: "readonly",
         HTMLButtonElement: "readonly",

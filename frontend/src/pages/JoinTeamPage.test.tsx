@@ -155,7 +155,13 @@ describe("JoinTeamPage", () => {
       id: "t1",
       name: "Alice",
     });
-    await waitFor(() => expect(screen.getByText("team page")).toBeInTheDocument());
+    // The navigation now awaits the destination chunk's import (the route
+    // transition must not animate to the Suspense fallback). Under vitest that
+    // is a real module-graph evaluation, which exceeds waitFor's 1 s default on
+    // a loaded worker even though the page prefetches it on mount.
+    await waitFor(() => expect(screen.getByText("team page")).toBeInTheDocument(), {
+      timeout: 5000,
+    });
     // Never falls back to a manual join for a valid link.
     expect(joinTeam).not.toHaveBeenCalled();
   });

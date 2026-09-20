@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { TransitionLink } from "../components/TransitionLink";
 import { Logo } from "../components/Logo";
 import { SetupSchematic } from "../components/SetupSchematic";
 import { ArrowLeftIcon, HostIcon, PhoneIcon, SpeakerIcon, TvIcon } from "../components/icons";
@@ -223,9 +223,9 @@ export function HowToPlayPage() {
         </section>
 
         <div className={styles.backRow}>
-          <Link to="/" className="btn btn-ghost">
+          <TransitionLink to="/" className="btn btn-ghost">
             <ArrowLeftIcon /> Back
-          </Link>
+          </TransitionLink>
         </div>
       </main>
     </div>

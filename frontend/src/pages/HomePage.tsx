@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { CSSProperties } from "react";
-import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
+import { TransitionLink } from "../components/TransitionLink";
 import { ArrowRightIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
 import styles from "./HomePage.module.css";
@@ -16,6 +16,10 @@ const ROLES = [
     title: "Host",
     desc: "Pick genres, run the rounds, score the room.",
     name: "Host a game",
+    // Warm the destination's lazy chunk before the route transition starts, so
+    // it never animates to the Suspense fallback. /join is eager (it is the QR
+    // landing page), so it needs no preload.
+    preload: () => import("./ManagerCreateGamePage"),
   },
   {
     to: "/join",
@@ -23,6 +27,7 @@ const ROLES = [
     title: "Play",
     desc: "Join from your phone with the code on the TV.",
     name: "Join a game",
+    preload: undefined,
   },
   {
     to: "/display",
@@ -30,6 +35,7 @@ const ROLES = [
     title: "Display",
     desc: "Put the scoreboard and the QR code on the big screen.",
     name: "Display screen",
+    preload: () => import("./DisplayPage"),
   },
 ] as const;
 
@@ -64,9 +70,10 @@ export function HomePage() {
         </section>
         <nav className={styles.roles} aria-label="Choose your role">
           {ROLES.map((r, i) => (
-            <Link
+            <TransitionLink
               key={r.to}
               to={r.to}
+              preload={r.preload}
               className={styles.role}
               aria-label={r.name}
               style={{ "--i": i } as CSSProperties}
@@ -81,13 +88,13 @@ export function HomePage() {
               <span className={styles.roleArrow} aria-hidden="true">
                 <ArrowRightIcon />
               </span>
-            </Link>
+            </TransitionLink>
           ))}
         </nav>
         <p className={styles.howTo}>
-          <Link to="/how-to-play">
+          <TransitionLink to="/how-to-play" preload={() => import("./HowToPlayPage")}>
             How to play <ArrowRightIcon />
-          </Link>
+          </TransitionLink>
         </p>
       </main>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { TransitionLink } from "../components/TransitionLink";
+import { useViewTransitionNavigate } from "../hooks/useViewTransitionNavigate";
 import { CheckIcon } from "../components/icons";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
@@ -94,7 +95,7 @@ function sameMembers<T>(a: Set<T>, b: Iterable<T>): boolean {
 
 export function ManagerCreateGamePage() {
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const go = useViewTransitionNavigate();
 
   const [genres, setGenres] = useState<Genre[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -111,6 +112,15 @@ export function ManagerCreateGamePage() {
   // mentions the server/infrastructure — the host only cares about the game.
   const slowPending = useSlowPending(busy);
   const stillLoading = useSlowPending(busy, 30000);
+
+  // Prefetch the console chunk while the host picks genres, so the jump to
+  // /manager/game/:code after a successful create is instant (React.lazy in
+  // App.tsx requests the same chunk — Vite dedupes it), and the route
+  // transition never has to wait on a cold import. Same pattern as
+  // JoinTeamPage's TeamGameplayPage prefetch.
+  useEffect(() => {
+    void import("./ManagerConsolePage");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,7 +186,9 @@ export function ManagerCreateGamePage() {
       });
       setManagerToken(game.game_code, game.manager_token);
       toast(`Game ${game.game_code} created`, { variant: "success" });
-      navigate(`/manager/game/${game.game_code}`);
+      await go(`/manager/game/${game.game_code}`, {
+        preload: () => import("./ManagerConsolePage"),
+      });
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to create game", { variant: "error" });
     } finally {
@@ -270,9 +282,9 @@ export function ManagerCreateGamePage() {
         </div>
 
         <div className={styles.actions}>
-          <Link to="/" className="btn btn-ghost">
+          <TransitionLink to="/" className="btn btn-ghost">
             Cancel
-          </Link>
+          </TransitionLink>
           <button type="submit" className="btn btn-primary" disabled={selected.size === 0 || busy}>
             {busy ? (
               <>
