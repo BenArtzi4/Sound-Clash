@@ -43,6 +43,9 @@ frontend/coverage/
 # Service-role keys / admin password / deploy hooks live in GitHub Actions
 # secrets and .claude/phase7-secrets.local: never in the repo.
 !frontend/.env.production
+# Per-PR preview env, same reasoning: browser-bundle values only, and its
+# telemetry keys are deliberately blank (see the file's own header).
+!frontend/.env.preview
 
 # Editor / OS
 .vscode/
