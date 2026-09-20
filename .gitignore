@@ -26,6 +26,10 @@ node_modules/
 
 # Vite
 frontend/dist/
+# Scratch build dir used to measure a preview against the LOCAL stack
+# (`vite build --mode development --outDir dist-local`). Untracked it also
+# kept tripping `eslint .`, which lints the whole emitted bundle.
+frontend/dist-local/
 frontend/.vite/
 frontend/coverage/
 

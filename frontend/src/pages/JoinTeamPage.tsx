@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { TransitionLink } from "../components/TransitionLink";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
 import { parseRejoinHash, setStoredTeam } from "../lib/teamStorage";
@@ -94,6 +95,13 @@ export function JoinTeamPage() {
     try {
       const team = await joinTeam(code, trimmedName);
       setStoredTeam(code, { id: team.id, name: team.name });
+      // Deliberately NOT a view transition. A running view transition suspends
+      // pointer hit-testing document-wide for its duration, and measured on a
+      // preview build the arriving buzz button swallowed a real pointerdown for
+      // 290 ms (the event retargeted to <html>). A late joiner landing on a
+      // live round would lose their first tap, silently — the one failure this
+      // app must not have. The chunk is already warm (prefetched on mount), so
+      // the swap is instant anyway.
       navigate(`/team/${code}`);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -171,9 +179,9 @@ export function JoinTeamPage() {
         {error ? <p className="error">{error}</p> : null}
 
         <div className={styles.actions}>
-          <Link to="/" className="btn btn-ghost">
+          <TransitionLink to="/" className="btn btn-ghost">
             Cancel
-          </Link>
+          </TransitionLink>
           <button type="submit" className="btn btn-primary" disabled={!submittable}>
             {busy ? (
               <>

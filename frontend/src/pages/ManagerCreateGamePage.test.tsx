@@ -78,7 +78,13 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => screen.getByText("Rock"));
     fireEvent.click(screen.getByLabelText(/rock/i));
     fireEvent.click(screen.getByRole("button", { name: /create game/i }));
-    await waitFor(() => expect(screen.getByText("game console")).toBeInTheDocument());
+    // The navigation now awaits the destination chunk's import (the route
+    // transition must not animate to the Suspense fallback). Under vitest that
+    // is a real module-graph evaluation, which exceeds waitFor's 1 s default on
+    // a loaded worker even though the page prefetches it on mount.
+    await waitFor(() => expect(screen.getByText("game console")).toBeInTheDocument(), {
+      timeout: 5000,
+    });
     expect(createGame).toHaveBeenCalledWith({
       selected_genres: ["g1"],
       selected_decades: [],

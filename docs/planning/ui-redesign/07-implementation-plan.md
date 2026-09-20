@@ -1686,6 +1686,8 @@ process.exit(failed ? 1 : 0);
 
 ### Task 10: Route transitions
 
+> **Built 2026-09-20 (PR #316).** Eight numbered departures, all found by driving the plan's own code on a `dist-local` preview against a local stack and measuring it; the PR body lists each with its numbers. The two that change what this section says are marked **[as built]** below.
+
 **Files:**
 - Create: `frontend/src/hooks/useViewTransitionNavigate.ts`, `frontend/src/hooks/useViewTransitionNavigate.test.tsx`
 - Create: `frontend/src/components/TransitionLink.tsx`, `frontend/src/components/TransitionLink.test.tsx`
@@ -1761,6 +1763,8 @@ describe("TransitionLink", () => {
   });
 });
 ```
+
+**[as built] `flushSync(() => navigate(to))` does not work, and the hook below is wrong because of it.** `<BrowserRouter>` pushes location updates through `React.startTransition` (react-router 7.18, `Router`: `startTransition(() => setStateImpl(newState))`), and `flushSync` cannot force a transition update to be synchronous. Measured on a preview build: the DOM was still the OLD page when the update callback returned, so the browser captured old-as-new, and the real swap ~15 ms later — which drops the wordmark's `view-transition-name` — aborted the transition outright; **240 ms of animation ended at 45 ms**, on every route. The shipped hook instead returns a promise from the update callback, settled by a one-shot `MutationObserver` attached *before* `navigate` and capped at 100 ms (a navigation that changes nothing must never hold rendering suppressed until the browser's own 4 s timeout). After the fix: 296–336 ms, full length, wordmark morphing. `flushSync` and the `react-dom` import are gone.
 
 - [ ] **Step 3: Implementation**
 
@@ -1839,7 +1843,7 @@ export function TransitionLink({ preload, onClick, to, ...rest }: Props) {
 
 Add `ViewTransition: "readonly"` and `MouseEvent: "readonly"` to `eslint.config.js` globals if lint flags them.
 
-- [ ] **Step 4: Wire the navigation sites** — Home role links: `<TransitionLink to="/manager/create" preload={() => import("../pages/ManagerCreateGamePage")} …>` (Join needs no preload — it is in the main chunk; Display: `import("../pages/DisplayPage")`; How to play: `import("../pages/HowToPlayPage")`). Join success: `const go = useViewTransitionNavigate(); … await go(\`/team/${code}\`, { preload: () => import("./TeamGameplayPage") });` (the page already prefetches this chunk on mount, so the await is instant). Create success: `go(\`/manager/game/${game.game_code}\`, { preload: () => import("./ManagerConsolePage") })`. Display entry: `go(\`/display/${trimmed}\`)`. Cancel / Back links → `TransitionLink`. Leave every `navigate(..., { replace: true })` redirect untouched.
+- [ ] **Step 4: Wire the navigation sites** — Home role links: `<TransitionLink to="/manager/create" preload={() => import("../pages/ManagerCreateGamePage")} …>` (Join needs no preload — it is in the main chunk; Display: `import("../pages/DisplayPage")`; How to play: `import("../pages/HowToPlayPage")`). **[as built]** Join success stays a plain `navigate(\`/team/${code}\`)` — **no transition into the buzz screen**. A running view transition suspends pointer hit-testing document-wide, and measured on a preview build a real `pointerdown` aimed at the arriving buzz button retargeted to `<html>` and was swallowed for 290 ms; a late joiner landing on a live round would lose their first tap, silently. The page already prefetches that chunk on mount, so the swap was instant either way. `redesign_guards.spec.ts` now asserts zero transitions cover the buzz screen (after first proving the counter works on Home → Host). `ManagerCreateGamePage` gains the same mount-time prefetch for the console chunk. Create success: `go(\`/manager/game/${game.game_code}\`, { preload: () => import("./ManagerConsolePage") })`. Display entry: `go(\`/display/${trimmed}\`)`. Cancel / Back links → `TransitionLink`. Leave every `navigate(..., { replace: true })` redirect untouched.
 
 - [ ] **Step 5: Gate; manual check in Chrome (transition plays, wordmark morphs, Back is instant), Firefox (instant swap, no errors), DevTools reduced-motion emulation (no transition); `grep -rl startViewTransition frontend/src --include=*.ts --include=*.tsx | grep -v test` → exactly `useViewTransitionNavigate.ts`; CHANGELOG (`### Added`: smooth page transitions); commit `Add view-transition route changes through a single navigation hook`; PR with `run-e2e`.**
 

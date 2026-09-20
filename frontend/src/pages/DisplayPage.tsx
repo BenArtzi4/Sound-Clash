@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
 import { PointChange } from "../components/PointChange";
 import { QRPanel } from "../components/QRPanel";
@@ -17,6 +17,7 @@ import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { CheckIcon, FilmIcon, MicIcon, NoteIcon } from "../components/icons";
 import { useCountUp } from "../hooks/useCountUp";
 import { useGameChannel } from "../hooks/useGameChannel";
+import { useViewTransitionNavigate } from "../hooks/useViewTransitionNavigate";
 import { fetchSongById } from "../lib/songMetadata";
 import type { Song, Team } from "../lib/types";
 import styles from "./DisplayPage.module.css";
@@ -139,14 +140,14 @@ export function DisplayPage() {
 }
 
 function DisplayEntry() {
-  const navigate = useNavigate();
+  const go = useViewTransitionNavigate();
   const [code, setCode] = useState("");
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = normalizeCode(code);
     if (!CODE_RE.test(trimmed)) return;
-    navigate(`/display/${trimmed}`);
+    void go(`/display/${trimmed}`);
   }
 
   return (

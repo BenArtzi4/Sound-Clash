@@ -156,3 +156,60 @@ test("team page registers no non-passive touch/wheel listeners and buzz feedback
     timeout: 1_000,
   });
 });
+
+// Task 10 (route transitions). A running view transition suspends pointer
+// hit-testing document-wide for its whole duration — the page is effectively
+// `pointer-events: none`, and a real pointerdown retargets to <html>. Measured
+// on a preview build, wrapping the join -> /team navigation in one left the
+// arriving buzz button swallowing presses for 290 ms. A late joiner landing on
+// a live round would lose their first tap, silently. So: transitions are for
+// every other navigation, and never for the one that lands on the buzzer.
+test("no view transition covers the arrival at the buzz screen", async ({ browser }) => {
+  const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
+
+  // Its own context, so startViewTransition is counted from the first byte.
+  // (joinAsTeam opens its own context, so the join flow is inlined here.)
+  const context = await browser.newContext();
+  await context.addInitScript(() => {
+    const w = window as unknown as { __vtCalls: number };
+    w.__vtCalls = 0;
+    const doc = document as Document & {
+      startViewTransition?: (cb: () => void | Promise<void>) => unknown;
+    };
+    const orig = doc.startViewTransition;
+    if (typeof orig === "function") {
+      doc.startViewTransition = function (cb) {
+        w.__vtCalls += 1;
+        return orig.call(this, cb);
+      };
+    }
+  });
+  const page = await context.newPage();
+  const count = () => page.evaluate(() => (window as unknown as { __vtCalls: number }).__vtCalls);
+
+  // First prove the counter — and the feature — work in this browser, so the
+  // zero below can never be a silently broken probe.
+  await page.goto("/");
+  const supported = await page.evaluate(
+    () =>
+      typeof (document as Document & { startViewTransition?: unknown }).startViewTransition ===
+      "function",
+  );
+  await page.getByRole("link", { name: /host a game/i }).click();
+  await expect(page).toHaveURL(/\/manager\/create$/);
+  if (supported) expect(await count()).toBeGreaterThan(0);
+
+  // Now the navigation that matters.
+  await page.evaluate(() => {
+    (window as unknown as { __vtCalls: number }).__vtCalls = 0;
+  });
+  await page.goto(`/join/${manager.gameCode}`);
+  await page.locator("#game-code").fill(manager.gameCode);
+  await page.locator("#team-name").fill("NoFreeze");
+  await page.getByRole("button", { name: /join game/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/team/${manager.gameCode}$`));
+  await expect(page.getByTestId("buzz")).toBeVisible({ timeout: 15_000 });
+  expect(await count()).toBe(0);
+
+  await context.close();
+});
