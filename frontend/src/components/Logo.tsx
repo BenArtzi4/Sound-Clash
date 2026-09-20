@@ -3,7 +3,7 @@ import { EqualizerMark } from "./icons";
 import styles from "./Logo.module.css";
 
 interface Props {
-  size?: "small" | "medium" | "large";
+  size?: "small" | "medium" | "large" | "hero";
   animated?: boolean;
 }
 

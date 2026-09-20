@@ -19,6 +19,41 @@ describe("HomePage", () => {
     expect(display).toHaveAttribute("href", "/display");
   });
 
+  // Each card renders its content twice — the resting face and the clipped
+  // fill copy — so the accessible name has to come from aria-label, not from
+  // the duplicated text. If that ever regresses, getByRole throws on the
+  // multiple matches and the whole e2e suite goes with it: every game spec
+  // enters through fixtures/manager-context.ts, which clicks /host a game/i.
+  it("keeps one uniquely-named link per role despite the duplicated fill copy", () => {
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+    for (const name of [/host a game/i, /join a game/i, /display screen/i]) {
+      expect(screen.getAllByRole("link", { name })).toHaveLength(1);
+    }
+    // The second copy must stay out of the accessibility tree entirely.
+    const hidden = document.querySelectorAll('[aria-hidden="true"]');
+    expect(hidden.length).toBeGreaterThanOrEqual(3);
+  });
+
+  // The hue of each card comes from --role-* selected by this attribute, so a
+  // missing or renamed value silently drops the colour rather than failing.
+  it("tags each role with the attribute its colour is keyed on", () => {
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: /host a game/i })).toHaveAttribute("data-role", "host");
+    expect(screen.getByRole("link", { name: /join a game/i })).toHaveAttribute("data-role", "play");
+    expect(screen.getByRole("link", { name: /display screen/i })).toHaveAttribute(
+      "data-role",
+      "display",
+    );
+  });
+
   it("links to the dedicated How to Play page", () => {
     render(
       <MemoryRouter>

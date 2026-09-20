@@ -1,65 +1,88 @@
+/* Home. Spec: docs/planning/ui-redesign/09-home-colour-and-fill.md,
+   which amends 05-page-by-page.md §1. */
+
 .page {
   min-height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.header {
-  padding: var(--space-5) var(--space-5) 0;
-}
-
+/* Vertically centred on desktop — this is what removes the ~196px of dead
+   space the previous layout left below the fold at 1440x900. Phones start at
+   the top instead, because the content is taller than a short viewport. */
 .main {
   flex: 1;
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
-  padding: var(--space-8) var(--space-5) var(--space-8);
+  padding: var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-7);
 }
 
 .hero {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-1);
+  text-align: center;
   animation: rise var(--dur-intro) var(--ease-arrive) both;
 }
 
+/* Separates the wordmark from the headline so the hierarchy reads
+   wordmark > headline > subhead rather than as one block of display type. */
+.hero > :first-child {
+  margin-bottom: var(--space-4);
+}
+
 .title {
-  font-size: var(--text-display-m);
-  max-width: 14ch;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.05;
+  max-width: 22ch;
+  color: var(--bone);
 }
 
 .subtitle {
   color: var(--text-muted);
   font-size: var(--text-title);
-  max-width: 40ch;
+  max-width: 46ch;
+  margin-top: var(--space-1);
 }
 
 .roles {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  width: 100%;
 }
 
+/* --hue is the card's role colour; every coloured part reads from it. */
 .role {
-  display: grid;
-  grid-template-columns: 3rem 1fr 2rem;
-  align-items: center;
-  gap: var(--space-4);
-  min-height: 88px;
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--border);
+  --hue: var(--role-host);
+  position: relative;
+  overflow: hidden;
+  display: block;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--hue);
+  border-radius: var(--radius-md);
   color: inherit;
   text-decoration: none;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   animation: rise var(--dur-intro) var(--ease-arrive) both;
   animation-delay: calc(120ms + var(--i) * 60ms);
-  transition:
-    background-color var(--dur-micro) var(--ease-move),
-    transform var(--dur-micro) var(--ease-overshoot);
+}
+
+.role[data-role="play"] {
+  --hue: var(--role-play);
+}
+.role[data-role="display"] {
+  --hue: var(--role-display);
 }
 
 /* Out-specifies the global `a:hover` underline in every pointer state
@@ -68,50 +91,72 @@
   text-decoration: none;
 }
 
-.role:active {
-  transform: scale(0.995);
-  transition-duration: var(--dur-instant);
-}
-
-.roleIndex {
-  font-family: var(--font-display);
-  font-size: var(--text-title);
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
-}
-
-.roleBody {
+/* The two stacked copies. Identical box so the inverted text lands exactly on
+   top of the resting text; only .roleFill is clipped. */
+.roleFace,
+.roleFill {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  min-height: 176px;
+}
+
+/* Diagonal sweep, 200ms. Both clip states carry four vertices, which is what
+   makes them interpolate; the leading edge starts fully off the left side so
+   no corner pops in. clip-path is on the allowed-animation list and runs on
+   the compositor, so this costs no layout. */
+.roleFill {
+  position: absolute;
+  inset: 0;
+  background: var(--hue);
+  clip-path: polygon(0 0, 0 0, -34% 100%, -34% 100%);
+  transition: clip-path 200ms var(--ease-move);
+}
+
+.roleFill .roleTitle,
+.roleFill .roleIcon,
+.roleFill .roleCue {
+  color: var(--accent-ink);
+}
+.roleFill .roleDesc {
+  color: rgba(0, 0, 0, 0.74);
+}
+
+.roleIcon {
+  font-size: 1.875rem;
+  color: var(--hue);
+  line-height: 1;
 }
 
 .roleTitle {
   font-family: var(--font-display);
-  font-size: var(--text-display-s);
+  font-size: clamp(1.5rem, 2.5vw, 2.125rem);
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: var(--text);
+  line-height: 1.1;
+  color: var(--bone);
 }
 
 .roleDesc {
   color: var(--text-muted);
   font-size: var(--text-body);
+  line-height: 1.5;
+  flex: 1;
 }
 
-.roleArrow {
+.roleCue {
   display: inline-flex;
-  font-size: 1.5rem;
-  color: var(--bone);
-  transition: transform var(--dur-micro) var(--ease-arrive);
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  color: var(--hue);
 }
 
 .howTo {
   animation: rise var(--dur-intro) var(--ease-arrive) both;
   animation-delay: 360ms;
 }
-
 .howTo a {
   display: inline-flex;
   align-items: center;
@@ -120,12 +165,15 @@
   font-weight: 600;
 }
 
+/* Touch equivalent of the hover fill: same geometry, driven by an attribute
+   the pointer handlers set, so it can never stick the way :hover does. */
+.role[data-tapped="true"] .roleFill {
+  clip-path: polygon(0 0, 134% 0, 100% 100%, -34% 100%);
+}
+
 @media (hover: hover) {
-  .role:hover {
-    background: var(--surface);
-  }
-  .role:hover .roleArrow {
-    transform: translateX(4px);
+  .role:hover .roleFill {
+    clip-path: polygon(0 0, 134% 0, 100% 100%, -34% 100%);
   }
 }
 
@@ -136,13 +184,78 @@
   }
 }
 
+@media (max-width: 900px) {
+  .roles {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  /* Compact row on phones: icon, then title over description, cue at the end.
+     Both copies take the same grid so the fill still lines up exactly. */
+  .roleFace,
+  .roleFill {
+    display: grid;
+    grid-template-columns: 2.25rem 1fr auto;
+    grid-template-areas: "i t c" "i d c";
+    align-items: center;
+    column-gap: var(--space-4);
+    row-gap: 2px;
+    padding: var(--space-4) var(--space-4);
+    min-height: 0;
+  }
+  .roleIcon {
+    grid-area: i;
+    font-size: 1.75rem;
+  }
+  .roleTitle {
+    grid-area: t;
+  }
+  .roleDesc {
+    grid-area: d;
+    flex: none;
+    font-size: 0.9375rem;
+  }
+  /* The cue word is dropped on phones; the arrow carries it. */
+  .roleCue {
+    grid-area: c;
+    font-size: 0;
+    gap: 0;
+  }
+  .roleCue svg {
+    font-size: 1.5rem;
+  }
+}
+
 @media (max-width: 600px) {
   .main {
     padding: var(--space-6) var(--space-4);
     gap: var(--space-6);
+    justify-content: flex-start;
   }
-  .role {
-    min-height: 72px;
-    grid-template-columns: 2.5rem 1fr 1.5rem;
+  .hero > :first-child {
+    margin-bottom: var(--space-3);
+  }
+}
+
+/* Short phones (a 640-tall Android, a 667-tall iPhone SE) need the squeeze or
+   the page scrolls. The ceiling is 700px deliberately: Task 8 shipped 660px,
+   which sits 7px under a 667-tall SE and silently missed it. */
+@media (max-height: 700px) {
+  .main {
+    padding: var(--space-4) var(--space-4) var(--space-3);
+    gap: var(--space-4);
+  }
+  .title {
+    font-size: 1.5rem;
+  }
+  .subtitle {
+    font-size: 0.9375rem;
+  }
+  .roleFace,
+  .roleFill {
+    padding: var(--space-3) var(--space-4);
+  }
+  .roleDesc {
+    font-size: 0.875rem;
   }
 }

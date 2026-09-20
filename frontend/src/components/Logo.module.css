@@ -26,6 +26,25 @@
   font-size: 2.5rem;
 }
 
+/* The hero position 04-motion-and-transitions.md §route-transition always
+   assumed ("small header <-> large hero") but no page ever placed. Home uses
+   it; How to play keeps .small, so the wordmark morphs between the two. */
+.hero {
+  font-size: clamp(3.25rem, 6vw, 5.5rem);
+}
+
+/* On a phone the mark moves above the text. Not cosmetic: measured in Anton,
+   the side-by-side lockup is 308px at 44px type while a 360px phone has only
+   328px of content width, so inline caps out around 44px. Stacking takes the
+   mark out of the governing width and allows ~56px. */
+@media (max-width: 600px) {
+  .hero {
+    flex-direction: column;
+    gap: 0.1em;
+    font-size: clamp(2.75rem, 13vw, 3.75rem);
+  }
+}
+
 .mark {
   display: inline-flex;
   font-size: 1.15em;

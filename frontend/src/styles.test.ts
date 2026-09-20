@@ -11,14 +11,18 @@ const css = readFileSync(join(import.meta.dirname, "styles.css"), "utf8");
 describe("styles.css design tokens", () => {
   it("defines the redesign palette and motion tokens", () => {
     for (const t of [
-      "--bg: #000000",
-      "--surface: #121111",
+      "--bg: #14120e",
+      "--surface: #1d1a14",
       "--accent: #ff7a00",
       "--accent-ink: #000000",
       "--bone: #e9e4d9",
       "--text-muted: #b4a88f",
       "--positive: #4ade80",
       "--negative: #f2352b",
+      "--periwinkle: #a9b4ff",
+      "--role-host: var(--accent)",
+      "--role-play: var(--positive)",
+      "--role-display: var(--periwinkle)",
       "--ease-move: cubic-bezier(0.645, 0.045, 0.355, 1)",
       "--ease-arrive: cubic-bezier(0.155, 0.055, 0.14, 1)",
       "--dur-route: 240ms",

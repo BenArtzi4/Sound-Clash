@@ -137,6 +137,18 @@
   margin: 0.75rem;
 }
 
+/* The centred wordmark 05-page-by-page.md §5 specified for the waiting screen
+   and which was never built. Rendered only while the game is not playing, so
+   it is gone before the buzz path matters. Logo.module.css already pauses the
+   equaliser bars under [data-round-live="true"] — a rule written for exactly
+   this placement — and a paused animation reports playState "paused", which
+   the redesign_guards animation budget (it filters on "running") ignores. */
+.waitingMark {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
 .buzzZone {
   flex: 1 1 0%;
   min-height: 0;

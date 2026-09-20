@@ -23,8 +23,8 @@ Dark only. The app sets `<meta name="color-scheme" content="dark">` and `theme-c
 
 | Token | Value | Role | Contrast on `--bg` |
 |---|---|---|---|
-| `--bg` | `#000000` | page ground, all roles | — |
-| `--surface` | `#121111` | cards, panels, board rows | — |
+| `--bg` | `#14120E` | page ground, all roles | — |
+| `--surface` | `#1D1A14` | cards, panels, board rows | — |
 | `--surface-2` | `#1C1A17` | hover/pressed rows, chips, input backgrounds, waiting tone | — |
 | `--border` | `rgba(233, 228, 217, 0.14)` | 1 px hairlines | — |
 | `--border-strong` | `rgba(233, 228, 217, 0.32)` | focused/selected outlines | — |
@@ -188,7 +188,7 @@ Keep the existing breakpoints so no responsive contract moves: `480`, `600`, `76
 - Purple→pink or blue→cyan "startup" colour pairs.
 - Emoji as icons or decoration.
 - Glassmorphism (`backdrop-filter`), glow shadows, drop shadows on cards.
-- "Welcome to …" headlines; centred-everything layouts on desktop.
+- "Welcome to …" headlines; centred-everything layouts on desktop — **except the landing page**, which is a poster and is centred deliberately ([09](09-home-colour-and-fill.md)).
 - Hover lifts (`translateY(-6px)`), icon rotations, spring bounce on hover, `transition: all`.
 - Illustrated AI hero art; stock-photo heroes.
 - Rounded 20 px cards with 2 px pastel borders as the default container.
