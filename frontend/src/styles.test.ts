@@ -32,9 +32,34 @@ describe("styles.css design tokens", () => {
     expect(css).not.toMatch(/transition:\s*all/);
     expect(css).not.toMatch(/#f8fafc|#e0e7ff|#dbeafe/);
   });
-  it("keeps the legacy aliases so untouched modules still compile", () => {
-    for (const alias of ["--color-primary:", "--space-md:", "--radius-md:", "--easing-spring:"]) {
-      expect(css).toContain(alias);
+  it("defines the real spacing and radius scales", () => {
+    for (const token of [
+      "--space-1:",
+      "--space-4:",
+      "--space-7:",
+      "--radius-xs:",
+      "--radius-sm:",
+      "--radius-md:",
+      "--radius-lg:",
+      "--radius-pill:",
+    ]) {
+      expect(css).toContain(token);
+    }
+  });
+  // The cleanup task removed the transitional aliases; this is the guard that
+  // keeps them from creeping back in with a module that was never retokenised.
+  it("no longer defines the legacy aliases", () => {
+    for (const alias of [
+      "--color-primary:",
+      "--color-text:",
+      "--color-border:",
+      "--color-card:",
+      "--space-md:",
+      "--space-xl:",
+      "--shadow-sm:",
+      "--easing-spring:",
+    ]) {
+      expect(css).not.toContain(alias);
     }
   });
   it("silences view-transition pseudo-elements under reduced motion", () => {

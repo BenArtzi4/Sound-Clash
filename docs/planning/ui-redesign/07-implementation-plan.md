@@ -1282,16 +1282,19 @@ export function HomePage() {
 .subtitle { color: var(--text-muted); margin-top: var(--space-2); }
 .field { display: flex; flex-direction: column; gap: var(--space-2); }
 .label { font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500; }
-/* One input, six drawn cells: the cell boxes are a repeating gradient-free
-   background image built from a 1px border colour, so the DOM stays a single
-   <input maxLength=6> (tests + QR prefill depend on it). */
-.codeInput {
-  font-family: var(--font-display); font-size: 2rem; letter-spacing: 0.6em; text-indent: 0.6em; text-align: center;
-  text-transform: uppercase; color: var(--bone); background-color: var(--surface-2);
-  background-image: repeating-linear-gradient(90deg, transparent 0 calc(100% / 6 - 1px), var(--border) calc(100% / 6 - 1px) calc(100% / 6));
-  min-height: 64px;
-}
-.codeInput::placeholder { color: var(--text-dim); letter-spacing: 0.6em; }
+/* [as built, PR #317] One input, six drawn cells — but the cells are a GRID and
+   the input is invisible on top of it, not letter-spaced text over a gradient.
+   The DOM still holds a single <input maxLength=6> (tests + QR prefill depend
+   on it); only the rendering moved. */
+.codeBox { position: relative; display: grid; min-height: 64px; border: 1px solid var(--border); border-radius: var(--radius-sm); background-color: var(--surface-2); outline: 2px solid transparent; outline-offset: 2px; }
+.codeBox:focus-within { border-color: var(--border-strong); outline-color: var(--accent); }
+/* Covers the box with NO pointer-events:none, so a tap anywhere focuses it. */
+.codeInput { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: none; opacity: 0; cursor: text; }
+.codeCells { display: grid; grid-template-columns: repeat(6, 1fr); font-family: var(--font-display); font-size: 2rem; line-height: 1; color: var(--bone); text-transform: uppercase; pointer-events: none; }
+.codeCell { display: grid; place-items: center; border-left: 1px solid var(--border); }
+.codeCell:first-child { border-left: 0; }
+.codeCellEmpty { color: var(--text-dim); }
+.codeBox:focus-within .codeCellNext { box-shadow: inset 0 -3px 0 var(--accent); } /* caret stand-in */
 .counter { align-self: flex-end; font-size: var(--text-caption); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hint { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; }
 .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid rgba(0,0,0,0.25); border-top-color: var(--accent-ink); border-radius: 50%; animation: spin 0.6s linear infinite; }
@@ -1302,9 +1305,9 @@ export function HomePage() {
 @media (min-width: 601px) { .actions { flex-direction: row; justify-content: flex-end; } .actions :global(.btn-primary) { width: auto; } }
 ```
 
-(`repeating-linear-gradient` here draws 1 px cell dividers, not a colour gradient; the styles.test gradient ban applies to `styles.css` only.)
+**[as built] The `letter-spacing` version above was wrong and is gone (PR #317).** `letter-spacing` + `text-indent` cannot hold glyphs in fixed cells in a **proportional** face — each character advances by `glyph + tracking`, not `1ch` (Anton at 32 px: `I` 7.3 px, `M` 23.9 px, `1ch` 15.8 px), and `letter-spacing` also adds a trailing space after the last character, so the run is structurally wider than the field. The sixth character then overflowed, the browser scrolled the input to keep the caret visible, and every glyph jumped sideways. Measured at 390 px: `ABCDEF` overflow 15 px, `K7P2QZ` 18 px, `MMMMMM` 70 px, `IIIIII` 0 — content-dependent, which is why a mean-width test code hid it through review. The shipped version draws the characters in an `aria-hidden` `repeat(6, 1fr)` grid and lays the transparent input over it; after, `scrollLeft` and overflow are 0 on both pages at 390/1280 px for every code, worst glyph distance from its cell centre 0.50 px. It also **deleted** the `cqw`/`ch` arithmetic, the gradient and the `container-type: inline-size` that existed only to feed it. Test a cells field with the extremes of its own alphabet (`IIIIII` and `MMMMMM`), never just `ABCDEF`.
 
-- [ ] **Step 3: Display entry** — mirror the same `.entryCard` / `.entryInput` / `.entryCounter` rules (dark surface, display face, cells), delete the `::before` stripe.
+- [ ] **Step 3: Display entry** — mirror the same `.entryCard` / `.entryInput` / `.entryCounter` rules (dark surface, display face, cells — the grid, per the as-built note), delete the `::before` stripe.
 - [ ] **Step 4: Gate; CHANGELOG (`### Changed`: join and display code screens restyled); commit `Redesign the Join and Display code-entry screens`; PR.**
 
 ---
@@ -1850,6 +1853,16 @@ Add `ViewTransition: "readonly"` and `MouseEvent: "readonly"` to `eslint.config.
 ---
 
 ### Task 11: Cleanup
+
+> **Built 2026-09-20 (PR #318).** Five departures from the text below, each measured on `main` 677b096 first.
+>
+> 1. **Scope was 42 references in exactly three files**, not "every `*.module.css`": `RouteFallback.module.css` (1), `YouTubePlayer.module.css` (2), `AdminSongsPage.module.css` (39). Tasks 1–10 had already retokenised everything else.
+> 2. **`--radius-*` are NOT aliases.** They are real tokens (`styles.css` `--radius-xs/sm/md/lg/pill`, 64 uses). Step 1 says to drop the `styles.test.ts` alias assertion, but that assertion mixes `--radius-md:` in with the aliases, so dropping it would stop asserting a live token. It was **split** instead: one test that the real space/radius scales exist, one that the aliases are **gone** (`not.toContain`) — the second is the guard that keeps a stray `var(--color-*)` from coming back.
+> 3. **`--shadow-sm` / `--shadow-md` are literally `none`**, so both declarations were deleted rather than rewritten to `box-shadow: none` — same computed value, one less line.
+> 4. **`.emptyBoardQR` / `.emptyBoardCode` no longer exist** — Task 9 deleted them. The only dead rules left were `AdminSongsPage.module.css` `.soundtrackToggle` ×3 (referenced by no `.tsx`).
+> 5. **No CHANGELOG entry**: computed styles are byte-identical, so nothing is visible on a refresh (`.claude/rules/changelog.md`). Step 3's Full-Game Exit Gate is **not** run here — `08-final-validation.md` owns it and runs as its own session after this merges.
+>
+> Equivalence was proved rather than assumed: both builds' CSS chunks were rendered on a `vite preview` with their real hashed class names, and **827 computed values across 29 elements were identical**. The only two deltas were the RouteFallback pulse's instantaneous `opacity` (the same 1.4 s animation sampled at a different phase — keyframes byte-identical) and its generated `@keyframes` scope hash, which no test references. Total CSS **−1386 bytes** (`index` −931, `AdminSongsPage` −421, `ManagerConsolePage` −34 — that chunk carries `YouTubePlayer.module.css`).
 
 **Files:**
 - Modify: `frontend/src/styles.css` (delete the legacy alias block), every `*.module.css` still referencing `--color-*` / `--space-xs…2xl` / `--easing-spring` / `--shadow-*` (grep and replace with the new tokens), `DisplayPage.module.css` (`.emptyBoardQR`, `.emptyBoardCode` dead rules), `AdminSongsPage.module.css` (`.soundtrackToggle`)

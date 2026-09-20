@@ -1,6 +1,6 @@
 # UI redesign — plan index
 
-_Created 2026-09-17. Status: **planning only — nothing implemented.** The maintainer asked for a professional, emoji-free look with smooth transitions that does not read as a generic AI-generated app, anchored on one site from the Barba.js showcase, plus a plan to prove nothing breaks. This folder is that plan. Implementation starts only after the open questions below are answered and the maintainer approves._
+_Created 2026-09-17. Status (2026-09-20): **shipped — Tasks 0–11 are merged and live on `https://soundclash.org`.** The maintainer asked for a professional, emoji-free look with smooth transitions that does not read as a generic AI-generated app, anchored on one site from the Barba.js showcase, plus a plan to prove nothing breaks. This folder is that plan; each task's as-built departures are recorded inline in [07-implementation-plan.md](07-implementation-plan.md). What remains: the end-of-redesign run in [08-final-validation.md](08-final-validation.md) (its own fresh session), the cross-browser pass the sessions cannot do (below), and the OG image / PWA icon follow-up (decision 9)._
 
 ## The decision in one paragraph
 
@@ -26,7 +26,11 @@ _Created 2026-09-17. Status: **planning only — nothing implemented.** The main
 
 **Out (not changing):** anything below the component layer — hooks, RPC calls, Realtime reducer, `BuzzButton.tsx`/`useBuzzer.ts` logic, routes/paths, localStorage keys, backend, DB. Also out: a light theme (dark only), an RTL interface (vetoed D-6; only text runs become bidi-aware), the admin songs page beyond inherited tokens, regenerating the OG image and PWA icons (follow-up PR, binary assets), sound effects (X-SFX, separate feature).
 
-## Proposed PR sequence (each independently revertable; details go into the implementation plan after approval)
+## PR sequence — all shipped
+
+Every row below merged between 2026-09-17 and 2026-09-20; the PR numbers are #303 (0), #304 (1), #307 (2), #308 (3), #309 (4), #310 (5), #311 (6), #312 (7), #313 (8), #315 (9), #316 (10), #318 (11), plus #314 (buzz-screen chip fill) and #317 (the game-code field rebuilt as a six-column grid — `letter-spacing` cannot fill fixed cells in a proportional face). Each task's measured departures from the plan are recorded inline in `07-implementation-plan.md`.
+
+**Still owed, and no session can do it:** the cross-browser pass for Task 10 — a real Chrome (transition plays, wordmark morphs, Back is instant), a real Firefox (instant swap, no errors, no layout shift) and Safari / iOS. Headless Chromium proved the mechanics; it cannot stand in for the other two engines.
 
 | # | PR | Touches | Risk |
 |---|---|---|---|
@@ -41,7 +45,7 @@ _Created 2026-09-17. Status: **planning only — nothing implemented.** The main
 | 8 | Host console (CSS only) | `ManagerConsolePage.module.css` (+ chip icons from PR 2) | **run-e2e**; #177 fit measurements |
 | 9 | Display board + Final Results | `DisplayPage` (adds `@formkit/auto-animate`, imported here only; masked reveal blocks + the six `???` test updates), `EndScreen`, `useCountUp`; `package.json` + lockfile | **run-e2e**; `display_fit` + `ten_teams` specs; bundle guard proves the dependency is absent from `index-*.js` / `TeamGameplayPage-*.js` / `ManagerConsolePage-*.js` |
 | 10 | Route transitions | `useViewTransitionNavigate`, `TransitionLink`, `::view-transition-*` CSS, navigation sites | reduced-motion + Firefox fallback checks |
-| 11 | Cleanup | remove token aliases (`--space-xs…`, `--easing-spring`), the old `bg-drift`, dead CSS; docs + CHANGELOG roll-up | none |
+| 11 | Cleanup | the legacy token alias block in `styles.css` plus its last 42 references in `RouteFallback` / `YouTubePlayer` / `AdminSongsPage`, the dead `.soundtrackToggle` rules; docs | none — computed styles byte-identical, CSS −1386 bytes, so no CHANGELOG line |
 
 Order rationale: tokens first so every later PR is small; the two hot-path pages (7, 8) are CSS-only and isolated; route transitions last because they are the only piece with browser-support variance.
 
