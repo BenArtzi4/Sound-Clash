@@ -614,7 +614,15 @@ Free tier: 200 concurrent peers, 2M messages/month, 100 channels per client. See
 
 ### CORS
 
-FastAPI allows: `https://soundclash.org`, `https://www.soundclash.org`, and (in dev) `http://localhost:5173`.
+FastAPI allows: `https://soundclash.org`, `https://www.soundclash.org`, and (in dev) `http://localhost:5173`. The list is overridable as a comma-separated `CORS_ORIGINS` env var.
+
+Optionally, `CORS_ORIGIN_REGEX` adds a pattern for origins the exact-match list can't name because their hostname varies per deployment. Production sets it to admit the per-PR Cloudflare Pages previews:
+
+```
+CORS_ORIGIN_REGEX=^https://[a-z0-9][a-z0-9-]*\.sound-clash\.pages\.dev$
+```
+
+Unset (the default), `allow_origin_regex` is `None` and only the exact-match list applies. Any value must be anchored at both ends — an unanchored pattern would also match a lookalike host such as `https://pr-1.sound-clash.pages.dev.evil.example`. Note that CORS is not a privilege boundary here: `POST /games` is unauthenticated by design, host-only endpoints are gated by `X-Manager-Token`, and the song catalog by `X-Admin-Password`.
 
 Methods: `GET, POST, PUT, DELETE, OPTIONS`. Headers: `Content-Type, X-Admin-Password, X-Manager-Token`.
 

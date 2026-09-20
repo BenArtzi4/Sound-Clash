@@ -35,6 +35,14 @@ class Settings:
             "http://localhost:5173",
         ]
     )
+    # Optional regex allowing origins the exact-match list above can't name,
+    # because the hostname varies per deployment. Set on Render to admit the
+    # per-PR Cloudflare Pages previews:
+    #   ^https://[a-z0-9][a-z0-9-]*\.sound-clash\.pages\.dev$
+    # Left unset (the default) the middleware gets allow_origin_regex=None and
+    # behaves exactly as it did before this field existed. Anchor both ends of
+    # any value you set; an unanchored pattern would match a lookalike host.
+    cors_origin_regex: str | None = None
 
 
 def _split_csv(value: str | None) -> list[str] | None:
@@ -59,6 +67,7 @@ def get_settings() -> Settings:
         "supabase_service_role_key": _required("SUPABASE_SERVICE_ROLE_KEY"),
         "sentry_dsn_backend": os.environ.get("SENTRY_DSN_BACKEND") or None,
         "log_level": os.environ.get("LOG_LEVEL", "INFO"),
+        "cors_origin_regex": (os.environ.get("CORS_ORIGIN_REGEX") or "").strip() or None,
     }
     if cors:
         kwargs["cors_origins"] = cors

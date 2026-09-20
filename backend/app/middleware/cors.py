@@ -24,6 +24,8 @@ def install(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        # None unless CORS_ORIGIN_REGEX is set; see config.Settings.
+        allow_origin_regex=settings.cors_origin_regex,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-Admin-Password", "X-Manager-Token"],
         allow_credentials=False,
