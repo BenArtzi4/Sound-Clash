@@ -1,19 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { GameCodeField } from "../components/GameCodeField";
 import { TransitionLink } from "../components/TransitionLink";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
+import { CODE_RE, normalizeCode } from "../lib/gameCode";
 import { parseRejoinHash, setStoredTeam } from "../lib/teamStorage";
 import styles from "./JoinTeamPage.module.css";
-
-const CODE_RE = /^[A-Z2-9]{6}$/;
-const CODE_CELLS = [0, 1, 2, 3, 4, 5];
-const CODE_PLACEHOLDER = "ABCDEF";
-const CODE_CHAR_RE = /[A-Z2-9]/g;
-
-function normalizeCode(raw: string): string {
-  return (raw.toUpperCase().match(CODE_CHAR_RE) ?? []).join("").slice(0, 6);
-}
 
 export function JoinTeamPage() {
   const { gameCode: paramCode } = useParams<{ gameCode?: string }>();
@@ -142,37 +135,7 @@ export function JoinTeamPage() {
           <label className={styles.label} htmlFor="game-code">
             Game code
           </label>
-          <div className={styles.codeBox}>
-            <input
-              id="game-code"
-              className={styles.codeInput}
-              value={code}
-              onChange={(e) => setCode(normalizeCode(e.target.value))}
-              placeholder="ABCDEF"
-              autoComplete="off"
-              inputMode="text"
-              maxLength={6}
-              required
-            />
-            {/* The characters you see. aria-hidden: the input above is the
-                real control and already announces its own value. */}
-            <div className={styles.codeCells} aria-hidden="true">
-              {CODE_CELLS.map((i) => (
-                <span
-                  key={i}
-                  className={[
-                    styles.codeCell,
-                    code[i] ? "" : styles.codeCellEmpty,
-                    i === code.length ? styles.codeCellNext : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  {code[i] ?? (code.length === 0 ? CODE_PLACEHOLDER[i] : "")}
-                </span>
-              ))}
-            </div>
-          </div>
+          <GameCodeField id="game-code" value={code} onChange={setCode} required />
           <span className={styles.counter} aria-hidden="true">
             {code.length}/6
           </span>

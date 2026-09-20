@@ -74,7 +74,7 @@ echo "T1  tokens       $(grep -c -- '--accent: #FF7A00' src/styles.css) (expect 
 echo "T2  icons        $(test -f src/components/icons.tsx && echo present || echo MISSING)"
 echo "T3  wordmark     $(grep -c 'EqualizerMark' src/components/Logo.tsx) (expect >=1)"
 echo "T4  home copy    $(grep -c 'Name the song' src/pages/HomePage.tsx) (expect 1)"
-echo "T5  code field   $(grep -c 'repeating-linear-gradient' src/pages/JoinTeamPage.module.css) (expect >=1)"
+echo "T5  code field   $(test -f src/components/GameCodeField.tsx && echo present || echo MISSING)"
 echo "T6  create       $(grep -c 'scroll-snap' src/pages/ManagerCreateGamePage.module.css) (expect >=1)"
 echo "T7  buzz screen  $(grep -c 'data-round-live' src/pages/TeamGameplayPage.tsx) (expect 1)"
 echo "T8  console      $(grep -c -- '--accent' src/pages/ManagerConsolePage.module.css) (expect >=1)"

@@ -9,6 +9,7 @@ import {
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
+import { GameCodeField } from "../components/GameCodeField";
 import { PointChange } from "../components/PointChange";
 import { QRPanel } from "../components/QRPanel";
 import { RoundCountdown } from "../components/RoundCountdown";
@@ -18,6 +19,7 @@ import { CheckIcon, FilmIcon, MicIcon, NoteIcon } from "../components/icons";
 import { useCountUp } from "../hooks/useCountUp";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useViewTransitionNavigate } from "../hooks/useViewTransitionNavigate";
+import { CODE_RE, normalizeCode } from "../lib/gameCode";
 import { fetchSongById } from "../lib/songMetadata";
 import type { Song, Team } from "../lib/types";
 import styles from "./DisplayPage.module.css";
@@ -34,15 +36,6 @@ const ANSWER_DURATION_SEC = 10;
 // winning" story stays readable across a room. Every team that falls off the
 // board keeps its own place + score on its phone (see TeamGameplayPage).
 const MAX_BOARD_TEAMS = 5;
-
-const CODE_RE = /^[A-Z2-9]{6}$/;
-const CODE_CHAR_RE = /[A-Z2-9]/g;
-const CODE_CELLS = [0, 1, 2, 3, 4, 5];
-const CODE_PLACEHOLDER = "ABCDEF";
-
-function normalizeCode(raw: string): string {
-  return (raw.toUpperCase().match(CODE_CHAR_RE) ?? []).join("").slice(0, 6);
-}
 
 // Dense ranks over score-sorted teams: teams tied on score share a place (…,2,2,4
 // → returned as 2,2,3 dense) and the next distinct score is +1. Matches the
@@ -157,35 +150,7 @@ function DisplayEntry() {
       <form className={styles.entryCard} onSubmit={handleSubmit}>
         <h1>Display</h1>
         <p className="muted">Enter the game code to open a read-only scoreboard.</p>
-        <div className={styles.entryBox}>
-          <input
-            className={styles.entryInput}
-            value={code}
-            onChange={(e) => setCode(normalizeCode(e.target.value))}
-            placeholder="ABCDEF"
-            maxLength={6}
-            autoFocus
-            required
-          />
-          {/* The characters you see. aria-hidden: the input above is the
-              real control and already announces its own value. */}
-          <div className={styles.entryCells} aria-hidden="true">
-            {CODE_CELLS.map((i) => (
-              <span
-                key={i}
-                className={[
-                  styles.entryCell,
-                  code[i] ? "" : styles.entryCellEmpty,
-                  i === code.length ? styles.entryCellNext : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {code[i] ?? (code.length === 0 ? CODE_PLACEHOLDER[i] : "")}
-              </span>
-            ))}
-          </div>
-        </div>
+        <GameCodeField value={code} onChange={setCode} ariaLabel="Game code" autoFocus required />
         <span className={styles.entryCounter} aria-hidden="true">
           {code.length}/6
         </span>

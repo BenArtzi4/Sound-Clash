@@ -70,6 +70,7 @@ export default [
         File: "readonly",
         Blob: "readonly",
         Document: "readonly",
+        DOMRect: "readonly",
         MutationObserver: "readonly",
         HTMLElement: "readonly",
         HTMLAnchorElement: "readonly",
