@@ -1,0 +1,118 @@
+/* One input, six cells — and the characters are drawn by the cells, not by the
+   input.
+
+   An earlier version positioned the glyphs inside a single <input> with
+   `letter-spacing: calc(cell - 1ch)` and a matching `text-indent`. That model
+   only holds if every glyph advances exactly 1ch, and Anton is proportional
+   (I 7.3px, M 23.9px, mean 15.3px against a 15.8px 1ch at 32px), so the run
+   was wider than the field for most codes and the sixth character scrolled the
+   input, sliding all six glyphs sideways.
+
+   A grid cannot drift: each cell is exactly 1/6 of the field and centres its
+   own character, for every glyph and every code, with nothing to scroll. The
+   <input> stays the one real control — same id, label, placeholder, maxLength
+   and value — and covers the whole box so it keeps focus, hit-testing and every
+   test contract; it is transparent, and the cells render what you typed. */
+.box {
+  position: relative;
+  display: grid;
+  min-height: 64px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-2);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition:
+    border-color var(--dur-micro) var(--ease-move),
+    outline-color var(--dur-micro) var(--ease-move);
+}
+.box:focus-within {
+  border-color: var(--border-strong);
+  outline-color: var(--accent);
+}
+/* Covers the whole box with no `pointer-events: none`, so a tap anywhere in
+   the field lands on the input and focuses it natively. */
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  opacity: 0;
+  cursor: text;
+}
+.cells {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--bone);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-left: 1px solid var(--border);
+}
+.cell:first-child {
+  border-left: 0;
+}
+.cellEmpty {
+  color: var(--text-dim);
+}
+
+/* The character you tapped, lit: what a keystroke replaces and what Backspace
+   removes is then never in doubt — the one affordance a touch screen has, with
+   no arrow keys to walk the caret along with. */
+.box:focus-within .cell[data-selected="true"] {
+  background-color: var(--accent-soft);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+/* The insert point. The input is transparent, so it shows no caret of its own
+   and we draw one at the cell boundary the selection actually sits on. */
+.box:focus-within .cell[data-caret]::after {
+  content: "";
+  position: absolute;
+  top: 15%;
+  bottom: 15%;
+  width: 2px;
+  border-radius: 1px;
+  background-color: var(--accent);
+}
+.cell[data-caret="before"]::after {
+  left: -1px; /* centred on the divider it sits against */
+}
+.cell:first-child[data-caret="before"]::after {
+  left: 3px; /* no divider here — keep it off the box's own border */
+}
+.cell[data-caret="after"]::after {
+  right: 3px;
+}
+
+/* A caret that blinks is the one thing everybody reads as "you are here".
+   Declared only under no-preference: the global reduced-motion rule zeroes
+   animation-duration and iteration-count, which would freeze this on whichever
+   keyframe it landed on — an invisible caret half the time. */
+@media (prefers-reduced-motion: no-preference) {
+  .box:focus-within .cell[data-caret]::after {
+    animation: caretBlink 1.1s steps(1, end) infinite;
+  }
+}
+@keyframes caretBlink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  55.01%,
+  100% {
+    opacity: 0;
+  }
+}
