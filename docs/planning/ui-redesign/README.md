@@ -1,6 +1,6 @@
 # UI redesign — plan index
 
-_Created 2026-09-17. Status (2026-09-20): **shipped — Tasks 0–11 are merged and live on `https://soundclash.org`.** The maintainer asked for a professional, emoji-free look with smooth transitions that does not read as a generic AI-generated app, anchored on one site from the Barba.js showcase, plus a plan to prove nothing breaks. This folder is that plan; each task's as-built departures are recorded inline in [07-implementation-plan.md](07-implementation-plan.md). What remains: the end-of-redesign run in [08-final-validation.md](08-final-validation.md) (its own fresh session), the cross-browser pass the sessions cannot do (below), and the OG image / PWA icon follow-up (decision 9)._
+_Created 2026-09-17. Status (2026-09-20): **shipped — Tasks 0–11 are merged and live on `https://soundclash.org`.** The maintainer asked for a professional, emoji-free look with smooth transitions that does not read as a generic AI-generated app, anchored on one site from the Barba.js showcase, plus a plan to prove nothing breaks. This folder is that plan; each task's as-built departures are recorded inline in [07-implementation-plan.md](07-implementation-plan.md). What remains: the end-of-redesign run in [08-final-validation.md](08-final-validation.md) (its own fresh session) and the cross-browser pass the sessions cannot do (below). The OG image / PWA icon follow-up (decision 9) shipped 2026-09-21 in PR #327._
 
 ## The decision in one paragraph
 
@@ -24,7 +24,7 @@ _Created 2026-09-17. Status (2026-09-20): **shipped — Tasks 0–11 are merged 
 
 **In:** all six user-facing routes (Home, How to play, Join, Team/buzz, Host create, Host console, Display + Final Results), the shared components (buttons, inputs, chips, cards, toasts, modals, skeletons, wordmark), design tokens, self-hosted fonts, the icon set, route transitions, element-level motion, the Display board reorder/count-up, copy tweaks on Home, the `how-to-play` hero replacement, `index.html` meta (theme colour, colour scheme, font preload), `_headers` (font caching).
 
-**Out (not changing):** anything below the component layer — hooks, RPC calls, Realtime reducer, `BuzzButton.tsx`/`useBuzzer.ts` logic, routes/paths, localStorage keys, backend, DB. Also out: a light theme (dark only), an RTL interface (vetoed D-6; only text runs become bidi-aware), the admin songs page beyond inherited tokens, regenerating the OG image and PWA icons (follow-up PR, binary assets), sound effects (X-SFX, separate feature).
+**Out (not changing):** anything below the component layer — hooks, RPC calls, Realtime reducer, `BuzzButton.tsx`/`useBuzzer.ts` logic, routes/paths, localStorage keys, backend, DB. Also out: a light theme (dark only), an RTL interface (vetoed D-6; only text runs become bidi-aware), the admin songs page beyond inherited tokens, regenerating the OG image and PWA icons (done separately in PR #327), sound effects (X-SFX, separate feature).
 
 ## PR sequence — all shipped
 
@@ -61,7 +61,7 @@ Order rationale: tokens first so every later PR is small; the two hot-path pages
 | 6 | Confetti | **Replace with the staggered rise + light sweep.** No particles. |
 | 7 | Dependency budget | **`@formkit/auto-animate` is approved now, for the Display chunk only** (3.2 kB gzip, zero transitive deps, WAAPI, inert in jsdom). It handles the TV board reorder in PR 9; it must never be imported by any module reachable from the player or console bundles. No other dependency. |
 | 8 | `???` placeholder | **Masked blocks**; the six assertions on the literal `???` are updated in PR 9. |
-| 9 | OG image + PWA icons | **Regenerate in a follow-up PR** after the redesign lands (binary assets, confirmed then). |
+| 9 | OG image + PWA icons | **Done — PR #327** (2026-09-21). "Orange knockout": a flat `--accent` card with the wordmark in black, and the five PWA icons as the equaliser mark alone on the same orange (the wordmark is unreadable at the ~48px a home screen draws). Generators and the reasoning live in [`tools/og-image/README.md`](../../../tools/og-image/README.md). |
 
 Implementation is unblocked; the next step is the implementation plan (see the last section).
 
@@ -81,6 +81,6 @@ The spec is approved and the implementation plan is written ([07-implementation-
 
 > Read `docs/planning/ui-redesign/README.md`, `07-implementation-plan.md` (Task N), `06-validation-plan.md` §2 and `02-current-state-audit.md` §4. Implement Task N exactly as written on a new `feature/ui-N-…` branch from `main`, run the gate, open the PR (label `run-e2e` when the task says so), then carry it to merge-ready: wait for the checks, resolve every bot review thread (CodeQL / Advanced Security) so "All comments must be resolved" cannot block it, and confirm `mergeStateStatus` is `CLEAN`. Do not merge. Work autonomously and stop only for a question I must answer. Report the gate output, the final merge state and the PR link.
 
-Order: Task 0 (fonts) → 1 (tokens, reviewed on a real phone before merge) → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. Tasks 4–6 are independent of each other once 1–3 are in; the rest are sequential. After Task 11: the final validation run in [08-final-validation.md](08-final-validation.md) (which contains the Full-Game Exit Gate from [06-validation-plan.md](06-validation-plan.md) §9 plus everything around it; paste its starter prompt into a fresh session), then the OG image / PWA icon follow-up (decision 9).
+Order: Task 0 (fonts) → 1 (tokens, reviewed on a real phone before merge) → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. Tasks 4–6 are independent of each other once 1–3 are in; the rest are sequential. After Task 11: the final validation run in [08-final-validation.md](08-final-validation.md) (which contains the Full-Game Exit Gate from [06-validation-plan.md](06-validation-plan.md) §9 plus everything around it; paste its starter prompt into a fresh session), The OG image / PWA icon follow-up (decision 9) is already done — PR #327.
 
 After each merge, the post-merge prod pass (`06` §2.4 + §8) is scripted: `node tests/smoke/ui_prod_pass.mjs all` from the repo root with the Bash sandbox disabled (see `tests/smoke/README.md`). Exit 0 means every hard gate is green; the soft findings it prints are the items that stay non-zero until Tasks 2, 4 and 9 land.
