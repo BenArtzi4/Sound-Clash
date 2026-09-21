@@ -1,6 +1,6 @@
 # Border tokens fall below WCAG 1.4.11 — one real defect, nine false alarms
 
-_Status: found 2026-09-20 while shipping the Home colour pass ([PR #323](https://github.com/BenArtzi4/Sound-Clash/pull/323)). Not fixed there — it is unrelated to that change and deserves its own PR. Every number below was computed, not recalled._
+_Status: **fixed 2026-09-21** — `--border-strong` raised to `rgba(233, 228, 217, 0.42)`, with a computed-contrast guard in `frontend/src/styles.test.ts`. Measured on a preview build: the unchecked genre checkbox went 2.52:1 -> 3.38:1, and the nine decorative uses all landed at 3.46-3.48:1. Found 2026-09-20 while shipping the Home colour pass ([PR #323](https://github.com/BenArtzi4/Sound-Clash/pull/323)). Not fixed there — it is unrelated to that change and deserves its own PR. Every number below was computed, not recalled._
 
 ## The finding
 
