@@ -15,7 +15,12 @@
   --surface: #1d1a14;
   --surface-2: #26221a;
   --border: rgba(233, 228, 217, 0.14);
-  --border-strong: rgba(233, 228, 217, 0.32);
+  /* 3.47:1 on --bg. WCAG 1.4.11 wants 3:1 for a boundary that identifies a
+     control, and the unchecked genre checkbox on the host create screen has
+     nothing but this border to identify it. 0.375 is the exact threshold;
+     0.42 leaves margin without making the decorative hairlines loud.
+     See docs/planning/FIX-2026-09-20-border-token-contrast.md. */
+  --border-strong: rgba(233, 228, 217, 0.42);
   --text: #ffffff;
   --text-muted: #b4a88f;
   --text-dim: rgba(255, 255, 255, 0.42);
