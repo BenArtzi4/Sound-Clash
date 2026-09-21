@@ -1,6 +1,6 @@
 # Next session — start here
 
-_Last updated: 2026-07-14 (planning cleanup: after a 5-agent code audit verified every claimed item is really shipped, the completed backlog + phase files were deleted and the survivors consolidated — all open work now lives in **[TASKS.md](TASKS.md)** (§A features / §B residuals / §C maintainer-gated); the decision log is **[DECISIONS.md](DECISIONS.md)**; the process doc moved to **[EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md)** in this directory. Detail lives in git history. Correction folded in: **issue #183 team rejoin IS merged + live on prod** — PR #260, mig 046 `team_secrets`, `TeamRescueModal` — the previous version of this file predated that merge.)_
+_Last updated: 2026-09-20 (the **UI redesign is complete and live** — all 12 tasks, PRs #303-#320, plus the Home colour pass #323/#324. This file was two months stale and had been pointing sessions at X-DarkRoom #243, which the redesign's dark base theme already delivered. Everything below is re-verified against `git log origin/main`.)_
 
 ## Start the next session with ONE line
 
@@ -8,7 +8,7 @@ Just run the skill — it reads this whole file and picks the next task:
 
 > **`/next-task`**
 
-To point it at a specific task, add a few words, e.g. **`/next-task do X-DarkRoom`**. Everything the skill needs (per-PR loop, gates, env traps, the open-work map below) is in this file + `EXECUTION-CONTRACT.md` + `.claude/rules/lessons-learned.md`, which the skill loads automatically.
+To point it at a specific task, add a few words, e.g. **`/next-task do X-Recap`**. Everything the skill needs (per-PR loop, gates, env traps, the open-work map below) is in this file + `EXECUTION-CONTRACT.md` + `.claude/rules/lessons-learned.md`, which the skill loads automatically.
 
 ## One-glance state (verified against code/git 2026-07-14)
 
@@ -17,14 +17,17 @@ To point it at a specific task, add a few words, e.g. **`/next-task do X-DarkRoo
 - **Recent UX polish shipped 2026-07-13:** manager console fits one phone screen (#177 → PR #264, CSS-only); Display board capped to top 5 + per-player standing chip (#179 → PRs #268/#275); Final Results top-5 + polish (#180 → PRs #266/#272); scroll-to-top on navigation (#181 → #267); standing "Ends at" hint removed from the manager console (#276 — the last-20-min warning banner + "Keep playing +1h" remain).
 - **Observability:** Faro re-enabled on prod (#258); the I-Vitals layer is built + merged (#262 — `observability/` dashboard JSON, #254 alert, stale-buzz-lock scan Action); the **Supabase metrics scrape is live since 2026-07-13** (PR #269 — `supabase-soundclash` job in `grafanacloud-prom`). Maintainer still owes the apply steps (dashboard import, contact point + alert rule, `GRAFANA_READ_TOKEN` secret) — see `TASKS.md` §C.
 - **Buzzer resilience:** #254 round-advance derivation + 15s locked backstop (#259) and the #261 provisional-lock TTL/reconciler (#263) are live; `stale_buzz_lock_resynced` warns in Loki mark real dropped Realtime events.
+- **UI redesign ✅ complete + live (2026-09-17 → 2026-09-20).** All 12 tasks merged (PRs #303-#320); plan in `docs/planning/ui-redesign/`. Dark Rogue-Studio system: `--bg` is now the warm near-black `#14120E`, Anton + Instrument Sans self-hosted, one icon set, view-transition route changes. **This delivered X-DarkRoom #243** as the base theme rather than a toggle — do not build it. Home got a colour pass on 2026-09-20 (#323/#324): hero wordmark, three colour-coded role cards, diagonal `clip-path` fill. Prod pass 29/29.
+- **⚠️ The redesign's formal sign-off has NOT been run.** `docs/planning/ui-redesign/08-final-validation.md` is a full runbook with ~40 checks and **zero** are ticked. It needs its own session (Docker + local Supabase, three browser engines, a 30-team prod load run).
 - **Nothing urgent / on fire. No open production or security holes.**
 
 ## What to do next (pick one)
 
-1. **Features (pick + green-light one — `TASKS.md` §A has the design notes):** X-SFX **#244** (needs the D-9 audio-asset sign-off; display-only — must not slow the buzz), X-DarkRoom **#243** (frontend-only, ready to build), X-Recap **#245** (client-side canvas PNG), X-GenreSpotlight **#246** (owes a "why is it good?" case first; DB migration → `run-stress`/`run-e2e` labels + in-prompt merge auth).
-2. **Small autonomous residual — I-BuzzMetric (`TASKS.md` §B):** emit `locked_at` so DB-lock latency separates from fan-out latency (`telemetry.ts` already emits `realtime.fanout_ms`; the buzz span still conflates RPC + WAL + fan-out).
-3. **Owed to the maintainer (manual):** F-P2-5 two-IP rate-limit check **#247** (laptop ~11 rapid game-creates → last 429s; phone on cellular → 201 proves independent buckets); **prod `ADMIN_PASSWORD` rotation** (shared in-chat 2026-07-12 — after rotating on Render, update the GitHub `ADMIN_PASSWORD` secret + `backend/.env`).
-4. **Maintainer-gated infra/ops (`TASKS.md` §C):** T5.6 Cloudflare edge + WAF, I-Vitals apply steps, T5.1 CSV formula-injection guard (off-limits `tools/song-curation/*`), song curation (Hebrew + soundtracks), secret rotation.
+1. **Finish the redesign (highest value, and it is owed):** run `docs/planning/ui-redesign/08-final-validation.md` top to bottom in its own session. Then two small follow-ups: the **border-token contrast fix** (`docs/planning/FIX-2026-09-20-border-token-contrast.md` — one line + a test, prompt included at the bottom of that file) and the **OG image + PWA icons**, which are still the pre-redesign white-tile/blue-bars artwork from June and no longer match the shipped design (decision 9; binary assets, so ask before committing them).
+2. **Features (pick + green-light one — `TASKS.md` §A has the design notes):** X-SFX **#244** (needs the D-9 audio-asset sign-off; display-only — must not slow the buzz), ~~X-DarkRoom #243~~ (**delivered by the redesign — do not build**), X-Recap **#245** (client-side canvas PNG), X-GenreSpotlight **#246** (owes a "why is it good?" case first; DB migration → `run-stress`/`run-e2e` labels + in-prompt merge auth).
+3. **Small autonomous residual — I-BuzzMetric (`TASKS.md` §B):** emit `locked_at` so DB-lock latency separates from fan-out latency (`telemetry.ts` already emits `realtime.fanout_ms`; the buzz span still conflates RPC + WAL + fan-out).
+4. **Owed to the maintainer (manual):** F-P2-5 two-IP rate-limit check **#247** (laptop ~11 rapid game-creates → last 429s; phone on cellular → 201 proves independent buckets); **prod `ADMIN_PASSWORD` rotation** (shared in-chat 2026-07-12 — after rotating on Render, update the GitHub `ADMIN_PASSWORD` secret + `backend/.env`).
+5. **Maintainer-gated infra/ops (`TASKS.md` §C):** T5.6 Cloudflare edge + WAF, I-Vitals apply steps, T5.1 CSV formula-injection guard (off-limits `tools/song-curation/*`), song curation (Hebrew + soundtracks), secret rotation.
 
 ## The per-PR loop (from EXECUTION-CONTRACT.md — don't skip)
 
