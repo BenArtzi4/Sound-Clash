@@ -14,11 +14,11 @@ Make the game **load fast, respond instantly, and never lag** — every button, 
 | [TASKS.md](TASKS.md) | **The backlog** — every open item: features awaiting green-light, small residuals, maintainer-gated work |
 | [EXECUTION-CONTRACT.md](EXECUTION-CONTRACT.md) | **Process** (the single process doc): session protocol, per-PR loop, merge authorization, exit gates |
 | [DECISIONS.md](DECISIONS.md) | **Decision log — all resolved**; don't re-litigate |
-| [ui-redesign/README.md](ui-redesign/README.md) | **UI redesign — ✅ shipped and live (all 12 tasks, PRs #303-#320; Home colour pass #323/#324). Its `08-final-validation.md` runbook is still unrun.** — design system anchored on Rogue Studio, motion spec, page-by-page spec, library verdicts, current-state audit, and the validation/regression plan |
+| [ui-redesign/README.md](ui-redesign/README.md) | **UI redesign — ✅ shipped, live and validated (all 12 tasks, PRs #303-#320; Home colour pass #323/#324; `08-final-validation.md` run 2026-09-22 → GO, fix PRs #329-#334 and the #339 revert merged; report in `ui-redesign/validation/2026-09-22-final-validation.md`).** — design system anchored on Rogue Studio, motion spec, page-by-page spec, library verdicts, current-state audit, and the validation/regression plan |
 
 ## Status snapshot
 
-_Updated: 2026-09-20 (phases 1–7 ✅ done and live on prod, re-verified by a 5-agent audit on 2026-07-14; the UI redesign shipped 2026-09-17 → 2026-09-20 and is live)._
+_Updated: 2026-09-22 (phases 1–7 ✅ done and live on prod, re-verified by a 5-agent audit on 2026-07-14; the UI redesign shipped 2026-09-17 → 2026-09-20, passed its final validation on 2026-09-22 and is live)._
 
 | Phase | Theme | State |
 |---|---|---|
@@ -28,7 +28,7 @@ _Updated: 2026-09-20 (phases 1–7 ✅ done and live on prod, re-verified by a 5
 | 5 | Security & abuse hardening | ✅ code done; only Cloudflare WAF (infra) + CSV guard (off-limits tooling) remain — [TASKS.md](TASKS.md) §C |
 | 6 | Correctness & docs hygiene | ✅ done (#199, #200/#203, #216) |
 | 7 | Tech-debt & test hardening | ✅ done (T7.1–T7.6; exit gate passed 2026-07-11) |
-| UI | Redesign (dark Rogue-Studio system, 12 tasks) | ✅ shipped + live (PRs #303-#320, #323, #324); **`ui-redesign/08-final-validation.md` not yet run** |
+| UI | Redesign (dark Rogue-Studio system, 12 tasks) | ✅ shipped + live + validated (PRs #303-#320, #323, #324; final validation 2026-09-22 → GO, `ui-redesign/validation/2026-09-22-final-validation.md`; leftovers: PR #340, issues #335/#336, three taste calls in the report) |
 | 8 | Features | 🟡 in progress — X-Presets (#241), X-Recovery, X-Extend, team rejoin (#183/PR #260) shipped; the rest is [TASKS.md](TASKS.md) §A |
 
 **Everything still open — features, residuals, and maintainer-gated work — is in [TASKS.md](TASKS.md)** (features also tracked as GitHub issues #243–#247).
