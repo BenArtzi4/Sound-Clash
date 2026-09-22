@@ -259,7 +259,7 @@
 }
 
 .chipBad {
-  color: var(--negative);
+  color: var(--negative-text);
   background: var(--negative-soft);
 }
 

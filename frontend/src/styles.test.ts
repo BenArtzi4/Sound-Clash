@@ -39,6 +39,13 @@ function luminance([r, g, b]: Rgba): number {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
+/** `colour` (possibly translucent) flattened onto an opaque `ground`, as an rgb() string. */
+function composite(colour: string, ground: string): string {
+  const [r, g, b, a] = parse(colour);
+  const [gr, gg, gb] = parse(ground);
+  return `rgb(${r * a + gr * (1 - a)}, ${g * a + gg * (1 - a)}, ${b * a + gb * (1 - a)})`;
+}
+
 /** Contrast of a (possibly translucent) colour composited over an opaque ground. */
 function contrastRatio(colour: string, ground: string): number {
   const [r, g, b, a] = parse(colour);
@@ -62,6 +69,7 @@ describe("styles.css design tokens", () => {
       "--text-muted: #b4a88f",
       "--positive: #4ade80",
       "--negative: #f2352b",
+      "--negative-text: #ff5a4f",
       "--periwinkle: #a9b4ff",
       "--role-host: var(--accent)",
       "--role-play: var(--positive)",
@@ -82,6 +90,29 @@ describe("styles.css design tokens", () => {
   it("keeps --border-strong at 3:1 against every ground it sits on", () => {
     for (const ground of ["--bg", "--surface", "--surface-2"]) {
       expect(contrastRatio(token("--border-strong"), token(ground))).toBeGreaterThanOrEqual(3);
+    }
+  });
+  // Final validation 2026-09-22 (F-05): Home's "How to play" link and the toast's
+  // close button still flashed the browser's tap overlay because only some
+  // components reset it. One global floor, so a new control cannot forget.
+  it("resets the browser tap highlight on every interactive element", () => {
+    expect(css).toMatch(
+      /a,\s*button,\s*input,\s*select,\s*textarea,\s*label,\s*summary,\s*\[role="button"\]\s*\{\s*-webkit-tap-highlight-color:\s*transparent;/,
+    );
+  });
+
+  // Small red text (the Wrong label, error strips, "copy failed", the low
+  // countdown) sits on the warm grounds and on --negative-soft. --negative itself
+  // measures 4.40:1 on --surface since 09 moved the ground, under the 4.5:1
+  // body-text floor (06 §6) — the 2026-09-22 final validation caught it on the
+  // host console (P1) and How to play. --negative-text exists for exactly those
+  // runs; fills, borders and >= 24 px text keep --negative.
+  it("keeps --negative-text at 4.5:1 on every ground small red text sits on", () => {
+    for (const ground of ["--bg", "--surface", "--surface-2"]) {
+      expect(contrastRatio(token("--negative-text"), token(ground))).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(token("--negative-text"), composite(token("--negative-soft"), token(ground))),
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
   it("has no gradients, no blur, no transition: all, and no light-mode background", () => {
