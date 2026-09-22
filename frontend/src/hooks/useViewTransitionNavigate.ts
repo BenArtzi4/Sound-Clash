@@ -5,19 +5,6 @@ type VTDocument = Document & {
   startViewTransition?: (cb: () => void | Promise<void>) => { finished: Promise<void> };
 };
 
-// WebKit — Safari and every iOS browser — crashed the page on a transition into a
-// lazy route that is taller than the viewport: Playwright's WebKit 26.5, 30/30
-// reproductions on Home → Host and Home → How to play (local dev server and prod),
-// 0/12 on the plain-navigate path, and no CSS-only mitigation held up under
-// repeats (docs/planning/ui-redesign/validation/2026-09-22-final-validation.md,
-// F-04). Until WebKit is proven clean on a real device, it gets the instant swap
-// the spec already defines for engines without the API. navigator.vendor is
-// "Apple Computer, Inc." on WebKit and nothing else (Chromium "Google Inc.",
-// Firefox "").
-function isWebKit(): boolean {
-  return typeof navigator !== "undefined" && navigator.vendor === "Apple Computer, Inc.";
-}
-
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -80,7 +67,7 @@ export function useViewTransitionNavigate() {
         /* a failed preload is handled by lib/preloadError on the real import */
       }
       const doc = document as VTDocument;
-      if (typeof doc.startViewTransition !== "function" || prefersReducedMotion() || isWebKit()) {
+      if (typeof doc.startViewTransition !== "function" || prefersReducedMotion()) {
         navigate(to, navOpts);
         return;
       }
