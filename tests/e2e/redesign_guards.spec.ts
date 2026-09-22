@@ -5,7 +5,7 @@
 // touch/wheel listener that blocks the compositor, an animation on a property
 // that repaints, or a press whose feedback misses the next frame. None of that
 // is visible to the other specs, which assert behaviour rather than cost.
-import { expect, test } from "@playwright/test";
+import { devices, expect, test } from "@playwright/test";
 import { advanceRound, openManagerAndCreateGame } from "./fixtures/manager-context";
 import { joinAsTeam } from "./fixtures/team-context";
 
@@ -211,5 +211,17 @@ test("no view transition covers the arrival at the buzz screen", async ({ browse
   await expect(page.getByTestId("buzz")).toBeVisible({ timeout: 15_000 });
   expect(await count()).toBe(0);
 
+  await context.close();
+});
+
+// Final validation 2026-09-22 (F-06): Home's "How to play" link measured
+// 111 x 24 px on a phone, under the 44 px tap floor (06 §6). The text does not
+// move; the link's box grows to the floor.
+test("Home's How to play link is a 44 px tap target on a phone", async ({ browser }) => {
+  const context = await browser.newContext({ ...devices["iPhone 12"] });
+  const page = await context.newPage();
+  await page.goto("/");
+  const box = await page.getByRole("link", { name: /how to play/i }).boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   await context.close();
 });
