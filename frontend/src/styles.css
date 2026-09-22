@@ -151,9 +151,13 @@ a {
   color: var(--bone);
   text-decoration: none;
 }
-a:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+/* Hover only where a hover exists (07 Global Constraints): a bare a:hover sticks
+   after a tap on a touch screen and leaves the link underlined (#282). */
+@media (hover: hover) {
+  a:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 
 /* No browser tap overlay on any control (#282): the grey/blue flash reads as a
