@@ -124,6 +124,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-09-22: The host console's "<team> buzzed in — score it:" strip now has a visible gap between the team name and the words. (#340)
 - 2026-09-22: The host console's player cover ("Loading player…", "Song ended", "Video unavailable") no longer shows the old blue-slate gradient; it sits on the same dark surface as the rest of the console. (#333)
 - 2026-09-22: Links no longer stay underlined after a tap on touch screens — the underline (and the admin table's row tint) now only answers a real mouse hover. (#332)
 - 2026-09-22: Tapping a link or the close button on a toast no longer flashes the browser's grey or blue tap highlight on phones — the reset now applies to every control, not only the ones that had it. (#331)
