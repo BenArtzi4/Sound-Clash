@@ -92,6 +92,15 @@ describe("styles.css design tokens", () => {
       expect(contrastRatio(token("--border-strong"), token(ground))).toBeGreaterThanOrEqual(3);
     }
   });
+  // Final validation 2026-09-22 (F-05): Home's "How to play" link and the toast's
+  // close button still flashed the browser's tap overlay because only some
+  // components reset it. One global floor, so a new control cannot forget.
+  it("resets the browser tap highlight on every interactive element", () => {
+    expect(css).toMatch(
+      /a,\s*button,\s*input,\s*select,\s*textarea,\s*label,\s*summary,\s*\[role="button"\]\s*\{\s*-webkit-tap-highlight-color:\s*transparent;/,
+    );
+  });
+
   // Small red text (the Wrong label, error strips, "copy failed", the low
   // countdown) sits on the warm grounds and on --negative-soft. --negative itself
   // measures 4.40:1 on --surface since 09 moved the ground, under the 4.5:1
