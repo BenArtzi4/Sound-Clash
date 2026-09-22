@@ -1,19 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TransitionLink } from "./TransitionLink";
-
-// jsdom's navigator.vendor is "Apple Computer, Inc.", which the hook treats as
-// WebKit and skips the transition for; pin a Chromium vendor so these tests
-// exercise the transition path they were written for.
-beforeEach(() =>
-  Object.defineProperty(navigator, "vendor", { value: "Google Inc.", configurable: true }),
-);
 
 afterEach(() => {
   delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
-  delete (navigator as unknown as { vendor?: unknown }).vendor;
 });
 
 function renderLink(node: React.ReactNode) {
