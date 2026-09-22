@@ -22,6 +22,7 @@ import { useViewTransitionNavigate } from "../hooks/useViewTransitionNavigate";
 import { CODE_RE, normalizeCode } from "../lib/gameCode";
 import { fetchSongById } from "../lib/songMetadata";
 import type { Song, Team } from "../lib/types";
+import { Logo } from "../components/Logo";
 import styles from "./DisplayPage.module.css";
 
 interface PointEvent {
@@ -148,6 +149,9 @@ function DisplayEntry() {
   return (
     <main className={styles.entry}>
       <form className={styles.entryCard} onSubmit={handleSubmit}>
+        <div className={styles.brand}>
+          <Logo size="small" />
+        </div>
         <h1>Display</h1>
         <p className="muted">Enter the game code to open a read-only scoreboard.</p>
         <GameCodeField value={code} onChange={setCode} ariaLabel="Game code" autoFocus required />

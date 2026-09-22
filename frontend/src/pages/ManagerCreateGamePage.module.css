@@ -1,6 +1,13 @@
 /* The sticky action bar is in flow (it settles at the end of the form), so the
    shell needs no extra room beneath it: a symmetric 32px keeps the page from
    scrolling on a laptop just to reveal empty padding. */
+/* Small wordmark above the heading (05 §4). */
+.brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-5);
+}
+
 .shell {
   min-height: 100%;
   padding: var(--space-6) var(--space-4);
