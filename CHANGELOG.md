@@ -124,6 +124,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-09-22: The host console's player cover ("Loading player…", "Song ended", "Video unavailable") no longer shows the old blue-slate gradient; it sits on the same dark surface as the rest of the console. (#333)
 - 2026-09-22: Links no longer stay underlined after a tap on touch screens — the underline (and the admin table's row tint) now only answers a real mouse hover. (#332)
 - 2026-09-22: Tapping a link or the close button on a toast no longer flashes the browser's grey or blue tap highlight on phones — the reset now applies to every control, not only the ones that had it. (#331)
 - 2026-09-22: Small red text — the Wrong button's label and points, error strips, "copy failed" notes and the countdown's last seconds — is a touch lighter so it meets the 4.5:1 contrast floor on the warm dark surfaces (it had slipped to 4.4:1 when the ground moved off pure black). (#330)

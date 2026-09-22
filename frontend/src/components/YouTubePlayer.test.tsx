@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act, render, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -404,5 +406,18 @@ describe("YouTubePlayer", () => {
     });
     await flushIframeLoad(container);
     await waitFor(() => expect(lastPlayer).not.toBeNull());
+  });
+});
+
+// Final validation 2026-09-22 (F-01): the cover shipped with the pre-redesign
+// slate gradient and hard-coded text colours. 01 §2 bans gradients anywhere and
+// every colour comes from a token; 04 §2 allows only the four easing tokens.
+// #000 behind the iframe is the one literal kept — YouTube letterboxes in black.
+describe("YouTubePlayer.module.css", () => {
+  it("uses tokens only: no gradient, no hex colour but the black letterbox, no bare easing", () => {
+    const css = readFileSync(join(import.meta.dirname, "YouTubePlayer.module.css"), "utf8");
+    expect(css).not.toMatch(/gradient\(/);
+    expect(css.replace(/#000\b/g, "")).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(css).not.toMatch(/\bease(?![-\w])/);
   });
 });
