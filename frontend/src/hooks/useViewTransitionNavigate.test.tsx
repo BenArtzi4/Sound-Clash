@@ -1,14 +1,23 @@
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useViewTransitionNavigate } from "./useViewTransitionNavigate";
 
 const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
 
+// jsdom reports navigator.vendor = "Apple Computer, Inc." (its UA is WebKit-
+// flavoured), which would send every test below down the WebKit bail-out. Pin a
+// Chromium vendor by default; the WebKit test sets Apple's explicitly.
+const setVendor = (vendor: string) =>
+  Object.defineProperty(navigator, "vendor", { value: vendor, configurable: true });
+
+beforeEach(() => setVendor("Google Inc."));
+
 afterEach(() => {
   delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
   delete (window as unknown as { matchMedia?: unknown }).matchMedia;
+  delete (navigator as unknown as { vendor?: unknown }).vendor;
 });
 
 describe("useViewTransitionNavigate", () => {
@@ -111,6 +120,28 @@ describe("useViewTransitionNavigate", () => {
     });
     expect(vt).not.toHaveBeenCalled();
     expect(result.current.loc.pathname).toBe("/join");
+  });
+
+  // WebKit (Safari, every iOS browser) crashed the page on a transition into a
+  // lazy route taller than the viewport — Playwright's WebKit 26.5, 30/30 on
+  // Home → Host and Home → How to play, local and prod, and 0/12 on the plain
+  // navigate path (final validation 2026-09-22, F-04). navigator.vendor is
+  // "Apple Computer, Inc." on WebKit and nothing else.
+  it("skips the transition on WebKit (navigator.vendor)", async () => {
+    setVendor("Apple Computer, Inc.");
+    const vt = vi.fn((cb: () => void) => {
+      cb();
+      return { finished: Promise.resolve() };
+    });
+    (document as unknown as { startViewTransition: unknown }).startViewTransition = vt;
+    const { result } = renderHook(() => ({ go: useViewTransitionNavigate(), loc: useLocation() }), {
+      wrapper,
+    });
+    await act(async () => {
+      await result.current.go("/manager/create");
+    });
+    expect(vt).not.toHaveBeenCalled();
+    expect(result.current.loc.pathname).toBe("/manager/create");
   });
 
   it("runs the transition when reduced motion is not requested", async () => {
