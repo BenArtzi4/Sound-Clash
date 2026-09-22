@@ -229,6 +229,9 @@
   font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: 0.02em;
+  /* The display face's tight right sidebearing swallows the literal space before
+     "buzzed in" (final validation 2026-09-22, F-11 / issue #337). */
+  margin-inline-end: 0.3em;
 }
 
 .scoreRow {
