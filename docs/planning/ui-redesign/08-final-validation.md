@@ -140,7 +140,7 @@ Expected: every command exits 0; `test:run` reports **no fewer tests than the ba
 
 ```bash
 rg -n "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B50}\x{2705}\x{274C}\x{2605}]" frontend/src -g '!*.test.*'    # 0 matches  [T2]
-rg -n "gradient\(" frontend/src -g '*.css'                    # only the code-field cells (Join + Display entry) and the EndScreen winner sweep ::after  [T5][T9]
+rg -n "gradient\(" frontend/src -g '*.css'                    # only the EndScreen winner sweep ::after (the code field stopped using a gradient in PR #317)  [T5][T9]
 rg -n "transition:\s*all" frontend/src -g '*.css'             # 0  [T1]
 rg -n "backdrop-filter" frontend/src -g '*.css'               # 0  [T3]
 rg -n "box-shadow" frontend/src -g '*.css'                    # only --shadow-modal (modal + toast)  [T1][T3]
@@ -250,7 +250,7 @@ Expected: exits 0 through all eight steps (lock atomic, release re-arms, round a
 - [ ] **C.3 Prod Realtime smoke (one buzzer round through the deployed UI).**
 
 ```bash
-cd /c/Users/yulin/GBA/Sound-Clash/tests/e2e && BASE_URL=https://www.soundclash.org npx playwright test --config smoke/playwright.smoke.config.ts --reporter=list
+cd /c/Users/yulin/GBA/Sound-Clash/tests/e2e && API_URL=https://api.soundclash.org BASE_URL=https://www.soundclash.org npx playwright test --config smoke/playwright.smoke.config.ts --reporter=list   # API_URL is required with the www host: the spec derives api.www.… otherwise (issue #335)
 ```
 
 Expected: 1 passed. This is the first run that exercises the redesigned Join, Create, Console, Team and Display pages on prod through the real fixtures — a locator failure here means a frozen contract from `02` §4 broke (P1).
@@ -280,7 +280,7 @@ New-Item -ItemType Directory -Force "C:\Users\yulin\GBA\Sound-Clash\tests\load\r
 Start-Process -FilePath "node" -ArgumentList "tests/load/loadtest.mjs","run","--label","final-1x30","--games","1","--teams","30","--rounds","15","--seed","404" -WorkingDirectory "C:\Users\yulin\GBA\Sound-Clash" -RedirectStandardOutput "C:\Users\yulin\GBA\Sound-Clash\tests\load\results\final-1x30-console.log" -RedirectStandardError "C:\Users\yulin\GBA\Sound-Clash\tests\load\results\final-1x30-console.err.log" -WindowStyle Hidden
 ```
 
-Then read `tests/load/results/final-1x30/report.md`. Expected: verdict **PASS**, `violations: 0` (every race exactly one winner, every ledger delta matched, all 15 rounds `previous+1`, the game ended cleanly); Realtime misses 0 with ≤ 32 sockets. Add the one-line ledger row to `tests/load/FINDINGS.md` (a committed file — stage it on the report branch) and, if the harness itself fails to start, read the `.err.log` before blaming the stack. A WARN on latency percentiles is advisory; a `violation` is a P0.
+Then read `tests/load/results/final-1x30/report.md`. Expected: verdict **PASS**, `violations: 0` (every race exactly one winner, every ledger delta matched, all 15 rounds `previous+1`, the game ended cleanly); Realtime misses 0 with ≤ 32 sockets. Add the one-line ledger row to `tests/load/FINDINGS.md` (the whole `tests/load/` tree is untracked since PR #280 — the row stays local, so copy the numbers into the report) and, if the harness itself fails to start, read the `.err.log` before blaming the stack. A WARN on latency percentiles is advisory; a `violation` is a P0.
 
 - [ ] **C.7 No leftovers.**
 
@@ -290,7 +290,7 @@ supabase db query --linked "select game_code, status, expires_at from active_gam
 
 Expected: only games that were already there in Part 0.5 (a real host's game); anything created by C.1–C.6 is `ended`. End a stray with `curl -s -X POST https://api.soundclash.org/games/<CODE>/end -H "X-Manager-Token: <token>"` if its token is in `tests/load/results/<label>/games.json`; otherwise `node tests/load/loadtest.mjs cleanup --dir tests/load/results/<label>`.
 
-- [ ] **C.8 Record + commit.** `git add docs/planning/ui-redesign/validation/ tests/load/FINDINGS.md && git commit -m "Final validation report: Part C"`.
+- [ ] **C.8 Record + commit.** `git add docs/planning/ui-redesign/validation/ && git commit -m "Final validation report: Part C"` (`tests/load/` is untracked).
 
 ## Part D — Real-browser games on prod: many teams, every button, every combination
 
@@ -312,7 +312,7 @@ The script prints one `PASS S<n>` / `FAIL S<n>: <reason>` line per scenario belo
 | S4 | Host | Wait for `youtube-player[data-ready="true"]`, click **Start game** (`start-round`) | Console "Round 1"; every phone `data-tone="idle"` with label `BUZZ`; Display banner in the `playing` state; both YouTube layers mounted and visible |
 | S5 | Six phones | Simultaneous `pointerdown` on `buzz` | Exactly one `winner` (`YOU BUZZED`), five `locked-other`; console `role="status"` contains "<name> buzzed in"; Display banner names the same team and `role="timer"` shows 1–10 |
 | S6 | Host | **Correct Song** (`score-title`) | Toast "+10 to <name>"; winner keeps the floor (`winner` tone persists, timer restarts); `token-chip-title[data-claimed="true"]`; Display `display-reveal-title[data-revealed="true"]` with the real title; `score-title` disabled; DB score +10; phone chip +10; Display row +10 |
-| S7 | Host, then `FV-02` | **Continue round** (`continue-round`); `FV-02` buzzes; **Correct Artist** (`score-artist`) | After Continue every tone is `idle`; `FV-02` wins; toast "+5 to FV-02"; artist chip claimed; Display artist revealed; with both tokens claimed `score-title`, `score-artist` and `continue-round` are disabled |
+| S7 | Host, then `FV-02` | **Continue round** (`continue-round`); `FV-02` buzzes; **Correct Artist** (`score-artist`) | After Continue every tone is `idle`; `FV-02` wins; toast "+5 to FV-02"; artist chip claimed; Display artist revealed; with both tokens claimed `score-title` and `score-artist` are disabled while `continue-round` stays **enabled** — `game-rules.md` disables Continue only when no buzz is held, and FV-02 still holds the floor (corrected 2026-09-22; the first run of this file expected it disabled) |
 | S8 | Host | **Next round** (`start-round`) | "Round 2"; tones `idle`; both reveal rows `data-revealed="false"` (masked, no `???` text); chips `data-claimed="false"` |
 | S9 | `FV-03`, host | Buzz → **Wrong**; buzz again → **Wrong** | "−3 to FV-03" twice (no lock-out, no free guess yet); each Wrong clears the lock without Continue; DB −6 |
 | S10 | `FV-04`, host, `FV-03`, `FV-05`, `FV-06` | `FV-04` buzz → **Correct Song**; **Continue**; `FV-03` buzz → **Wrong**; `FV-05` buzz → **Wrong**; `FV-06` buzz → **Correct Artist** | +10; **0** for `FV-03` (free guess after a correct); **−3** for `FV-05` (flag consumed); +5 for `FV-06`; DB matches at every step |
@@ -325,7 +325,7 @@ The script prints one `PASS S<n>` / `FAIL S<n>: <reason>` line per scenario belo
 | S17 | Script (REST), `FV-06`'s tab | `DELETE /games/<CODE>/teams/<FV-06 id>` with `X-Manager-Token` | 204; the tab redirects to `/` within 5 s; the bonus picker now lists 11; Display no longer lists `FV-06` |
 | S18 | Script | `extend_game` RPC; `FV-13` joins over REST mid-game; open a tab for `FV-13`; next round; `FV-13` buzzes | `expires_at` +1 h in the DB (the banner is correctly absent — not within 20 min); Display `+N more teams` recomputes; `FV-13` can win a race |
 | S19 | Host | Round with nobody buzzing → **Next round**; then one more full round with `FV-01` buzzing (latency probe, D.4) | Rounds advance with no score change on the skip; the buzz probe numbers are printed |
-| S20 | Host, all roles | **End game** (`end-game`) → dialog "This cannot be undone." → confirm | Every role shows the `FINAL RESULTS` heading and the exact text `WINNER`; Display swaps the board for the podium; console shows `export-download` + `export-playlist`; phones show `final-scoreboard` + `final-scoreboard-more` ("and N more teams"); DB `status='ended'`; a fresh join afterwards shows "already ended" |
+| S20 | Host, all roles | **End game** (`end-game`) → dialog "End the game now?" / "No more rounds can be played and teams will see the final scoreboard." (the console passes its own copy; "This cannot be undone." is only `ConfirmDialog`'s default) → confirm | Every role shows the `FINAL RESULTS` heading and the exact text `WINNER`; Display swaps the board for the podium; console shows `export-download` + `export-playlist`; phones show `final-scoreboard` + `final-scoreboard-more` ("and N more teams"); DB `status='ended'`; a fresh join afterwards shows "already ended" |
 
 - [ ] **D.2 Read the results.** Every `FAIL` line is a finding: score/lock/state mismatches are **P0**, missing test ids / attributes / labels are **P1**, purely visual mismatches go to Part E. Paste the full `PASS/FAIL` block into the report.
 
@@ -381,7 +381,7 @@ It visits `/`, `/how-to-play`, `/join`, `/join/ABCDEF`, `/manager/create`, `/dis
 
 | Check | Rule (spec) | Tag |
 |---|---|---|
-| `tokens` | `--bg #000000`, `--surface #121111`, `--accent #FF7A00`, `--accent-ink #000000`, `--bone #E9E4D9`, `--text-muted #B4A88F`, `--positive #4ADE80`, `--negative #F2352B`, `--warning #F6CC00` on `:root`; `body` background `rgb(0, 0, 0)`; `<meta name="color-scheme" content="dark">`, `theme-color #000000` (`01` §2) | T1 |
+| `tokens` | `--bg #14120E`, `--surface #1D1A14` (as amended by [09](09-home-colour-and-fill.md)), `--accent #FF7A00`, `--accent-ink #000000` (shipped as the shorthand `#000` — compare colours, not strings), `--bone #E9E4D9`, `--text-muted #B4A88F`, `--positive #4ADE80`, `--negative #F2352B`, `--warning #F6CC00` on `:root`; `body` background `rgb(20, 18, 14)`; `<meta name="color-scheme" content="dark">`, `theme-color #14120e` (`01` §2, `09`) | T1 |
 | `fonts` | after `document.fonts.ready`: `Anton` and `Instrument Sans` faces `loaded`; `body` `font-family` starts with `Instrument Sans`; every `h1`/`h2` starts with `Anton`; no `Refused`/failed request under `/fonts/`; each `/fonts/*` response has `cache-control` with `immutable` (`01` §3, `06` §5) | T0 T1 |
 | `emoji` | `document.body.innerText` has no match for `[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{2705}\u{274C}\u{2605}]` (`01` §6, §9) | T2 |
 | `gradients` | no element or `::before`/`::after` with `background-image` containing `gradient`, except the six-cell code input (`input[maxlength="6"]`) and the EndScreen winner sweep (`01` §2 "No gradients, anywhere") | T1 T5 T9 |
@@ -394,7 +394,7 @@ It visits `/`, `/how-to-play`, `/join`, `/join/ABCDEF`, `/manager/create`, `/dis
 | `contrast` | every visible text node ≥ 4.5:1 against its effective background (≥ 3:1 at ≥ 24 px or ≥ 18.66 px bold) (`06` §6) | T1 |
 | `focus-ring` | Tab-walking the page, every focused element shows a visible `outline` (≥ 2 px, not `none`) (`01` §4) | T1 |
 | `copy` | Home: no "Welcome to"; `h1` = `Name the song. Buzz first.`; subhead `Real-time music trivia for a room full of people and one TV.`; three role links in the order Host / Play / Display; Join rejoin hint verbatim `Already had a team? Enter the same name to rejoin and keep your score.` (`README` decision 4, `05` §2) | T4 T5 |
-| `reduced-motion` | in a context with `reducedMotion: "reduce"`, `document.getAnimations().length === 0` one second after load on every route, and `startViewTransition` is never called on navigation (`04` §1 rule 5, §4) | T1 T10 |
+| `reduced-motion` | in a context with `reducedMotion: "reduce"`, no animation is `running` with a duration > 1 ms one second after load on every route (finished 0.01 ms `fill: both` entrances stay listed in `getAnimations()` forever — count motion, as `ui_prod_pass.mjs` does), and `startViewTransition` is never called on navigation (`04` §1 rule 5, §4) | T1 T10 |
 | `view-transition` | Chromium, normal motion: Home → Host and Home → Play each call `document.startViewTransition` exactly once; `scrollY === 0` after each; the wordmark text `Sound Clash` exists before and after; Back returns instantly (no extra call); zero console errors (`04` §4) | T10 |
 | `routes` (`--routes-only`) | every route renders with zero console errors / page errors / failed requests, on the engine given by `--browser` (`06` §4.1) | — |
 
@@ -417,7 +417,7 @@ curl -s "https://www.soundclash.org$IDX" | grep -c "startViewTransition"        
 curl -sI https://www.soundclash.org/fonts/anton-latin.woff2 | grep -iE "cache-control|content-type"   # immutable, font/woff2
 curl -s "https://www.soundclash.org/?cb=$(date +%s)" | grep -oE '<link rel="preload"[^>]*font[^>]*>'   # the display-face preload
 curl -s "https://www.soundclash.org/?cb=$(date +%s)" | grep -oE '<meta name="(theme-color|color-scheme)"[^>]*>'
-curl -s https://www.soundclash.org/manifest.webmanifest | jq '{theme_color, background_color}'          # both #000000
+curl -s https://www.soundclash.org/manifest.webmanifest | jq '{theme_color, background_color}'          # both #14120e since 09 / PR #327
 ```
 
 - [ ] **E.4 Looked-at-it review — every route, every state.** Open the screenshots from E.1 and D.1 with the Read tool (one at a time) and tick each line against `05-page-by-page.md`. Write one sentence per route in the report ("matches", or the deviation). This is where taste enters: a deviation from the spec is a P2; something the spec does not decide is a P3 with your recommendation.
