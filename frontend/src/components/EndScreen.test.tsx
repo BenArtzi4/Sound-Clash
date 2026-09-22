@@ -46,8 +46,8 @@ describe("EndScreen", () => {
       { ...baseTeam, id: "5", name: "Eve", score: 10 },
     ];
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
-    // Nothing hidden (5 <= cap) -> the list is the full field, titled "Final standings".
-    expect(screen.getByText(/final standings/i)).toBeInTheDocument();
+    // Nothing hidden (5 <= cap) -> the list is the full field under the "Leaderboard" heading.
+    expect(screen.getByRole("heading", { level: 2, name: /^leaderboard$/i })).toBeInTheDocument();
     const scoreboard = screen.getByTestId("final-scoreboard");
     expect(scoreboard.querySelectorAll("[data-team-id]")).toHaveLength(5);
     expect(scoreboard.textContent).toMatch(/Alice/);
@@ -68,8 +68,8 @@ describe("EndScreen", () => {
       { ...baseTeam, id: "7", name: "Grace", score: 10 },
     ];
     render(<EndScreen teams={teams} gameCode="ABCDEF" />);
-    // Teams are hidden -> the list is a "Top teams" subset, not the full field.
-    expect(screen.getByText(/top teams/i)).toBeInTheDocument();
+    // Teams are hidden -> same "Leaderboard" heading; the cut is carried by the "…and N more" note.
+    expect(screen.getByRole("heading", { level: 2, name: /^leaderboard$/i })).toBeInTheDocument();
     const scoreboard = screen.getByTestId("final-scoreboard");
     // Only the top 5 render as rows; the last two are summarized.
     expect(scoreboard.querySelectorAll("[data-team-id]")).toHaveLength(5);

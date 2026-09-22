@@ -6,6 +6,7 @@ import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
 import { CODE_RE, normalizeCode } from "../lib/gameCode";
 import { parseRejoinHash, setStoredTeam } from "../lib/teamStorage";
+import { Logo } from "../components/Logo";
 import styles from "./JoinTeamPage.module.css";
 
 export function JoinTeamPage() {
@@ -126,6 +127,9 @@ export function JoinTeamPage() {
   return (
     <main className={styles.shell}>
       <form className={styles.card} onSubmit={handleSubmit}>
+        <div className={styles.brand}>
+          <Logo size="small" />
+        </div>
         <div>
           <h1 className={styles.title}>Join a team</h1>
           <p className={styles.subtitle}>Enter the code your host shared with you.</p>

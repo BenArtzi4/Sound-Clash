@@ -52,6 +52,12 @@ function renderAt(path: string) {
 }
 
 describe("JoinTeamPage", () => {
+  it("shows the small wordmark above the heading", () => {
+    renderAt("/join");
+    expect(screen.getByText("Sound Clash")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: /join a team/i })).toBeInTheDocument();
+  });
+
   it("disables submit when fields are empty", () => {
     renderAt("/join");
     const submit = screen.getByRole("button", { name: /join game/i });

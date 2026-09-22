@@ -45,6 +45,12 @@ function renderAt(path: string) {
 }
 
 describe("DisplayPage entry", () => {
+  it("shows the small wordmark above the entry heading", () => {
+    renderAt("/display");
+    expect(screen.getByText("Sound Clash")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: /^display$/i })).toBeInTheDocument();
+  });
+
   it("shows the entry form without a code", () => {
     renderAt("/display");
     expect(screen.getByPlaceholderText(/ABCDEF/i)).toBeInTheDocument();

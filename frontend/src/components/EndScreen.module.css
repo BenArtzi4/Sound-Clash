@@ -297,13 +297,10 @@
   max-width: 720px;
 }
 
+/* A real h2 in the display face (01 §3.2), uppercase like the podium headings. */
 .scoreboardTitle {
-  font-family: var(--font-ui);
-  font-size: var(--text-caption);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-weight: 600;
-  color: var(--text-muted);
+  letter-spacing: 0.02em;
   text-align: center;
   margin: 0 0 1rem;
 }

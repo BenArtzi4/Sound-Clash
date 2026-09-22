@@ -54,6 +54,12 @@
   font-size: var(--text-display-m);
 }
 
+/* Small wordmark at the top of the entry card (05 §6a); the card's column gap spaces it. */
+.brand {
+  display: flex;
+  justify-content: center;
+}
+
 /* Sits directly under the input: pull it up so the input→counter gap matches
    the Join field's --space-2 despite the card's --space-5 column gap. */
 .entryCounter {
@@ -321,9 +327,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The ring goes accent with the row; the digit stays bone like every other
+   row's (01 §2.2) so the buzz is carried by ring + tint, not a third colour. */
 .bigRowBuzzed .bigRank {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--bone);
 }
 
 .bigName {

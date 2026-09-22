@@ -20,6 +20,11 @@
     padding: var(--space-6);
   }
 }
+/* Small wordmark at the top of the column (05 §2); the card's column gap spaces it. */
+.brand {
+  display: flex;
+  justify-content: center;
+}
 .title {
   font-size: var(--text-display-m);
 }

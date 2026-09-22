@@ -8,6 +8,7 @@ import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { createGame, listGenres } from "../lib/api";
 import { setManagerToken } from "../lib/managerToken";
 import type { Genre } from "../lib/types";
+import { Logo } from "../components/Logo";
 import styles from "./ManagerCreateGamePage.module.css";
 
 // Decades are stored as their start year (the 80s = 1980); the picker floors a
@@ -199,6 +200,9 @@ export function ManagerCreateGamePage() {
   return (
     <main className={styles.shell}>
       <header>
+        <div className={styles.brand}>
+          <Logo size="small" />
+        </div>
         <h1>Host a game</h1>
         <p className="muted">Pick at least one genre to start.</p>
       </header>

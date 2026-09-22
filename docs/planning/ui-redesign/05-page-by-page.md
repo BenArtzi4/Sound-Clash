@@ -57,7 +57,7 @@ The shared rules first, then each route in the order a player meets them.
 
 **New:**
 
-- Centred column (max 420 px), no card on phone (the page *is* the card), `--surface` card on desktop. Wordmark small at top.
+- Centred column (max 420 px), no card on phone (the page *is* the card), `--surface` card on desktop. Wordmark small at top, centred above the heading (**built 2026-09-22** — the page shipped without it until the final validation's F-12 call).
 - **Code field.** Still ONE `<input>` (tests and the QR deep-link prefill depend on it), but the characters you see are drawn by an `aria-hidden` six-column grid stacked under it; the input itself is `opacity: 0` and covers the whole box, so focus, keyboard, paste, autofill and hit-testing all stay on the real control. Display face at 2 rem, one glyph centred per `1fr` column, dividers from `border-left` (`:first-child` gets none). Auto-uppercase stays. When the code arrives from the URL the field is pre-filled and read-only-looking (muted), as today.
   - **Built 2026-09-20 (PR #317), replacing an earlier `letter-spacing` version.** Positioning glyphs with `letter-spacing` + `text-indent` cannot hold them in fixed cells in a **proportional** face: each character advances by `glyph + tracking`, not by `1ch` (Anton at 32 px: `I` 7.3 px, `M` 23.9 px, `1ch` 15.8 px), and `letter-spacing` adds a trailing space after the last character too. So a typical code drifted out of its cells and the sixth character overflowed the field, at which point the browser scrolled the input to keep the caret visible and every glyph jumped sideways. Measured at 390 px: `ABCDEF` overflowed 15 px, `K7P2QZ` 18 px, `MMMMMM` 70 px, `IIIIII` 0 px — a content-dependent bug that a mean-width test code hides. A grid column is exactly a sixth of the field and centres whatever it holds, so there is nothing to drift and nothing to scroll: after the change, `scrollLeft` and input overflow are 0 on both pages at 390/1280 px for every code tried, worst glyph distance from its cell centre 0.50 px. Test such a field with the extremes of its own alphabet (`IIIIII` and `MMMMMM`), never just `ABCDEF`.
   - **Made editable 2026-09-20 (PR #321), and both entry screens now share `components/GameCodeField.tsx`.** #317 drew the characters correctly but left the field uneditable, in three ways that all follow from hiding an input under your own rendering: the caret stand-in was pinned to the next EMPTY cell, so arrowing back to a character showed nothing; a tap could not reach a cell, because the browser hit-tests the input's own invisible text (a different font, at the left edge of the box) rather than the grid; and a full code swallowed every keystroke, so a wrong character could not be replaced without deleting back to it. Now the indicator is drawn from the input's real `selectionStart`/`selectionEnd` — a blinking bar at the insert point, an `--accent-soft` lit cell for a selected character — a click maps to a cell by grid geometry and **selects** that character (type to replace it, Backspace to delete it: the whole fix on touch, where there are no arrow keys), and an insert into an already-full code overwrites the character at the caret rather than being dropped. **`maxLength` is deliberately gone:** WebKit truncates at it *before* dispatching any input event and hands the listener an empty `data`, so a guard built on `beforeinput` silently does nothing on Safari and iOS. The six-character cap and the overwrite both come from `lib/gameCode.ts`'s `applyEdit`, which reads the value the browser actually produced and so needs no per-engine knowledge. Backspace, Delete, arrows, Home/End, select-all, drag-select, paste and autofill stay native. Verified 38/38 in Chromium, WebKit and Firefox, and again on the deployed PR preview.
@@ -94,6 +94,7 @@ The shared rules first, then each route in the order a player meets them.
 
 **New:**
 
+- Small wordmark centred above the heading, as on Join (**built 2026-09-22**, F-12).
 - Same three sections, same order, same test ids and labels.
 - **Presets** become a horizontally scrollable chip row on phone (`overflow-x: auto`, scroll-snap, no scrollbar) and a wrapped row on desktop; chips are `--surface-2` with 1 px border, selected preset = `--accent` fill.
 - **Genre tiles** drop the native-checkbox look: a tile is a toggle with the genre name and a check icon that draws in (stroke-dashoffset, 160 ms) when selected; selected tile = `--accent` at 12 % with an accent border; the count "(N selected)" stays in the section title. The underlying `<input type=checkbox>`/`role` stays for the tests and for accessibility.
@@ -125,7 +126,7 @@ The shared rules first, then each route in the order a player meets them.
 
 ### 6a. Code entry (`/display`)
 
-Same as Join's code field, on a single centred column; "Open" primary button.
+Same as Join's code field, on a single centred column; "Open" primary button. Small wordmark at the top of the column, as on Join (**built 2026-09-22**, F-12).
 
 ### 6b. Board (`/display/:code`)
 
