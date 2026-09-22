@@ -184,9 +184,7 @@ export function EndScreen({ teams, gameCode }: Props) {
               dropped when scores tied; this guarantees each is visible. Any
               teams below the cut line are summarized as "…and N more". */}
           <div className={styles.scoreboard} data-testid="final-scoreboard">
-            <h2 className={styles.scoreboardTitle}>
-              {hiddenCount > 0 ? "Top teams" : "Final standings"}
-            </h2>
+            <h2 className={styles.scoreboardTitle}>Leaderboard</h2>
             <ol className={styles.scoreboardList}>
               {scoreboard.map(({ team, rank }) => (
                 <li

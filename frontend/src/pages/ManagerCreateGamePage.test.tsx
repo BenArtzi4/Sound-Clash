@@ -50,6 +50,13 @@ function renderPage() {
 }
 
 describe("ManagerCreateGamePage", () => {
+  it("shows the small wordmark above the heading", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([]);
+    renderPage();
+    await waitFor(() => screen.getByRole("heading", { level: 1, name: /host a game/i }));
+    expect(screen.getByText("Sound Clash")).toBeInTheDocument();
+  });
+
   it("loads genres and disables submit until at least one is selected", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([
       { id: "g1", name: "Rock", slug: "rock" },
