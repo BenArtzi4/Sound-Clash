@@ -151,6 +151,20 @@ a:hover {
   text-underline-offset: 3px;
 }
 
+/* No browser tap overlay on any control (#282): the grey/blue flash reads as a
+   stuck hover on a phone. Components keep their own resets; this is the floor,
+   so a new link or button cannot forget it (final validation 2026-09-22, F-05). */
+a,
+button,
+input,
+select,
+textarea,
+label,
+summary,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
 button {
   font-family: inherit;
   cursor: pointer;

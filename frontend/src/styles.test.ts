@@ -84,6 +84,14 @@ describe("styles.css design tokens", () => {
       expect(contrastRatio(token("--border-strong"), token(ground))).toBeGreaterThanOrEqual(3);
     }
   });
+  // Final validation 2026-09-22 (F-05): Home's "How to play" link and the toast's
+  // close button still flashed the browser's tap overlay because only some
+  // components reset it. One global floor, so a new control cannot forget.
+  it("resets the browser tap highlight on every interactive element", () => {
+    expect(css).toMatch(
+      /a,\s*button,\s*input,\s*select,\s*textarea,\s*label,\s*summary,\s*\[role="button"\]\s*\{\s*-webkit-tap-highlight-color:\s*transparent;/,
+    );
+  });
   it("has no gradients, no blur, no transition: all, and no light-mode background", () => {
     expect(css).not.toMatch(/linear-gradient|radial-gradient/);
     expect(css).not.toMatch(/backdrop-filter/);
