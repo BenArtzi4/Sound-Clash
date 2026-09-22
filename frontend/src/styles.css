@@ -33,6 +33,11 @@
   --negative: #f2352b;
   --negative-ink: #ffffff; /* large text only */
   --negative-soft: rgba(242, 53, 43, 0.12);
+  /* Small red text (the Wrong label, error strips, "copy failed", the low
+     countdown). --negative itself measures 4.40:1 on the warm --surface since 09
+     moved the ground, under the 4.5:1 body-text floor (06 §6); fills, borders
+     and >= 24 px text keep --negative. Ratios are asserted in styles.test.ts. */
+  --negative-text: #ff5a4f;
   --warning: #f6cc00;
   --warning-ink: #000000;
   --periwinkle: #a9b4ff;
@@ -246,7 +251,7 @@ textarea:disabled {
 }
 .btn-danger {
   background: transparent;
-  color: var(--negative);
+  color: var(--negative-text);
   border-color: var(--negative);
 }
 @media (hover: hover) {
@@ -296,7 +301,7 @@ textarea:disabled {
   align-items: center;
   gap: 0.55rem;
   align-self: flex-start;
-  color: var(--negative);
+  color: var(--negative-text);
   background: var(--negative-soft);
   border: 1px solid var(--negative);
   border-radius: var(--radius-sm);
