@@ -175,6 +175,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  /* 44 px tap floor on phones (06 §6): the text stays put, the box grows. */
+  min-height: 44px;
   color: var(--text-muted);
   font-weight: 600;
 }
