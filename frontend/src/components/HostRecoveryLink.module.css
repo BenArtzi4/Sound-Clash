@@ -110,7 +110,7 @@
 
 .copyFailed {
   font-size: 0.8rem;
-  color: var(--negative);
+  color: var(--negative-text);
 }
 
 .caution {

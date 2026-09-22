@@ -191,13 +191,13 @@
 
 .copyFailed {
   font-size: 0.8rem;
-  color: var(--negative);
+  color: var(--negative-text);
 }
 
 .error {
   margin: 0;
   font-size: 0.9rem;
-  color: var(--negative);
+  color: var(--negative-text);
   line-height: 1.4;
 }
 

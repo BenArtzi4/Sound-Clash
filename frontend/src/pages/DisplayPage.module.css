@@ -237,7 +237,7 @@
 }
 
 .timerLow .timerValue {
-  color: var(--negative);
+  color: var(--negative-text);
 }
 
 .scores {

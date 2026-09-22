@@ -314,13 +314,13 @@
 .wrongBtn {
   background: transparent;
   border-color: var(--negative);
-  color: var(--negative);
+  color: var(--negative-text);
   box-shadow: none;
 }
 
 .wrongBtn .scoreLabel,
 .wrongBtn .scorePoints {
-  color: var(--negative);
+  color: var(--negative-text);
 }
 
 /* Bonus is always actionable while teams exist (no buzz required), so it keeps
