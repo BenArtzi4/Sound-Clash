@@ -86,8 +86,10 @@
   top: 0;
 }
 
-.table tbody tr:hover {
-  background: var(--accent-soft);
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background: var(--accent-soft);
+  }
 }
 
 .table tbody tr:last-child td {
