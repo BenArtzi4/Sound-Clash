@@ -38,7 +38,8 @@ Dark only. The app sets `<meta name="color-scheme" content="dark">` and `theme-c
 | `--positive` | `#4ADE80` | correct / winner / success | 12.1:1 |
 | `--positive-ink` | `#000000` | text on `--positive` | 12.1:1 |
 | `--negative` | `#F2352B` | wrong / locked-by-other / destructive | 5.3:1 |
-| `--negative-ink` | `#FFFFFF` | text on `--negative` — **large text only** (≥ 24 px, 4.0:1); small text uses `--negative` on `--surface` (4.7:1) | — |
+| `--negative-ink` | `#FFFFFF` | text on `--negative` — **large text only** (≥ 24 px, 4.0:1); small red text uses `--negative-text` (below) — `--negative` itself is 4.4:1 on the warm `--surface` since [09](09-home-colour-and-fill.md) moved the ground | — |
+| `--negative-text` | `#FF5A4F` | small red text (the Wrong label and its points, error strips, "copy failed" notes, the countdown's last seconds) on `--bg` / `--surface` / `--surface-2` and on `--negative-soft`; fills, borders and ≥ 24 px text keep `--negative` (added 2026-09-22, final validation F-07; ratios asserted in `styles.test.ts`) | 6.1:1 (5.6:1 on `--surface`, 5.2:1 on `--surface-2`, ≥ 4.6:1 on `--negative-soft` over any of them) |
 | `--warning` | `#F6CC00` | expiry banner, "last 20 minutes" | 16.4:1 |
 | `--warning-ink` | `#000000` | text on `--warning` | — |
 
@@ -60,11 +61,11 @@ Rules:
 | BUZZ `waiting` | `--surface-2` | `--text-muted` |
 | Status pill WAITING / PLAYING / ENDED | outline `--bone` / fill `--positive` / outline `--text-muted` | matching |
 | Correct Song / Correct Artist / Correct (soundtrack) | outline `--positive`, fills on press | `--positive` → `--positive-ink` |
-| Wrong | outline `--negative` + icon | `--negative` |
+| Wrong | outline `--negative` + icon | `--negative-text` |
 | Bonus | outline `--bone` | `--bone` |
 | Next round / Start game / Create / Join / Open (primary) | `--accent` | `--accent-ink` |
 | Continue round / Cancel (secondary) | `--surface` + `--border` | `--text` |
-| End game (danger ghost) | none | `--negative` |
+| End game (danger ghost) | none | `--negative-text` |
 | Token chip open / claimed | `--surface-2` + `--border` / `--accent-soft` + `--accent` border | `--text-muted` / `--text` |
 | Board rank 1 / 2–3 / 4–5 | ring `--accent` / ring `--bone` / ring `--border` | `--bone` numerals |
 | Score numerals (Display) | — | `--bone` |
