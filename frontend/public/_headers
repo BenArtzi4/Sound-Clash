@@ -34,3 +34,26 @@
 # index.html and every SPA route are intentionally left on the platform default
 # (max-age=0, must-revalidate): the HTML must revalidate on every load so a
 # deploy is picked up mid-session and never served stale over a live game.
+
+# Keep one-off pages out of search results. Per-game and admin URLs carry a
+# game code (or a password prompt) and mean nothing to a searcher; the bare
+# entry pages /join, /display and /manager/create are NOT matched here and stay
+# indexable. robots.txt still lets crawlers fetch these, or they would never
+# see the header. See docs/seo.md.
+/team/*
+  X-Robots-Tag: noindex, nofollow
+/manager/game/*
+  X-Robots-Tag: noindex, nofollow
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+/join/*
+  X-Robots-Tag: noindex, nofollow
+/display/*
+  X-Robots-Tag: noindex, nofollow
+
+# sound-clash.pages.dev is Cloudflare's alias for production: an identical copy
+# of the site that must not compete with www.soundclash.org in search. This is
+# Cloudflare's documented rule for that; it matches only the pages.dev host,
+# never the custom domain.
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex

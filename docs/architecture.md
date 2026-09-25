@@ -12,6 +12,7 @@ This is the executive summary of the system. It points to the deeper docs rather
 - For local dev, see **`local-development.md`**.
 - For free-tier capacity planning, see **`free-tier-budget.md`**.
 - For dev/CI tooling reference (workflows, CodeQL, Dependabot, Codecov, …), see **`tooling.md`**.
+- For search and link-preview metadata (per-page titles, sitemap, robots, noindex rules), see **`seo.md`**.
 
 ## 1. Goals
 

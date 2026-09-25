@@ -16,6 +16,9 @@ async def _security_headers(
     response = await call_next(request)
     response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    # API JSON never belongs in search results, and the Swagger UI at /docs
+    # ("Sound Clash API") would otherwise compete with the site for its name.
+    response.headers.setdefault("X-Robots-Tag", "noindex")
     return response
 
 

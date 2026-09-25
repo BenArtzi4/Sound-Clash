@@ -11,7 +11,7 @@ For quota analysis (capacity in games/month), see `free-tier-budget.md`. For why
 | Backend runtime | Render (web service) | 750 hr/mo, 512 MB RAM, sleeps after 15min idle |
 | Database + Realtime + RPC | Supabase | 500 MB Postgres, 200 concurrent peers, 2M Realtime msgs/mo |
 | Frontend hosting | Cloudflare Pages | Unlimited bandwidth, 500 builds/mo |
-| DNS | Cloudflare | Free; existing |
+| DNS | Namecheap BasicDNS | Free with the domain |
 | CI/CD | GitHub Actions | Unlimited for public repos |
 | Error tracking | Sentry | 5,000 errors/mo (errors only; tracing off) |
 | Latency observability | Grafana Cloud (Faro + OTel) | ~50 GB traces + 50 GB logs/mo, 14-day retention |
@@ -104,7 +104,7 @@ Pick the region closest to the primary user geography. For an Israel-based maint
 - **Unlimited bandwidth** on free tier (Vercel free is 100 GB and has commercial-use friction).
 - **500 builds/month** is generous; we'll use ~30.
 - **Built-in PR preview deploys**: every PR gets a unique URL. Clean QA workflow.
-- **Cloudflare DNS already controls the domain**: no extra DNS hops.
+- **Custom domain by plain CNAME**: `www` points at `sound-clash.pages.dev` from the registrar's DNS; no DNS migration needed.
 - **Native Workers integration** if we ever need edge logic (we don't, in MVP).
 
 ### Why not Vercel
@@ -126,16 +126,16 @@ Pick the region closest to the primary user geography. For an Israel-based maint
 - Build command: `npm run build`.
 - Output directory: `frontend/dist`.
 - Environment variables (set in Cloudflare dashboard): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`.
-- Custom domain: `soundclash.org` (apex via Cloudflare DNS CNAME flattening).
+- Custom domain: `www.soundclash.org` (CNAME to `sound-clash.pages.dev`). The apex is not attached to Pages; see §5.
 - `_headers` file in repo defines CSP, security headers, and static-asset caching (immutable content-hashed `/assets/*`; see `security-rls.md` §7).
 
-## 5. DNS: Cloudflare
+## 5. DNS: Namecheap
 
-**`soundclash.org` already lives at Cloudflare.** No migration needed.
+**`soundclash.org` uses Namecheap BasicDNS**, the registrar's own DNS.
 
 Records:
-- Apex `soundclash.org` → CNAME-flattened to Cloudflare Pages
-- `www.soundclash.org` → CNAME to apex
+- Apex `soundclash.org` → Namecheap URL Redirect. It answers **HTTP only**: a 301 to `https://www.soundclash.org` that drops the path. There is no HTTPS listener, so `https://soundclash.org` does not load; `www` is the canonical host (see `seo.md`).
+- `www.soundclash.org` → CNAME to `sound-clash.pages.dev`
 - `api.soundclash.org` → CNAME to Render (`<service>.onrender.com`)
 
 The legacy AWS records (CloudFront distribution, ALB hostname) are deleted as part of Phase 7 cutover.
@@ -263,7 +263,7 @@ For each tier, the alternative considered and the reason for the choice:
 | Database | Supabase | Neon | Realtime built in |
 | Realtime | Supabase | Pusher | 200 peers > Pusher's 100; bundled |
 | Frontend host | Cloudflare Pages | Vercel | Unlimited bandwidth |
-| DNS | Cloudflare | Namecheap | Already the registrar+DNS |
+| DNS | Namecheap | Cloudflare | Already the registrar's DNS |
 | CI/CD | GitHub Actions | GitLab CI | Bundled with repo host |
 | Errors | Sentry | LogRocket | Wider FastAPI/React support |
 | Keepalive | cron-job.org | GitHub Actions schedule | Doesn't burn CI minutes |

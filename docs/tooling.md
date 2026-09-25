@@ -244,7 +244,7 @@ Pages serves from:
 - `https://sound-clash.pages.dev` (Cloudflare-issued)
 - `https://www.soundclash.org` (custom domain)
 
-The apex `soundclash.org` is a 301 redirect to `www.` (Cloudflare Page Rule).
+The apex `soundclash.org` is not served by Pages: DNS is Namecheap BasicDNS, and the apex is a Namecheap URL Redirect that answers HTTP only (301 to `https://www.soundclash.org`, dropping the path) with no HTTPS listener. `www` is a CNAME to `sound-clash.pages.dev`. See [`seo.md`](seo.md) §1.
 
 ### 7.3 Database (manual)
 

@@ -41,6 +41,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-09-25: Each public page now has its own browser-tab title and search description, and search engines get a sitemap, robots.txt and the site's name. (#345)
 - 2026-09-25: **Screens now change instantly, and tapping a home card on a phone shows a ripple.** The page-to-page slide and the Sound Clash wordmark morph are gone: on phones they looked jerky and briefly drew the wordmark twice. On a phone or tablet, touching Host, Play or Display spreads a soft ripple of the card's colour from under your finger and the next screen opens at once; on a laptop the diagonal hover sweep is unchanged. (#344)
 - 2026-09-22: On Final Results the standings list is now headed "Leaderboard" in the big display face instead of a small "Top teams" / "Final standings" caption. (#342)
 - 2026-09-22: The Join, Host a game and Display code-entry pages now carry the small Sound Clash wordmark above their heading, like How to play. (#342)

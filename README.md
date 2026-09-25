@@ -2,7 +2,7 @@
 
 Real-time multiplayer music-trivia buzzer game. Host a room, share the code, race to buzz.
 
-**Live: [soundclash.org](https://soundclash.org)**
+**Live: [www.soundclash.org](https://www.soundclash.org)**
 
 [![Backend CI](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/backend.yml/badge.svg)](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/backend.yml)
 [![Frontend CI](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/frontend.yml/badge.svg)](https://github.com/BenArtzi4/Sound-Clash/actions/workflows/frontend.yml)

@@ -1,0 +1,43 @@
+{
+  "origin": "https://www.soundclash.org",
+  "siteName": "Sound Clash",
+  "pages": [
+    {
+      "path": "/",
+      "file": "index.html",
+      "inSitemap": true,
+      "title": "Sound Clash – Guess the Song Music Trivia Party Game",
+      "description": "Free guess-the-song party game: the host plays the music, teams buzz in from their phones to name the title and artist. Hebrew & English hits, no app, no sign-up.",
+      "ogTitle": "Sound Clash",
+      "ogDescription": "Real-time multiplayer music trivia. Buzz in, name the tune, win the round."
+    },
+    {
+      "path": "/how-to-play",
+      "file": "how-to-play.html",
+      "inSitemap": true,
+      "title": "How to Play Sound Clash – Rules, Scoring & Setup",
+      "description": "Set up in two minutes: the host picks genres, teams join with a 6-letter code and buzz in to name the song (+10) and the artist (+5). Wrong buzz −3. Full rules and FAQ."
+    },
+    {
+      "path": "/join",
+      "file": "join.html",
+      "inSitemap": false,
+      "title": "Join a Game – Sound Clash",
+      "description": "Join a Sound Clash music trivia game from your phone: type the 6-letter code shown on the TV and your phone becomes your team's buzzer."
+    },
+    {
+      "path": "/manager/create",
+      "file": "manager/create.html",
+      "inSitemap": false,
+      "title": "Host a Game – Sound Clash",
+      "description": "Start a Sound Clash music trivia game in seconds: pick genres and decades, get a join code for the room, and run every round from your phone. Free, no sign-up."
+    },
+    {
+      "path": "/display",
+      "file": "display.html",
+      "inSitemap": false,
+      "title": "Display Screen – Sound Clash",
+      "description": "Put Sound Clash on the big screen: enter the game code to show the join QR code, the live scoreboard and every song reveal to the whole room."
+    }
+  ]
+}

@@ -172,7 +172,11 @@ export function HomePage() {
       <main className={styles.main}>
         <section className={styles.hero}>
           <Logo size="hero" />
-          <h1 className={styles.title}>Name the song. Buzz first.</h1>
+          {/* The wordmark above is not a heading, so the H1 carries the brand
+              for screen readers and search engines without showing it twice. */}
+          <h1 className={styles.title}>
+            <span className="visually-hidden">Sound Clash: </span>Name the song. Buzz first.
+          </h1>
           <p className={styles.subtitle}>
             Real-time music trivia for a room full of people and one TV.
           </p>

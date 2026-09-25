@@ -1,0 +1,7 @@
+# Everything public may be crawled. Per-game pages stay crawlable on purpose:
+# they are kept out of the index by the X-Robots-Tag in _headers, which a
+# crawler can only see if robots.txt lets it fetch the page.
+User-agent: *
+Allow: /
+
+Sitemap: https://www.soundclash.org/sitemap.xml
