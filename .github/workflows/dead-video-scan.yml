@@ -179,10 +179,13 @@ jobs:
                 split("\n") | map(select(length > 0) | split("\t")
                   | {ts: .[0], where: (if .[1] == "yt_preload_error" then "next-song preload" else "live" end),
                      code: .[2], yid: .[3], title: .[4], artist: .[5],
+                     # Only logs from #347 on carry context_game_code; older ones never do.
+                     new: ((.[6] // "") != ""),
                      game: (if (.[6] // "") != "" then .[6] else ((.[7] // "") | split("/") | last) end)})
-                | group_by(.yid) | sort_by(-length) | .[]
+                | group_by([.yid, .new]) | sort_by(-length) | .[]
                 | . as $g | $g[0] as $f
-                | (if $f.yid == "" then "_unknown: logged before failures recorded the song_"
+                | (if $f.yid == "" and $f.new then "_no song loaded yet (player error before the first song)_"
+                   elif $f.yid == "" then "_unknown: logged before failures recorded the song_"
                    elif $f.title == "" then "_song not identified (open the video)_"
                    else "\($f.title|cell) — \($f.artist|cell)" end) as $song
                 | (if $f.yid == "" then "—" else "[\($f.yid)](https://www.youtube.com/watch?v=\($f.yid))" end) as $video
