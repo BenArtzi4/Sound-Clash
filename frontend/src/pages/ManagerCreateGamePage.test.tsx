@@ -15,11 +15,12 @@ vi.mock("../lib/api", () => ({
     }
   },
   listGenres: vi.fn(),
+  getCachedGenres: vi.fn(() => null),
   createGame: vi.fn(),
   getHealth: vi.fn(() => Promise.resolve({ status: "ok", version: "test", supabase: "ok" })),
 }));
 
-import { createGame, getHealth, listGenres } from "../lib/api";
+import { createGame, getCachedGenres, getHealth, listGenres } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
 import { getManagerToken } from "../lib/managerToken";
 import { ManagerCreateGamePage } from "./ManagerCreateGamePage";
@@ -328,5 +329,24 @@ describe("ManagerCreateGamePage", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// Home fetches the genre list on landing, so arriving from it the create page
+// can draw the real tiles on its first frame: screen changes are instant, and
+// a frame of placeholder tiles read as a flicker (10-touch-and-route-motion.md).
+describe("ManagerCreateGamePage genres from Home's fetch", () => {
+  it("renders cached genres on the first frame, with no placeholder tiles", () => {
+    const rock = { id: "g1", name: "Rock", slug: "rock" };
+    vi.mocked(getCachedGenres).mockReturnValueOnce([rock]);
+    vi.mocked(listGenres).mockResolvedValueOnce([rock]);
+    render(
+      <MemoryRouter>
+        <ToastProvider>
+          <ManagerCreateGamePage />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByLabelText(/^rock$/i)).toBeInTheDocument();
   });
 });

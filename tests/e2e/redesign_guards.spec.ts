@@ -157,14 +157,14 @@ test("team page registers no non-passive touch/wheel listeners and buzz feedback
   });
 });
 
-// Task 10 (route transitions). A running view transition suspends pointer
-// hit-testing document-wide for its whole duration — the page is effectively
-// `pointer-events: none`, and a real pointerdown retargets to <html>. Measured
-// on a preview build, wrapping the join -> /team navigation in one left the
-// arriving buzz button swallowing presses for 290 ms. A late joiner landing on
-// a live round would lose their first tap, silently. So: transitions are for
-// every other navigation, and never for the one that lands on the buzzer.
-test("no view transition covers the arrival at the buzz screen", async ({ browser }) => {
+// Screen changes are instant (ui-redesign 10-touch-and-route-motion.md): the
+// Task 10 route transition and wordmark morph were removed after they read as
+// un-smooth on phones. A running view transition also suspends pointer
+// hit-testing document-wide — measured on a preview build, one over the
+// join -> /team navigation swallowed the arriving buzz button's presses for
+// 290 ms. So none may run on any page change, the buzz screen's arrival
+// included.
+test("no page change runs a view transition", async ({ browser }) => {
   const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
 
   // Its own context, so startViewTransition is counted from the first byte.
@@ -187,29 +187,36 @@ test("no view transition covers the arrival at the buzz screen", async ({ browse
   const page = await context.newPage();
   const count = () => page.evaluate(() => (window as unknown as { __vtCalls: number }).__vtCalls);
 
-  // First prove the counter — and the feature — work in this browser, so the
-  // zero below can never be a silently broken probe.
+  // First prove the counter counts in this browser, so the equality at the
+  // end can never be a silently broken probe.
   await page.goto("/");
-  const supported = await page.evaluate(
-    () =>
-      typeof (document as Document & { startViewTransition?: unknown }).startViewTransition ===
-      "function",
-  );
+  const counted = await page.evaluate(() => {
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    if (typeof doc.startViewTransition !== "function") return false;
+    doc.startViewTransition(() => undefined);
+    return true;
+  });
+  if (counted) expect(await count()).toBe(1);
+  const before = await count();
+
+  // Every kind of page change: card, Cancel, text link, browser back, and the
+  // join that lands on the buzzer.
   await page.getByRole("link", { name: /host a game/i }).click();
   await expect(page).toHaveURL(/\/manager\/create$/);
-  if (supported) expect(await count()).toBeGreaterThan(0);
-
-  // Now the navigation that matters.
-  await page.evaluate(() => {
-    (window as unknown as { __vtCalls: number }).__vtCalls = 0;
-  });
-  await page.goto(`/join/${manager.gameCode}`);
+  await page.getByRole("link", { name: /^cancel$/i }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole("link", { name: /how to play/i }).click();
+  await expect(page).toHaveURL(/\/how-to-play$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole("link", { name: /join a game/i }).click();
+  await expect(page).toHaveURL(/\/join$/);
   await page.locator("#game-code").fill(manager.gameCode);
   await page.locator("#team-name").fill("NoFreeze");
   await page.getByRole("button", { name: /join game/i }).click();
   await expect(page).toHaveURL(new RegExp(`/team/${manager.gameCode}$`));
   await expect(page.getByTestId("buzz")).toBeVisible({ timeout: 15_000 });
-  expect(await count()).toBe(0);
+  expect(await count()).toBe(before);
 
   await context.close();
 });

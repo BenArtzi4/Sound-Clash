@@ -28,7 +28,7 @@ _Status: research complete (2026-09-17). Companion to [README.md](README.md). Nu
 
 Two ways forward; the plan takes the first:
 
-- **Hand-written hook (chosen).** `useViewTransitionNavigate()` — ~20 lines: optionally `await` the destination chunk's `import()`, feature-detect `document.startViewTransition`, bail to plain `navigate()` under `prefers-reduced-motion`, otherwise `startViewTransition(() => flushSync(() => navigate(to)))`. A `TransitionLink` wrapper keeps `<Link>` semantics (real `href`, same accessible role) and routes the click through the hook. No refactor of `App.tsx`.
+- **Hand-written hook (chosen; removed 2026-09-25, see [10-touch-and-route-motion.md](10-touch-and-route-motion.md)).** `useViewTransitionNavigate()` — ~20 lines: optionally `await` the destination chunk's `import()`, feature-detect `document.startViewTransition`, bail to plain `navigate()` under `prefers-reduced-motion`, otherwise `startViewTransition(() => flushSync(() => navigate(to)))`. A `TransitionLink` wrapper keeps `<Link>` semantics (real `href`, same accessible role) and routes the click through the hook. No refactor of `App.tsx`.
 - Migrate to `createBrowserRouter` + `<RouterProvider>` — mechanical but touches the file that gates every route and changes how the single `Suspense` boundary behaves. Deferred; not needed for anything in this plan.
 
 ### 2.2 A view transition freezes hit-testing

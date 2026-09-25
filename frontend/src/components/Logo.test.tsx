@@ -3,13 +3,12 @@ import { describe, expect, it } from "vitest";
 import { Logo } from "./Logo";
 
 describe("Logo", () => {
-  it("keeps the literal wordmark text and names itself for view transitions", () => {
-    render(<Logo size="large" />);
-    const text = screen.getByText("Sound Clash");
-    expect(text).toBeInTheDocument();
-    expect(text.closest("[style]")?.getAttribute("style")).toContain(
-      "view-transition-name: wordmark",
-    );
+  // The wordmark no longer morphs between pages (ui-redesign 10), so it must
+  // not name itself for a view transition.
+  it("keeps the literal wordmark text and takes no view-transition name", () => {
+    const { container } = render(<Logo size="large" />);
+    expect(screen.getByText("Sound Clash")).toBeInTheDocument();
+    expect(container.innerHTML).not.toContain("view-transition-name");
   });
   it("renders the equaliser mark as an svg, not gradient bars", () => {
     const { container } = render(<Logo />);

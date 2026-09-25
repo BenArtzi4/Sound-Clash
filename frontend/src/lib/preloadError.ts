@@ -50,6 +50,9 @@ const INCIDENT_WINDOW_MS = 5 * 60_000;
 
 type Guard = { n: number; at: number };
 let installed = false;
+// Background chunk fetches in flight (see prefetchQuietly). While any is
+// running, a preload error is left to reject that fetch instead of reloading.
+let quietLoads = 0;
 
 // Returns the persisted reload budget, or `null` when sessionStorage is
 // unavailable. `null` is meaningful: without durable cross-reload memory we
@@ -75,6 +78,10 @@ function writeGuard(guard: Guard): boolean {
 }
 
 function handlePreloadError(event: Event): void {
+  // A background fetch failed, not a navigation: nobody is waiting on it, so
+  // don't reload the page under the viewer. The navigation that needs the
+  // chunk retries the import and gets the normal recovery then.
+  if (quietLoads > 0) return;
   const guard = readGuard();
   // Storage unavailable -> can't make auto-reload loop-safe -> defer to the CTA.
   if (guard === null) return;
@@ -103,6 +110,22 @@ export function installPreloadErrorHandler(): void {
   if (installed) return;
   installed = true;
   window.addEventListener("vite:preloadError", handlePreloadError);
+}
+
+/**
+ * Fetch a lazy route's chunk ahead of time without the reload recovery: Home
+ * warms the pages its cards lead to while it sits idle, and a failure there
+ * (offline, a flaky connection) must not reload the screen the viewer is on.
+ */
+export async function prefetchQuietly(load: () => Promise<unknown>): Promise<void> {
+  quietLoads += 1;
+  try {
+    await load();
+  } catch {
+    // Harmless: the real navigation imports the chunk again.
+  } finally {
+    quietLoads -= 1;
+  }
 }
 
 // Test-only: clear the persisted reload budget between tests. Deliberately does
