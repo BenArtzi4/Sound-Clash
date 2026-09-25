@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-09-25: **Players now get the setlist too.** When a game ends, every player's phone shows the songs that played under the final results — who got each one, with a play link per song and a *Play all on YouTube* button — so "what was that song?" has an answer on the spot, not just on the host's screen. (#348)
 - 2026-09-25: The Display code-entry screen has a **Cancel** button back to the home screen, like Host and Join. (#344)
 - 2026-09-20: **The home screen has been redesigned.** The Sound Clash wordmark is now large and centred rather than tucked in a corner, and the three ways in — Host, Play, Display — are colour-coded cards (orange, green, periwinkle) instead of a plain numbered list. Hovering or tapping a card sweeps its colour across diagonally (on a phone, a tap shows a ripple instead since 2026-09-25, #344). The whole app also sits on a warm near-black now instead of pure black, and headings use the warm off-white the rest of the design already used, so screens read less stark. (#323)
 - 2026-09-20: Operators can set an optional `CORS_ORIGIN_REGEX` env var on the backend, admitting API callers whose hostname varies per deployment — used so per-PR preview builds of the frontend can reach the production API. Left unset, CORS behaviour is exactly as before. (#318)
@@ -41,6 +42,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-09-25: **The end-of-game song export is now a setlist.** Under the final results the host sees every song that played, in order, with its year and which team got the song and the artist, instead of two bare buttons. The actions are *Play all on YouTube*, *Share list* (the phone's share sheet — WhatsApp, Messages, Copy; *Copy list* on a laptop) and *Save as file*. The shared list is plain "Artist - Title" lines, which paste straight into TuneMyMusic (Spotify → Your Library → Import your music) to make a Spotify or Apple Music playlist. The saved file is no longer a plain white page: it is a keepsake in the game's own dark-and-orange look with the winner, the leaderboard and the setlist, and it opens offline. (#348)
 - 2026-09-25: Each public page now has its own browser-tab title and search description, and search engines get a sitemap, robots.txt and the site's name. (#345)
 - 2026-09-25: **Screens now change instantly, and tapping a home card on a phone shows a ripple.** The page-to-page slide and the Sound Clash wordmark morph are gone: on phones they looked jerky and briefly drew the wordmark twice. On a phone or tablet, touching Host, Play or Display spreads a soft ripple of the card's colour from under your finger and the next screen opens at once; on a laptop the diagonal hover sweep is unchanged. (#344)
 - 2026-09-22: On Final Results the standings list is now headed "Leaderboard" in the big display face instead of a small "Top teams" / "Final standings" caption. (#342)
@@ -130,6 +132,8 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-09-25: **Players can now scroll their final results.** On a phone the podium ran past the bottom of the screen and the leaderboard below it could not be reached — the page was locked to one screen height like the buzzer. (#348)
+- 2026-09-25: **The YouTube playlist no longer drops songs after the 50th.** YouTube only keeps the first 50 songs of an instant playlist, so a long game now gets one *Play songs 1–50*, *51–100* … link per 50 songs instead of silently losing the rest. (#348)
 - 2026-09-25: Going back to the home screen (a back swipe, the Back button or Cancel) no longer blanks it and makes it fade in a second time. The intro animation now plays only when you first open the site on the home screen, and swiping back on an iPhone no longer shows the card you tapped still pressed. (#344)
 - 2026-09-22: The host console's "<team> buzzed in — score it:" strip now has a visible gap between the team name and the words. (#340)
 - 2026-09-22: The host console's player cover ("Loading player…", "Song ended", "Video unavailable") no longer shows the old blue-slate gradient; it sits on the same dark surface as the rest of the console. (#333)
