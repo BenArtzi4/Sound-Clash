@@ -20,6 +20,9 @@
          chrome). The service worker is registered from main.tsx and caches
          nothing — see frontend/public/sw.js. -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- iOS can label a home-screen icon with the page <title>, which is now a
+         search headline ("Sound Clash – Guess the Song…"); pin it to the name. -->
+    <meta name="apple-mobile-web-app-title" content="Sound Clash" />
     <!-- The display face draws the BUZZ label and every headline; preload it so
          it is resolved before first paint instead of swapping in mid-round. -->
     <link rel="preload" href="/fonts/anton-latin.woff2" as="font" type="font/woff2" crossorigin />
