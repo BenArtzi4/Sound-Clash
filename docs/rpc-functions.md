@@ -707,7 +707,7 @@ confirmed-dead YouTube video never reaches a round.
 
 ```sql
 CREATE OR REPLACE FUNCTION set_song_availability(
-  p_flag_ids  uuid[],   -- oEmbed 404 verdicts: flag as unavailable
+  p_flag_ids  uuid[],   -- oEmbed 404/403/401 verdicts: flag as unavailable
   p_clear_ids uuid[]    -- oEmbed 200 verdicts: restore to playable
 ) RETURNS TABLE(flagged integer, cleared integer)
 LANGUAGE plpgsql
@@ -722,9 +722,10 @@ Behavior:
 - Clearing sets `unavailable_at = NULL` **only where it is currently `NOT NULL`** — a
   restored (or transiently-404ing) video becomes eligible again; this self-healing is why
   a transient 404 can't permanently bury a good song.
-- Ambiguous scan verdicts (`401`/`400`/`5xx`/timeout → `unknown`) are never passed in by
-  the caller — the endpoint only sends definitive `404`s as `p_flag_ids` and `200`s as
-  `p_clear_ids`.
+- Ambiguous scan verdicts (`400`/`429`/`5xx`/timeout → `unknown`) are never passed in by
+  the caller — the endpoint only sends definitive `404` (deleted) and `403`/`401` (private /
+  embedding disabled) verdicts as `p_flag_ids` and `200`s as `p_clear_ids`, and sends no
+  flags at all for a page where its known-good canary video also failed.
 - Returns the counts of rows **actually changed** (surfaced as `flagged`/`cleared` in the
   endpoint's response). `NULL`/empty arrays are no-ops; unknown ids are ignored.
 - No parameter DEFAULTs (mig-021 lesson: keep PostgREST named-arg routing unambiguous).

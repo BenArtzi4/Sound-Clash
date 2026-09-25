@@ -16,8 +16,20 @@ from ._helpers import insert_song
 pytestmark = pytest.mark.needs_docker
 
 
-def _stub_probe(monkeypatch, mapping: dict[str, str], *, default: str = "ok") -> None:
+CANARY = youtube_availability.CANARY_YOUTUBE_ID
+
+
+def _stub_probe(
+    monkeypatch, mapping: dict[str, str], *, default: str = "ok", calls: list[str] | None = None
+) -> None:
+    """Stub the oEmbed probe. The canary answers "ok" unless ``mapping`` says
+    otherwise, so ``default="dead"`` still means "YouTube answered normally"."""
+
     def fake(youtube_id: str, *, timeout: float = 3.0) -> str:
+        if calls is not None:
+            calls.append(youtube_id)
+        if youtube_id == CANARY:
+            return mapping.get(CANARY, "ok")
         return mapping.get(youtube_id, default)
 
     monkeypatch.setattr(youtube_availability, "check_oembed", fake)
@@ -51,16 +63,39 @@ async def test_classifies_dead_and_unknown(admin_client, db, monkeypatch) -> Non
     assert body["next_offset"] is None
 
 
+async def test_classifies_unplayable_with_artist(admin_client, db, monkeypatch) -> None:
+    await insert_song(
+        db, title="Private", artist="Someone", youtube_id="privVIDEO01", genre_slugs=["rock"]
+    )
+    await insert_song(db, title="Alive", youtube_id="okVIDEO0123", genre_slugs=["rock"])
+    _stub_probe(monkeypatch, {"privVIDEO01": "unplayable"})
+
+    resp = await admin_client.post("/admin/songs/check-availability", json={})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["dead"] == []
+    assert body["unknown"] == []
+    assert body["canary_failed"] is False
+    [song] = body["unplayable"]
+    assert song["youtube_id"] == "privVIDEO01"
+    assert song["title"] == "Private"
+    assert song["artist"] == "Someone"
+
+
 async def test_all_ok_returns_empty_report(admin_client, db, monkeypatch) -> None:
     await insert_song(db, title="Fine", youtube_id="fineVIDEO01", genre_slugs=["rock"])
-    _stub_probe(monkeypatch, {})  # default "ok"
+    calls: list[str] = []
+    _stub_probe(monkeypatch, {}, calls=calls)  # default "ok"
 
     resp = await admin_client.post("/admin/songs/check-availability", json={})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["checked"] == 1
     assert body["dead"] == []
+    assert body["unplayable"] == []
     assert body["unknown"] == []
+    # Nothing to confirm, so the canary is never probed.
+    assert CANARY not in calls
 
 
 async def test_paging_next_offset(admin_client, db, monkeypatch) -> None:
@@ -150,6 +185,43 @@ async def test_commit_flags_dead_clears_ok_leaves_unknown(
     assert await _unavailable_at(db, dead_id) is not None  # 404 -> flagged
     assert await _unavailable_at(db, restored_id) is None  # 200 -> cleared
     assert await _unavailable_at(db, unknown_id) is not None  # unknown -> untouched
+
+
+async def test_commit_flags_unplayable(admin_client, db, monkeypatch) -> None:
+    """Private / embed-disabled videos are skipped in games like deleted ones."""
+    private_id = await insert_song(
+        db, title="Private", youtube_id="privVIDEO01", genre_slugs=["rock"]
+    )
+    _stub_probe(monkeypatch, {"privVIDEO01": "unplayable"})
+
+    resp = await admin_client.post("/admin/songs/check-availability", json={"commit": True})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["flagged"] == 1
+    assert await _unavailable_at(db, private_id) is not None
+
+
+async def test_canary_failure_flags_nothing(admin_client, db, monkeypatch) -> None:
+    """If YouTube refuses the known-good video too, the page's verdicts are
+    about this server, not the songs: report them as unknown, write nothing."""
+    dead_id = await insert_song(db, title="Gone", youtube_id="deadVIDEO01", genre_slugs=["rock"])
+    private_id = await insert_song(
+        db, title="Private", youtube_id="privVIDEO01", genre_slugs=["rock"]
+    )
+    _stub_probe(
+        monkeypatch,
+        {"deadVIDEO01": "dead", "privVIDEO01": "unplayable", CANARY: "unplayable"},
+    )
+
+    resp = await admin_client.post("/admin/songs/check-availability", json={"commit": True})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["canary_failed"] is True
+    assert body["dead"] == []
+    assert body["unplayable"] == []
+    assert sorted(u["youtube_id"] for u in body["unknown"]) == ["deadVIDEO01", "privVIDEO01"]
+    assert body["flagged"] == 0
+    assert await _unavailable_at(db, dead_id) is None
+    assert await _unavailable_at(db, private_id) is None
 
 
 async def test_commit_false_writes_nothing(admin_client, db, monkeypatch) -> None:

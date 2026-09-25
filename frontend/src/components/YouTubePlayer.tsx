@@ -45,7 +45,9 @@ interface Props {
   // `noCover` is true.
   coverWhilePaused?: boolean;
   onReady?: () => void;
-  onError?: (code: number) => void;
+  // `videoId` is the id this player was last asked to load or prebuffer (null
+  // before the first load), so the parent can log WHICH video failed.
+  onError?: (code: number, videoId: string | null) => void;
   // Fired the first time the player reaches PLAYING after a loadVideoById. The
   // YouTube IFrame API has no native "audio started" event, so we derive it
   // from onStateChange (PLAYING) with a bounded getPlayerState poll as a
@@ -195,6 +197,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   const prebufferingRef = useRef(false);
   const prebufferPausedRef = useRef(false);
   const prebufferStartRef = useRef(0);
+  // The video this player was last asked to load/prebuffer, reported with
+  // onError so a failure can be traced to a catalog song.
+  const videoIdRef = useRef<string | null>(null);
 
   // Arm (or re-arm) PLAYING detection for an audible load: reset the dedupe
   // flag and start the bounded fallback poll in case onStateChange(PLAYING) is
@@ -265,7 +270,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
           },
           onError: (event) => {
             setErrorCode(event.data);
-            onErrorRef.current?.(event.data);
+            onErrorRef.current?.(event.data, videoIdRef.current);
           },
           onStateChange: (event) => {
             if (event.data === YT_STATE_PLAYING) {
@@ -319,6 +324,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         // is now a different, valid video.
         setErrorCode(null);
         armPlaying();
+        videoIdRef.current = videoId;
         playerRef.current?.unMute();
         playerRef.current?.loadVideoById({
           videoId,
@@ -339,6 +345,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         }
         setEnded(false);
         setErrorCode(null);
+        videoIdRef.current = videoId;
         playerRef.current?.mute();
         playerRef.current?.loadVideoById({
           videoId,

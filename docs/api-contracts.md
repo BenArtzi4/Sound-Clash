@@ -472,21 +472,27 @@ Response `200`:
 ```jsonc
 {
   "checked": 200,                                   // songs probed on this page
-  "dead":    [{"id": "…", "youtube_id": "…", "title": "…"}],   // oEmbed 404 → removed
-  "unknown": [{"id": "…", "youtube_id": "…", "title": "…"}],   // 401/400/5xx/timeout → could not confirm
+  "dead":       [{"id": "…", "youtube_id": "…", "title": "…", "artist": "…"}],  // oEmbed 404 → removed
+  "unplayable": [{"id": "…", "youtube_id": "…", "title": "…", "artist": "…"}],  // oEmbed 403/401 → private / embedding disabled
+  "unknown":    [{"id": "…", "youtube_id": "…", "title": "…", "artist": "…"}],  // 400/429/5xx/timeout → could not confirm
+  "canary_failed": false,                           // true → YouTube refused the known-good video too; bad verdicts downgraded to unknown
   "flagged": 0,                                     // commit=true only: songs newly marked unavailable
   "cleared": 0,                                     // commit=true only: flagged songs restored to playable
   "next_offset": 200                                // offset for the next page, or null at the end
 }
 ```
 
-Classification is deliberately conservative so an admin never deletes a good song on a false positive: **only a definitive oEmbed `404` is `dead`**. A `401` (embed-disabled / region-blocked — may still play in the IFrame), a `400` (id YouTube rejects as malformed), any `5xx`, and any timeout/network error are all reported as **`unknown`** (surfaced for a human to eyeball, never asserted dead).
+Classification only asserts what YouTube definitively says about the video itself: an oEmbed **`404` is `dead`** (deleted), a **`403` or `401` is `unplayable`** (private / embedding disabled — the IFrame player fails on these every time; verified 2026-09-25 on two catalog videos whose watch pages read "Private video"). A `400` (id YouTube rejects as malformed), `429`, any `5xx`, and any timeout/network error are **`unknown`** (surfaced for a human to eyeball, never flagged).
+
+Before a page's `dead`/`unplayable` verdicts count, the endpoint re-probes a known-good **canary** video (`CANARY_YOUTUBE_ID` in `services/youtube_availability.py`). If the canary fails too, YouTube is refusing this server (an IP block would answer every video with 403), not the songs, so the page's bad verdicts are reported as `unknown`, `canary_failed` is `true`, and nothing is flagged. This keeps a YouTube-side block from taking the whole catalog offline.
 
 **`commit=true` (I-Liveness Phase 2, mig 045)** persists the verdicts for the probed page via the service-role-only `set_song_availability` RPC, and the semantics are self-healing:
 
-- `dead` (oEmbed `404`) → sets `songs.unavailable_at = now()` (only if not already flagged — the timestamp records *first noticed*). Flagged songs are **skipped by `select_next_song`/`peek_next_song`**, so they never reach a round; they stay in the catalog and the admin list (`unavailable_at` is returned by the list/get endpoints).
-- `ok` (oEmbed `200`) → **clears** `unavailable_at` back to `NULL`; a restored or transiently-404ing video becomes eligible again, so a transient 404 can't permanently bury a good song.
+- `dead` (oEmbed `404`) and `unplayable` (`403`/`401`) → set `songs.unavailable_at = now()` (only if not already flagged — the timestamp records *first noticed*). Flagged songs are **skipped by `select_next_song`/`peek_next_song`**, so they never reach a round; they stay in the catalog and the admin list (`unavailable_at` is returned by the list/get endpoints).
+- `ok` (oEmbed `200`) → **clears** `unavailable_at` back to `NULL`; a restored, re-published or transiently-failing video becomes eligible again, so a transient verdict can't permanently bury a good song.
 - `unknown` → never writes.
+
+The weekly `.github/workflows/dead-video-scan.yml` pages the catalog with `commit=true`, adds the last 7 days of real in-game player errors from Grafana Loki (the `yt_player_error` / `yt_preload_error` Faro logs, which carry the failing song's `title`, `artist`, `song_id`, `youtube_id`, `url` and `game_code`), and keeps one `dead-videos` GitHub issue open while anything is wrong. In-game failures are reported, not auto-flagged.
 
 `flagged`/`cleared` count the rows whose `unavailable_at` actually changed on this page (always `0` when `commit=false`). The writer only ever touches the probed page (or the explicit `song_ids`).
 
