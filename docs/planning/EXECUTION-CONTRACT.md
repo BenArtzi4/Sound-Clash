@@ -58,7 +58,7 @@ Then `git fetch && git status` — confirm clean state, note in-flight branches/
 - **Buzz-race test green** (10 concurrent → 1 winner, looped) if the work touched the buzz path or any RPC. Add the `run-stress`/`run-e2e` labels to RPC/realtime-touching PRs (a `labeled` event spawns a separate workflow run — watch that one).
 - e2e green against a local `supabase start` stack — at minimum `full_game`, `multi_buzz_round`, `buzzer_race`, plus any spec covering the changes.
 - Prod smoke: `./tests/smoke/post_deploy.sh https://api.soundclash.org` and `tests/e2e/smoke/prod_realtime.spec.ts`.
-- **Manual three-tab game on production** (sandbox disabled): create → display QR → join×2 → start → song plays → buzz locks others → Correct Song → Continue → artist → Next round → Bonus → End → podium + song export. Hebrew titles render on all three screens; **zero app console errors** (ignore YouTube's third-party `compute-pressure` warnings); buzz feels instant from a second device; manager clicks give immediate feedback.
+- **Manual three-tab game on production** (sandbox disabled): create → display QR → join×2 → start → song plays → buzz locks others → Correct Song → Continue → artist → Next round → Bonus → End → podium + setlist. Hebrew titles render on all three screens; **zero app console errors** (ignore YouTube's third-party `compute-pressure` warnings); buzz feels instant from a second device; manager clicks give immediate feedback.
 - CI green on `main`; Sentry shows no new production errors from the smoke window.
 - `TASKS.md` updated: boxes ticked or explicitly moved with a note.
 

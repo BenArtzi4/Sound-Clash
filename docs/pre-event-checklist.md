@@ -65,7 +65,7 @@ Requires Docker + `supabase start`. If the local stack can't come up, skip and n
 - [ ] Wrong −3 does **not** lock the team out; free-guess waiver right after a correct; Continue releases the lock with no score; re-claim guard (no double points).
 - [ ] Soundtrack round: single `Correct` +15 + 🎬 badge.
 - [ ] Bonus +4 works in both `waiting` and `playing`.
-- [ ] End game → confirm → FINAL RESULTS podium on all three screens; manager gets the song export.
+- [ ] End game → confirm → FINAL RESULTS podium on all three screens; manager console and team phones show the Setlist (Play all on YouTube, Share/Copy list, Save as file).
 - [ ] Scores agree on manager, teams, and display throughout. Hebrew titles render on all three screens.
 
 ## 5. Scale + known-risk (agent, prod)
