@@ -51,6 +51,11 @@ describe("DisplayPage entry", () => {
     expect(screen.getByRole("heading", { level: 1, name: /^display$/i })).toBeInTheDocument();
   });
 
+  it("offers Cancel back to Home, like Host and Join", () => {
+    renderAt("/display");
+    expect(screen.getByRole("link", { name: /^cancel$/i })).toHaveAttribute("href", "/");
+  });
+
   it("shows the entry form without a code", () => {
     renderAt("/display");
     expect(screen.getByPlaceholderText(/ABCDEF/i)).toBeInTheDocument();

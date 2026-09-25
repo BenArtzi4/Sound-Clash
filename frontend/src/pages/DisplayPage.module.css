@@ -70,14 +70,24 @@
   font-variant-numeric: tabular-nums;
 }
 
-.entryCard :global(.btn-primary) {
+/* Cancel + Open, laid out like Join's actions: Open full-width on top on a
+   phone (the thumb's target), Cancel under it; side by side on the right on
+   wider screens. */
+.entryActions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-3);
+}
+.entryActions :global(.btn-primary) {
   width: 100%;
 }
-
 @media (min-width: 601px) {
-  .entryCard :global(.btn-primary) {
+  .entryActions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  .entryActions :global(.btn-primary) {
     width: auto;
-    align-self: flex-end;
   }
 }
 

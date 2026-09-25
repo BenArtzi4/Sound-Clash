@@ -1689,6 +1689,8 @@ process.exit(failed ? 1 : 0);
 
 ### Task 10: Route transitions
 
+> **Removed 2026-09-25** — screen changes are instant; see [10-touch-and-route-motion.md](10-touch-and-route-motion.md).
+
 > **Built 2026-09-20 (PR #316).** Eight numbered departures, all found by driving the plan's own code on a `dist-local` preview against a local stack and measuring it; the PR body lists each with its numbers. The two that change what this section says are marked **[as built]** below.
 
 **Files:**

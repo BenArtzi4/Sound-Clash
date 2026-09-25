@@ -1,5 +1,6 @@
 /* Home. Spec: docs/planning/ui-redesign/09-home-colour-and-fill.md,
-   which amends 05-page-by-page.md §1. */
+   which amends 05-page-by-page.md §1; touch press and the one-time intro:
+   10-touch-and-route-motion.md. */
 
 .page {
   min-height: 100%;
@@ -29,7 +30,6 @@
   align-items: center;
   gap: var(--space-1);
   text-align: center;
-  animation: rise var(--dur-intro) var(--ease-arrive) both;
 }
 
 /* Separates the wordmark from the headline so the hierarchy reads
@@ -59,11 +59,9 @@
   width: 100%;
 }
 
-/* --hue is the card's role colour; every coloured part reads from it.
-   --fill-dur is overridden for touch below. */
+/* --hue is the card's role colour; every coloured part reads from it. */
 .role {
   --hue: var(--role-host);
-  --fill-dur: 200ms;
   position: relative;
   overflow: hidden;
   display: block;
@@ -76,8 +74,7 @@
   text-decoration: none;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  animation: rise var(--dur-intro) var(--ease-arrive) both;
-  animation-delay: calc(120ms + var(--i) * 60ms);
+  -webkit-touch-callout: none;
 }
 
 .role[data-role="play"] {
@@ -94,7 +91,9 @@
 }
 
 /* The two stacked copies. Identical box so the inverted text lands exactly on
-   top of the resting text; only .roleFill is clipped. */
+   top of the resting text; only .roleFill is clipped. Layered ripple (0) <
+   face (1) < fill (2), so a touch ripple sits under the text and the hover
+   fill still covers everything. */
 .roleFace,
 .roleFill {
   display: flex;
@@ -104,27 +103,49 @@
   min-height: 176px;
 }
 
-/* Diagonal sweep, 200ms. Both clip states carry four vertices, which is what
-   makes them interpolate; the leading edge starts fully off the left side so
-   no corner pops in. clip-path is on the allowed-animation list and runs on
-   the compositor, so this costs no layout. */
+.roleFace {
+  position: relative;
+  z-index: 1;
+}
+
+/* Diagonal sweep, 200ms, for a mouse only. Both clip states carry four
+   vertices, which is what makes them interpolate; the leading edge starts
+   fully off the left side so no corner pops in. clip-path is on the
+   allowed-animation list and runs on the compositor, so this costs no layout.
+   Touch no longer drives it: a tap ends the wipe halfway, and a half-painted
+   card is what froze into the next screen (10-touch-and-route-motion.md). */
 .roleFill {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: var(--hue);
   clip-path: polygon(0 0, 0 0, -34% 100%, -34% 100%);
-  transition: clip-path var(--fill-dur) var(--ease-move);
+  transition: clip-path 200ms var(--ease-move);
 }
 
-/* Touch is not hover. A pointer rests on a card for as long as the user likes,
-   so 200ms of travel reads as deliberate; a tap is over in ~80-120ms, so the
-   same 200ms reads as lag chasing the finger. Halving it on devices that have
-   no hover keeps the gesture legible without making it feel sluggish.
-   Keyed on (hover: none) rather than width: it is the absence of hover, not a
-   narrow screen, that makes the fill press-driven. */
-@media (hover: none) {
-  .role {
-    --fill-dur: 100ms;
+/* Touch press: a circle of the card's hue grows from the finger over 450ms
+   (Material's press timing) under the text, and fades on release. HomePage
+   sizes it to reach the farthest corner and adds it only for touch and pen.
+   Transform and opacity only; under reduced motion the global rule collapses
+   the growth, leaving an instant flat tint. */
+.ripple {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  background: var(--hue);
+  opacity: 0.2;
+  transform: scale(0);
+  animation: ripple 450ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  pointer-events: none;
+}
+.ripple[data-leaving] {
+  opacity: 0;
+  transition: opacity 375ms ease-out;
+}
+
+@keyframes ripple {
+  to {
+    transform: scale(1);
   }
 }
 
@@ -167,10 +188,6 @@
   color: var(--hue);
 }
 
-.howTo {
-  animation: rise var(--dur-intro) var(--ease-arrive) both;
-  animation-delay: 360ms;
-}
 .howTo a {
   display: inline-flex;
   align-items: center;
@@ -181,16 +198,27 @@
   font-weight: 600;
 }
 
-/* Touch equivalent of the hover fill: same geometry, driven by an attribute
-   the pointer handlers set, so it can never stick the way :hover does. */
-.role[data-tapped="true"] .roleFill {
-  clip-path: polygon(0 0, 134% 0, 100% 100%, -34% 100%);
-}
-
-@media (hover: hover) {
+/* (pointer: fine) as well as (hover: hover): some Android phones report hover,
+   and a tap there would start the sweep this rule is meant to keep off touch. */
+@media (hover: hover) and (pointer: fine) {
   .role:hover .roleFill {
     clip-path: polygon(0 0, 134% 0, 100% 100%, -34% 100%);
   }
+}
+
+/* The fade-up plays only when the site opens on Home: HomePage sets
+   data-intro for that first mount alone. Replaying it on every return left the
+   first frame blank, the "flash" after a back-swipe. */
+.page[data-intro="true"] .hero,
+.page[data-intro="true"] .role,
+.page[data-intro="true"] .howTo {
+  animation: rise var(--dur-intro) var(--ease-arrive) both;
+}
+.page[data-intro="true"] .role {
+  animation-delay: calc(120ms + var(--i) * 60ms);
+}
+.page[data-intro="true"] .howTo {
+  animation-delay: 360ms;
 }
 
 @keyframes rise {

@@ -76,7 +76,6 @@ describe("styles.css design tokens", () => {
       "--role-display: var(--periwinkle)",
       "--ease-move: cubic-bezier(0.645, 0.045, 0.355, 1)",
       "--ease-arrive: cubic-bezier(0.155, 0.055, 0.14, 1)",
-      "--dur-route: 240ms",
     ]) {
       expect(css).toContain(t);
     }
@@ -151,7 +150,10 @@ describe("styles.css design tokens", () => {
       expect(css).not.toContain(alias);
     }
   });
-  it("silences view-transition pseudo-elements under reduced motion", () => {
-    expect(css).toMatch(/::view-transition-group\(\*\)[\s\S]*animation:\s*none/);
+  // Screen changes are instant (ui-redesign 10-touch-and-route-motion.md):
+  // no route view transition, so none of its pseudo-elements or its token.
+  it("has no route view transition", () => {
+    expect(css).not.toMatch(/view-transition/);
+    expect(css).not.toContain("--dur-route");
   });
 });

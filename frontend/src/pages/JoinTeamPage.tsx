@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { GameCodeField } from "../components/GameCodeField";
-import { TransitionLink } from "../components/TransitionLink";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
 import { CODE_RE, normalizeCode } from "../lib/gameCode";
@@ -168,9 +167,9 @@ export function JoinTeamPage() {
         {error ? <p className="error">{error}</p> : null}
 
         <div className={styles.actions}>
-          <TransitionLink to="/" className="btn btn-ghost">
+          <Link to="/" className="btn btn-ghost">
             Cancel
-          </TransitionLink>
+          </Link>
           <button type="submit" className="btn btn-primary" disabled={!submittable}>
             {busy ? (
               <>
