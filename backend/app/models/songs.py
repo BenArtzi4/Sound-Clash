@@ -90,10 +90,11 @@ class AvailabilityCheckRequest(BaseModel):
     limit: int = Field(default=200, ge=1, le=250)
     offset: int = Field(default=0, ge=0)
     song_ids: list[UUID] | None = None
-    # Phase 2 (mig 045): persist the verdicts for the probed page. ``dead``
-    # sets songs.unavailable_at (the auto-pickers then skip them); ``ok``
-    # clears it (a restored video becomes eligible again); ``unknown`` never
-    # writes. False keeps the exact Phase-1 report-only behavior.
+    # Phase 2 (mig 045): persist the verdicts for the probed page. ``dead`` and
+    # ``unplayable`` set songs.unavailable_at (the auto-pickers then skip
+    # them); ``ok`` clears it (a restored video becomes eligible again);
+    # ``unknown`` never writes. False keeps the exact Phase-1 report-only
+    # behavior.
     commit: bool = False
 
 
@@ -105,17 +106,26 @@ class AvailabilitySong(BaseModel):
     id: UUID
     youtube_id: str
     title: str
+    artist: str = ""
 
 
 class AvailabilityReport(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     checked: int
+    # Deleted videos (oEmbed 404).
     dead: list[AvailabilitySong]
+    # Videos that exist but can never play in the embedded player: private or
+    # embedding disabled (oEmbed 403 / 401).
+    unplayable: list[AvailabilitySong] = Field(default_factory=list)
     unknown: list[AvailabilitySong]
+    # True when this page had dead/unplayable verdicts but the known-good
+    # canary video failed too, so they were downgraded to ``unknown`` and
+    # nothing was flagged (YouTube was likely blocking the probe).
+    canary_failed: bool = False
     # Rows whose ``unavailable_at`` actually changed on this page (newly
-    # flagged dead / newly cleared back to playable). Always 0 unless the
-    # request set ``commit=true``.
+    # flagged dead or unplayable / newly cleared back to playable). Always 0
+    # unless the request set ``commit=true``.
     flagged: int = 0
     cleared: int = 0
     # Offset for the next page, or null when this page reached the end of the

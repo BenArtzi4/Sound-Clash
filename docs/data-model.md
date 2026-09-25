@@ -236,16 +236,18 @@ importer both accept an optional `release_year` so new songs can carry it from c
 ### `songs.unavailable_at`
 
 Nullable `timestamptz` (migration 045, I-Liveness Phase 2). **When the availability scan
-last confirmed the song's YouTube video dead** (oEmbed `404`); `NULL` means playable. The
+last confirmed the song's YouTube video won't play** (oEmbed `404` deleted, or `403`/`401`
+private / embedding disabled); `NULL` means playable. The
 auto-pickers (`select_next_song`'s random path and `peek_next_song`) skip flagged songs, so
 a confirmed-dead video never reaches a round; the explicit `p_song_id` override is
 deliberately not filtered (a host forcing a specific song is a deliberate act).
 
 Written only by the service-role-only `set_song_availability` RPC, called by
-`POST /admin/songs/check-availability` with `commit=true`: a `404` verdict flags a song
-(only if currently `NULL` — the timestamp records *first noticed*, and re-scans don't
+`POST /admin/songs/check-availability` with `commit=true`: a `404`/`403`/`401` verdict flags
+a song (only if currently `NULL` — the timestamp records *first noticed*, and re-scans don't
 rewrite it), a `200` clears it back to `NULL` (a restored/transient video becomes eligible
-again), and an ambiguous verdict (`401`/`400`/`5xx`/timeout) never writes. Updating a song
+again), and an ambiguous verdict (`400`/`429`/`5xx`/timeout, or any page where the canary
+video also failed) never writes. Updating a song
 with a **different** `youtube_id` via the admin CRUD also clears the flag — the verdict
 belongs to the video, not the song row. The flag is metadata, not deletion: the song stays
 in the catalog and the admin list, and self-heals when the video comes back.

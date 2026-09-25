@@ -24,7 +24,7 @@ from app.models.songs import (
     SongUpdate,
 )
 from app.services.csv_import import apply_import, parse_csv
-from app.services.youtube_availability import check_many
+from app.services.youtube_availability import check_many, youtube_answers_normally
 
 router = APIRouter(
     prefix="/admin/songs",
@@ -270,7 +270,7 @@ async def _read_capped(file: UploadFile) -> bytes:
     return b"".join(chunks)
 
 
-AVAILABILITY_COLUMNS = "id,youtube_id,title"
+AVAILABILITY_COLUMNS = "id,youtube_id,title,artist"
 
 
 def _availability_page_blocking(
@@ -327,18 +327,24 @@ def _apply_verdicts_blocking(
 async def check_availability(
     request: Request, body: AvailabilityCheckRequest
 ) -> AvailabilityReport:
-    """Probe a page of the catalog for dead YouTube videos.
+    """Probe a page of the catalog for YouTube videos that won't play.
 
     Reads one page of songs, probes each ``youtube_id`` via YouTube oEmbed, and
-    returns the ones that are gone (``dead``) or unreachable-but-maybe-alive
-    (``unknown``). Page through the catalog with ``next_offset``.
+    returns the ones that are gone (``dead``), exist but can't play in our
+    embed (``unplayable``: private / embedding disabled), or were
+    unreachable-but-maybe-alive (``unknown``). Page through the catalog with
+    ``next_offset``.
 
     By default (``commit=false``) it is report-only — no writes; the admin
     reviews and fixes/deletes via the existing song CRUD. With ``commit=true``
     the verdicts for the probed page are persisted (I-Liveness Phase 2):
-    ``dead`` flags ``songs.unavailable_at`` so the round pickers skip the song,
-    ``ok`` clears a previously-flagged song back to playable, and ``unknown``
-    never writes.
+    ``dead`` and ``unplayable`` flag ``songs.unavailable_at`` so the round
+    pickers skip the song, ``ok`` clears a previously-flagged song back to
+    playable, and ``unknown`` never writes.
+
+    Before a page's dead/unplayable verdicts count, a known-good canary video
+    is re-probed; if it fails too, YouTube is refusing this server rather than
+    the songs, so those verdicts are reported as ``unknown`` and never flagged.
     """
     client = get_supabase_client()
     song_ids = [str(s) for s in body.song_ids] if body.song_ids is not None else None
@@ -349,20 +355,32 @@ async def check_availability(
     )
     verdicts = await check_many([s["youtube_id"] for s in songs])
 
-    dead: list[AvailabilitySong] = []
-    unknown: list[AvailabilitySong] = []
+    buckets: dict[str, list[AvailabilitySong]] = {"dead": [], "unplayable": [], "unknown": []}
     ok_ids: list[str] = []
     for song in songs:
         verdict = verdicts.get(song["youtube_id"], "unknown")
         if verdict == "ok":
             ok_ids.append(str(song["id"]))
             continue
-        ref = AvailabilitySong(id=song["id"], youtube_id=song["youtube_id"], title=song["title"])
-        (dead if verdict == "dead" else unknown).append(ref)
+        buckets[verdict].append(
+            AvailabilitySong(
+                id=song["id"],
+                youtube_id=song["youtube_id"],
+                title=song["title"],
+                artist=song.get("artist") or "",
+            )
+        )
+    dead, unplayable, unknown = buckets["dead"], buckets["unplayable"], buckets["unknown"]
+
+    canary_failed = False
+    if (dead or unplayable) and not await youtube_answers_normally():
+        canary_failed = True
+        unknown = [*unknown, *dead, *unplayable]
+        dead, unplayable = [], []
 
     flagged = cleared = 0
     if body.commit:
-        flag_ids = [str(s.id) for s in dead]
+        flag_ids = [str(s.id) for s in (*dead, *unplayable)]
         if flag_ids or ok_ids:
             flagged, cleared = await anyio.to_thread.run_sync(
                 lambda: _apply_verdicts_blocking(client, flag_ids=flag_ids, clear_ids=ok_ids)
@@ -371,7 +389,9 @@ async def check_availability(
     return AvailabilityReport(
         checked=len(songs),
         dead=dead,
+        unplayable=unplayable,
         unknown=unknown,
+        canary_failed=canary_failed,
         flagged=flagged,
         cleared=cleared,
         next_offset=next_offset,

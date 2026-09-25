@@ -161,7 +161,7 @@ describe("YouTubePlayer", () => {
     });
     const alert = await findByRole("alert");
     expect(alert.textContent).toContain("Video unavailable");
-    expect(onError).toHaveBeenCalledWith(150);
+    expect(onError).toHaveBeenCalledWith(150, null);
   });
 
   it("keeps the overlay visible on error even when hideOverlay is true", async () => {
@@ -297,7 +297,30 @@ describe("YouTubePlayer", () => {
     act(() => {
       lastConfig?.events?.onError?.({ data: 150 });
     });
-    expect(onError).toHaveBeenCalledWith(150);
+    expect(onError).toHaveBeenCalledWith(150, null);
+  });
+
+  it("reports the id of the video that failed (load, then prebuffer)", async () => {
+    installFakeYT();
+    const onError = vi.fn();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container } = render(<YouTubePlayer ref={ref} noCover onError={onError} />);
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      ref.current?.loadVideoById("liveVIDEO01", 0);
+    });
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 150 });
+    });
+    expect(onError).toHaveBeenLastCalledWith(150, "liveVIDEO01");
+    act(() => {
+      ref.current?.prebuffer("nextVIDEO01", 5);
+    });
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 101 });
+    });
+    expect(onError).toHaveBeenLastCalledWith(101, "nextVIDEO01");
   });
 
   it("uses a custom testId on the wrapper when provided", async () => {

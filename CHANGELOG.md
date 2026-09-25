@@ -130,6 +130,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-09-25: Songs whose YouTube video became private or had embedding turned off are now skipped in games, like deleted videos, instead of showing "Video unavailable" mid-round. The weekly video check also lists every song that failed to play in a real game, with its name and link, so it can be replaced. (#TBD)
 - 2026-09-25: Going back to the home screen (a back swipe, the Back button or Cancel) no longer blanks it and makes it fade in a second time. The intro animation now plays only when you first open the site on the home screen, and swiping back on an iPhone no longer shows the card you tapped still pressed. (#344)
 - 2026-09-22: The host console's "<team> buzzed in — score it:" strip now has a visible gap between the team name and the words. (#340)
 - 2026-09-22: The host console's player cover ("Loading player…", "Song ended", "Video unavailable") no longer shows the old blue-slate gradient; it sits on the same dark surface as the rest of the console. (#333)
