@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { TransitionLink } from "../components/TransitionLink";
-import { useViewTransitionNavigate } from "../hooks/useViewTransitionNavigate";
+import { Link, useNavigate } from "react-router-dom";
 import { CheckIcon } from "../components/icons";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
@@ -96,7 +95,7 @@ function sameMembers<T>(a: Set<T>, b: Iterable<T>): boolean {
 
 export function ManagerCreateGamePage() {
   const { toast } = useToast();
-  const go = useViewTransitionNavigate();
+  const navigate = useNavigate();
 
   const [genres, setGenres] = useState<Genre[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -187,9 +186,12 @@ export function ManagerCreateGamePage() {
       });
       setManagerToken(game.game_code, game.manager_token);
       toast(`Game ${game.game_code} created`, { variant: "success" });
-      await go(`/manager/game/${game.game_code}`, {
-        preload: () => import("./ManagerConsolePage"),
-      });
+      // Fetch the console's code first: the router would hold this page while
+      // it downloads, and `finally` below would re-enable the button meanwhile,
+      // inviting a second create. A failed import is recovered by
+      // lib/preloadError when the route imports it for real.
+      await import("./ManagerConsolePage").catch(() => undefined);
+      navigate(`/manager/game/${game.game_code}`);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to create game", { variant: "error" });
     } finally {
@@ -286,9 +288,9 @@ export function ManagerCreateGamePage() {
         </div>
 
         <div className={styles.actions}>
-          <TransitionLink to="/" className="btn btn-ghost">
+          <Link to="/" className="btn btn-ghost">
             Cancel
-          </TransitionLink>
+          </Link>
           <button type="submit" className="btn btn-primary" disabled={selected.size === 0 || busy}>
             {busy ? (
               <>

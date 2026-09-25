@@ -49,6 +49,8 @@ Why the budget is one tiny, scoped dependency: everything in the moment catalogu
 
 ## 4. Route transitions
 
+> **Superseded 2026-09-25 by [10-touch-and-route-motion.md](10-touch-and-route-motion.md).** Screen changes are instant: the hook, `TransitionLink`, the `::view-transition-*` CSS and the wordmark morph were removed after a phone test showed the morph drawing two wordmarks at once and the transition ending mid-way through Home's fade-up. The section below is kept as the record of what was built.
+
 - **Where:** user-initiated internal navigations — Home → Host/Play/Display, Join → Team, Create → Console, Display code → Board, and the Cancel/back links. Not on programmatic redirects (`navigate(..., { replace: true })` after a kick, an expired game, a missing team) — those stay instant. Browser back/forward is instant too (declarative router; acceptable).
 - **What:** old page fades out 100 ms (`--ease-exit`); new page fades in and slides up 12 px over 240 ms (`--ease-arrive`). The wordmark (`view-transition-name: wordmark`) morphs between its positions (small header ↔ large hero) so the eye has an anchor. Total ≤ 240 ms: **a running view transition suspends pointer hit-testing for its duration**, so it must be short and must only happen when the user just clicked something.
 - **Never on live-state updates.** `startViewTransition` is never used for Realtime-driven changes (buzz lock, scores, round advance, banners) and never on the manager's scoring buttons — those would freeze the very buttons the host is pressing. Route changes only.
@@ -64,7 +66,7 @@ Why the budget is one tiny, scoped dependency: everything in the moment catalogu
 |---|---|---|---|---|---|
 | 1 | First paint of Home | Home | keyframes, stagger via `animation-delay` | 320 ms, 60 ms apart, `--ease-arrive` | Once per full load; not on client-side return |
 | 2 | Role row hover / press | Home | transition | 120 ms / 0 ms press | Hover only under `(hover: hover)` |
-| 3 | Route change | all | View Transitions | 120 out / 240 in | §4 |
+| 3 | Route change | all | ~~View Transitions~~ none: instant swap | ~~120 out / 240 in~~ 0 | [10-touch-and-route-motion.md](10-touch-and-route-motion.md) |
 | 4 | Input focus ring | Join, Create, Display | transition on `outline-color` | 120 ms | |
 | 5 | Preset / genre / decade toggle | Create | transition (background, border-color) + check icon stroke draw | 160 ms | These are small paint areas, acceptable; press scale 0 ms |
 | 6 | Create / Join submit | Create, Join | spinner keyframes (rotate) | continuous while pending | Existing spinner ids kept |

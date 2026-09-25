@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomePage } from "./HomePage";
 
 describe("HomePage", () => {
@@ -63,17 +63,34 @@ describe("HomePage", () => {
     const howTo = screen.getByRole("link", { name: /how to play/i });
     expect(howTo).toHaveAttribute("href", "/how-to-play");
   });
+});
 
-  // Each CTA is a TransitionLink that preloads its destination's lazy chunk
-  // before navigating, so the route transition never animates to the Suspense
-  // fallback. jsdom has no startViewTransition, so this exercises the plain
-  // fallback path — and, with it, that the preload really runs and a click on
-  // a real <a href> still navigates.
+// Screen changes are instant (docs/planning/ui-redesign/10-touch-and-route-motion.md):
+// no view transition, no wordmark morph. The stub runs the update callback, so
+// a regression shows up as a non-zero count rather than a stuck navigation.
+describe("HomePage navigation", () => {
+  let transitions = 0;
+
+  beforeEach(() => {
+    transitions = 0;
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: (cb: () => unknown) => {
+        transitions += 1;
+        void cb();
+        return { finished: Promise.resolve() };
+      },
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(document, "startViewTransition");
+  });
+
   it.each([
     [/host a game/i, "/manager/create", "host"],
     [/display screen/i, "/display", "display"],
     [/how to play/i, "/how-to-play", "how to play"],
-  ])("preloads and navigates when %s is clicked", async (name, path, marker) => {
+  ])("opens %s with no view transition", async (name, path, marker) => {
     render(
       <MemoryRouter>
         <Routes>
@@ -83,10 +100,99 @@ describe("HomePage", () => {
       </MemoryRouter>,
     );
     await userEvent.click(screen.getByRole("link", { name }));
-    await waitFor(
-      () => expect(screen.getByText(`${marker} page`)).toBeInTheDocument(),
-      // The preload is a real module-graph evaluation under vitest.
-      { timeout: 5000 },
+    await waitFor(() => expect(screen.getByText(`${marker} page`)).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    expect(transitions).toBe(0);
+  });
+});
+
+// Touch gets a ripple from the finger; a mouse keeps the diagonal hover sweep.
+describe("HomePage touch ripple", () => {
+  function hostCard() {
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
     );
+    const card = screen.getByRole("link", { name: /host a game/i });
+    vi.spyOn(card, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 100, width: 300, height: 80 }),
+    );
+    return card;
+  }
+
+  it("spreads a ripple from where the finger lands", () => {
+    const card = hostCard();
+    fireEvent.pointerDown(card, { pointerType: "touch", clientX: 60, clientY: 120 });
+    const dot = card.querySelector<HTMLElement>("[data-ripple]");
+    expect(dot).not.toBeNull();
+    // Sized to reach the farthest corner from the touch point (240, 60 away),
+    // and centred on that point (60, 20 inside the card).
+    const r = Math.hypot(240, 60);
+    expect(parseFloat(dot!.style.width)).toBeCloseTo(2 * r);
+    expect(parseFloat(dot!.style.height)).toBeCloseTo(2 * r);
+    expect(parseFloat(dot!.style.left) + r).toBeCloseTo(60);
+    expect(parseFloat(dot!.style.top) + r).toBeCloseTo(20);
+  });
+
+  it("leaves a mouse press to the hover sweep", () => {
+    const card = hostCard();
+    fireEvent.pointerDown(card, { pointerType: "mouse", clientX: 60, clientY: 120 });
+    expect(card.querySelector("[data-ripple]")).toBeNull();
+  });
+
+  it("fades the ripple out when the finger lifts, then removes it", () => {
+    vi.useFakeTimers();
+    try {
+      const card = hostCard();
+      fireEvent.pointerDown(card, { pointerType: "touch", clientX: 60, clientY: 120 });
+      fireEvent.pointerUp(card, { pointerType: "touch", clientX: 60, clientY: 120 });
+      expect(card.querySelector("[data-ripple]")).toHaveAttribute("data-leaving");
+      vi.advanceTimersByTime(500);
+      expect(card.querySelector("[data-ripple]")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// The fade-up is for someone opening the site on Home. Replaying it on every
+// mount blanked the first frame after a back-swipe (the "loads, flashes, loads
+// again" report). The landing path is read when the module first evaluates, so
+// each case imports a fresh copy of the page.
+describe("HomePage intro", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  async function freshHome(landingPath: string) {
+    window.history.replaceState(null, "", landingPath);
+    vi.resetModules();
+    return (await import("./HomePage")).HomePage;
+  }
+  function renderHome(Home: typeof HomePage) {
+    return render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    ).container.firstElementChild;
+  }
+
+  it("plays when the site opens on Home", async () => {
+    const Home = await freshHome("/");
+    expect(renderHome(Home)).toHaveAttribute("data-intro", "true");
+  });
+
+  it("does not replay when you come back to Home", async () => {
+    const Home = await freshHome("/");
+    renderHome(Home);
+    cleanup();
+    expect(renderHome(Home)).not.toHaveAttribute("data-intro");
+  });
+
+  it("does not play when the site opened on another page", async () => {
+    const Home = await freshHome("/join");
+    expect(renderHome(Home)).not.toHaveAttribute("data-intro");
   });
 });

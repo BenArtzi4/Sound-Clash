@@ -26,9 +26,7 @@
   font-size: 2.5rem;
 }
 
-/* The hero position 04-motion-and-transitions.md §route-transition always
-   assumed ("small header <-> large hero") but no page ever placed. Home uses
-   it; How to play keeps .small, so the wordmark morphs between the two. */
+/* Home's hero wordmark. The other entry pages use .small. */
 .hero {
   font-size: clamp(3.25rem, 6vw, 5.5rem);
 }

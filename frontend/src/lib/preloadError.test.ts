@@ -1,5 +1,9 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { _resetChunkReloadGuard, installPreloadErrorHandler } from "./preloadError";
+import {
+  _resetChunkReloadGuard,
+  installPreloadErrorHandler,
+  prefetchQuietly,
+} from "./preloadError";
 
 // The sessionStorage key the guard persists its reload budget under. Kept in
 // sync with preloadError.ts (internal there; asserted here).
@@ -104,5 +108,30 @@ describe("preloadError handler", () => {
     installPreloadErrorHandler();
     const reRegistrations = addSpy.mock.calls.filter(([type]) => type === "vite:preloadError");
     expect(reRegistrations).toHaveLength(0);
+  });
+});
+
+// Home fetches the next pages' chunks in the background. If one of those fails
+// (offline, a flaky connection) nobody asked to navigate, so reloading the page
+// under the viewer would be wrong; the real navigation retries the import and
+// gets the normal recovery then.
+describe("prefetchQuietly", () => {
+  it("lets a failed background fetch fail without reloading the page", async () => {
+    let event: Event | undefined;
+    await prefetchQuietly(async () => {
+      await Promise.resolve();
+      event = firePreloadError();
+      throw new Error("chunk gone");
+    });
+    expect(event).toBeDefined();
+    expect(event?.defaultPrevented).toBe(false);
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(readGuard()).toBeNull();
+  });
+
+  it("restores the reload recovery once the background fetch is over", async () => {
+    await prefetchQuietly(async () => undefined);
+    firePreloadError();
+    expect(reloadMock).toHaveBeenCalledTimes(1);
   });
 });

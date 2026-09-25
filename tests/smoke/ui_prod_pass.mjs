@@ -233,11 +233,12 @@ async function run(game) {
       if (w === 1280) {
         // step 11: route transition click-through.
         //
-        // Wait for the URL, not just an <h1>: since Task 10 a link click routes
-        // through useViewTransitionNavigate, which awaits the chunk preload and
-        // then commits inside startViewTransition — so `location` lags the click
-        // by tens of ms, and every page here has an <h1> already, which makes
-        // waitForSelector("h1") resolve instantly on the OLD page. Swallowing the
+        // Wait for the URL, not just an <h1>: the router commits a route change
+        // inside a React transition, and a lazy route waits for its chunk, so
+        // `location` can lag the click; every page here has an <h1> already,
+        // which makes waitForSelector("h1") resolve instantly on the OLD page.
+        // (Screen changes have been instant since 10-touch-and-route-motion.md;
+        // the gate's name is historical.) Swallowing the
         // timeout keeps a genuinely dropped click reporting as a red gate below
         // (the path simply never changes) rather than as a thrown exception that
         // would lose the rest of the run's output.

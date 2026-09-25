@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { ExpiryCountdown } from "../components/ExpiryCountdown";
 import { HostRecoveryLink } from "../components/HostRecoveryLink";
 import { Skeleton } from "../components/Skeleton";
-import { TransitionLink } from "../components/TransitionLink";
 import { SongExport } from "../components/SongExport";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { TeamRescueModal } from "../components/TeamRescueModal";
@@ -124,9 +123,9 @@ export function ManagerConsolePage() {
           paste the copied link) and this browser becomes the console.
         </p>
         <p>
-          <TransitionLink to="/" className="btn btn-ghost">
+          <Link to="/" className="btn btn-ghost">
             Back to home
-          </TransitionLink>
+          </Link>
         </p>
       </main>
     );
@@ -146,9 +145,9 @@ export function ManagerConsolePage() {
           <EndScreen teams={boardTeams} gameCode={gameCode} />
           <div className={styles.endActions}>
             <SongExport game={finalBoard.game} rounds={finalBoard.rounds} teams={boardTeams} />
-            <TransitionLink to="/" className="btn btn-primary">
+            <Link to="/" className="btn btn-primary">
               Back to home
-            </TransitionLink>
+            </Link>
           </div>
         </main>
       );
@@ -187,9 +186,9 @@ export function ManagerConsolePage() {
         <EndScreen teams={boardTeams} gameCode={gameCode} />
         <div className={styles.endActions}>
           <SongExport game={board.game} rounds={board.rounds} teams={boardTeams} />
-          <TransitionLink to="/" className="btn btn-primary">
+          <Link to="/" className="btn btn-primary">
             Back to home
-          </TransitionLink>
+          </Link>
         </div>
       </main>
     );

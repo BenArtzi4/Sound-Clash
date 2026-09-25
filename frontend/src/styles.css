@@ -88,7 +88,6 @@
   --dur-instant: 0ms;
   --dur-micro: 150ms;
   --dur-state: 250ms;
-  --dur-route: 240ms;
   --dur-enter: 400ms;
   --dur-reveal: 600ms;
   --dur-intro: 800ms;
@@ -362,29 +361,6 @@ a:focus-visible {
   border: 0;
 }
 
-/* Route transitions (Task 10 adds the hook; the CSS is inert until then). */
-::view-transition-old(root) {
-  animation: vt-out 100ms var(--ease-exit) both;
-}
-::view-transition-new(root) {
-  animation: vt-in var(--dur-route) var(--ease-arrive) both;
-}
-::view-transition-group(wordmark) {
-  animation-duration: var(--dur-route);
-  animation-timing-function: var(--ease-move);
-}
-@keyframes vt-out {
-  to {
-    opacity: 0;
-  }
-}
-@keyframes vt-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -396,11 +372,5 @@ a:focus-visible {
     animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-  /* The universal rule above does not reach the view-transition pseudo tree. */
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
   }
 }
