@@ -20,6 +20,23 @@
   overflow: hidden;
 }
 
+/* The final board is a document, not the full-bleed buzzer: podium +
+   leaderboard + setlist run well past one phone screen, so it must grow and
+   let the page scroll. (With the buzzer's fixed 100dvh + overflow: hidden the
+   leaderboard sat below the fold with no way to reach it.) 100% rather than
+   100vw so a desktop scrollbar can't add a sideways scroll. */
+.finalShell {
+  width: 100%;
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+.finalSetlist {
+  padding: 0 var(--space-4) var(--space-7);
+}
+
 .pointStack {
   position: fixed;
   top: 1rem;

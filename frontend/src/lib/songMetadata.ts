@@ -66,3 +66,57 @@ export async function fetchSongById(
     if (isCancelled()) return null;
   }
 }
+
+// The end-of-game setlist resolves every played song in one batch read. A
+// shorter retry than a round-time lookup: the setlist is not time-critical, and
+// after this it shows an explicit Retry instead of spinning.
+export const SETLIST_FETCH_RETRY_DELAYS_MS: readonly number[] = [300, 900];
+
+export interface CatalogSong {
+  id: string;
+  title: string;
+  artist: string;
+  youtube_id: string;
+  release_year: number | null;
+  is_soundtrack: boolean;
+}
+
+// Map of song id -> catalog row, or null once every attempt failed. An id with
+// no row (a song deleted from the catalog since) is simply absent.
+export async function fetchSongsByIds(
+  ids: readonly string[],
+  isCancelled: () => boolean = () => false,
+): Promise<Map<string, CatalogSong> | null> {
+  for (let attempt = 0; ; attempt++) {
+    let failure: string;
+    try {
+      const { data, error } = await supabase
+        .from("songs")
+        .select("id,title,artist,youtube_id,release_year,song_genres(genres(slug))")
+        .in("id", ids as string[]);
+      if (isCancelled()) return null;
+      if (!error && data) {
+        const rows = data as unknown as (Omit<CatalogSong, "is_soundtrack"> & {
+          song_genres: SongGenreSlugEmbed[] | null;
+        })[];
+        return new Map(
+          rows.map(({ song_genres, ...base }) => [
+            base.id,
+            { ...base, is_soundtrack: deriveIsSoundtrack(song_genres) },
+          ]),
+        );
+      }
+      failure = error?.message ?? "no data";
+    } catch (err) {
+      if (isCancelled()) return null;
+      failure = err instanceof Error ? err.message : String(err);
+    }
+    const delayMs = SETLIST_FETCH_RETRY_DELAYS_MS[attempt];
+    if (delayMs === undefined) {
+      log("error", "setlist_fetch_failed", { count: String(ids.length), message: failure });
+      return null;
+    }
+    await sleep(delayMs);
+    if (isCancelled()) return null;
+  }
+}
