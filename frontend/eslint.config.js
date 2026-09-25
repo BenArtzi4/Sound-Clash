@@ -54,6 +54,7 @@ export default [
         sessionStorage: "readonly",
         fetch: "readonly",
         AbortSignal: "readonly",
+        btoa: "readonly",
         DOMException: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",

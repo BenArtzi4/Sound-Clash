@@ -21,6 +21,7 @@ import {
   resetSupabaseMock,
   setHydrate,
   setRpcResponse,
+  setSongFetch,
   supabaseMock,
 } from "../test/supabaseMock";
 import { TeamGameplayPage } from "./TeamGameplayPage";
@@ -194,6 +195,33 @@ describe("TeamGameplayPage", () => {
     });
     expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
     expect(screen.queryByTestId("buzz")).not.toBeInTheDocument();
+  });
+
+  it("gives players the setlist under the podium, and keeps it after the rows are swept", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    setSongFetch({ id: "s1", title: "Levitating", artist: "Dua Lipa", youtube_id: "aaaaaaaaaaa" });
+    setHydrate({
+      game: makeActiveGame({ status: "ended" }),
+      teams: [makeTeam({ id: "team-1", name: "Alice", score: 10 })],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "s1", title_claimed_by: "team-1" })],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    const row = await screen.findByTestId("setlist-row");
+    expect(row).toHaveTextContent("Levitating");
+    expect(row).toHaveTextContent("Song: Alice");
+    expect(screen.getByRole("link", { name: /play all on youtube/i })).toBeInTheDocument();
+
+    act(() => {
+      fireGame(makePayload<ActiveGame>("active_games", "DELETE", { old: { game_code: "ABCDEF" } }));
+    });
+    expect(screen.getByTestId("setlist-row")).toHaveTextContent("Levitating");
   });
 
   it("never renders the post-buzz countdown timer (the display screen is the source of truth)", async () => {

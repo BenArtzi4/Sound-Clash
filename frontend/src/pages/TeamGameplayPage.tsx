@@ -4,6 +4,7 @@ import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
 import { Logo } from "../components/Logo";
 import { PointChange } from "../components/PointChange";
+import { Setlist } from "../components/Setlist";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { isGameExpired, useGameChannel } from "../hooks/useGameChannel";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
@@ -24,6 +25,8 @@ interface PointEvent {
 // (the ended branch always passes false; the gone branch derives it from the
 // snapshot). Module-level so React keeps one component type across the
 // live-ended → swept transition (no podium remount, no confetti replay).
+// Players get the same setlist as the host under the podium: the round history
+// and claims are already in the snapshot, and the songs catalog is anon-readable.
 function FinalBoard({
   board,
   gameCode,
@@ -33,10 +36,14 @@ function FinalBoard({
   gameCode: string;
   expired: boolean;
 }) {
+  const teams = Array.from(board.teams.values());
   return (
-    <main className={styles.shell}>
+    <main className={`${styles.shell} ${styles.finalShell}`}>
       {expired ? <div className={styles.statusEnded}>This game has ended or expired.</div> : null}
-      <EndScreen teams={Array.from(board.teams.values())} gameCode={gameCode} />
+      <EndScreen teams={teams} gameCode={gameCode} />
+      <div className={styles.finalSetlist}>
+        <Setlist game={board.game} rounds={board.rounds} teams={teams} />
+      </div>
     </main>
   );
 }

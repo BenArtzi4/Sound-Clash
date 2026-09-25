@@ -5,7 +5,7 @@ import { EndScreen } from "../components/EndScreen";
 import { ExpiryCountdown } from "../components/ExpiryCountdown";
 import { HostRecoveryLink } from "../components/HostRecoveryLink";
 import { Skeleton } from "../components/Skeleton";
-import { SongExport } from "../components/SongExport";
+import { Setlist } from "../components/Setlist";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { TeamRescueModal } from "../components/TeamRescueModal";
 import { YouTubePlayer } from "../components/YouTubePlayer";
@@ -135,7 +135,7 @@ export function ManagerConsolePage() {
     // The final scoreboard + song export survive the delete (I-FinalBoard):
     // render them from the hook's last-known snapshot so a host whose game was
     // swept mid-view still gets the podium and can still export the songs that
-    // played (the songs table is durable, so SongExport's lookup works after
+    // played (the songs table is durable, so the Setlist's lookup works after
     // the ephemeral rows are gone). No snapshot falls back to the bare message.
     if (finalBoard) {
       const boardTeams = Array.from(finalBoard.teams.values());
@@ -144,7 +144,7 @@ export function ManagerConsolePage() {
           <p className="muted">This game has ended or expired.</p>
           <EndScreen teams={boardTeams} gameCode={gameCode} />
           <div className={styles.endActions}>
-            <SongExport game={finalBoard.game} rounds={finalBoard.rounds} teams={boardTeams} />
+            <Setlist game={finalBoard.game} rounds={finalBoard.rounds} teams={boardTeams} />
             <Link to="/" className="btn btn-primary">
               Back to home
             </Link>
@@ -185,7 +185,7 @@ export function ManagerConsolePage() {
       <main className={styles.shell}>
         <EndScreen teams={boardTeams} gameCode={gameCode} />
         <div className={styles.endActions}>
-          <SongExport game={board.game} rounds={board.rounds} teams={boardTeams} />
+          <Setlist game={board.game} rounds={board.rounds} teams={boardTeams} />
           <Link to="/" className="btn btn-primary">
             Back to home
           </Link>

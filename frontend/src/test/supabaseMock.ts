@@ -25,6 +25,7 @@ interface State {
       youtube_id: string;
       start_time: number;
       is_soundtrack: boolean;
+      release_year: number | null;
     }
   >;
   // When > 0, the next N from("songs")...maybeSingle() lookups resolve with
@@ -33,6 +34,10 @@ interface State {
   songFetchFailuresRemaining: number;
   songFetchError: { message: string; code?: string };
   songFetchAttempts: number;
+  // Same idea for the setlist's batch lookup (from("songs").select().in("id",
+  // ids)): the next N batch reads fail, and songBatchAttempts counts them all.
+  songBatchFailuresRemaining: number;
+  songBatchAttempts: number;
 }
 
 const state: State = {
@@ -45,6 +50,8 @@ const state: State = {
   songFetchFailuresRemaining: 0,
   songFetchError: { message: "song fetch failed" },
   songFetchAttempts: 0,
+  songBatchFailuresRemaining: 0,
+  songBatchAttempts: 0,
 };
 
 export const channelMock = {
@@ -76,7 +83,7 @@ function buildSelect(table: TableName | "songs") {
       }
       return builder;
     }),
-    // Batch lookup used by SongExport: from("songs").select(...).in("id", ids).
+    // Batch lookup used by the setlist: from("songs").select(...).in("id", ids).
     in: vi.fn((column: string, values: readonly unknown[]) => {
       if (table === "songs" && column === "id") {
         pendingInIds = (values as string[]).slice();
@@ -111,7 +118,14 @@ function buildSelect(table: TableName | "songs") {
     single: vi.fn(async () => ({ data: null, error: null })),
     then<T>(onfulfilled?: (value: { data: unknown; error: unknown }) => T): Promise<T> {
       if (table === "songs" && pendingInIds !== null) {
-        const rows: { id: string; title: string; artist: string; youtube_id: string }[] = [];
+        state.songBatchAttempts += 1;
+        if (state.songBatchFailuresRemaining > 0) {
+          state.songBatchFailuresRemaining -= 1;
+          return Promise.resolve({ data: null, error: { message: "song batch failed" } }).then(
+            onfulfilled,
+          );
+        }
+        const rows = [];
         for (const id of pendingInIds) {
           const row = state.songsById[id];
           if (row) {
@@ -120,6 +134,8 @@ function buildSelect(table: TableName | "songs") {
               title: row.title,
               artist: row.artist,
               youtube_id: row.youtube_id,
+              release_year: row.release_year,
+              song_genres: [{ genres: { slug: row.is_soundtrack ? "soundtracks" : "rock" } }],
             });
           }
         }
@@ -154,6 +170,8 @@ export function resetSupabaseMock(): void {
   state.songFetchFailuresRemaining = 0;
   state.songFetchError = { message: "song fetch failed" };
   state.songFetchAttempts = 0;
+  state.songBatchFailuresRemaining = 0;
+  state.songBatchAttempts = 0;
   supabaseMock.channel.mockClear();
   supabaseMock.removeChannel.mockClear();
   supabaseMock.from.mockClear();
@@ -203,6 +221,7 @@ export function setSongFetch(song: {
   youtube_id: string;
   start_time?: number;
   is_soundtrack?: boolean;
+  release_year?: number | null;
 }): void {
   state.songsById[song.id] = {
     id: song.id,
@@ -211,7 +230,16 @@ export function setSongFetch(song: {
     youtube_id: song.youtube_id,
     start_time: song.start_time ?? 0,
     is_soundtrack: song.is_soundtrack ?? false,
+    release_year: song.release_year ?? null,
   };
+}
+
+export function setSongBatchFailures(count: number): void {
+  state.songBatchFailuresRemaining = count;
+}
+
+export function getSongBatchAttempts(): number {
+  return state.songBatchAttempts;
 }
 
 export function setSongFetchFailures(
