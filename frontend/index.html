@@ -3,10 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The home page's head. `npm run build` copies this file once per public
+         page (scripts/prerender-heads.mjs) and rewrites the title, description,
+         canonical and og/twitter text from src/seo/pages.json, so keep these
+         in step with its "/" entry. This file is also the fallback for every
+         per-game URL, whose canonical is rightly the home page. -->
     <meta
       name="description"
-      content="Sound Clash: real-time multiplayer music trivia. Buzz in, name the tune, win the round."
+      content="Free guess-the-song party game: the host plays the music, teams buzz in from their phones to name the title and artist. Hebrew &amp; English hits, no app, no sign-up."
     />
+    <link rel="canonical" href="https://www.soundclash.org/" />
     <meta name="theme-color" content="#14120e" />
     <meta name="color-scheme" content="dark" />
 
@@ -14,6 +20,9 @@
          chrome). The service worker is registered from main.tsx and caches
          nothing — see frontend/public/sw.js. -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- iOS can label a home-screen icon with the page <title>, which is now a
+         search headline ("Sound Clash – Guess the Song…"); pin it to the name. -->
+    <meta name="apple-mobile-web-app-title" content="Sound Clash" />
     <!-- The display face draws the BUZZ label and every headline; preload it so
          it is resolved before first paint instead of swapping in mid-round. -->
     <link rel="preload" href="/fonts/anton-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -83,6 +92,19 @@
       content="Sound Clash — real-time multiplayer music trivia buzzer game"
     />
 
+    <!-- Tells search engines the site's name, which Google shows above the
+         result instead of the bare domain ("soundclash.org"). -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://www.soundclash.org/#website",
+        "name": "Sound Clash",
+        "alternateName": ["SoundClash", "Sound Clash game"],
+        "url": "https://www.soundclash.org/"
+      }
+    </script>
+
     <!-- The equaliser mark on the app's own ground. The bars are the four paths
          from EqualizerMark (src/components/icons.tsx) rather than the earlier
          hand-drawn rectangles, so the tab icon is the same drawing as the
@@ -95,7 +117,7 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='2 2 20 20'%3E%3Crect x='2' y='2' width='20' height='20' fill='%2314120e'/%3E%3Cg fill='none' stroke='%23e9e4d9' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M5 15v-6'/%3E%3Cpath d='M9.5 19V5'/%3E%3Cpath d='M14 17V7'/%3E%3Cpath d='M18.5 15v-6'/%3E%3C/g%3E%3C/svg%3E"
     />
-    <title>Sound Clash</title>
+    <title>Sound Clash – Guess the Song Music Trivia Party Game</title>
   </head>
   <body>
     <div id="root"></div>

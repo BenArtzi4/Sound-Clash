@@ -14,6 +14,8 @@ async def test_health_ok(client) -> None:
     assert body["status"] == "ok"
     assert "version" in body
     assert body["supabase"] in {"ok", "degraded"}
+    # The API stays out of search results (see cors._security_headers).
+    assert resp.headers["x-robots-tag"] == "noindex"
 
 
 async def test_health_supabase_ok_against_fake(client) -> None:
