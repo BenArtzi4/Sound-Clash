@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
 import { GameCodeField } from "../components/GameCodeField";
 import { PointChange } from "../components/PointChange";
@@ -157,9 +157,14 @@ function DisplayEntry() {
         <span className={styles.entryCounter} aria-hidden="true">
           {code.length}/6
         </span>
-        <button type="submit" className="btn btn-primary" disabled={!CODE_RE.test(code)}>
-          Open
-        </button>
+        <div className={styles.entryActions}>
+          <Link to="/" className="btn btn-ghost">
+            Cancel
+          </Link>
+          <button type="submit" className="btn btn-primary" disabled={!CODE_RE.test(code)}>
+            Open
+          </button>
+        </div>
       </form>
     </main>
   );

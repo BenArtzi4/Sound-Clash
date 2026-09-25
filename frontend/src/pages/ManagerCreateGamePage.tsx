@@ -4,7 +4,7 @@ import { CheckIcon } from "../components/icons";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
-import { createGame, listGenres } from "../lib/api";
+import { createGame, getCachedGenres, listGenres } from "../lib/api";
 import { setManagerToken } from "../lib/managerToken";
 import type { Genre } from "../lib/types";
 import { Logo } from "../components/Logo";
@@ -97,11 +97,13 @@ export function ManagerCreateGamePage() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [genres, setGenres] = useState<Genre[]>([]);
+  // Arriving from Home, the genres are usually cached already: draw them on
+  // the first frame rather than behind a frame of placeholder tiles.
+  const [genres, setGenres] = useState<Genre[]>(() => getCachedGenres() ?? []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedDecades, setSelectedDecades] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [genresLoading, setGenresLoading] = useState(true);
+  const [genresLoading, setGenresLoading] = useState(() => genres.length === 0);
 
   // Wake the Render backend so the create-game POST is warm. HomePage already
   // pre-warms on landing; this covers a direct deep-link to /manager/create.

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -134,6 +134,37 @@ describe("HomePage touch ripple", () => {
     expect(parseFloat(dot!.style.height)).toBeCloseTo(2 * r);
     expect(parseFloat(dot!.style.left) + r).toBeCloseTo(60);
     expect(parseFloat(dot!.style.top) + r).toBeCloseTo(20);
+  });
+
+  // iOS Safari snapshots Home for its swipe-back preview at the moment the
+  // page changes. A tap that navigates in the same instant bakes the ripple
+  // into that snapshot, so the swipe back showed the pressed card. The tap
+  // clears it and waits for a painted frame before leaving.
+  it("clears the ripple and paints a clean frame before leaving on a touch tap", async () => {
+    const frames: ((time: number) => void)[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: (time: number) => void) => frames.push(cb));
+    try {
+      render(
+        <MemoryRouter>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/display" element={<p>display page</p>} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      const card = screen.getByRole("link", { name: /display screen/i });
+      fireEvent.pointerDown(card, { pointerType: "touch", clientX: 10, clientY: 10 });
+      fireEvent.pointerUp(card, { pointerType: "touch", clientX: 10, clientY: 10 });
+      fireEvent.click(card);
+      expect(card.querySelector("[data-ripple]")).toBeNull();
+      // Two frames: the first runs before the clean paint, the second after it.
+      act(() => frames.shift()?.(0));
+      expect(screen.queryByText("display page")).toBeNull();
+      act(() => frames.shift()?.(16));
+      expect(await screen.findByText("display page")).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("leaves a mouse press to the hover sweep", () => {

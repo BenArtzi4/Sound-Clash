@@ -162,6 +162,12 @@ export function listGenres(): Promise<Genre[]> {
   return inflightGenres;
 }
 
+/** The genres an earlier listGenres() already fetched, or null. Home fetches
+ * them on landing, so the create page can draw its tiles on the first frame. */
+export function getCachedGenres(): Genre[] | null {
+  return cachedGenres;
+}
+
 // Test-only: reset the genre memoization so each test gets a clean cache.
 export function __resetListGenresCacheForTests(): void {
   cachedGenres = null;

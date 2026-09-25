@@ -13,6 +13,7 @@ import {
   getTeamRejoinToken,
   joinTeam,
   kickTeam,
+  getCachedGenres,
   listGenres,
   listSongs,
   rejoinTeam,
@@ -81,6 +82,18 @@ describe("api - public routes", () => {
     expect(supabaseMocks.select).toHaveBeenCalledWith("id,name,slug");
     expect(supabaseMocks.order).toHaveBeenCalledWith("name");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The create page reads this on its first render, so genres Home already
+  // fetched appear at once instead of behind a frame of placeholder tiles.
+  it("getCachedGenres is null before a fetch and the list after one", async () => {
+    expect(getCachedGenres()).toBeNull();
+    supabaseMocks.order.mockResolvedValueOnce({
+      data: [{ id: "g1", name: "Rock", slug: "rock" }],
+      error: null,
+    });
+    const list = await listGenres();
+    expect(getCachedGenres()).toEqual(list);
   });
 
   it("listGenres memoizes the result so a second call does not hit the network", async () => {

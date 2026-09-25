@@ -37,6 +37,7 @@ The research agrees on two points. A tap must answer within 0.1 s, and it must n
 - **Hover gate.** The hover rule is now gated on `(hover: hover) and (pointer: fine)`, because some Android phones report hover.
 - **What was deleted.** The touch-driven sweep (`data-tapped`, the `(hover: none)` 100 ms override).
 - **Reduced motion.** The global rule collapses the growth, so the ripple becomes an instant flat tint.
+- **Leaving cleanly on a tap (found on the PR preview, 2026-09-25).** iOS Safari takes the snapshot it shows during a swipe-back at the moment the page changes. A tap that navigated in that same instant baked the ripple into the snapshot, so swiping back from Host, Play or Display showed the pressed card. Cancel and the browser's back button were clean, because they use no snapshot. So a touch tap removes its ripple, lets one clean frame paint (two `requestAnimationFrame`s, about 30 ms, well inside the 0.1 s a tap may take to answer), then navigates. A mouse click has no ripple and navigates at once.
 
 ### 2. Home's intro plays once, on landing
 
@@ -50,6 +51,8 @@ The research agrees on two points. A tap must answer within 0.1 s, and it must n
 - **Deleted:** `useViewTransitionNavigate`, `TransitionLink`, the `::view-transition-*` CSS and `--dur-route`, and the wordmark's `view-transition-name`. Links are plain react-router `<Link>`s, and the two programmatic sites use `useNavigate()`.
 - **No loading flash.** `<BrowserRouter>` already wraps a location update in `React.startTransition`, so the current screen stays up until a lazy page is ready.
 - **Create → Console.** The create page still awaits the console's chunk before navigating, so its "Creating…" state holds until the console can render. Otherwise `finally` would re-enable the button during the wait.
+- **Genres on the first frame.** Home also fetches the genre list on landing (`listGenres`, memoised), and the create page seeds its tiles from `getCachedGenres()`. Arriving from Home, the real tiles are drawn on the first frame, not after one or two frames of grey placeholders.
+- **Cancel on Display.** The Display code-entry screen gets a Cancel link back to Home, laid out like Join's actions: Open full-width on top on a phone, both side by side on the right on wider screens.
 - **Prefetch.** Home fetches the Host, Display and How to play chunks when idle: `requestIdleCallback`, falling back to an 800 ms timeout because Safari has none. That is about 12 kB gzip of JS and 5.7 kB of CSS. It goes through `prefetchQuietly` in `lib/preloadError.ts`, which suspends the stale-chunk auto-reload while a background fetch is in flight. A prefetch failing on flaky wifi must not reload the screen the viewer is looking at; the real navigation imports the chunk again and gets the normal recovery.
 
 ## Guards
@@ -57,6 +60,9 @@ The research agrees on two points. A tap must answer within 0.1 s, and it must n
 | Guard | What it catches |
 |---|---|
 | `HomePage.test.tsx` | Every Home link navigates with zero `startViewTransition` calls. The ripple is created for touch but not for mouse, is sized and centred on the finger, fades on lift and is removed. The intro plays on landing only. |
+| `HomePage.test.tsx` (touch tap) | A touch tap removes the ripple and navigates only after two frames |
+| `ManagerCreateGamePage.test.tsx`, `api.test.ts` | Cached genres render on the first frame; `getCachedGenres` is null before a fetch |
+| `DisplayPage.test.tsx` | The code entry offers Cancel back to Home |
 | `HomePage.prefetch.test.tsx` | Home imports the three lazy pages without a click |
 | `preloadError.test.ts` | A background fetch's failure does not reload; the recovery returns afterwards |
 | `arrivalMotion.test.ts` | Home's `rise` exists only behind `[data-intro="true"]`; How to play has no animation |
@@ -69,6 +75,6 @@ The research agrees on two points. A tap must answer within 0.1 s, and it must n
 On the per-PR preview (`https://pr-<N>.sound-clash.pages.dev`), on an iPhone:
 
 - Tap each card: a ripple appears under your finger and the next screen opens at once.
-- From Host, swipe back: Home is simply there, with no blink and no second fade-up.
+- From Host, Play and Display, swipe back: Home is simply there, with no blink, no second fade-up, and no pressed card in the swipe preview.
 - Tap Cancel: the same.
 - On a laptop, hover still sweeps the card, and a click opens the page at once.

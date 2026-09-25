@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { CSSProperties, PointerEvent, ReactNode } from "react";
-import { Link } from "react-router-dom";
+import type { CSSProperties, MouseEvent, PointerEvent, ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { ArrowRightIcon, HostIcon, PhoneIcon, TvIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
@@ -126,8 +126,33 @@ function rippleOff(e: PointerEvent<HTMLAnchorElement>) {
   }
 }
 
+// Runs `run` once the current DOM has been painted: the first frame callback
+// fires before the next paint, the second after it.
+function afterNextPaint(run: () => void) {
+  if (typeof window.requestAnimationFrame !== "function") {
+    run();
+    return;
+  }
+  window.requestAnimationFrame(() => window.requestAnimationFrame(run));
+}
+
 export function HomePage() {
   const [intro] = useState(() => introPending);
+  const navigate = useNavigate();
+
+  // iOS Safari snapshots Home for its swipe-back preview at the moment the page
+  // changes. A tap that navigated in that same instant baked its ripple into
+  // the snapshot, so swiping back showed the pressed card. A touch tap drops
+  // its ripple, lets one clean frame paint (~30 ms, well inside the 0.1 s a
+  // tap may take to answer), then leaves. A mouse click has no ripple and the
+  // Link navigates as usual.
+  function leaveCleanly(e: MouseEvent<HTMLAnchorElement>, to: string) {
+    const dots = e.currentTarget.querySelectorAll("[data-ripple]");
+    if (dots.length === 0) return;
+    e.preventDefault();
+    for (const dot of dots) dot.remove();
+    afterNextPaint(() => navigate(to));
+  }
 
   useEffect(() => {
     introPending = false;
@@ -161,6 +186,7 @@ export function HomePage() {
               aria-label={r.name}
               data-role={r.role}
               style={{ "--i": i } as CSSProperties}
+              onClick={(e) => leaveCleanly(e, r.to)}
               onPointerDown={rippleOn}
               onPointerUp={rippleOff}
               onPointerCancel={rippleOff}
