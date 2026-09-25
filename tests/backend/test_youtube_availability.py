@@ -62,15 +62,55 @@ def test_404_is_dead(monkeypatch) -> None:
     assert youtube_availability.check_oembed("abcDEF12345") == "dead"
 
 
-def test_401_is_unknown_not_dead(monkeypatch) -> None:
-    # Embed-disabled / region-blocked: the IFrame may still play it.
+def test_401_is_unplayable(monkeypatch) -> None:
+    # The owner disabled embedding: the IFrame player fails on it every time.
     monkeypatch.setattr(urllib.request, "urlopen", _urlopen_raising(_http_error(401)))
-    assert youtube_availability.check_oembed("abcDEF12345") == "unknown"
+    assert youtube_availability.check_oembed("abcDEF12345") == "unplayable"
+
+
+def test_403_is_unplayable(monkeypatch) -> None:
+    # A private video: oEmbed answers 403, the watch page says "Private video".
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen_raising(_http_error(403)))
+    assert youtube_availability.check_oembed("abcDEF12345") == "unplayable"
 
 
 def test_5xx_is_unknown_not_dead(monkeypatch) -> None:
     monkeypatch.setattr(urllib.request, "urlopen", _urlopen_raising(_http_error(503)))
     assert youtube_availability.check_oembed("abcDEF12345") == "unknown"
+
+
+def test_429_is_unknown_not_unplayable(monkeypatch) -> None:
+    # Rate limiting says nothing about the video itself.
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen_raising(_http_error(429)))
+    assert youtube_availability.check_oembed("abcDEF12345") == "unknown"
+
+
+def test_400_is_unknown(monkeypatch) -> None:
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen_raising(_http_error(400)))
+    assert youtube_availability.check_oembed("abcDEF12345") == "unknown"
+
+
+# ----- canary ------------------------------------------------------------
+
+
+async def test_youtube_answers_normally_probes_the_canary(monkeypatch) -> None:
+    probed: list[str] = []
+
+    def fake(youtube_id: str, *, timeout: float = 3.0) -> str:
+        probed.append(youtube_id)
+        return "ok"
+
+    monkeypatch.setattr(youtube_availability, "check_oembed", fake)
+    assert await youtube_availability.youtube_answers_normally() is True
+    assert probed == [youtube_availability.CANARY_YOUTUBE_ID]
+
+
+async def test_youtube_answers_normally_false_when_canary_refused(monkeypatch) -> None:
+    def fake(youtube_id: str, *, timeout: float = 3.0) -> str:
+        return "unplayable"
+
+    monkeypatch.setattr(youtube_availability, "check_oembed", fake)
+    assert await youtube_availability.youtube_answers_normally() is False
 
 
 def test_url_error_is_unknown(monkeypatch) -> None:

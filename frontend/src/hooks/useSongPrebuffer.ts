@@ -25,7 +25,12 @@ export interface SongPrebuffer {
   onPlayerReady: () => void;
   onPlayerBReady: () => void;
   handlePlayerPlaying: (detection: "statechange" | "poll") => void;
-  handlePlayerError: (key: "A" | "B", code: number) => void;
+  handlePlayerError: (
+    key: "A" | "B",
+    code: number,
+    videoId: string | null,
+    liveSong: Song | null,
+  ) => void;
 
   // Imperative surface for handleNextRound + the mid-round song resolver.
   activePlayer: () => YouTubePlayerHandle | null;
@@ -47,6 +52,39 @@ interface PlayerReadyHandle {
   setReady: () => void;
   enqueueSong: (song: { youtube_id: string; start_time: number }) => void;
   flushPendingSong: () => { youtube_id: string; start_time: number } | null;
+}
+
+interface SongRef {
+  id: string;
+  title: string;
+  artist: string;
+  youtube_id: string;
+}
+
+// Telemetry context for a video the player refused (yt_player_error /
+// yt_preload_error): the catalog song and a watch URL, so the weekly
+// dead-video scan can list real in-game failures by name. `candidates` are the
+// songs the player could have been playing, most likely first; the one whose
+// youtube_id matches the failed video wins. Empty fields are omitted.
+export function failedVideoContext(
+  gameCode: string,
+  code: number,
+  videoId: string | null,
+  candidates: Array<SongRef | null>,
+): Record<string, string> {
+  const song =
+    candidates.find((s) => s !== null && (videoId === null || s.youtube_id === videoId)) ?? null;
+  const youtubeId = videoId ?? song?.youtube_id ?? "";
+  const context: Record<string, string> = {
+    code: String(code),
+    game_code: gameCode,
+    youtube_id: youtubeId,
+    url: youtubeId ? `https://www.youtube.com/watch?v=${youtubeId}` : "",
+    song_id: song?.id ?? "",
+    title: song?.title ?? "",
+    artist: song?.artist ?? "",
+  };
+  return Object.fromEntries(Object.entries(context).filter(([, v]) => v !== ""));
 }
 
 export function useSongPrebuffer(
@@ -211,15 +249,37 @@ export function useSongPrebuffer(
 
   // A YouTube error on the standby/preload buffer must not alarm the host (the
   // live song is fine); just abandon the preload so Next round falls back to a
-  // fresh random pick. An error on the live player surfaces as before.
-  function handlePlayerError(key: "A" | "B", code: number) {
-    if (key === activeKeyRef.current) {
-      log("warn", "yt_player_error", { code: String(code) });
+  // fresh random pick. An error on the live player surfaces as before. Both
+  // log the failing song (title, artist, id, URL) so it can be found and fixed.
+  function handlePlayerError(
+    key: "A" | "B",
+    code: number,
+    videoId: string | null,
+    liveSong: Song | null,
+  ) {
+    const peeked = preloadRef.current;
+    const peekedRef: SongRef | null = peeked
+      ? {
+          id: peeked.song_id,
+          title: peeked.title,
+          artist: peeked.artist,
+          youtube_id: peeked.youtube_id,
+        }
+      : null;
+    const isLive = key === activeKeyRef.current;
+    const context = failedVideoContext(
+      gameCode,
+      code,
+      videoId,
+      isLive ? [liveSong, peekedRef] : [peekedRef, liveSong],
+    );
+    if (isLive) {
+      log("warn", "yt_player_error", context);
       toast("Video unavailable — click Next round to pick a different song.", {
         variant: "error",
       });
     } else {
-      log("warn", "yt_preload_error", { code: String(code) });
+      log("warn", "yt_preload_error", context);
       preloadRef.current = null;
     }
   }

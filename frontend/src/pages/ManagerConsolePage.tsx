@@ -303,7 +303,7 @@ export function ManagerConsolePage() {
               testId={activeKey === "A" ? "youtube-player" : "youtube-player-preload"}
               onReady={onPlayerReady}
               onPlaying={handlePlayerPlaying}
-              onError={(code) => handlePlayerError("A", code)}
+              onError={(code, videoId) => handlePlayerError("A", code, videoId, currentSong)}
             />
           </div>
           <div
@@ -317,7 +317,7 @@ export function ManagerConsolePage() {
               testId={activeKey === "B" ? "youtube-player" : "youtube-player-preload"}
               onReady={onPlayerBReady}
               onPlaying={handlePlayerPlaying}
-              onError={(code) => handlePlayerError("B", code)}
+              onError={(code, videoId) => handlePlayerError("B", code, videoId, currentSong)}
             />
           </div>
         </div>

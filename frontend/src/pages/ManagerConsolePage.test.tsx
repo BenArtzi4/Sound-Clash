@@ -110,6 +110,7 @@ let lastHandle: MockHandle | null = null;
 let playerHandles: MockHandle[] = [];
 let onReadyHandlers: Array<(() => void) | undefined> = [];
 let onPlayingHandlers: Array<((d: "statechange" | "poll") => void) | undefined> = [];
+let onErrorHandlers: Array<((code: number, videoId: string | null) => void) | undefined> = [];
 
 // Typed accessor (tsconfig has noUncheckedIndexedAccess): the handle is pushed
 // before this is ever read, so a missing index is a test-setup bug.
@@ -125,6 +126,7 @@ vi.mock("../components/YouTubePlayer", () => ({
     {
       onReady?: () => void;
       onPlaying?: (d: "statechange" | "poll") => void;
+      onError?: (code: number, videoId: string | null) => void;
       testId?: string;
     }
   >((props, ref) => {
@@ -134,6 +136,7 @@ vi.mock("../components/YouTubePlayer", () => ({
       playerHandles.push(makeMockHandle());
       onReadyHandlers.push(props.onReady);
       onPlayingHandlers.push(props.onPlaying);
+      onErrorHandlers.push(props.onError);
     }
     const idx = idxRef.current;
     // Keep the handler captures current across re-renders — the page recreates
@@ -142,6 +145,7 @@ vi.mock("../components/YouTubePlayer", () => ({
     // mirror the active player (index 0) for the legacy single-player tests.
     onReadyHandlers[idx] = props.onReady;
     onPlayingHandlers[idx] = props.onPlaying;
+    onErrorHandlers[idx] = props.onError;
     if (idx === 0) {
       onReadyHandler = props.onReady ?? null;
       lastHandle = handle(0);
@@ -190,6 +194,7 @@ beforeEach(() => {
   playerHandles = [];
   onReadyHandlers = [];
   onPlayingHandlers = [];
+  onErrorHandlers = [];
   vi.mocked(selectNextSongDirect).mockReset();
   vi.mocked(peekNextSongDirect).mockReset();
   vi.mocked(awardAttemptDirect).mockReset();
@@ -1862,6 +1867,56 @@ describe("ManagerConsolePage", () => {
         expect.objectContaining({ preloaded: true, songId: "song-2" }),
       ),
     );
+  });
+
+  it("logs the failing live song's name and URL when the video errors", async () => {
+    await setupPlayingRoundWithBothPlayersReady();
+    await waitFor(() => expect(screen.getByText("First")).toBeInTheDocument());
+
+    act(() => {
+      onErrorHandlers[0]?.(150, "vid1aaaaaaa");
+    });
+
+    expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_player_error", {
+      code: "150",
+      game_code: "ABCDEF",
+      youtube_id: "vid1aaaaaaa",
+      url: "https://www.youtube.com/watch?v=vid1aaaaaaa",
+      song_id: "song-1",
+      title: "First",
+      artist: "A",
+    });
+    expect(await screen.findByText(/video unavailable/i)).toBeInTheDocument();
+  });
+
+  it("logs the prebuffered song's name and URL when the standby video errors", async () => {
+    await setupPlayingRoundWithBothPlayersReady();
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-2",
+      youtube_id: "vid2bbbbbbb",
+      start_time: 30,
+      title: "Song Two",
+      artist: "Artist Two",
+      is_soundtrack: false,
+    });
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 30));
+
+    act(() => {
+      onErrorHandlers[1]?.(101, "vid2bbbbbbb");
+    });
+
+    expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_preload_error", {
+      code: "101",
+      game_code: "ABCDEF",
+      youtube_id: "vid2bbbbbbb",
+      url: "https://www.youtube.com/watch?v=vid2bbbbbbb",
+      song_id: "song-2",
+      title: "Song Two",
+      artist: "Artist Two",
+    });
   });
 
   it("renders the peeked song's metadata in-gesture on the fast path (I-NextMeta)", async () => {
