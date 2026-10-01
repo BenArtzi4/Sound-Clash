@@ -359,7 +359,10 @@ export function ManagerConsolePage() {
               lands (previously a conditionally-mounted banner pushed the row
               down). Locked and idle share the same box metrics; only the
               colour + text change. Keep the "buzzed in" wording so the status
-              stays greppable for the e2e/unit assertions. */}
+              stays greppable for the e2e/unit assertions. The single inner
+              span keeps the team name and the sentence one run of text: as
+              direct flex children they became two side-by-side columns when
+              a long name wrapped. */}
           {game.status === "playing" ? (
             <div
               className={`${styles.statusStrip} ${
@@ -368,13 +371,16 @@ export function ManagerConsolePage() {
               role="status"
               aria-live="polite"
             >
-              {lockedTeam ? (
-                <>
-                  <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score it:
-                </>
-              ) : (
-                "Waiting for a buzz…"
-              )}
+              <span className={styles.statusText} data-testid="status-text">
+                {lockedTeam ? (
+                  <>
+                    <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score
+                    it:
+                  </>
+                ) : (
+                  "Waiting for a buzz…"
+                )}
+              </span>
             </div>
           ) : null}
 
