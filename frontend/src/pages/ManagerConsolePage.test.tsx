@@ -467,6 +467,29 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByText(/waiting for a buzz/i)).toBeInTheDocument();
   });
 
+  it("keeps the buzzed team's name and the sentence in one run of text", async () => {
+    // As two direct children of the flex strip, a long name and "buzzed in"
+    // rendered as two side-by-side columns. One wrapper keeps them one line.
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "The Midnight Lyric Hunters XL" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const text = screen.getByTestId("status-text");
+    const strip = text.parentElement;
+    expect(strip).toHaveAttribute("role", "status");
+    expect(strip?.childNodes).toHaveLength(1);
+    expect(text).toHaveTextContent("The Midnight Lyric Hunters XL buzzed in — score it:");
+  });
+
   it("Correct Song fires awardAttemptDirect with title_correct=true and toasts +10 immediately", async () => {
     setHydrate({
       game: makeActiveGame({

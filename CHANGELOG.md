@@ -132,6 +132,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-10-01: The host console's buzz status line (“Waiting for a buzz…” / “<team> buzzed in — score it:”) is now centred on every screen, and a long team name wraps as one sentence instead of splitting into two columns. (#TBD)
 - 2026-09-25: Songs whose YouTube video became private or had embedding turned off are now skipped in games, like deleted videos, instead of showing "Video unavailable" mid-round. The weekly video check also lists every song that failed to play in a real game, with its name and link, so it can be replaced. (#347)
 - 2026-09-25: **Players can now scroll their final results.** On a phone the podium ran past the bottom of the screen and the leaderboard below it could not be reached — the page was locked to one screen height like the buzzer. (#348)
 - 2026-09-25: **The YouTube playlist no longer drops songs after the 50th.** YouTube only keeps the first 50 songs of an instant playlist, so a long game now gets one *Play songs 1–50*, *51–100* … link per 50 songs instead of silently losing the rest. (#348)
