@@ -11,7 +11,7 @@ migration 039). Each does its own in-function manager-token check before
 performing any work, so the function-level EXECUTE grant is safe. The remaining
 backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
 ``end_game``, ``cleanup_expired_games``, ``archive_game``,
-``set_song_availability`` -- must still reject anon.
+``set_song_availability``, ``pick_next_song`` -- must still reject anon.
 """
 
 from __future__ import annotations
@@ -210,6 +210,44 @@ async def test_anon_cannot_execute_set_song_availability(
         )
 
 
+@pytest.mark.asyncio
+async def test_anon_cannot_execute_pick_next_song(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 048: pick_next_song is the internal balanced-turns helper
+    behind select_next_song / peek_next_song. It takes no manager token, so it
+    must not be callable from the browser."""
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await anon_conn.execute(
+            "SELECT pick_next_song($1, $2::uuid[], $3::integer[])",
+            "ABCDEF",
+            [uuid.uuid4()],
+            [],
+        )
+
+
+@pytest.mark.asyncio
+async def test_anon_peek_reaches_the_revoked_helper_through_the_definer(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 048: with a valid token, anon's peek_next_song returns a song
+    even though anon cannot call pick_next_song directly -- the SECURITY
+    DEFINER RPC calls the helper as its owner."""
+    game_code = await create_test_game(db, status="playing")
+    token = await db.fetchval("SELECT manager_token FROM game_secrets WHERE game_code = $1", game_code)
+    rock = await db.fetchval("SELECT id FROM genres WHERE slug = 'rock'")
+    await db.execute(
+        "UPDATE active_games SET selected_genres = ARRAY[$1::uuid] WHERE game_code = $2",
+        rock,
+        game_code,
+    )
+    song = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11])
+    await db.execute("INSERT INTO song_genres (song_id, genre_id) VALUES ($1, $2)", song, rock)
+
+    row = await anon_conn.fetchrow("SELECT song_id FROM peek_next_song($1, $2)", game_code, token)
+    assert row is not None and row["song_id"] == song
+
+
 # ----- migration 020: explicit grant state on the backend-only RPCs ----------
 #
 # On hosted Supabase a `REVOKE ... FROM PUBLIC` is not enough, because the
@@ -232,6 +270,7 @@ async def test_anon_cannot_execute_set_song_availability(
         "cleanup_expired_games",
         "archive_game",
         "set_song_availability",
+        "pick_next_song",
     ],
 )
 async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) -> None:
