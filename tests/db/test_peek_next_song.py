@@ -384,14 +384,13 @@ async def test_peek_returns_zero_rows_when_all_songs_unavailable(
 
 
 # ---------------------------------------------------------------------------
-# Uniform-per-song distribution (migration 047, Option B)
+# Balanced genre turns (migration 048)
 #
-# peek_next_song is READ-ONLY, so it is the distribution probe: calling it N
-# times without committing samples the picker's per-song probability directly.
-# These tests use >=2 UNEQUAL genres, where the old "equal-weight per genre"
-# two-stage pick and the new uniform-per-song pick diverge. The pre-047
-# algorithm inflated small-genre and multi-genre songs, so both tests fail
-# against it and pass only against the deduped single-draw pick.
+# peek_next_song is READ-ONLY, so calling it repeatedly samples the picker for
+# the CURRENT point of the game without changing it. It runs the same
+# pick_next_song helper as select_next_song's random path, so these tests pin
+# the rule the prebuffered video follows: a genre more than one song ahead of
+# the least-played genre is never offered.
 # ---------------------------------------------------------------------------
 
 
@@ -416,73 +415,81 @@ async def _peek_counts(
     return counts
 
 
-@pytest.mark.asyncio
-async def test_uniform_per_song_distribution(db: asyncpg.Connection) -> None:
-    """Two unequal genres (2 songs vs 8 songs), all 10 distinct: every song must
-    be drawn with ~equal frequency (uniform per song).
-
-    Old algorithm (equal weight per genre): a small-genre song gets ~25% of
-    draws (0.5 genre * 0.5 within) vs the ~10% a uniform pick gives it, blowing
-    past the upper band -> this test fails pre-047. New algorithm: each of the
-    10 songs is ~1/10, comfortably inside the band.
-    """
-    game_code = await create_test_game(db, status="playing")
-    rock = (await _genre_ids(db, "rock"))[0]
-    pop = (await _genre_ids(db, "pop"))[0]
-    await _set_selected_genres(db, game_code, [rock, pop])
-    token = await fetch_manager_token(db, game_code)
-
-    small = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(2)]
-    large = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(8)]
-    for sid in small:
-        await _attach_song_to_genre(db, sid, rock)
-    for sid in large:
-        await _attach_song_to_genre(db, sid, pop)
-
-    draws = 1000
-    counts = await _peek_counts(db, game_code, token, draws)
-
-    # Every eligible song must actually appear.
-    assert set(counts) == set(small) | set(large)
-
-    expected = draws / 10  # 100 per song under a uniform pick
-    lo, hi = expected * 0.6, expected * 1.4  # [60, 140] -- ~4.2 sigma band
-    for sid, n in counts.items():
-        assert lo <= n <= hi, f"song {sid} drawn {n} times, outside uniform band [{lo}, {hi}]"
+async def _two_genre_game(
+    conn: asyncpg.Connection, sizes: tuple[int, int], dual: int = 0
+) -> tuple[str, uuid.UUID, list[uuid.UUID], list[uuid.UUID], list[uuid.UUID]]:
+    """Game with rock + pop selected: `sizes` single-genre songs each, plus
+    `dual` songs tagged in both. Returns (code, token, rock, pop, dual)."""
+    game_code = await create_test_game(conn, status="playing")
+    rock = (await _genre_ids(conn, "rock"))[0]
+    pop = (await _genre_ids(conn, "pop"))[0]
+    await _set_selected_genres(conn, game_code, [rock, pop])
+    token = await fetch_manager_token(conn, game_code)
+    rock_songs = [await create_test_song(conn, youtube_id=uuid.uuid4().hex[:11]) for _ in range(sizes[0])]
+    pop_songs = [await create_test_song(conn, youtube_id=uuid.uuid4().hex[:11]) for _ in range(sizes[1])]
+    dual_songs = [await create_test_song(conn, youtube_id=uuid.uuid4().hex[:11]) for _ in range(dual)]
+    for sid in rock_songs:
+        await _attach_song_to_genre(conn, sid, rock)
+    for sid in pop_songs:
+        await _attach_song_to_genre(conn, sid, pop)
+    for sid in dual_songs:
+        await _attach_song_to_genre(conn, sid, rock)
+        await _attach_song_to_genre(conn, sid, pop)
+    return game_code, token, rock_songs, pop_songs, dual_songs
 
 
 @pytest.mark.asyncio
-async def test_multi_genre_song_not_boosted(db: asyncpg.Connection) -> None:
-    """A song tagged in BOTH selected genres must be no likelier than a
-    single-genre song.
+async def test_peek_offers_only_the_genre_that_is_behind(db: asyncpg.Connection) -> None:
+    """Two rock songs already played, no pop: rock is 2 ahead, so every peek
+    must offer a pop song even though rock still has songs left."""
+    game_code, token, rock, pop, _ = await _two_genre_game(db, (5, 5))
+    await _select(db, game_code, token, song_id=rock[0])
+    await _select(db, game_code, token, song_id=rock[1])
 
-    Old algorithm: a dual-tagged song is reachable through either chosen genre,
-    so its probability is the SUM over both genres -> ~2x a single-genre song.
-    New algorithm counts it once (EXISTS dedup), so it matches the singles.
-    """
-    game_code = await create_test_game(db, status="playing")
-    rock = (await _genre_ids(db, "rock"))[0]
-    pop = (await _genre_ids(db, "pop"))[0]
-    await _set_selected_genres(db, game_code, [rock, pop])
-    token = await fetch_manager_token(db, game_code)
+    counts = await _peek_counts(db, game_code, token, 40)
+    assert set(counts) <= set(pop)
 
-    # 4 rock-only + 4 pop-only singles, plus one song tagged in BOTH.
-    rock_only = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(4)]
-    pop_only = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(4)]
-    for sid in rock_only:
-        await _attach_song_to_genre(db, sid, rock)
-    for sid in pop_only:
-        await _attach_song_to_genre(db, sid, pop)
-    dual = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11])
-    await _attach_song_to_genre(db, dual, rock)
-    await _attach_song_to_genre(db, dual, pop)
 
-    draws = 1200
-    counts = await _peek_counts(db, game_code, token, draws)
+@pytest.mark.asyncio
+async def test_peek_offers_both_genres_when_one_ahead(db: asyncpg.Connection) -> None:
+    """One rock song played, no pop: rock is only 1 ahead, so it may still go
+    next. Both genres must show up across 200 peeks (not a fixed rotation)."""
+    game_code, token, rock, pop, _ = await _two_genre_game(db, (5, 5))
+    await _select(db, game_code, token, song_id=rock[0])
 
-    singles = rock_only + pop_only
-    assert set(counts) == set(singles) | {dual}
-    mean_single = sum(counts[sid] for sid in singles) / len(singles)
-    ratio = counts[dual] / mean_single
-    # Uniform pick -> ratio ~1.0; the old per-genre pick -> ~2.0. Band excludes 2.0.
-    assert 0.6 <= ratio <= 1.5, f"dual-genre song boosted: {ratio:.2f}x the mean single"
+    counts = await _peek_counts(db, game_code, token, 200)
+    assert set(counts) & set(rock[1:])
+    assert set(counts) & set(pop)
+    assert rock[0] not in counts
+
+
+@pytest.mark.asyncio
+async def test_multi_genre_song_counts_as_a_turn_for_each_genre(db: asyncpg.Connection) -> None:
+    """Playing two songs tagged in rock AND pop gives both genres 2 turns, so a
+    third selected genre with none must be the only one offered."""
+    game_code, token, _, _, dual = await _two_genre_game(db, (4, 4), dual=2)
+    hip_hop = (await _genre_ids(db, "hip-hop"))[0]
+    hip_songs = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(4)]
+    for sid in hip_songs:
+        await _attach_song_to_genre(db, sid, hip_hop)
+    await db.execute(
+        "UPDATE active_games SET selected_genres = array_append(selected_genres, $1) "
+        "WHERE game_code = $2",
+        hip_hop,
+        game_code,
+    )
+    for sid in dual:
+        await _select(db, game_code, token, song_id=sid)
+
+    counts = await _peek_counts(db, game_code, token, 40)
+    assert set(counts) <= set(hip_songs)
+
+
+@pytest.mark.asyncio
+async def test_peek_draws_every_song_of_an_allowed_genre(db: asyncpg.Connection) -> None:
+    """Within the genres allowed to go next the song is uniformly random: over
+    300 peeks of a fresh 3 + 3 game every song, including a dual-tagged one,
+    turns up."""
+    game_code, token, rock, pop, dual = await _two_genre_game(db, (3, 3), dual=1)
+    counts = await _peek_counts(db, game_code, token, 300)
+    assert set(counts) == set(rock) | set(pop) | set(dual)

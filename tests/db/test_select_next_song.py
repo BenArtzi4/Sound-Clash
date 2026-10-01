@@ -22,6 +22,7 @@ Coverage:
 from __future__ import annotations
 
 import uuid
+from itertools import pairwise
 
 import asyncpg
 import pytest
@@ -153,14 +154,12 @@ async def test_random_pick_excludes_already_played_songs(db: asyncpg.Connection)
 
 
 @pytest.mark.asyncio
-async def test_random_pick_uniform_spans_unequal_genres(db: asyncpg.Connection) -> None:
-    """Uniform-per-song pick (migration 047): with two unequal genres selected,
-    the random path draws from the DEDUPED UNION of both. Every distinct eligible
-    song -- including one tagged in BOTH genres, counted once -- is served exactly
-    once across successive rounds, then the pool exhausts with no_more_songs.
-
-    Locks the contract that the new `eligible` CTE enumerates exactly the set of
-    distinct eligible songs (no genre fan-out, no double-serving of the dual song)."""
+async def test_random_pick_spans_unequal_genres(db: asyncpg.Connection) -> None:
+    """With two unequal genres selected, the random path eventually serves every
+    distinct eligible song from BOTH -- including one tagged in both genres --
+    exactly once across successive rounds, then the pool exhausts with
+    no_more_songs. A dual-tagged song is reachable through either genre's turn
+    (migration 048) but, once played, never comes back."""
     game_code = await create_test_game(db, status="waiting")
     token = await fetch_manager_token(db, game_code)
     rock = (await _genre_ids(db, "rock"))[0]
@@ -537,3 +536,123 @@ async def test_null_unavailable_at_stays_eligible(db: asyncpg.Connection) -> Non
 
     rows = await _call(db, game_code, token)
     assert rows[0]["song_id"] == songs[0]
+
+
+# ---------------------------------------------------------------------------
+# Balanced genre turns (migration 048)
+#
+# The random path picks a genre first, then a song inside it. A genre may go
+# next unless it is already more than one song ahead of the least-played genre
+# that still has songs left, so genre counts never drift more than 2 apart.
+# These tests assert that invariant round by round, so they are deterministic
+# rather than statistical. Under migration 047's uniform-per-song pick a 10 vs
+# 30 vs 30 pool drifts past 2 within a few rounds.
+# ---------------------------------------------------------------------------
+
+
+async def _genre_map(conn: asyncpg.Connection, *slugs: str) -> dict[str, uuid.UUID]:
+    rows = await conn.fetch("SELECT slug, id FROM genres WHERE slug = ANY($1::text[])", list(slugs))
+    return {r["slug"]: r["id"] for r in rows}
+
+
+async def _seed_genre_songs(
+    conn: asyncpg.Connection,
+    genres: dict[str, uuid.UUID],
+    sizes: dict[str, int],
+    *,
+    release_year: int | None = None,
+) -> dict[uuid.UUID, str]:
+    """Give each genre `n` songs of its own. Returns {song_id: genre_slug}."""
+    owner: dict[uuid.UUID, str] = {}
+    for slug, n in sizes.items():
+        for _ in range(n):
+            sid = await create_test_song(
+                conn, youtube_id=uuid.uuid4().hex[:11], release_year=release_year
+            )
+            await _attach_song_to_genre(conn, sid, genres[slug])
+            owner[sid] = slug
+    return owner
+
+
+async def _new_game(
+    conn: asyncpg.Connection, genres: dict[str, uuid.UUID]
+) -> tuple[str, uuid.UUID]:
+    game_code = await create_test_game(conn, status="waiting")
+    await _set_selected_genres(conn, game_code, list(genres.values()))
+    return game_code, await fetch_manager_token(conn, game_code)
+
+
+@pytest.mark.asyncio
+async def test_balanced_turns_keep_genre_counts_within_two(db: asyncpg.Connection) -> None:
+    """10 vs 30 vs 30 songs, 24 rounds per game, 3 games: after every round the
+    most- and least-played genres differ by at most 2 (so each ends on 7-9)."""
+    genres = await _genre_map(db, "rock", "pop", "hip-hop")
+    owner = await _seed_genre_songs(db, genres, {"rock": 10, "pop": 30, "hip-hop": 30})
+    for _ in range(3):
+        game_code, token = await _new_game(db, genres)
+        counts = dict.fromkeys(genres, 0)
+        for rnd in range(1, 25):
+            sid = (await _call(db, game_code, token))[0]["song_id"]
+            counts[owner[sid]] += 1
+            gap = max(counts.values()) - min(counts.values())
+            assert gap <= 2, f"round {rnd}: genre counts drifted to {counts}"
+        assert all(7 <= n <= 9 for n in counts.values()), counts
+
+
+@pytest.mark.asyncio
+async def test_exhausted_genre_drops_out_and_the_rest_continue(db: asyncpg.Connection) -> None:
+    """A 2-song genre beside a 10-song one: both small-genre songs are played
+    within the first 5 rounds (it can never fall more than 2 behind), then the
+    big genre carries on alone until the whole pool is used."""
+    genres = await _genre_map(db, "rock", "pop")
+    owner = await _seed_genre_songs(db, genres, {"rock": 2, "pop": 10})
+    game_code, token = await _new_game(db, genres)
+
+    order = [(await _call(db, game_code, token))[0]["song_id"] for _ in range(12)]
+    assert [owner[s] for s in order[:5]].count("rock") == 2
+    assert all(owner[s] == "pop" for s in order[5:])
+    assert set(order) == set(owner)
+
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert "no_more_songs" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_balanced_turns_are_not_a_fixed_rotation(db: asyncpg.Connection) -> None:
+    """Two equal genres must not simply alternate: somewhere across 4 games of
+    16 rounds the same genre plays twice in a row. A strict rotation would make
+    every second genre predictable. Each game has at least 7 independent 50/50 chances
+    of a repeat, so this fails by luck with probability below 2**-28."""
+    genres = await _genre_map(db, "rock", "pop")
+    owner = await _seed_genre_songs(db, genres, {"rock": 16, "pop": 16})
+    back_to_back = 0
+    for _ in range(4):
+        game_code, token = await _new_game(db, genres)
+        played = [owner[(await _call(db, game_code, token))[0]["song_id"]] for _ in range(16)]
+        back_to_back += sum(a == b for a, b in pairwise(played))
+    assert back_to_back > 0
+
+
+@pytest.mark.asyncio
+async def test_balanced_turns_respect_the_decade_filter(db: asyncpg.Connection) -> None:
+    """Balancing only counts songs the decade filter lets through: rock has 2
+    songs from the 1990s (and 5 from the 1980s that never qualify), pop has 6
+    from the 1990s. Exactly the 8 eligible songs play, rock's 2 within the
+    first 5 rounds."""
+    genres = await _genre_map(db, "rock", "pop")
+    rock_90s = await _seed_genre_songs(db, genres, {"rock": 2}, release_year=1994)
+    rock_80s = await _seed_genre_songs(db, genres, {"rock": 5}, release_year=1985)
+    pop_90s = await _seed_genre_songs(db, genres, {"pop": 6}, release_year=1997)
+    game_code, token = await _new_game(db, genres)
+    await db.execute(
+        "UPDATE active_games SET selected_decades = '{1990}' WHERE game_code = $1", game_code
+    )
+
+    order = [(await _call(db, game_code, token))[0]["song_id"] for _ in range(8)]
+    assert set(order) == set(rock_90s) | set(pop_90s)
+    assert not set(order) & set(rock_80s)
+    assert sum(s in rock_90s for s in order[:5]) == 2
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await _call(db, game_code, token)
+    assert "no_more_songs" in str(exc.value)
