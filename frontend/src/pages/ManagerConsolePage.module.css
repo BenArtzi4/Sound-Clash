@@ -192,10 +192,17 @@
    the scoring buttons below never move when a buzz lands. The locked and
    waiting variants share identical box metrics (padding, min-height, border
    width) — only the colour changes — so the strip's height is constant across
-   the transition. */
+   the transition.
+   The text is centred: the strip is a boxed, full-width banner sitting right
+   over the symmetric score grid, whose labels are centred too, and a short
+   left-aligned line left most of a laptop-wide box empty. The content is one
+   inner span (.statusText) so a long team name wraps as a single sentence
+   instead of splitting into two flex columns. */
 .statusStrip {
   display: flex;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   min-height: 3.25rem;
   padding: 0.75rem 1.1rem;
   border: 1px solid var(--border);
@@ -209,6 +216,13 @@
     background-color var(--dur-state) var(--ease-move),
     border-color var(--dur-state) var(--ease-move),
     color var(--dur-state) var(--ease-move);
+}
+
+/* min-width: 0 lets the flex item shrink below its longest word; anywhere
+   breaks a 30-character name typed without spaces instead of overflowing. */
+.statusText {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .statusStripLocked {
@@ -229,9 +243,15 @@
   font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: 0.02em;
-  /* The display face's tight right sidebearing swallows the literal space before
-     "buzzed in" (final validation 2026-09-22, F-11 / issue #337). */
-  margin-inline-end: 0.3em;
+  /* The name shares a line with the Instrument Sans sentence, and at the
+     inherited 1.5 the taller display face grew that line, making the locked
+     strip 1px taller than the waiting one (the buttons below shifted). 1.2
+     keeps the line box the strut's height.
+     No margin before "buzzed in": issue #337 added one because the space was
+     missing, but the cause was the strip's flex layout dropping the leading
+     space of a text-only flex item. Inside .statusText the literal space
+     renders (0.19em, the same as the space between "buzzed" and "in"). */
+  line-height: 1.2;
 }
 
 .scoreRow {
@@ -241,12 +261,29 @@
   margin-bottom: 1rem;
 }
 
+/* Soundtrack rounds have three buttons (Correct, Wrong, Bonus): give them three
+   columns instead of leaving the fourth slot empty. On a phone (2 columns, see
+   below) Correct takes the whole first row instead. */
+.scoreRowSoundtrack {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 @media (max-width: 600px) {
   .scoreRow {
     grid-template-columns: repeat(2, 1fr);
   }
+  .scoreRowSoundtrack > :first-child {
+    grid-column: 1 / -1;
+  }
 }
 
+/* Score buttons: colour means you can press it. A live button is a solid fill
+   with black ink; an unavailable one is an empty outline in dim ink, so a buzz
+   visibly lights the row up (while the round waits only Bonus stays lit).
+   Black, not white, ink on every fill: the labels are 12.8-24 px and black
+   measures 12.05:1 on --positive, 5.32:1 on --negative (white, --negative-ink,
+   measures 3.9:1) and 16.56:1 on --bone. The icon row + 1.5rem display numerals
+   fit the height the old label + points used, so the #177 phone fit holds. */
 .scoreBtn {
   display: flex;
   flex-direction: column;
@@ -254,13 +291,13 @@
   justify-content: center;
   gap: 0.2rem;
   padding: 12px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
-  color: var(--text);
+  color: #000000;
   font: inherit;
   font-family: var(--font-ui);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   text-align: center;
   touch-action: manipulation;
@@ -268,85 +305,78 @@
   transition:
     background-color var(--dur-micro) var(--ease-move),
     border-color var(--dur-micro) var(--ease-move),
+    color var(--dur-micro) var(--ease-move),
+    filter var(--dur-micro) var(--ease-move),
+    box-shadow var(--dur-micro) var(--ease-move),
     transform var(--dur-micro) var(--ease-overshoot);
   min-height: 64px;
 }
 
-.scoreBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.scoreBtn:not(:disabled):active {
-  transform: scale(0.98);
-  /* Instant press-in; release eases back via the base .scoreBtn transition. */
-  transition-duration: var(--dur-instant);
-}
-
 .scoreLabel {
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.1;
 }
 
-.scorePoints {
-  font-size: 1.05rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+.scoreLabel svg {
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
-/* Correct Song / Correct Artist / Correct (soundtrack): green outline that
-   fills on press. The points value carries the colour while the button is at
-   rest; on press the fill becomes green, so BOTH children must flip to the
-   ink colour or they'd render green-on-green (a child rule beats the
-   inherited colour from the button). */
+.scorePoints {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Correct Song / Correct Artist / Correct (soundtrack). */
 .scorePositive {
+  background: var(--positive);
   border-color: var(--positive);
 }
 
-.scorePositive .scorePoints {
-  color: var(--positive);
-}
-
-/* Wrong is a one-click commit action (not a toggle): red outline at rest,
-   solid red on press so it reads as a final verdict. Pressed ink is black,
-   not --negative-ink white: these labels are 13.6-16.8 px, and white on
-   #F2352B measures 3.9:1 (AA needs 4.5:1 below 24 px) while black measures
-   5.3:1. */
+/* Wrong: a one-click commit action, so it reads as a final verdict. */
 .wrongBtn {
-  background: transparent;
+  background: var(--negative);
   border-color: var(--negative);
-  color: var(--negative-text);
-  box-shadow: none;
 }
 
-.wrongBtn .scoreLabel,
-.wrongBtn .scorePoints {
-  color: var(--negative-text);
-}
-
-/* Bonus is always actionable while teams exist (no buzz required), so it keeps
-   a bone outline instead of the neutral surface the judgement buttons use —
-   it reads as the "always on" action even when its row-mates sit greyed out.
-   scoreActiveBonus is the open-picker state. */
+/* Bonus is always actionable while teams exist (no buzz required), so it is
+   usually the one lit button while its row-mates sit as outlines.
+   scoreActiveBonus is the open-picker state: a ring set off from the card by a
+   --surface gap, so an open picker never looks like the resting button. */
 .scoreBonus,
 .scoreActiveBonus {
-  background: transparent;
+  background: var(--bone);
   border-color: var(--bone);
-  color: var(--bone);
-  box-shadow: none;
-}
-
-.scoreBonus .scoreLabel,
-.scoreBonus .scorePoints,
-.scoreActiveBonus .scoreLabel,
-.scoreActiveBonus .scorePoints {
-  color: var(--bone);
 }
 
 .scoreActiveBonus {
-  background: rgba(233, 228, 217, 0.1);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--bone);
+}
+
+/* Push the focus ring outside the open-picker ring instead of on top of it. */
+.scoreActiveBonus:focus-visible {
+  outline-offset: 6px;
+}
+
+/* Declared after the variants; .scoreBtn:disabled (0,2,0) out-ranks them. */
+.scoreBtn:disabled {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-dim);
+  cursor: not-allowed;
 }
 
 /* The slot reserves vertical space whether the picker is open or not, so
@@ -432,19 +462,7 @@
 
 @media (hover: hover) {
   .scoreBtn:not(:disabled):hover {
-    border-color: var(--border-strong);
-  }
-  .scorePositive:not(:disabled):hover {
-    border-color: var(--positive);
-  }
-  .wrongBtn:not(:disabled):hover {
-    border-color: var(--negative);
-    background: var(--negative-soft);
-  }
-  .scoreBonus:not(:disabled):hover,
-  .scoreActiveBonus:not(:disabled):hover {
-    border-color: var(--bone);
-    background: rgba(233, 228, 217, 0.1);
+    filter: brightness(1.06);
   }
   .awardBtn:hover:not(:disabled) {
     background: #ff8f2b;
@@ -458,47 +476,16 @@
   }
 }
 
-/* Pressed fills. These MUST come after the @media (hover: hover) block: a
-   mouse press is also a hover, and `.x:not(:disabled):hover` and
-   `.x:not(:disabled):active` have identical specificity (0,3,0), so source
-   order decides. Declared earlier, the hover wash won while the button was
-   held down and the Wrong button rendered black-on-dark-red at 1.23:1.
-   Each rule flips the children too, because `.wrongBtn .scorePoints` (0,2,0)
-   beats the colour inherited from the button. */
-.scorePositive:not(:disabled):active {
-  background: var(--positive);
-  border-color: var(--positive);
-  color: var(--positive-ink);
-}
-
-.scorePositive:not(:disabled):active .scoreLabel,
-.scorePositive:not(:disabled):active .scorePoints {
-  color: var(--positive-ink);
-}
-
-.wrongBtn:not(:disabled):active {
-  background: var(--negative);
-  border-color: var(--negative);
-  color: var(--bg);
-}
-
-.wrongBtn:not(:disabled):active .scoreLabel,
-.wrongBtn:not(:disabled):active .scorePoints {
-  color: var(--bg);
-}
-
-.scoreBonus:not(:disabled):active,
-.scoreActiveBonus:not(:disabled):active {
-  background: var(--bone);
-  border-color: var(--bone);
-  color: var(--bg);
-}
-
-.scoreBonus:not(:disabled):active .scoreLabel,
-.scoreBonus:not(:disabled):active .scorePoints,
-.scoreActiveBonus:not(:disabled):active .scoreLabel,
-.scoreActiveBonus:not(:disabled):active .scorePoints {
-  color: var(--bg);
+/* Pressed. MUST come after the @media (hover: hover) block: a mouse press is
+   also a hover, and `.scoreBtn:not(:disabled):hover` and `:active` have the
+   same specificity (0,3,0), so source order decides. The filter darkens the
+   fill and leaves the black ink black; 0.92 is the darkest step that keeps
+   pressed Wrong at AA (4.59:1, where 0.82 measured 3.79:1). Press-in is
+   instant; release eases back via the base .scoreBtn transition. */
+.scoreBtn:not(:disabled):active {
+  filter: brightness(0.92);
+  transform: scale(0.97);
+  transition-duration: var(--dur-instant);
 }
 
 .tokenChips {

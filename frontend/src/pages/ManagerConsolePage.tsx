@@ -9,7 +9,15 @@ import { Setlist } from "../components/Setlist";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { TeamRescueModal } from "../components/TeamRescueModal";
 import { YouTubePlayer } from "../components/YouTubePlayer";
-import { CheckIcon, RefreshIcon } from "../components/icons";
+import {
+  CheckIcon,
+  CloseIcon,
+  FilmIcon,
+  LaurelIcon,
+  MicIcon,
+  NoteIcon,
+  RefreshIcon,
+} from "../components/icons";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { useManagerToken } from "../hooks/useManagerToken";
@@ -359,7 +367,10 @@ export function ManagerConsolePage() {
               lands (previously a conditionally-mounted banner pushed the row
               down). Locked and idle share the same box metrics; only the
               colour + text change. Keep the "buzzed in" wording so the status
-              stays greppable for the e2e/unit assertions. */}
+              stays greppable for the e2e/unit assertions. The single inner
+              span keeps the team name and the sentence one run of text: as
+              direct flex children they became two side-by-side columns when
+              a long name wrapped. */}
           {game.status === "playing" ? (
             <div
               className={`${styles.statusStrip} ${
@@ -368,17 +379,22 @@ export function ManagerConsolePage() {
               role="status"
               aria-live="polite"
             >
-              {lockedTeam ? (
-                <>
-                  <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score it:
-                </>
-              ) : (
-                "Waiting for a buzz…"
-              )}
+              <span className={styles.statusText} data-testid="status-text">
+                {lockedTeam ? (
+                  <>
+                    <span className={styles.lockedTeam}>{lockedTeam.name}</span> buzzed in — score
+                    it:
+                  </>
+                ) : (
+                  "Waiting for a buzz…"
+                )}
+              </span>
             </div>
           ) : null}
 
-          <div className={styles.scoreRow}>
+          <div
+            className={`${styles.scoreRow} ${isSoundtrackRound ? styles.scoreRowSoundtrack : ""}`}
+          >
             {isSoundtrackRound ? (
               <button
                 type="button"
@@ -387,7 +403,10 @@ export function ManagerConsolePage() {
                 disabled={soundtrackActionDisabled}
                 data-testid="score-soundtrack"
               >
-                <span className={styles.scoreLabel}>Correct</span>
+                <span className={styles.scoreLabel}>
+                  <FilmIcon />
+                  Correct
+                </span>
                 <span className={styles.scorePoints}>+{SOUNDTRACK_POINTS}</span>
               </button>
             ) : (
@@ -399,7 +418,10 @@ export function ManagerConsolePage() {
                   disabled={titleActionDisabled}
                   data-testid="score-title"
                 >
-                  <span className={styles.scoreLabel}>Correct Song</span>
+                  <span className={styles.scoreLabel}>
+                    <NoteIcon />
+                    Correct Song
+                  </span>
                   <span className={styles.scorePoints}>+{TITLE_POINTS}</span>
                 </button>
                 <button
@@ -409,7 +431,10 @@ export function ManagerConsolePage() {
                   disabled={artistActionDisabled}
                   data-testid="score-artist"
                 >
-                  <span className={styles.scoreLabel}>Correct Artist</span>
+                  <span className={styles.scoreLabel}>
+                    <MicIcon />
+                    Correct Artist
+                  </span>
                   <span className={styles.scorePoints}>+{ARTIST_POINTS}</span>
                 </button>
               </>
@@ -421,7 +446,10 @@ export function ManagerConsolePage() {
               disabled={wrongActionDisabled}
               data-testid="score-wrong"
             >
-              <span className={styles.scoreLabel}>Wrong</span>
+              <span className={styles.scoreLabel}>
+                <CloseIcon />
+                Wrong
+              </span>
               <span className={styles.scorePoints}>-{WRONG_BUZZ_PENALTY}</span>
             </button>
             <button
@@ -433,7 +461,10 @@ export function ManagerConsolePage() {
               aria-controls="bonus-team-picker"
               data-testid="score-bonus"
             >
-              <span className={styles.scoreLabel}>Bonus</span>
+              <span className={styles.scoreLabel}>
+                <LaurelIcon />
+                Bonus
+              </span>
               <span className={styles.scorePoints}>+{BONUS_POINTS}</span>
             </button>
           </div>
