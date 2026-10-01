@@ -192,10 +192,17 @@
    the scoring buttons below never move when a buzz lands. The locked and
    waiting variants share identical box metrics (padding, min-height, border
    width) — only the colour changes — so the strip's height is constant across
-   the transition. */
+   the transition.
+   The text is centred: the strip is a boxed, full-width banner sitting right
+   over the symmetric score grid, whose labels are centred too, and a short
+   left-aligned line left most of a laptop-wide box empty. The content is one
+   inner span (.statusText) so a long team name wraps as a single sentence
+   instead of splitting into two flex columns. */
 .statusStrip {
   display: flex;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   min-height: 3.25rem;
   padding: 0.75rem 1.1rem;
   border: 1px solid var(--border);
@@ -209,6 +216,13 @@
     background-color var(--dur-state) var(--ease-move),
     border-color var(--dur-state) var(--ease-move),
     color var(--dur-state) var(--ease-move);
+}
+
+/* min-width: 0 lets the flex item shrink below its longest word; anywhere
+   breaks a 30-character name typed without spaces instead of overflowing. */
+.statusText {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .statusStripLocked {
@@ -229,9 +243,15 @@
   font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: 0.02em;
-  /* The display face's tight right sidebearing swallows the literal space before
-     "buzzed in" (final validation 2026-09-22, F-11 / issue #337). */
-  margin-inline-end: 0.3em;
+  /* The name shares a line with the Instrument Sans sentence, and at the
+     inherited 1.5 the taller display face grew that line, making the locked
+     strip 1px taller than the waiting one (the buttons below shifted). 1.2
+     keeps the line box the strut's height.
+     No margin before "buzzed in": issue #337 added one because the space was
+     missing, but the cause was the strip's flex layout dropping the leading
+     space of a text-only flex item. Inside .statusText the literal space
+     renders (0.19em, the same as the space between "buzzed" and "in"). */
+  line-height: 1.2;
 }
 
 .scoreRow {
