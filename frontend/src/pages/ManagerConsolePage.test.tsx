@@ -534,6 +534,67 @@ describe("ManagerConsolePage", () => {
     );
   });
 
+  it("score buttons carry a decorative icon and keep the four-slot row in a normal round", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    for (const id of ["score-title", "score-artist", "score-wrong", "score-bonus"]) {
+      const btn = screen.getByTestId(id);
+      // One icon per button, hidden from assistive tech so the name stays the text.
+      expect(btn.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(1);
+      expect(btn.querySelector("svg:not([aria-hidden])")).toBeNull();
+    }
+    expect(screen.getByTestId("score-title")).toHaveTextContent("Correct Song+10");
+    expect(screen.getByTestId("score-wrong")).toHaveTextContent("Wrong-3");
+    expect(screen.getByTestId("score-title").parentElement?.className).not.toMatch(
+      /scoreRowSoundtrack/,
+    );
+  });
+
+  it("soundtrack rounds mark the score row so Correct fills the empty slot", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        buzzed_team_id: "t1",
+        current_round_id: "r1",
+        current_song_id: "song-S",
+        round_number: 1,
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-S" })],
+    });
+    setSongFetch({
+      id: "song-S",
+      title: "Star Wars",
+      artist: "Star Wars",
+      youtube_id: "abcdefghijk",
+      start_time: 0,
+      is_soundtrack: true,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(screen.getByTestId("score-soundtrack")).toBeInTheDocument());
+    const row = screen.getByTestId("score-soundtrack").parentElement;
+    expect(row?.className).toMatch(/scoreRowSoundtrack/);
+    // Correct leads the row: the phone layout spans its first child across both columns.
+    expect(row?.firstElementChild).toBe(screen.getByTestId("score-soundtrack"));
+    expect(
+      screen.getByTestId("score-soundtrack").querySelectorAll('svg[aria-hidden="true"]'),
+    ).toHaveLength(1);
+  });
+
   it("Soundtrack rounds show a +15 button that fires both flags and leaves the lock/playback alone", async () => {
     setHydrate({
       game: makeActiveGame({
