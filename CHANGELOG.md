@@ -134,6 +134,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-10-04: **Two teams can no longer end up merged by picking the same name.** Typing a team name that's already in the game used to silently put the second phone on the first team, so both shared one score. Now the second team is told "That team name is already taken" and picks another. Names count as the same regardless of capital letters or extra spaces ("Ofra Fans" = "ofra fans"). Typing your own name again in the same browser still takes you back to your team; on a different phone, ask the host to reconnect you with the "Reconnect a team" QR. (#TBD)
 - 2026-10-01: The host console's buzz status line (“Waiting for a buzz…” / “<team> buzzed in — score it:”) is now centred on every screen, and a long team name wraps as one sentence instead of splitting into two columns. (#352)
 - 2026-09-25: Songs whose YouTube video became private or had embedding turned off are now skipped in games, like deleted videos, instead of showing "Video unavailable" mid-round. The weekly video check also lists every song that failed to play in a real game, with its name and link, so it can be replaced. (#347)
 - 2026-09-25: **Players can now scroll their final results.** On a phone the podium ran past the bottom of the screen and the leaderboard below it could not be reached — the page was locked to one screen height like the buzzer. (#348)
