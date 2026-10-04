@@ -23,6 +23,7 @@ gated), never to players.
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -31,6 +32,7 @@ import anyio
 from fastapi import APIRouter, Depends, Request, status
 
 from app.db.errors import (
+    ConflictError,
     GoneError,
     NotFoundError,
     mapped_postgrest_errors,
@@ -119,6 +121,13 @@ def _is_expired(game: dict[str, Any]) -> bool:
     return expires < datetime.now(UTC)
 
 
+def _team_name_key(name: str) -> str:
+    """Comparison key for team-name uniqueness within a game: NFKC-folded (so
+    full-width letters match their ASCII forms), whitespace runs collapsed, and
+    case-folded."""
+    return " ".join(unicodedata.normalize("NFKC", name).split()).casefold()
+
+
 def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dict[str, Any]:
     game = _fetch_game_blocking(client, code)
     if game["status"] == "ended" or game.get("ended_at"):
@@ -126,28 +135,19 @@ def _join_team_blocking(client: SupabaseClientLike, code: str, name: str) -> dic
     if _is_expired(game):
         raise GoneError(f"game {code} has expired")
 
-    # Idempotent reclaim (D-4 / F-P2-1): if a team with this exact
-    # (game_code, name) already exists, return it instead of inserting a
-    # duplicate. This lets a player who refreshed/lost their tab rejoin with
-    # the same name and resume their existing team (same id, preserved score)
-    # rather than get a fresh score-0 row or a 409. game_teams has a
-    # UNIQUE (game_code, name) constraint (migration 003), so the tiny
-    # select-then-insert race window (two simultaneous same-name joins) is
-    # closed by the DB: the loser hits the unique violation → 409, no
-    # duplicate row. Acceptable for casual play; the host is the integrity
-    # check (D-4, resolved — no per-team tokens).
+    # A taken name is a 409, never a hand-back of the existing team. Joining
+    # used to "reclaim" a same-name row (T5.7), which in game XSU8WK silently
+    # put a second team on the first team's row. Returning teams use their own
+    # browser's stored identity or the host's rescue QR (POST .../rejoin).
+    # Names compare by _team_name_key so "Ofra Fans" and "ofra  fans", which
+    # look like one team on the projector, can't both join. The exact-match
+    # UNIQUE (game_code, name) from migration 003 still closes the
+    # select-then-insert race for identical names (→ 409 via the mapper).
     with mapped_postgrest_errors():
-        existing = (
-            client.table("game_teams")
-            .select("*")
-            .eq("game_code", code)
-            .eq("name", name)
-            .limit(1)
-            .execute()
-        )
-    existing_rows = existing.data or []
-    if existing_rows:
-        return dict(existing_rows[0])
+        existing = client.table("game_teams").select("name").eq("game_code", code).execute()
+    key = _team_name_key(name)
+    if any(_team_name_key(str(row["name"])) == key for row in existing.data or []):
+        raise ConflictError(f"a team named {name!r} is already in game {code}")
 
     with mapped_postgrest_errors():
         resp = client.table("game_teams").insert({"game_code": code, "name": name}).execute()

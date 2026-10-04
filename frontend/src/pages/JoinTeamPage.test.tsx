@@ -119,6 +119,46 @@ describe("JoinTeamPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /join game/i }));
     await waitFor(() => expect(screen.getByText(/already taken/i)).toBeInTheDocument());
+    // Points a returning team at the host's rescue QR instead of the name.
+    expect(screen.getByText(/already taken/i)).toHaveTextContent(/ask the host/i);
+    expect(screen.queryByText("team page")).not.toBeInTheDocument();
+  });
+
+  it("goes back into its own team when this browser already holds the taken name", async () => {
+    // The player reopened the site and typed their own name: the server refuses
+    // the taken name, but this browser's stored identity proves it's theirs.
+    window.localStorage.setItem("game:ABCDEF:team", JSON.stringify({ id: "t1", name: "Alice" }));
+    vi.mocked(joinTeam).mockRejectedValueOnce(new ApiError("conflict", "taken", 409));
+    renderAt("/join/ABCDEF");
+    fireEvent.change(screen.getByLabelText(/team name/i), {
+      target: { value: "  alice " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /join game/i }));
+    await waitFor(() => expect(screen.getByText("team page")).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    expect(JSON.parse(window.localStorage.getItem("game:ABCDEF:team") ?? "{}")).toEqual({
+      id: "t1",
+      name: "Alice",
+    });
+  });
+
+  it("still refuses a taken name when this browser holds a different team", async () => {
+    window.localStorage.setItem("game:ABCDEF:team", JSON.stringify({ id: "t2", name: "Bob" }));
+    vi.mocked(joinTeam).mockRejectedValueOnce(new ApiError("conflict", "taken", 409));
+    renderAt("/join/ABCDEF");
+    fireEvent.change(screen.getByLabelText(/team name/i), {
+      target: { value: "Alice" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /join game/i }));
+    await waitFor(() => expect(screen.getByText(/already taken/i)).toBeInTheDocument());
+    expect(screen.queryByText("team page")).not.toBeInTheDocument();
+  });
+
+  it("no longer tells players to rejoin by typing the same name", () => {
+    renderAt("/join/ABCDEF");
+    expect(screen.queryByText(/same name to rejoin/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/lost your team/i)).toHaveTextContent(/ask the host/i);
   });
 
   it("strips invalid characters from the game-code input as the user types", () => {
@@ -176,7 +216,9 @@ describe("JoinTeamPage", () => {
     vi.mocked(rejoinTeam).mockRejectedValueOnce(new ApiError("not_found", "no", 404));
     renderAt(`/join/ABCDEF#rt=${REJOIN_UUID}`);
     await waitFor(() => expect(screen.getByText(/didn't work/i)).toBeInTheDocument());
-    // The join form is back so the player can re-enter their name (path B).
+    // Typing the team name no longer rejoins, so the message sends the player
+    // back to the host for a fresh link; the form stays for a new team.
+    expect(screen.getByText(/didn't work/i)).toHaveTextContent(/ask the host/i);
     expect(screen.getByLabelText(/game code/i)).toBeInTheDocument();
   });
 
