@@ -7,7 +7,7 @@ Every big call the plan needed is **decided** (2026-07-04). This file is the dur
 | D-1 | `manager_token` leak (the one CRITICAL) | ✅ **A** — moved to `game_secrets` table | ✅ shipped: mig 034 / PR #156 |
 | D-2 | pre-reveal answer leak | **Accept + document** — the clip is audible to the room anyway; a DB-reading cheat is narrow and self-defeating | ✅ shipped: `security-rls.md` write-up (#208) |
 | D-3 | RPC/Realtime abuse protection | **A** — Cloudflare edge + WAF in front of Supabase REST/Realtime; I-Alert as the cheap first layer | open — maintainer ops, outside git ([TASKS.md](TASKS.md) §C) |
-| D-4 | per-team auth (buzz-spoofing) | **Accept the tradeoff** — no per-team tokens; friends don't grief each other, the host is the integrity check | ✅ shipped: `security-rls.md` write-up (#208) + same-name reclaim (#210) + host-only rejoin (#260) |
+| D-4 | per-team auth (buzz-spoofing) | **Accept the tradeoff** — no per-team tokens; friends don't grief each other, the host is the integrity check | ✅ shipped: `security-rls.md` write-up (#208) + host-only rejoin (#260); same-name reclaim (#210) removed 2026-10-04 (merged two teams in game XSU8WK) |
 | D-5 | win conditions (target score / round limit) | ❌ **Out of scope for now** — revisit later; would be an optional additive setting (nullable columns mirroring `selected_decades`) | deferred; rationale in [TASKS.md](TASKS.md) §A |
 | D-6 | Hebrew (RTL) UI | ❌ **Out of scope for now** — touches all six pages + a translation workflow; revisit if growing the Hebrew audience becomes a goal | deferred; rationale in [TASKS.md](TASKS.md) §A |
 | D-7 | scoring authority into the DB | **Yes, carefully** — `award_attempt` takes booleans, computes points server-side; removes the client-typo corruption footgun | ✅ shipped: migs 043/044 / PRs #218/#220 |
@@ -16,7 +16,7 @@ Every big call the plan needed is **decided** (2026-07-04). This file is the dur
 
 ## Consequences already folded into the plan
 
-- **D-4** killed X-Reclaim (the player-held token version); the lightweight **same-name reclaim** (#210) plus the **host-only** secure rejoin (#183/PR #260, mig 046 `team_secrets`) replaced it — D-4's posture unchanged.
+- **D-4** killed X-Reclaim (the player-held token version); the lightweight **same-name reclaim** (#210) plus the **host-only** secure rejoin (#183/PR #260, mig 046 `team_secrets`) replaced it — D-4's posture unchanged. On 2026-10-04 the same-name reclaim was removed: in game XSU8WK a second team typed a name already playing and was merged into the first. A taken name is now a 409 (ignoring case and spacing); the host-only rejoin and the same browser's stored identity are the ways back in.
 - **D-2 and D-4 "accept + document" — ✅ document halves shipped** (`security-rls.md`, #208/#210). Both decisions are fully closed.
 - **D-1 is fully closed** (mig 034).
 

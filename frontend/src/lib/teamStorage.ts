@@ -40,6 +40,13 @@ export function setStoredTeam(gameCode: string, team: StoredTeam): void {
   }
 }
 
+// Team names are unique per game ignoring case and spacing (the backend's
+// _team_name_key), so "Alice" and " alice " name the same team.
+export function sameTeamName(a: string, b: string): boolean {
+  const key = (name: string) => name.normalize("NFKC").trim().split(/\s+/).join(" ").toLowerCase();
+  return key(a) === key(b);
+}
+
 export function clearStoredTeam(gameCode: string): void {
   try {
     window.localStorage.removeItem(teamKey(gameCode));

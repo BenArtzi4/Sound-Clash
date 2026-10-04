@@ -169,7 +169,8 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 - On page reload or temporary disconnect, the page reads `localStorage`, re-subscribes to the Realtime channel, and resumes; no server-side state restoration needed.
 - If the team's row was deleted, the page distinguishes why before acting: a kick from a live game clears the stored identity and redirects home, while a game that has ended or passed its `expires_at` (the expiry sweep cascade-deletes `game_teams` just before `active_games`) keeps the player on `/team/` and shows the "game has ended or expired" banner **with the final scoreboard** rendered from the last-known state (T4.11 / I-FinalBoard) — the swept player still sees where everyone stood, not a bare line.
 - No "reconnect grace period" is enforced. If a team disconnects, the game continues. They can rejoin while the game is `waiting` or `playing`. While the Realtime channel is `reconnecting` mid-game, the BUZZ button stays live — `buzz_in` goes over REST and the DB adjudicates, so a press during a blip is either a normal win or a normal loss (#254).
-- If `localStorage` is lost (different device, cleared storage), rejoining with the **same team name** resumes the same team: `POST /games/{code}/teams` reclaims the existing `(game_code, name)` row (same id, preserved score) rather than creating a fresh duplicate (T5.7 / F-P2-1).
+- If the player goes back through the join form in the **same browser** and types their own name, the server refuses the taken name (409) and the join page sends them back to their team on the stored identity.
+- If `localStorage` is lost (different device, cleared storage), the host reconnects the team: "Reconnect a team" on the console shows that team's rejoin QR (`/join/<code>#rt=<token>`), which resumes the exact team with its score (issue #183). Typing the same name on another device does **not** rejoin; it is refused as taken. Until 2026-10-04 it did ("same-name reclaim", T5.7), and in game XSU8WK that silently merged a second team into the first.
 
 ## 8. Reconnection (manager)
 
@@ -206,7 +207,7 @@ The current Sound Clash has a 15-second grace window for team disconnect. The ne
 | Manager disconnects | Game stays in current state. Recoverable via reload. | Defined |
 | Manager presses "End game" mid-round | `end_game` RPC runs; current round is left without `ended_at`; scoreboard shows current scores. | Defined |
 | Tied final scores | Multiple teams shown as "winner"; no tiebreaker round. | Defined for MVP |
-| Same team name joined twice | Reclaims the existing team (same id, preserved score) instead of erroring — the "player refreshed / lost their tab" recovery path (T5.7 / F-P2-1). `UNIQUE (game_code, name)` is the race backstop. | Defined |
+| Same team name joined twice | Refused with `conflict` (409): "That team name is already taken". Names match ignoring letter case and runs of spaces. The join page lets the browser that already holds the team back in; any other device must pick another name or be reconnected by the host. `UNIQUE (game_code, name)` is the race backstop. | Defined |
 | Empty team name / 100-char team name | Rejected at API layer; min 1 char, max 30 chars. | Defined |
 | Game created with no genres | Rejected at API layer; min 1 genre required. | Defined |
 | Manager restarts the same song | "Restart song" button calls `select_next_song` with a manual `p_song_id`. Buzz state cleared. Old round row remains as a no-points-awarded artifact. | Defined |

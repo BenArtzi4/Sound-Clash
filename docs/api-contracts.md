@@ -80,10 +80,13 @@ Game-code generation: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O, 1/
 
 Team joins a game. **No auth.** Anyone with the game code can call this.
 
-**Idempotent on team name (T5.7 / F-P2-1):** joining with a name that already
-exists in the same game returns that existing team (same `id`, preserved
-`score`) with a 201 instead of creating a duplicate row. A player who refreshed
-or lost their tab can rejoin with the same name and resume their team.
+**Team names are unique per game; a taken name is a `conflict` (409).** The
+handler never hands back an existing team for a matching name. Until 2026-10-04
+it did ("same-name reclaim", T5.7), and in game XSU8WK a second team that
+typed a name already playing was silently put on the first team's row. A team
+that lost its device rejoins through its own browser's stored identity (the
+join page goes back in on a 409 when `localStorage` already holds that name) or
+the host's rescue QR (`POST /games/{code}/rejoin`).
 
 **Request body**:
 ```json
@@ -92,9 +95,12 @@ or lost their tab can rejoin with the same name and resume their team.
 
 Validation:
 - `name`: 1–30 chars, trimmed; no leading/trailing whitespace. Uniqueness within
-  the game is backed by a UNIQUE `(game_code, name)` constraint; the handler
-  reclaims a matching existing row before inserting, so a same-name rejoin is a
-  successful reclaim rather than a conflict.
+  the game ignores letter case, runs of spaces and full-width forms (NFKC,
+  whitespace collapsed, case-folded), so `Ofra Fans` and `ofra  fans` cannot
+  both join. The handler checks this before inserting; the exact-match UNIQUE
+  `(game_code, name)` constraint closes the select-then-insert race for
+  identical names. Two case-variant names submitted in the same instant can
+  both get in (accepted: the window is a few milliseconds).
 - **Sanitization (T5.2):** control, line/paragraph-separator, zero-width, and
   bidirectional override/isolate characters are stripped from the name before
   the length check (they can scramble the projector or leave permanent junk in
@@ -115,7 +121,7 @@ Validation:
 
 The frontend stores `id` in `localStorage` keyed by `game_code` for reconnection.
 
-**Errors**: `validation_error` (400; bad name), `not_found` (404; game doesn't exist), `gone` (410; game expired or ended). A same-name rejoin no longer 409s (it reclaims the existing team); a `conflict` (409) can still surface only in the narrow race where two simultaneous same-name joins both pass the reclaim SELECT and the UNIQUE constraint rejects the second INSERT.
+**Errors**: `validation_error` (400; bad name), `not_found` (404; game doesn't exist), `conflict` (409; a team with that name, ignoring case and spacing, is already in the game), `gone` (410; game expired or ended).
 
 ---
 
@@ -665,7 +671,7 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 ## 7. Idempotency
 
 - `POST /games`: not idempotent (each call creates a new game). Frontend must not retry on network error without user confirmation.
-- `POST /games/{code}/teams`: idempotent on `(game_code, name)` — the handler SELECTs an existing team with that name and returns it (reclaim: same `id`, preserved `score`) before inserting, so a rejoin resumes the same team. The UNIQUE `(game_code, name)` constraint is the backstop for the tiny select-then-insert race.
+- `POST /games/{code}/teams`: NOT idempotent. A repeat call with a name already in the game is a `conflict` (409), not a hand-back of the existing team; resuming a team goes through the browser's stored identity or `POST /games/{code}/rejoin`. The UNIQUE `(game_code, name)` constraint is the backstop for the tiny select-then-insert race.
 - `select_next_song` RPC (direct from manager browser): NOT idempotent; each call advances the round number and inserts a new `game_rounds` row. The prior round is closed defensively inside the function; calling on an already-ended game raises `game_ended`.
 - `award_attempt` RPC (direct from manager browser): NOT idempotent. Each call records one attempt against the open round. Manager UI guards against double-submit with a busy flag; the SQL function additionally raises `title_already_claimed` / `artist_already_claimed` on retry. Calling on an ended round raises `round_already_ended`.
 - `release_buzz_lock` RPC (direct from manager browser): idempotent on the unlock side; safe to call when no buzz is held.

@@ -4,6 +4,7 @@ import {
   getStoredTeam,
   parseRejoinHash,
   rejoinHash,
+  sameTeamName,
   setStoredTeam,
   teamRejoinUrl,
 } from "./teamStorage";
@@ -12,6 +13,19 @@ const UUID = "b3b8c9d0-1234-4abc-9def-0123456789ab";
 
 afterEach(() => {
   window.localStorage.clear();
+});
+
+describe("sameTeamName", () => {
+  it("ignores case, surrounding spaces, space runs and full-width forms", () => {
+    expect(sameTeamName("Ofra Fans", "  ofra   FANS ")).toBe(true);
+    expect(sameTeamName("מעריצי ירדנה", "מעריצי  ירדנה")).toBe(true);
+    expect(sameTeamName("Ｂｅａｔｌｅｓ", "beatles")).toBe(true);
+  });
+
+  it("tells different names apart", () => {
+    expect(sameTeamName("Ofra Fans", "Ofra Haters")).toBe(false);
+    expect(sameTeamName("Ofra Fans", "OfraFans")).toBe(false);
+  });
 });
 
 describe("stored team identity", () => {

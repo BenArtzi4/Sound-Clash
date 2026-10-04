@@ -4,7 +4,7 @@ import { GameCodeField } from "../components/GameCodeField";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
 import { CODE_RE, normalizeCode } from "../lib/gameCode";
-import { parseRejoinHash, setStoredTeam } from "../lib/teamStorage";
+import { getStoredTeam, parseRejoinHash, sameTeamName, setStoredTeam } from "../lib/teamStorage";
 import { Logo } from "../components/Logo";
 import styles from "./JoinTeamPage.module.css";
 
@@ -66,9 +66,7 @@ export function JoinTeamPage() {
       } catch {
         if (cancelled) return;
         setRejoining(false);
-        setError(
-          "That rejoin link didn't work. Enter your team name to rejoin and keep your score.",
-        );
+        setError("That rejoin link didn't work. Ask the host to show it again.");
         navigate(`/join/${targetCode}`, { replace: true });
       }
     })();
@@ -102,8 +100,19 @@ export function JoinTeamPage() {
       if (err instanceof ApiError) {
         if (err.status === 404) setError("That game code does not exist.");
         else if (err.status === 410) setError("That game has already ended.");
-        else if (err.status === 409) setError("That team name is already taken.");
-        else setError(err.message);
+        else if (err.status === 409) {
+          // The name is taken. If this browser already holds that team (the
+          // player reopened the site and typed their own name), go back in on
+          // the stored identity; anyone else has to pick another name.
+          const stored = getStoredTeam(code);
+          if (stored && sameTeamName(stored.name, trimmedName)) {
+            navigate(`/team/${code}`);
+            return;
+          }
+          setError(
+            "That team name is already taken. Pick another one, or ask the host to reconnect you if it's your team.",
+          );
+        } else setError(err.message);
       } else {
         setError("Something went wrong. Try again.");
       }
@@ -159,9 +168,7 @@ export function JoinTeamPage() {
           <span className={styles.counter} aria-hidden="true">
             {trimmedName.length}/30
           </span>
-          <p className={styles.hint}>
-            Already had a team? Enter the same name to rejoin and keep your score.
-          </p>
+          <p className={styles.hint}>Lost your team? Ask the host to reconnect you.</p>
         </div>
 
         {error ? <p className="error">{error}</p> : null}
