@@ -45,6 +45,8 @@ export interface SongPrebuffer {
   armSongStartTimeout: () => void;
   maybePreloadNext: () => void;
   beginSongStart: () => SongStartHandle;
+  beginRoundCommit: () => void;
+  endRoundCommit: (committed: boolean) => void;
 }
 
 interface PlayerReadyHandle {
@@ -129,6 +131,17 @@ export function useSongPrebuffer(
   const preloadRef = useRef<PeekedSong | null>(null);
   const preloadInFlightRef = useRef(false);
   const preloadEpochRef = useRef(0);
+  // The peek must not run while a Next round is still being recorded. The
+  // picker (mig 049) never repeats the genre of the song playing now and spaces
+  // artists from the last rounds, so it has to see the new round in
+  // game_rounds. Prod traces showed the promoted player reaching PLAYING
+  // 60-120ms into the ~150ms select_next_song call, which would let the peek
+  // judge against the previous song. `roundCommitPendingRef` holds the peek back
+  // from the click until the RPC settles; `livePlayingRef` remembers that the
+  // live song already started meanwhile, so the peek can run as soon as the
+  // round is recorded.
+  const roundCommitPendingRef = useRef(false);
+  const livePlayingRef = useRef(false);
   // I-NextMeta: on the Next-round fast path we optimistically render the peeked
   // song's metadata BEFORE the round advances server-side. That makes
   // `currentSong.id` briefly lead `currentRound.song_id`; this ref holds the
@@ -179,6 +192,7 @@ export function useSongPrebuffer(
     // current song. During waiting there is no round yet — that's expected, and
     // the first song is the thing we want to warm up.
     if (gameStatus === "playing" && !state?.currentRound?.id) return;
+    if (roundCommitPendingRef.current) return;
     if (preloadRef.current !== null || preloadInFlightRef.current) return;
     if (!standbyReady()) return;
     preloadInFlightRef.current = true;
@@ -244,7 +258,24 @@ export function useSongPrebuffer(
     }
     songStartRef.current?.playing(detection);
     songStartRef.current = null;
+    livePlayingRef.current = true;
     maybePreloadNext();
+  }
+
+  // Next round clicked: hold the peek until the new round is recorded.
+  function beginRoundCommit() {
+    roundCommitPendingRef.current = true;
+    livePlayingRef.current = false;
+  }
+
+  // select_next_song settled. On success, peek now if the new song is already
+  // playing (otherwise handlePlayerPlaying will). On failure the round did not
+  // advance, so the song still playing is the right reference and the peek can
+  // run at once (a rolled-back fast path has already restored preloadRef, which
+  // makes this a no-op).
+  function endRoundCommit(committed: boolean) {
+    roundCommitPendingRef.current = false;
+    if (!committed || livePlayingRef.current) maybePreloadNext();
   }
 
   // A YouTube error on the standby/preload buffer must not alarm the host (the
@@ -329,5 +360,7 @@ export function useSongPrebuffer(
     armSongStartTimeout,
     maybePreloadNext,
     beginSongStart,
+    beginRoundCommit,
+    endRoundCommit,
   };
 }
