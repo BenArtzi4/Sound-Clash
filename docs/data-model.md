@@ -45,6 +45,7 @@ CREATE TABLE songs (
   release_year  integer                        -- original release year (mig 031); nullable
                   CHECK (release_year IS NULL OR release_year BETWEEN 1900 AND 2100),
   unavailable_at timestamptz,                  -- dead-video auto-skip (mig 045); NULL = playable
+  artist_keys   text[] GENERATED ALWAYS AS (song_artist_keys(artist)) STORED,  -- credited artists (mig 049)
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (youtube_id)                          -- one catalog row per YouTube video (mig 042; via UNIQUE INDEX songs_youtube_id_key)
@@ -233,6 +234,18 @@ decade, so it is excluded from a decade-filtered game and included only when the
 no decade. The catalog is backfilled by `tools/song-curation/`; the admin song form and CSV
 importer both accept an optional `release_year` so new songs can carry it from creation.
 
+### `songs.artist_keys`
+
+`text[]` STORED generated column (migration 049): the artists credited in `artist`,
+lowercased and trimmed, split by `song_artist_keys()` on ` & `, ` ft. `, ` feat. `,
+` featuring `, ` vs. `, ` x ` (not the X of "Lil Nas X & …"), commas and the Hebrew ` ו`
+prefix. "עומר אדם ולירן דנינו" gives `{"לירן דנינו","עומר אדם"}`. Postgres fills it on every
+insert and on every update of `artist`, so nothing writes it and the admin API never
+selects it. The song picker uses it to space artists (no artist again within 8 rounds)
+and to prefer artists heard less in the game — see `rpc-functions.md §3cc`. Storing it
+keeps the text split out of every pick. If `song_artist_keys` ever changes, run
+`UPDATE songs SET artist = artist` so existing rows recompute.
+
 ### `songs.unavailable_at`
 
 Nullable `timestamptz` (migration 045, I-Liveness Phase 2). **When the availability scan
@@ -273,10 +286,13 @@ Backwards transitions are NOT enforced at the database level; RPC functions reje
 Postgres `uuid[]` array, set once at `POST /games`. The song pickers
 (`select_next_song` / `peek_next_song`, direct-RPC — see `rpc-functions.md`)
 share the rounds between these genres in **balanced turns** (migration 048, via
-the internal `pick_next_song` helper): a genre first, then a uniformly random
-unplayed song in it. A genre may go next unless it is more than one song ahead
-of the least-played selected genre that still has eligible songs, so genre
-counts stay within 2 of each other. A song is eligible when it belongs to the
+the internal `pick_next_song` helper): a genre first, then a song in it. A
+genre may go next unless it is more than one song ahead of the least-played
+selected genre that still has eligible songs, so genre counts stay within 2 of
+each other, and (migration 049) it is never the genre of the song playing now
+while another selected genre has songs. Inside the genre, artists heard in the
+last 8 rounds are skipped and artists heard less in the game are preferred
+(see `songs.artist_keys` and `rpc-functions.md §3cc`). A song is eligible when it belongs to the
 genre, has not been played in this game, and passes the optional
 `selected_decades` filter and the dead-video `unavailable_at IS NULL` skip.
 Turns are counted from `game_rounds` joined to `song_genres`, so a song tagged
@@ -400,7 +416,9 @@ db/migrations/
 ├── 043_award_attempt_boolean_overload.sql -- scoring authority in the DB (T7.1): boolean overload of award_attempt derives +10/+5/−3 server-side, added alongside the integer overload
 ├── 044_drop_award_attempt_integer_overload.sql -- drop the now-dead integer overload of award_attempt once the boolean-sending frontend soaked; boolean signature is now the sole one
 │   … 045: songs.unavailable_at dead-video auto-skip + set_song_availability writer
-└── 046_team_secrets.sql        -- per-team rejoin_token in an anon-invisible team_secrets table (host-only team reconnect, issue #183); mirrors game_secrets' isolation
+├── 046_team_secrets.sql        -- per-team rejoin_token in an anon-invisible team_secrets table (host-only team reconnect, issue #183); mirrors game_secrets' isolation
+│   … 047: uniform-per-song pick; 048: balanced genre turns via the internal pick_next_song helper
+└── 049_song_spacing.sql        -- songs.artist_keys generated column + pick_next_song: no genre twice in a row, no artist again within 8 rounds, artists heard less preferred
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.

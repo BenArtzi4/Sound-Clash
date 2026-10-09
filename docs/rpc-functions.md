@@ -354,7 +354,7 @@ SET search_path = public;
 Behavior:
 - Token + game-state gate runs first (same shape as `award_attempt`): raises `game_not_found` / `game_ended` / `manager_token_required` before any reads of song / round state.
 - Then `no_genres_selected` (`22023`) if `selected_genres` is empty.
-- Random path: calls the internal `pick_next_song` helper (§3cc), which shares the rounds between the `selected_genres` in **balanced turns** (migration 048): a genre first, then a uniformly random unplayed song in it, never letting one genre get more than 2 songs ahead of another. Raises `no_more_songs` (`22023`) when the helper finds nothing left. (Migration 047 drew uniformly per song, which let large genres dominate; before 047 the genre was drawn uniformly at random. See `game-rules.md §5`. Historically this logic lived in `backend/app/services/song_picker.py`, removed in the dead-code cleanup.)
+- Random path: calls the internal `pick_next_song` helper (§3cc): never the genre of the song playing now while another selected genre has songs (migration 049), genres kept within 2 songs of each other (migration 048), and artists spaced and shared out (migration 049). Raises `no_more_songs` (`22023`) when the helper finds nothing left. (Migration 047 drew uniformly per song, which let large genres dominate; before 047 the genre was drawn uniformly at random. See `game-rules.md §5`. Historically this logic lived in `backend/app/services/song_picker.py`, removed in the dead-code cleanup.)
 - **Decade filter (migration 032):** when `active_games.selected_decades` is non-empty, the helper's `eligible` set additionally requires `(songs.release_year / 10 * 10) = ANY(selected_decades)` — the song's decade must be one the host chose. The empty default imposes no year limit. A `NULL` `release_year` matches no specific decade, so unknown-year songs are excluded when a decade is selected and included when none is. `selected_decades` is optional; only `selected_genres` is required.
 - **Dead-video auto-skip (migration 045):** the helper's `eligible` set also requires `songs.unavailable_at IS NULL`, so a video the availability scan confirmed dead (see §5b) is never randomly picked — an all-flagged pool raises the same `no_more_songs`.
 - Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow), and **no `unavailable_at` filter** — a host forcing a specific song (the peek commit / a restart) is a deliberate act.
@@ -370,9 +370,9 @@ Not idempotent on its own — every call inserts a new round. The composition re
 
 - Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect`). Single caller in the deployed system.
 
-## 3cc. `pick_next_song`: the balanced-turns picker (internal-only)
+## 3cc. `pick_next_song`: the song picker (internal-only)
 
-Added in migration 048. The one random picker behind `select_next_song`'s random path (§3c) and `peek_next_song` (§3d), so the two can never disagree about which song may come next.
+Added in migration 048 (balanced genre turns), rewritten in migration 049 (genre rotation + artist spacing). The one random picker behind `select_next_song`'s random path (§3c) and `peek_next_song` (§3d), so the two can never disagree about which song may come next.
 
 ```sql
 CREATE OR REPLACE FUNCTION pick_next_song(
@@ -388,9 +388,15 @@ Behavior:
 - **Eligible** `(genre, song)` pairs: the song belongs to a selected genre, has not been played in this game (`game_rounds`), passes the decade filter, and has `unavailable_at IS NULL`. A multi-genre song appears once per selected genre it is in.
 - **Turns** per selected genre: the songs already played in this game that belong to it (`game_rounds` joined to `song_genres`). A song in two selected genres counts as a turn for both, and a manual `p_song_id` commit counts like any other round.
 - **Alive** genres are those with at least one eligible song. A genre that runs out drops out of the comparison, so it never blocks the others.
-- **Allowed** genres: alive genres whose turns are at most the alive minimum + 1. One is chosen with `ORDER BY random()`, then one of its eligible songs with `ORDER BY random()`.
-- Net effect: genre counts never drift more than 2 apart, yet the next genre is narrowed to a single choice in only a few percent of rounds, so it is not a predictable rotation.
-- Not anon-callable (it takes no manager token): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. The two SECURITY DEFINER callers run it as their owner.
+- **Rotation** (049): the genre(s) of the song playing now (the latest `game_rounds` row) are dropped, unless no other alive genre is left. With two genres this is a strict alternation.
+- **Balance** (048): of the rotating genres, those whose turns are at most the alive minimum + 1 may go next; if the rotation left none inside that limit (possible only through songs tagged in two selected genres), the limit is taken from the rotating genres instead, so rotation always wins. One allowed genre is drawn with `ORDER BY random()`. Genre counts never drift more than 2 apart.
+- **Song** (049), within the chosen genre, ranked in this order:
+  1. a song sharing no selected genre with the song playing now beats one that does;
+  2. a song none of whose artists was heard in the last 8 rounds beats one whose artist was; failing that, the artist heard longest ago wins, so a small pool spreads its repeats out;
+  3. the songs left tied are drawn with weight `1 / (1 + plays)^2`, where `plays` is how many songs in this game already credited the song's most-played artist (Efraimidis-Spirakis: `ORDER BY -ln(1 - random()) * (1 + plays)^2 LIMIT 1`). An artist holding half or more of the genre's remaining songs is weighted as if unplayed, because holding it back would only bunch its songs at the end of a long game.
+- **Artists** come from `songs.artist_keys` (049), a STORED generated column: `song_artist_keys(artist)` splits the free-text credit on ` & `, ` ft. `, ` feat. `, ` featuring `, ` vs. `, ` x ` (not the X of "Lil Nas X & …"), commas and the Hebrew ` ו` prefix, then lowercases and trims, so a duet counts for both artists. Soundtrack songs list the film as the artist, so two songs from one film are spaced the same way. If `song_artist_keys` ever changes, run `UPDATE songs SET artist = artist` to recompute existing rows.
+- **Cost** (measured on prod 2026-10-09, catalog of 1,521 songs, rolled-back synthetic games): `peek_next_song` 2.6–4.8 ms on average, `select_next_song` 5–7.5 ms, worst single call 15 ms, against 1.2–3.4 ms under migration 048. A first draft that split artist names inside the pick took 250–900 ms per call on an 8-genre game, which is why the split is stored. Normally the picker runs in the background (`peek_next_song` during the current round) and the Next-round click commits the peeked id through `p_song_id`, which skips the picker entirely; the manager browser holds that peek until `select_next_song` has recorded the new round, so the rotation and spacing see the song that is actually playing.
+- Not anon-callable (it takes no manager token): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. The two SECURITY DEFINER callers run it as their owner. `song_artist_keys` follows the same pattern; service_role keeps EXECUTE because the admin API and CSV import write songs as it.
 
 ## 3d. `peek_next_song`: read-only "what would the next random song be?"
 
@@ -414,7 +420,7 @@ SET search_path = public;
 
 Behavior:
 - Token + game-state gate runs first, **identical** to `select_next_song`: raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) / `no_genres_selected` (`22023`) before returning any candidate.
-- Calls the **same** `pick_next_song` helper as `select_next_song`'s random path (balanced genre turns, migration 048 — §3cc), so the decade filter (migration 032), the dead-video auto-skip (migration 045) and the genre balance are identical by construction: a peeked candidate is always one the random path could have chosen at this point of the game, and a prebuffered video is never a dead one.
+- Calls the **same** `pick_next_song` helper as `select_next_song`'s random path (genre rotation, balance and artist spacing, migrations 048/049 — §3cc), so the decade filter (migration 032), the dead-video auto-skip (migration 045) and the genre balance are identical by construction: a peeked candidate is always one the random path could have chosen at this point of the game, and a prebuffered video is never a dead one.
 - **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
 - **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "nothing to prebuffer"; the real `no_more_songs` still surfaces from the eventual `select_next_song` commit.
