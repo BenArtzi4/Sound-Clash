@@ -7,11 +7,13 @@
 # the durable, detailed incident record (occurrence timestamps, stale/fresh team
 # pairs, affected session_ids, Grafana deep-link).
 #
-# Read path only: a READ-ONLY Grafana service-account token (repo secret
-# GRAFANA_READ_TOKEN, Viewer role) queries the Loki datasource through the
-# Grafana datasource proxy. Dedup is by exact issue title (label
-# stale-buzz-lock), so the overlapping cadence and manual reruns never double
-# file the same game+day.
+# Read path only: a Grafana Cloud access-policy token scoped to logs:read (repo
+# secret LOKI_READ_TOKEN) queries the Loki API directly. It deliberately does
+# NOT go through the hosted Grafana's datasource proxy: on this free stack that
+# web instance answers 503 for days at a time while Loki itself stays up, which
+# failed almost every run from 2026-08-28 to 2026-10-09. Dedup is by exact
+# issue title (label stale-buzz-lock), so the overlapping cadence and manual
+# reruns never double file the same game+day.
 #
 # The email alert query and this query are identical, validated 2026-07-12: at
 # 20:00 UTC the 30m window returned 3VX6QJ=3, AJJFJD=2, VHG4S4=2, so only 3VX6QJ
@@ -52,9 +54,14 @@ jobs:
     timeout-minutes: 10
     env:
       GRAFANA_URL: https://prudentcurrant2518.grafana.net
-      LOKI_DS_UID: grafanacloud-logs
-      GRAFANA_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
+      # The stack's Loki endpoint and Loki user (instance) id, as shown on the
+      # grafanacloud-logs datasource. Not secrets.
+      LOKI_URL: https://logs-prod-039.grafana.net
+      LOKI_USER: "1650589"
+      LOKI_TOKEN: ${{ secrets.LOKI_READ_TOKEN }}
       GH_TOKEN: ${{ github.token }}
+      # No checkout, so gh cannot infer the repo from a .git directory.
+      GH_REPO: ${{ github.repository }}
       THRESHOLD: "3"
       WINDOW_MINUTES: ${{ github.event.inputs.lookback_minutes || '30' }}
       DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
@@ -63,14 +70,28 @@ jobs:
       - name: Scan Loki for #254 incidents and file issues
         run: |
           set -euo pipefail
-          if [ -z "${GRAFANA_TOKEN:-}" ]; then
+          if [ -z "${LOKI_TOKEN:-}" ]; then
             # Graceful skip (not a hard failure) so scheduled runs stay quiet
             # until the secret is configured, instead of red-X'ing every 15 min.
-            echo "::warning::GRAFANA_READ_TOKEN secret is not set yet — skipping. Mint a Viewer service-account token in Grafana and set the repo secret to enable the #254 incident scan."
+            echo "::warning::LOKI_READ_TOKEN secret is not set yet — skipping. Create a Grafana Cloud access-policy token with the logs:read scope and set the repo secret to enable the #254 incident scan."
             exit 0
           fi
 
-          PROXY="$GRAFANA_URL/api/datasources/proxy/uid/$LOKI_DS_UID/loki/api/v1"
+          # loki <api path> <output file> [curl -G args...]
+          # On anything but HTTP 200, fail with the status and the start of the
+          # body, so a failed run says why instead of just "curl: (22)".
+          loki() {
+            local path=$1 out=$2 code
+            shift 2
+            code=$(curl -sS -o "$out" -w '%{http_code}' --max-time 30 \
+              --retry 3 --retry-delay 5 --retry-all-errors \
+              -u "$LOKI_USER:$LOKI_TOKEN" -G "$LOKI_URL/loki/api/v1/$path" "$@") || true
+            if [ "$code" != "200" ]; then
+              echo "::error::Loki $path returned HTTP ${code:-000}: $(head -c 300 "$out" 2>/dev/null)"
+              exit 1
+            fi
+          }
+
           WIN="${WINDOW_MINUTES}m"
           if [ -n "$END_TIME" ]; then
             end_s=$(date -u -d "$END_TIME" +%s)
@@ -85,11 +106,10 @@ jobs:
 
           # --- 1. per-game repair count over the trailing window (the alert query)
           Q='sum by (context_game_code) (count_over_time({service_name="sound-clash-web", kind="log"} |= "stale_buzz_lock_resynced" | logfmt ['"$WIN"']))'
-          resp=$(curl -sS --fail-with-body --max-time 30 --retry 3 --retry-delay 5 --retry-all-errors \
-            -G "$PROXY/query" \
-            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+          loki query count.json \
             --data-urlencode "query=$Q" \
-            --data-urlencode "time=$end_ns")
+            --data-urlencode "time=$end_ns"
+          resp=$(cat count.json)
 
           # tr -d '\r': normalize line endings so a CRLF jq build can't leave a
           # stray CR on a game_code (breaks the later string compares/dedup).
@@ -105,9 +125,10 @@ jobs:
           echo "Incident game_codes: ${incidents[*]}"
 
           filed=0 skipped=0
-          # existing stale-buzz-lock issue titles for dedup
+          # existing stale-buzz-lock issue titles for dedup. No fallback: if the
+          # list cannot be read, filing anyway would duplicate every 15 min.
           gh issue list --label stale-buzz-lock --state all --limit 300 \
-            --json title --jq '.[].title' > existing_titles.txt || : > existing_titles.txt
+            --json title --jq '.[].title' > existing_titles.txt
 
           for code in "${incidents[@]}"; do
             count=$(jq -r --arg c "$code" '.data.result[] | select(.metric.context_game_code==$c) | .value[1]' <<<"$resp")
@@ -121,15 +142,13 @@ jobs:
 
             # --- 2. per-incident detail lines: ts \t stale \t fresh \t session \t page
             DQ='{service_name="sound-clash-web", kind="log"} |= "stale_buzz_lock_resynced" | logfmt | context_game_code="'"$code"'" | line_format "{{.timestamp}}\t{{.context_stale_team}}\t{{.context_fresh_team}}\t{{.session_id}}\t{{.page_id}}"'
-            dresp=$(curl -sS --fail-with-body --max-time 30 --retry 3 --retry-delay 5 --retry-all-errors \
-              -G "$PROXY/query_range" \
-              -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            loki query_range detail.json \
               --data-urlencode "query=$DQ" \
               --data-urlencode "start=$start_ns" \
               --data-urlencode "end=$end_ns" \
               --data-urlencode "limit=1000" \
-              --data-urlencode "direction=forward")
-            jq -r '.data.result[].values[][1]' <<<"$dresp" | tr -d '\r' | sort > lines.tsv || : > lines.tsv
+              --data-urlencode "direction=forward"
+            jq -r '.data.result[].values[][1]' detail.json | tr -d '\r' | sort > lines.tsv || : > lines.tsv
 
             sessions=$(cut -f4 lines.tsv | sort -u | paste -sd', ' -)
             first_ts=$(head -1 lines.tsv | cut -f1)
