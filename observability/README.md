@@ -100,8 +100,8 @@ alert rule are in [`supabase-metrics-scrape.md`](supabase-metrics-scrape.md).
 ## 3. GitHub Action — durable #254 incident record
 
 - File: [`../.github/workflows/stale-buzz-lock-scan.yml`](../.github/workflows/stale-buzz-lock-scan.yml)
-- Every 15 min it runs the same #254 query against Loki (via the Grafana
-  datasource proxy, read-only token), and files **one issue per incident**
+- Every 15 min it runs the same #254 query against the Loki API directly
+  (read-only token), and files **one issue per incident**
   (`game_code` with ≥3 repairs in 30 min) — with occurrence timestamps,
   stale→fresh team pairs, affected `session_id`s, and a Grafana deep-link.
   Deduped by exact title (`Realtime dropped-event incident: game <CODE> (<date>)`,
@@ -110,35 +110,38 @@ alert rule are in [`supabase-metrics-scrape.md`](supabase-metrics-scrape.md).
 
 ### Secret to set
 
-Mint a **read-only service-account token** in Grafana
-(Administration → Users and access → Service accounts → add, role **Viewer** →
-add token) and set it as a repo secret:
+Create a **Grafana Cloud access-policy token scoped to `logs:read`**
+(grafana.com → your org → Administration → Cloud access policies → Create
+access policy, realm = the `prudentcurrant2518` stack, scope **logs: Read** →
+Add token) and set it as a repo secret:
 
 ```
-GRAFANA_READ_TOKEN   =  <the service-account token>
+LOKI_READ_TOKEN   =  <the access-policy token>
 ```
 
-(`gh secret set GRAFANA_READ_TOKEN --repo BenArtzi4/Sound-Clash`)
+(`gh secret set LOKI_READ_TOKEN --repo BenArtzi4/Sound-Clash`)
 
-> ⚠️ **Also grant the SA `datasources:query` — the Viewer basic role alone does
-> NOT include it in this Grafana Cloud stack** (a plain Viewer token gets
-> `403 {"message":"Permissions needed: datasources:query"}` from the proxy).
-> Keep it read-only by granting **Query on just the Loki datasource**:
-> Connections → Data sources → `grafanacloud-…-logs` → **Permissions** →
-> **Add a permission** → **Service account** → your SA → role **Query** → Save.
-> (An Editor SA also works but is broader than needed.)
+The workflow sends it as basic auth to the stack's Loki endpoint
+(`https://logs-prod-039.grafana.net`, user `1650589`, both on the
+`grafanacloud-logs` datasource). The weekly `dead-video-scan.yml` reads its
+in-game player failures with the same secret.
 
-The token only ever queries the Loki datasource through the proxy — no write
-scope. Validated on the runner 2026-07-13: with the datasource Query grant, the
-exact proxy path
-`/api/datasources/proxy/uid/grafanacloud-logs/loki/api/v1/query` returns
-`3VX6QJ=3, AJJFJD=2, VHG4S4=2`, and the dry-run correctly reports the `3VX6QJ`
-incident (3 repairs) while creating zero issues.
+> ⚠️ **Do not route these scans through the hosted Grafana's datasource proxy**
+> (`<stack>.grafana.net/api/datasources/proxy/...`). That was the original
+> design, with a Viewer service-account token in `GRAFANA_READ_TOKEN`, and it
+> failed almost every run from 2026-08-28 to 2026-10-09: on this free stack the
+> Grafana web instance answers `503` for days at a time. The scan's own requests
+> never brought it back; the success streaks each began right after a Claude
+> session queried Grafana through the MCP. Loki and Grafana alerting stayed up the
+> whole time (Grafana's usage-insights logs showed the `#254` alert rule
+> querying Loki every 5 min in the same minutes the scan got `503`), so the
+> email alert was never affected. Querying Loki directly removes the
+> dependency.
 
 ### Test before trusting the schedule
 
-Actions → **Stale buzz-lock scan → Run workflow**:
-`dry_run = true`, `end_time = 2026-07-12T20:00:00Z`. It will report it *would
-file* exactly the `3VX6QJ` incident (3 repairs) and print the full issue body,
-without creating anything. Then a real (`dry_run = false`) run against a live
-incident, or just let the schedule take over.
+Actions → **Stale buzz-lock scan → Run workflow**: `dry_run = true`, and an
+`end_time` just after a known incident that is still inside Loki's retention
+(14 days on the free tier). For example `end_time = 2026-10-04T21:45:03Z`
+reports that it *would file* the `YQFDR6` incident (5 repairs) and prints the
+full issue body, without creating anything. Then let the schedule take over.
