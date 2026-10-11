@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import mimetypes
 import os
 import re
 import shutil
@@ -185,13 +184,21 @@ class Handler(BaseHTTPRequestHandler):
         return {k: v[0] for k, v in q.items() if v}
 
     def static(self, rel: str) -> None:
-        target = (TOOL / rel).resolve()
-        if TOOL not in target.parents and target != TOOL:
+        # normpath + prefix check (then realpath, for symlinks): only files
+        # inside the tool folder, only the extensions in STATIC_TYPES.
+        base = os.path.realpath(TOOL)
+        target = os.path.normpath(os.path.join(base, rel))
+        if not target.startswith(base + os.sep):
             return self.json(403, {"error": "outside the tool folder"})
-        ext = target.suffix.lower()
-        if not target.is_file() or ext not in STATIC_TYPES:
-            return self.json(404, {"error": f"not found: {rel}"})
-        self.send(200, target.read_bytes(), STATIC_TYPES.get(ext) or mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+        real = os.path.realpath(target)
+        if not real.startswith(base + os.sep):
+            return self.json(403, {"error": "outside the tool folder"})
+        ext = os.path.splitext(real)[1].lower()
+        ctype = STATIC_TYPES.get(ext)
+        if ctype is None or not os.path.isfile(real):
+            return self.json(404, {"error": "not found"})
+        with open(real, "rb") as fh:
+            self.send(200, fh.read(), ctype)
 
     # ---- routes --------------------------------------------------------
     def do_GET(self):  # noqa: N802

@@ -9,7 +9,7 @@ microformat (upload date, countries, category), owner badges, the description
 usage: python fetch_meta.py catalog.json [--workers 4]
 """
 from __future__ import annotations
-import json, sys, time, re, urllib.request, concurrent.futures as cf
+import json, sys, time, urllib.request, concurrent.futures as cf
 from pathlib import Path
 
 HERE = Path.cwd()  # the batch folder
