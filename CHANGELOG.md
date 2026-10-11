@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-10-11: Added **93 songs players asked for** (1456 → 1549), human-reviewed from a list of requests: Israeli pop and Mizrahit hits from Noa Kirel, Eden Hason, Hanan Ben Ari, Ishay Ribo (his first songs in the game), Omer Adam, Moshe Peretz, Idan Amedi, Idan Raichel, Avraham Tal, Static & Ben El, Itay Levi, Benaia Barbi and more, plus classics from Yehuda Poliker, Miri Mesika and Arik Einstein. (#365)
 - 2026-10-09: Added **171 new songs** to the catalog (1350 → 1521), human-reviewed from four sources: two family-playlist CSVs (classic rock/disco/soul plus Mizrahit party hits), a family WhatsApp chat of classic Israeli singer-songwriter music (Arik Einstein, Chava Alberstein, Meir Ariel, Ehud Banai, Matti Caspi, David Broza, and more), and an OCR'd notebook of Hebrew poems set to music (Bialik, Rachel, Alterman, Leah Goldberg, Naomi Shemer, Ehud Manor, and more poets).
 - 2026-09-25: **Players now get the setlist too.** When a game ends, every player's phone shows the songs that played under the final results — who got each one, with a play link per song and a *Play all on YouTube* button — so "what was that song?" has an answer on the spot, not just on the host's screen. (#348)
 - 2026-09-25: The Display code-entry screen has a **Cancel** button back to the home screen, like Host and Join. (#344)
