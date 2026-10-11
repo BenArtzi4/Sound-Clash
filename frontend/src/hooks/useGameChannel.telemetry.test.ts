@@ -181,6 +181,53 @@ describe("useGameChannel telemetry wiring", () => {
       expect(staleLockWarnings()).toHaveLength(0);
     });
 
+    it("ignores frames from before the lock was learned", async () => {
+      // The usual path: the round-start frame (no lock) arrives, then the
+      // buzz frame. The clear is then lost. That earlier unlocked frame must
+      // not count as having delivered the clear.
+      const unlocked = { ...locked, buzzed_team_id: null, locked_at: null };
+      setHydrate({ game: unlocked, teams: [], rounds: [makeRound({ id: "r3", round_number: 3 })] });
+      renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+      act(() => {
+        fireGame(makePayload("active_games", "UPDATE", { new: unlocked }, TS));
+      });
+      act(() => {
+        fireGame(makePayload("active_games", "UPDATE", { new: locked }, TS));
+      });
+      setHydrate({ game: cleared, teams: [], rounds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 100);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(1);
+    });
+
+    it("still warns when the next round starts inside the window", async () => {
+      // The release frame was lost and the host pressed Next right after the
+      // repair. The new round's frame also has no lock, but it is a later
+      // write, so it does not prove the release was delivered.
+      await tickAfterClear();
+      act(() => {
+        fireGame(
+          makePayload(
+            "active_games",
+            "UPDATE",
+            { new: { ...cleared, round_number: 4, current_round_id: "r4" } },
+            TS,
+          ),
+        );
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(1);
+    });
+
     it("still warns when a later buzz by another team arrives inside the window", async () => {
       // A new lock is a different write from the lost clear, so it proves
       // nothing about whether the clear was delivered.

@@ -343,24 +343,38 @@ export function useGameChannel(gameCode: string): {
     // active_games Realtime row and each hydrate snapshot. Ordered by arrival,
     // not by React commits, so a frame that landed while its render was still
     // pending is not mistaken for a lost one.
+    type LockObservation = { seq: number; lock: string | null; round: number; realtime: boolean };
     let lockSeq = 0;
-    const lockLog: { seq: number; lock: string | null; realtime: boolean }[] = [];
-    function observeLock(lock: string | null, realtime: boolean): number {
+    const lockLog: LockObservation[] = [];
+    function observeLock(row: ActiveGame, realtime: boolean): number {
       lockSeq += 1;
-      lockLog.push({ seq: lockSeq, lock, realtime });
+      lockLog.push({
+        seq: lockSeq,
+        lock: row.buzzed_team_id ?? null,
+        round: row.round_number,
+        realtime,
+      });
       if (lockLog.length > LOCK_LOG_SIZE) lockLog.shift();
       return lockSeq;
     }
-    // Did Realtime itself deliver `fresh` after this client learned `stale`
-    // (its last sighting before the repairing snapshot `snapshotSeq`)? Only the
-    // repaired value counts. A different team's new lock is a later write, and
-    // says nothing about whether the clear between them was delivered.
-    function realtimeDelivered(stale: string, fresh: string | null, snapshotSeq: number): boolean {
+    // Did Realtime itself deliver the repaired state `fresh` after this client
+    // learned `stale` (its last sighting before the snapshot `snapshotSeq`)?
+    // Only the same lock in the same round counts. A different team's buzz or
+    // the next round's start is a later write, and says nothing about whether
+    // the clear before it was delivered.
+    function realtimeDelivered(stale: string, fresh: ActiveGame, snapshotSeq: number): boolean {
+      const freshLock = fresh.buzzed_team_id ?? null;
       let learnedSeq = 0;
       for (const o of lockLog) {
         if (o.seq < snapshotSeq && o.lock === stale) learnedSeq = o.seq;
       }
-      return lockLog.some((o) => o.realtime && o.seq > learnedSeq && o.lock === fresh);
+      return lockLog.some(
+        (o) =>
+          o.realtime &&
+          o.seq > learnedSeq &&
+          o.lock === freshLock &&
+          o.round === fresh.round_number,
+      );
     }
     const confirmTimers = new Set<number>();
     // Diagnostic for #254: a backstop tick found a different lock in the DB
@@ -368,7 +382,7 @@ export function useGameChannel(gameCode: string): {
     // only if Realtime never delivers the repaired value within
     // STALE_LOCK_CONFIRM_MS, i.e. the event really was lost. This warning is
     // what makes dropped Realtime events visible in Grafana.
-    function confirmStaleLock(stale: string, fresh: string | null, snapshotSeq: number): void {
+    function confirmStaleLock(stale: string, fresh: ActiveGame, snapshotSeq: number): void {
       if (realtimeDelivered(stale, fresh, snapshotSeq)) return;
       const id = window.setTimeout(() => {
         confirmTimers.delete(id);
@@ -376,7 +390,7 @@ export function useGameChannel(gameCode: string): {
         log("warn", "stale_buzz_lock_resynced", {
           game_code: gameCode,
           stale_team: stale,
-          fresh_team: fresh ?? "none",
+          fresh_team: fresh.buzzed_team_id ?? "none",
         });
       }, STALE_LOCK_CONFIRM_MS);
       confirmTimers.add(id);
@@ -421,7 +435,7 @@ export function useGameChannel(gameCode: string): {
           // lock land (won if it's our team, lost_race otherwise).
           if (typed.eventType !== "DELETE") {
             const row = typed.new as ActiveGame;
-            observeLock(row.buzzed_team_id ?? null, true);
+            observeLock(row, true);
             if (row.buzzed_team_id) {
               resolveBuzzE2E(row.buzzed_team_id, typed.commit_timestamp);
             }
@@ -591,12 +605,15 @@ export function useGameChannel(gameCode: string): {
             // Cast via unknown: a non-literal select() string makes
             // supabase-js infer GenericStringError rather than a row shape.
             const freshGame = gameRes.data as unknown as ActiveGame;
-            const freshLock = freshGame.buzzed_team_id ?? null;
-            const snapshotSeq = observeLock(freshLock, false);
+            const snapshotSeq = observeLock(freshGame, false);
             // A backstop tick that finds a different lock than the one held
             // here may have caught a lost event. confirmStaleLock decides.
-            if (resync && lockRef.current !== null && freshLock !== lockRef.current) {
-              confirmStaleLock(lockRef.current, freshLock, snapshotSeq);
+            if (
+              resync &&
+              lockRef.current !== null &&
+              (freshGame.buzzed_team_id ?? null) !== lockRef.current
+            ) {
+              confirmStaleLock(lockRef.current, freshGame, snapshotSeq);
             }
             dispatch({
               type: "HYDRATE",
