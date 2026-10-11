@@ -150,7 +150,9 @@ jobs:
               --data-urlencode "direction=forward"
             jq -r '.data.result[].values[][1]' detail.json | tr -d '\r' | sort > lines.tsv || : > lines.tsv
 
-            sessions=$(cut -f4 lines.tsv | sort -u | paste -sd', ' -)
+            # paste -d takes a delimiter LIST (it alternates ',' and ' '), so
+            # join on ',' and widen afterwards.
+            sessions=$(cut -f4 lines.tsv | sort -u | paste -sd, - | sed 's/,/, /g')
             first_ts=$(head -1 lines.tsv | cut -f1)
             last_ts=$(tail -1 lines.tsv | cut -f1)
 
