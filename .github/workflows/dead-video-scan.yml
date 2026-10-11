@@ -15,9 +15,11 @@
 #    while anything is wrong, closed automatically once everything is clean.
 #
 # Needs the ADMIN_PASSWORD repo secret (the same X-Admin-Password the admin
-# song catalog uses); a missing secret fails fast. GRAFANA_READ_TOKEN (Viewer
-# service-account token, shared with stale-buzz-lock-scan.yml) enables step 2;
-# without it the in-game section is skipped with a warning.
+# song catalog uses); a missing secret fails fast. LOKI_READ_TOKEN (Grafana
+# Cloud access-policy token with logs:read, shared with stale-buzz-lock-scan.yml)
+# enables step 2; without it the in-game section is skipped with a warning. It
+# queries Loki directly, not through the hosted Grafana's datasource proxy,
+# which answers 503 for days at a time on this free stack (it did on 2026-09-28).
 #
 # Test without side effects: Run workflow -> dry_run=true probes report-only
 # (commit=false) and prints the issue body instead of touching issues.
@@ -48,12 +50,13 @@ jobs:
       - name: Scan the catalog and in-game failures, sync the dead-videos issue
         env:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          GRAFANA_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
+          LOKI_TOKEN: ${{ secrets.LOKI_READ_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           API: https://api.soundclash.org
-          GRAFANA_URL: https://prudentcurrant2518.grafana.net
-          LOKI_DS_UID: grafanacloud-logs
+          # The stack's Loki endpoint and Loki user (instance) id. Not secrets.
+          LOKI_URL: https://logs-prod-039.grafana.net
+          LOKI_USER: "1650589"
           LOOKBACK_DAYS: "7"
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
@@ -98,16 +101,16 @@ jobs:
           # --- 2. real in-game player failures (Loki) -----------------------
           : > ingame.tsv
           ingame_note=""
-          if [ -z "${GRAFANA_TOKEN:-}" ]; then
-            echo "::warning::GRAFANA_READ_TOKEN is not set; skipping in-game failures."
-            ingame_note="In-game failures were not checked (GRAFANA_READ_TOKEN is not set)."
+          if [ -z "${LOKI_TOKEN:-}" ]; then
+            echo "::warning::LOKI_READ_TOKEN is not set; skipping in-game failures."
+            ingame_note="In-game failures were not checked (LOKI_READ_TOKEN is not set)."
           else
             end_ns=$(( $(date -u +%s) * 1000000000 ))
             start_ns=$(( end_ns - LOOKBACK_DAYS * 86400 * 1000000000 ))
             Q='{service_name="sound-clash-web", kind="log"} |~ "message=yt_(player|preload)_error" | logfmt | line_format "{{.timestamp}}\t{{.message}}\t{{.context_code}}\t{{.context_youtube_id}}\t{{.context_title}}\t{{.context_artist}}\t{{.context_game_code}}\t{{.page_url}}"'
             if lresp=$(curl -sS --fail-with-body --max-time 60 --retry 3 --retry-delay 10 --retry-all-errors \
-              -G "$GRAFANA_URL/api/datasources/proxy/uid/$LOKI_DS_UID/loki/api/v1/query_range" \
-              -H "Authorization: Bearer $GRAFANA_TOKEN" \
+              -G "$LOKI_URL/loki/api/v1/query_range" \
+              -u "$LOKI_USER:$LOKI_TOKEN" \
               --data-urlencode "query=$Q" \
               --data-urlencode "start=$start_ns" \
               --data-urlencode "end=$end_ns" \
@@ -117,7 +120,7 @@ jobs:
               # the last field of each line.
               jq -r '.data.result[].values[][1]' <<<"$lresp" | tr -d '\r' | sort > ingame.tsv
             else
-              echo "::warning::Loki query failed; in-game failures not checked."
+              echo "::warning::Loki query failed; in-game failures not checked: $(head -c 300 <<<"${lresp:-}")"
               ingame_note="In-game failures could not be read from Grafana this run."
             fi
           fi
