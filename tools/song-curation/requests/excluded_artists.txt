@@ -1,0 +1,9 @@
+# Artists the maintainer has chosen not to add to the catalog.
+# One name per line, as the catalog would spell it. Matching is case/punctuation-
+# insensitive and also catches duets/features where the artist is credited.
+# parse_requests.py skips these requests; finalize.py drops cards whose researched
+# artist turns out to be one of them. Both list what they skipped in their report.
+#
+# Every card offered for this artist (32, across four batches up to 2026-10-11,
+# including 17 player requests) was rejected in review.
+אייל גולן

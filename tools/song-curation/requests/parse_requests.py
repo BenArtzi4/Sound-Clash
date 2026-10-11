@@ -60,6 +60,25 @@ def artist_overlap(req_artist: str, cat_artist: str) -> bool:
     return False
 
 
+def excluded_artists() -> list:
+    """Names from excluded_artists.txt next to this script (# comments allowed)."""
+    p = Path(__file__).resolve().parent / "excluded_artists.txt"
+    if not p.exists():
+        return []
+    lines = (ln.strip() for ln in p.read_text(encoding="utf-8").splitlines())
+    return [ln for ln in lines if ln and not ln.startswith("#")]
+
+
+def is_excluded(artist: str, names: list) -> str | None:
+    """The excluded name credited in `artist` (main, duet or feature), else None."""
+    parts = artist_parts(artist)
+    for name in names:
+        n = norm(name)
+        if n in parts or any(n in p for p in parts):
+            return name
+    return None
+
+
 def main() -> None:
     src = Path(sys.argv[1])
     raw = json.loads((HERE / "_dumps" / "catalog_raw.json").read_text(encoding="utf-8"))
@@ -68,7 +87,8 @@ def main() -> None:
     for c in catalog:
         by_title.setdefault(norm(c["title"]), []).append(c)
 
-    wanted, in_cat, seen = [], [], {}
+    wanted, in_cat, seen, skipped = [], [], {}, []
+    excluded = excluded_artists()
     lines = src.read_text(encoding="utf-8").splitlines()
     report = []
     for n, line in enumerate(lines, 1):
@@ -87,9 +107,17 @@ def main() -> None:
             report.append(f"line {n}: repeat of line {seen[key]} in the request list: {title} — {artist}")
             continue
         seen[key] = n
+        # Players credit the wrong singer ~1 time in 8, so a request credited to an
+        # excluded artist is kept and tagged: research finds the real performer,
+        # skips it cheaply if it really is theirs, and finalize.py drops it anyway.
+        hit = is_excluded(artist, excluded)
+        if hit:
+            skipped.append(f"  #{n} {title} — {artist}  (credited to excluded artist: {hit})")
         exact = [c for c in by_title.get(norm(title), []) if artist_overlap(artist, c["artist"])]
         same_title = [c for c in by_title.get(norm(title), []) if c not in exact]
         rec = {"req": n, "title": title, "artist": artist}
+        if hit:
+            rec["credited_to_excluded_artist"] = hit
         if exact:
             rec["catalog"] = [{k: c[k] for k in ("title", "artist", "youtube_id", "release_year", "genres")} for c in exact]
             in_cat.append(rec)
@@ -101,7 +129,12 @@ def main() -> None:
 
     (HERE / "wanted.json").write_text(json.dumps(wanted, ensure_ascii=False, indent=1), encoding="utf-8")
     (HERE / "in_catalog.json").write_text(json.dumps(in_cat, ensure_ascii=False, indent=1), encoding="utf-8")
-    report.insert(0, f"requests parsed: {len(seen)} unique | already in catalog: {len(in_cat)} | to research: {len(wanted)}")
+    report.insert(0, f"requests parsed: {len(seen)} unique | already in catalog: {len(in_cat)} | "
+                     f"to research: {len(wanted)} (of which credited to an excluded artist: {len(skipped)})")
+    if skipped:
+        report.append("")
+        report.append("== credited to an excluded artist (excluded_artists.txt) — research checks who really sings it ==")
+        report += skipped
     report.append("")
     report.append("== already in catalog ==")
     for r in in_cat:
