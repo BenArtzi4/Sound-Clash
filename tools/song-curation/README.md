@@ -185,10 +185,11 @@ mizrahit, israeli-soundtracks`.
 
 3. **Export:** click **⬇ Export approved CSV** (also saved into the batch folder).
 
-4. **Handoff:** export the approved CSV and hand it to a maintainer to import into
-   the live catalog. That import step — and all live-database access — is
-   intentionally out of scope for this tool: no project ref, credentials, or import
-   command live in this repo.
+4. **Upload:** `requests/gen_upload.py <csv>` (run from the batch folder) writes the
+   idempotent upload SQL and a read-only verify query; a maintainer applies it with
+   their own linked Supabase CLI and checks the result with `--check`. No project ref
+   or credentials live in this repo. Full sequence: the `song-requests` skill
+   (`.claude/skills/song-requests/SKILL.md`).
 
 ## Validate the export before uploading
 
