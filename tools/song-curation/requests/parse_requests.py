@@ -60,9 +60,17 @@ def artist_overlap(req_artist: str, cat_artist: str) -> bool:
     return False
 
 
+def exclusions_file() -> Path:
+    """The maintainer's private exclusion list: <repo>/.claude/curation-exclusions.txt.
+
+    Local only (.claude/ is git-ignored), kept with the maintainer's credentials.
+    One artist per line, # comments allowed. Missing file = no exclusions."""
+    return Path(__file__).resolve().parents[3] / ".claude" / "curation-exclusions.txt"
+
+
 def excluded_artists() -> list:
-    """Names from excluded_artists.txt next to this script (# comments allowed)."""
-    p = Path(__file__).resolve().parent / "excluded_artists.txt"
+    """Names from the local exclusion list (see exclusions_file)."""
+    p = exclusions_file()
     if not p.exists():
         return []
     lines = (ln.strip() for ln in p.read_text(encoding="utf-8").splitlines())
@@ -133,7 +141,7 @@ def main() -> None:
                      f"to research: {len(wanted)} (of which credited to an excluded artist: {len(skipped)})")
     if skipped:
         report.append("")
-        report.append("== credited to an excluded artist (excluded_artists.txt) — research checks who really sings it ==")
+        report.append("== credited to an excluded artist (local exclusion list) — research checks who really sings it ==")
         report += skipped
     report.append("")
     report.append("== already in catalog ==")

@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from parse_requests import artist_overlap, artist_parts
+from parse_requests import artist_overlap, artist_parts, excluded_artists
 
 HERE = Path.cwd()  # always run from the batch folder
 
@@ -45,7 +45,10 @@ def main() -> None:
 
     tools = Path(__file__).resolve().parent
     guide = (tools / "AGENT_GUIDE.template.md").read_text(encoding="utf-8")
-    guide = guide.replace("{BATCH_DIR}", HERE.resolve().as_posix()).replace("{TOOLS}", tools.as_posix())
+    names = excluded_artists()  # private list; only the batch's local guide names them
+    guide = (guide.replace("{BATCH_DIR}", HERE.resolve().as_posix())
+             .replace("{TOOLS}", tools.as_posix())
+             .replace("{EXCLUDED}", ", ".join(names) if names else "(none)"))
     (HERE / "AGENT_GUIDE.md").write_text(guide, encoding="utf-8")
     print("wrote AGENT_GUIDE.md")
 

@@ -23,9 +23,11 @@ All paths below are relative to the repo root unless they start with `$B` (the b
   password are with the maintainer's credentials and are never in the repo. Check it works with
   `supabase db query --linked "select count(*) from songs"`.
 - **`gh`** logged in (for the CHANGELOG PR), and optionally Claude in Chrome (for the browser check).
+- **Private exclusion list:** copy the maintainer's list to `.claude/curation-exclusions.txt` (one artist
+  per line). It's git-ignored and kept with the credentials, never committed. Ask the maintainer for it
+  if it's missing; without it nothing is excluded.
 - **Batch folders are git-ignored**, so past batches don't come with a clone. That only weakens the
-  "offered before and never approved" flags in `finalize.py`. The permanent exclusions live in
-  `tools/song-curation/requests/excluded_artists.txt`, which is committed.
+  "offered before and never approved" flags in `finalize.py`.
 
 Session conventions:
 - Network commands need `dangerouslyDisableSandbox: true`.
@@ -88,14 +90,16 @@ Session conventions:
       It must print `mismatches 0` and every id must be present.
     - Branch `docs/changelog-<date>-song-requests`, add a `### Added` line to `CHANGELOG.md`, and open a
       PR (one-line commit messages, no AI attribution). Merge only when the user says so.
-    - If they rejected every card of some artist, ask whether to add that artist to `excluded_artists.txt`.
+    - If they rejected every card of some artist, ask whether to add that artist to the private
+      `.claude/curation-exclusions.txt` (never to a committed file — the repo is public).
 
 ## Rules that matter
 
 - Never write a YouTube id that didn't come from yt.py output. Every id is verified: status OK,
   embeddable, playable in Israel.
 - About 1 in 8 requests names the wrong performer: trust the title, fix the artist, and flag it.
-- Excluded artists live in `tools/song-curation/requests/excluded_artists.txt`. They are filtered on the
+- Excluded artists live only in the private `.claude/curation-exclusions.txt`. Never name them in a
+  committed file, commit message or PR description (the repo is public). They are filtered on the
   researched artist, never only on the name the player wrote.
 - Unapproved cards = rejected. Don't re-offer them silently; `finalize.py` flags re-offers.
 - Cards keep `start_time = 0`. The heat strip and `suggested_start` are only hints: the maintainer's
