@@ -539,14 +539,16 @@ async def test_null_unavailable_at_stays_eligible(db: asyncpg.Connection) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Balanced genre turns (migration 048)
+# Balanced genre turns (migration 048) and genre rotation (migration 049)
 #
 # The random path picks a genre first, then a song inside it. A genre may go
 # next unless it is already more than one song ahead of the least-played genre
-# that still has songs left, so genre counts never drift more than 2 apart.
-# These tests assert that invariant round by round, so they are deterministic
-# rather than statistical. Under migration 047's uniform-per-song pick a 10 vs
-# 30 vs 30 pool drifts past 2 within a few rounds.
+# that still has songs left, so genre counts never drift more than 2 apart, and
+# (049) it is never the genre of the song playing now while another genre has
+# songs. These tests assert both rules round by round, so they are
+# deterministic rather than statistical. Artist spacing (049) has its own tests
+# in test_song_spacing.py; every song here shares one artist, so it never
+# affects which genre goes next.
 # ---------------------------------------------------------------------------
 
 
@@ -591,11 +593,15 @@ async def test_balanced_turns_keep_genre_counts_within_two(db: asyncpg.Connectio
     for _ in range(3):
         game_code, token = await _new_game(db, genres)
         counts = dict.fromkeys(genres, 0)
+        previous = None
         for rnd in range(1, 25):
             sid = (await _call(db, game_code, token))[0]["song_id"]
             counts[owner[sid]] += 1
             gap = max(counts.values()) - min(counts.values())
             assert gap <= 2, f"round {rnd}: genre counts drifted to {counts}"
+            # Migration 049: never the genre that played the round before.
+            assert owner[sid] != previous, f"round {rnd}: {owner[sid]} twice in a row"
+            previous = owner[sid]
         assert all(7 <= n <= 9 for n in counts.values()), counts
 
 
@@ -619,19 +625,16 @@ async def test_exhausted_genre_drops_out_and_the_rest_continue(db: asyncpg.Conne
 
 
 @pytest.mark.asyncio
-async def test_balanced_turns_are_not_a_fixed_rotation(db: asyncpg.Connection) -> None:
-    """Two equal genres must not simply alternate: somewhere across 4 games of
-    16 rounds the same genre plays twice in a row. A strict rotation would make
-    every second genre predictable. Each game has at least 7 independent 50/50 chances
-    of a repeat, so this fails by luck with probability below 2**-28."""
+async def test_two_genres_alternate_strictly(db: asyncpg.Connection) -> None:
+    """Migration 049 reversed 048's "not a fixed rotation": a genre never plays
+    twice in a row while another genre has songs, so two equal genres alternate
+    for all 16 rounds of each of 4 games."""
     genres = await _genre_map(db, "rock", "pop")
     owner = await _seed_genre_songs(db, genres, {"rock": 16, "pop": 16})
-    back_to_back = 0
     for _ in range(4):
         game_code, token = await _new_game(db, genres)
         played = [owner[(await _call(db, game_code, token))[0]["song_id"]] for _ in range(16)]
-        back_to_back += sum(a == b for a, b in pairwise(played))
-    assert back_to_back > 0
+        assert all(a != b for a, b in pairwise(played)), played
 
 
 @pytest.mark.asyncio

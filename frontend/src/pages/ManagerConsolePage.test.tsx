@@ -2070,6 +2070,90 @@ describe("ManagerConsolePage", () => {
     expect(handle(1).commitPrebuffered).not.toHaveBeenCalled();
   });
 
+  it("holds the next peek until select_next_song has recorded the new round", async () => {
+    // The picker (mig 049) never repeats the genre playing now, so it must see
+    // the new round. The promoted player reaches PLAYING while the select call
+    // is still in flight; the peek has to wait for it to resolve.
+    await setupPlayingRoundWithBothPlayersReady();
+    vi.mocked(peekNextSongDirect)
+      .mockResolvedValueOnce({
+        song_id: "song-2",
+        youtube_id: "vid2bbbbbbb",
+        start_time: 30,
+        title: "Song Two",
+        artist: "Artist Two",
+        is_soundtrack: false,
+      })
+      .mockResolvedValueOnce(null);
+    let resolveSelect: (value: Awaited<ReturnType<typeof selectNextSongDirect>>) => void = () => {};
+    vi.mocked(selectNextSongDirect).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSelect = resolve;
+      }),
+    );
+
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 30));
+    expect(peekNextSongDirect).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("start-round"));
+    await waitFor(() => expect(handle(1).commitPrebuffered).toHaveBeenCalledWith(30));
+    await act(async () => {
+      onPlayingHandlers[1]?.("statechange");
+    });
+    expect(peekNextSongDirect).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSelect({
+        round_id: "r2",
+        round_number: 2,
+        song: {
+          id: "song-2",
+          title: "Second",
+          artist: "B",
+          youtube_id: "vid2bbbbbbb",
+          start_time: 30,
+          is_soundtrack: false,
+        },
+      });
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledTimes(2));
+  });
+
+  it("peeks after a cold Next round only once the new song is playing", async () => {
+    await setupPlayingRoundWithBothPlayersReady();
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
+      round_id: "r2",
+      round_number: 2,
+      song: {
+        id: "song-2",
+        title: "Second",
+        artist: "B",
+        youtube_id: "vid2bbbbbbb",
+        start_time: 0,
+        is_soundtrack: false,
+      },
+    });
+
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByTestId("start-round"));
+    await waitFor(() => expect(handle(0).loadVideoById).toHaveBeenCalledWith("vid2bbbbbbb", 0));
+    await act(async () => {});
+    expect(peekNextSongDirect).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledTimes(2));
+  });
+
   it("prebuffers the first song during 'waiting' and commits it in-gesture on Start game", async () => {
     // Regression for the mobile bug: the first song was loaded only AFTER
     // select_next_song resolved (post-await), so mobile blocked its autoplay and

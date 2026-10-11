@@ -81,6 +81,8 @@ export function useScoring(
     loadSongIntoPlayer,
     armSongStartTimeout,
     beginSongStart,
+    beginRoundCommit,
+    endRoundCommit,
   } = prebuffer;
 
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
@@ -429,6 +431,10 @@ export function useScoring(
     // Bump the preload epoch so any in-flight peek is discarded rather than
     // buffering into a player we're about to repurpose.
     preloadEpochRef.current += 1;
+    // Hold the next peek until select_next_song has recorded this round, so the
+    // picker compares against the song that is about to play (mig 049).
+    beginRoundCommit();
+    let roundCommitted = false;
     // Open the song-start span at the click instant (before the toast) so it
     // captures click → RPC → load → audio actually playing.
     const songStart = beginSongStart();
@@ -485,6 +491,7 @@ export function useScoring(
       if (committedPreloaded && preloaded) {
         // Confirm/record the round for the exact song we already started.
         const result = await selectNextSongDirect(gameCode, managerToken, preloaded.song_id);
+        roundCommitted = true;
         songStart.rpcDone({
           roundNumber: result.round_number,
           songId: result.song.id,
@@ -505,6 +512,7 @@ export function useScoring(
         // autoplay — but the waiting-screen prebuffer normally routes round 1
         // through the fast path above, leaving this as a rare fallback.
         const result = await selectNextSongDirect(gameCode, managerToken);
+        roundCommitted = true;
         songStart.rpcDone({
           roundNumber: result.round_number,
           songId: result.song.id,
@@ -539,6 +547,7 @@ export function useScoring(
       reportError(err);
     } finally {
       nextRoundInFlightRef.current = false;
+      endRoundCommit(roundCommitted);
     }
   }
 
