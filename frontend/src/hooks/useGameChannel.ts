@@ -53,6 +53,21 @@ export const RESYNC_INTERVAL_MS = 60_000;
 // RESYNC_INTERVAL_MS evenly (the quiet cadence is every Nth tick).
 export const LOCKED_RESYNC_INTERVAL_MS = 15_000;
 
+// How long a backstop repair waits for the Realtime frame before it counts as
+// a dropped event (#361). The poll often reads a lock-clear that committed a
+// moment earlier and gets its response back before the clear's Realtime frame
+// (fan-out is ~150-900 ms). That frame was only in flight, not lost. Logging
+// before it could arrive turned ordinary fan-out lag into a false
+// `stale_buzz_lock_resynced`. Every one of nine sampled warnings, from real
+// iPhones and from the prod harness, was this race. Only the diagnostic waits;
+// the repair is applied at once.
+export const STALE_LOCK_CONFIRM_MS = 3_000;
+
+// Recent lock observations kept for that verdict. A lock is held across only a
+// handful of active_games events and 15 s backstop ticks, so this comfortably
+// covers the stretch since the client learned the lock it is holding.
+const LOCK_LOG_SIZE = 32;
+
 // Ceiling on the pre-hydration event queue. The queue only grows while the
 // event gate is closed (no authoritative snapshot has succeeded yet), so
 // reaching the cap means hydrate has been failing for a long stretch while
@@ -324,6 +339,49 @@ export function useGameChannel(gameCode: string): {
     setStatus("connecting");
     setError(null);
 
+    // Every buzz lock this client has been told about, in arrival order: each
+    // active_games Realtime row and each hydrate snapshot. Ordered by arrival,
+    // not by React commits, so a frame that landed while its render was still
+    // pending is not mistaken for a lost one.
+    let lockSeq = 0;
+    const lockLog: { seq: number; lock: string | null; realtime: boolean }[] = [];
+    function observeLock(lock: string | null, realtime: boolean): number {
+      lockSeq += 1;
+      lockLog.push({ seq: lockSeq, lock, realtime });
+      if (lockLog.length > LOCK_LOG_SIZE) lockLog.shift();
+      return lockSeq;
+    }
+    // Did Realtime itself deliver `fresh` after this client learned `stale`
+    // (its last sighting before the repairing snapshot `snapshotSeq`)? Only the
+    // repaired value counts. A different team's new lock is a later write, and
+    // says nothing about whether the clear between them was delivered.
+    function realtimeDelivered(stale: string, fresh: string | null, snapshotSeq: number): boolean {
+      let learnedSeq = 0;
+      for (const o of lockLog) {
+        if (o.seq < snapshotSeq && o.lock === stale) learnedSeq = o.seq;
+      }
+      return lockLog.some((o) => o.realtime && o.seq > learnedSeq && o.lock === fresh);
+    }
+    const confirmTimers = new Set<number>();
+    // Diagnostic for #254: a backstop tick found a different lock in the DB
+    // than the one held here. The poll has already repaired the state. Warn
+    // only if Realtime never delivers the repaired value within
+    // STALE_LOCK_CONFIRM_MS, i.e. the event really was lost. This warning is
+    // what makes dropped Realtime events visible in Grafana.
+    function confirmStaleLock(stale: string, fresh: string | null, snapshotSeq: number): void {
+      if (realtimeDelivered(stale, fresh, snapshotSeq)) return;
+      const id = window.setTimeout(() => {
+        confirmTimers.delete(id);
+        if (cancelled || realtimeDelivered(stale, fresh, snapshotSeq)) return;
+        log("warn", "stale_buzz_lock_resynced", {
+          game_code: gameCode,
+          stale_team: stale,
+          fresh_team: fresh ?? "none",
+        });
+      }, STALE_LOCK_CONFIRM_MS);
+      confirmTimers.add(id);
+    }
+
     function dispatchOrQueue(action: GameAction): void {
       if (cancelled) return;
       if (!hydrated) {
@@ -363,6 +421,7 @@ export function useGameChannel(gameCode: string): {
           // lock land (won if it's our team, lost_race otherwise).
           if (typed.eventType !== "DELETE") {
             const row = typed.new as ActiveGame;
+            observeLock(row.buzzed_team_id ?? null, true);
             if (row.buzzed_team_id) {
               resolveBuzzE2E(row.buzzed_team_id, typed.commit_timestamp);
             }
@@ -532,22 +591,12 @@ export function useGameChannel(gameCode: string): {
             // Cast via unknown: a non-literal select() string makes
             // supabase-js infer GenericStringError rather than a row shape.
             const freshGame = gameRes.data as unknown as ActiveGame;
-            // Diagnostic for #254: a backstop tick that finds a different lock
-            // in the DB than the one we're holding means the clearing event
-            // was lost and the poll repaired it. Rare enough to warn on (a
-            // legit clear can race the fetch within one tick, but that window
-            // is milliseconds against a 15s cadence) — this is the signal that
-            // makes dropped Realtime events visible in Grafana.
-            if (
-              resync &&
-              lockRef.current !== null &&
-              freshGame.buzzed_team_id !== lockRef.current
-            ) {
-              log("warn", "stale_buzz_lock_resynced", {
-                game_code: gameCode,
-                stale_team: lockRef.current,
-                fresh_team: freshGame.buzzed_team_id ?? "none",
-              });
+            const freshLock = freshGame.buzzed_team_id ?? null;
+            const snapshotSeq = observeLock(freshLock, false);
+            // A backstop tick that finds a different lock than the one held
+            // here may have caught a lost event. confirmStaleLock decides.
+            if (resync && lockRef.current !== null && freshLock !== lockRef.current) {
+              confirmStaleLock(lockRef.current, freshLock, snapshotSeq);
             }
             dispatch({
               type: "HYDRATE",
@@ -577,6 +626,7 @@ export function useGameChannel(gameCode: string): {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stopResync();
+      for (const id of confirmTimers) window.clearTimeout(id);
       void supabase.removeChannel(
         channel as unknown as Parameters<typeof supabase.removeChannel>[0],
       );
