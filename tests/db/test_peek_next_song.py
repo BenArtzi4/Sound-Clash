@@ -451,16 +451,15 @@ async def test_peek_offers_only_the_genre_that_is_behind(db: asyncpg.Connection)
 
 
 @pytest.mark.asyncio
-async def test_peek_offers_both_genres_when_one_ahead(db: asyncpg.Connection) -> None:
-    """One rock song played, no pop: rock is only 1 ahead, so it may still go
-    next. Both genres must show up across 200 peeks (not a fixed rotation)."""
+async def test_peek_never_offers_the_genre_playing_now(db: asyncpg.Connection) -> None:
+    """One rock song is playing. Under 048 rock (only 1 ahead) could go again;
+    under migration 049's genre rotation every peek must offer pop, and every
+    pop song stays reachable."""
     game_code, token, rock, pop, _ = await _two_genre_game(db, (5, 5))
     await _select(db, game_code, token, song_id=rock[0])
 
     counts = await _peek_counts(db, game_code, token, 200)
-    assert set(counts) & set(rock[1:])
-    assert set(counts) & set(pop)
-    assert rock[0] not in counts
+    assert set(counts) == set(pop)
 
 
 @pytest.mark.asyncio

@@ -11,7 +11,8 @@ migration 039). Each does its own in-function manager-token check before
 performing any work, so the function-level EXECUTE grant is safe. The remaining
 backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
 ``end_game``, ``cleanup_expired_games``, ``archive_game``,
-``set_song_availability``, ``pick_next_song`` -- must still reject anon.
+``set_song_availability``, ``pick_next_song``, ``song_artist_keys`` -- must
+still reject anon.
 """
 
 from __future__ import annotations
@@ -271,6 +272,9 @@ async def test_anon_peek_reaches_the_revoked_helper_through_the_definer(
         "archive_game",
         "set_song_availability",
         "pick_next_song",
+        # Migration 049: computes songs.artist_keys. service_role must keep
+        # EXECUTE, because the admin API and CSV import write songs as it.
+        "song_artist_keys",
     ],
 )
 async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) -> None:
