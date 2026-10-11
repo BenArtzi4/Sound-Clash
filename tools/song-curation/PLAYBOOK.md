@@ -9,6 +9,12 @@ work (see §6 "Known-good sources" and §7 "Quality lessons").
 History: built over several passes in June 2026; grew the candidate batch to ~760
 validated net-new songs (mostly Hebrew). The catalog had ~804 songs at that point.
 
+> **Got a list of specific songs people asked for** ("title — artist" lines)? Use the
+> faster request flow in [`requests/README.md`](./requests/README.md) instead of this
+> scrape-a-playlist flow: parse + dedup → parallel research agents over one paced
+> YouTube gateway → `finalize.py` → the review page. 198 requests → 124 verified cards
+> in ~20 minutes on 2026-10-11.
+
 ---
 
 ## 0. Goal & non-negotiable principles
@@ -41,7 +47,8 @@ The flow is **scrape → parse → verify → consolidate → validate → fix �
 | `fix.py` | per-batch template | second pass: swaps **reversed** "Song-Artist" rows (KNOWN-artist list), trims latin transliteration tails, **drops junk/foreign/medleys/minor-self-promoters**, **within-batch name-dedup**. |
 | `audit.py` | per-batch template | re-scores every final artist+title against the real oEmbed title; should be ~100% "clean match". Writes `suspects.json`. |
 | `chart_songs.py` | per-batch template | holds a hand-entered best-of-year chart list; dedups by title vs batch+catalog; prints which songs still need an id found. |
-| `review.html`/`.js`/`.css` | yes (root) | browser review UI (same YouTube IFrame player as the game). Loads `candidates.js` as a `<script>` (works from `file://`). |
+| `review.html`/`.js`/`.css` | yes (root) | browser review page: big player embedded like the game's, keyboard-first approve/reject, start-time tools, editors, alternatives, CSV export. Loads `candidates.js` (or `batches/<name>/candidates.js` via `?batch=<name>`) as a `<script>`. |
+| `review_server.py` | yes (root) | stdlib server for the review page; saves every decision to `batches/<date>/decisions.json` (queued + retried in the browser, so a dead server loses nothing). |
 
 `validate.py` / `fix.py` / `audit.py` / `chart_songs.py` are committed at the tool
 root as the canonical templates; they read/write `_verified.js` / `candidates.js`
@@ -57,8 +64,10 @@ there** (tweak the artist lists / chart songs for the batch). Per-batch data
   israeli-soundtracks` (the slugs the importer accepts).
 - **Upload CSV columns** (`backend/app/services/csv_import.py`):
   `title,artist,youtube_id,start_time,genres` (`genres` = `;`-sep slugs;
-  `youtube_id` = `^[A-Za-z0-9_-]{11}$`; `start_time` int seconds ≥ 0). A trailing
-  `is_soundtrack` column is ignored (derived from genre, mig 028).
+  `youtube_id` = `^[A-Za-z0-9_-]{11}$`; `start_time` int seconds ≥ 0), plus an
+  optional `release_year` (blank = unknown, else 1900–2100). The review page
+  exports exactly `title,artist,youtube_id,start_time,genres,release_year`. An
+  `is_soundtrack` column (older exports) is ignored (derived from genre, mig 028).
 - **Soundtrack convention:** `artist` = film/show name (the answer); `title` = cue,
   or just `title = artist`.
 - **Handoff, not upload:** this tool stops at an *approved CSV*. Importing that CSV
@@ -73,9 +82,19 @@ there** (tweak the artist lists / chart songs for the batch). Per-batch data
   on Hebrew/emoji in `print` (the data files are fine, only stdout breaks).
 - **Network egress needs `dangerouslyDisableSandbox: true`** on the Bash tool for
   `verify.py` (oEmbed) and `supabase` calls (sandbox blocks non-GitHub egress).
-- **Playwright can't open `file://`** — serve the tool for play-testing:
-  `python -m http.server 8753 --directory tools/song-curation`, then
-  `http://localhost:8753/review.html`. The *user* can just double-click the file.
+- **Review through `review_server.py` at `localhost`, never as a file or on an IP.**
+  YouTube refuses to play anything in a page opened as a `file://` (error 153,
+  "missing referrer"), and from `http://127.0.0.1:<port>/` it refuses some
+  label-owned videos (error 150, `auth`) that play on `http://localhost:<port>/`
+  (both verified 2026-10-11). The page redirects an IP to `localhost` and doesn't
+  record those errors, but give the maintainer the `localhost` URL.
+- Start the server **detached** when an agent runs it for the maintainer, so
+  Claude Code's low-memory reaper can't kill it mid-review: PowerShell
+  `Start-Process -FilePath backend\.venv\Scripts\python.exe -ArgumentList 'review_server.py','batches/<date>','--port','8760' -WorkingDirectory tools\song-curation -WindowStyle Hidden -PassThru`;
+  stop it by port afterwards. Even if it dies, the page queues every decision and
+  sends it when the server is back.
+- **Close any automation browser** (Playwright MCP) that has the review page open
+  before handing over, so the maintainer can't review in the wrong window.
 - Interpreter: `backend/.venv/Scripts/python.exe`.
 
 ## 4. The workflow, step by step
@@ -123,11 +142,26 @@ cp batches/<date>/candidates.js tools/song-curation/candidates.js
 Tune the curated artist lists in `validate.py` (POP/ROCKPOP/MIZRAHIT) and `fix.py`
 (KNOWN, ALLOW, DROP_ARTIST, JUNK) for the new batch's artists.
 
-**7 — Human review.** Keep the cards lean: the maintainer wants **only the view
-count** as card metadata (e.g. `43M views` — set `notes` to just that in the
-batch's merge step; no rank / performer / upload date / evidence blobs) and a
-player wide enough to actually watch (480px). `review.html` → play, set start time, approve/reject, fix
-genres, scan the **Flagged** filter, export CSV.
+**7 — Human review.** Serve the batch and give the maintainer the URL:
+```bash
+cd tools/song-curation && python review_server.py batches/<date> --port 8760   # → http://localhost:8760/
+```
+The page (see README → "The review page") shows one song at a time in a large
+player: A/R approve/reject and jump to the next pending song, S sets the start to
+the current time, H uses the "most replayed" hook, Shift+click on the strip under
+the player sets the start there, ? lists every key. Decisions land in
+`batches/<date>/decisions.json` as they happen, and **⬇ Export approved CSV**
+also writes `approved-songs-<batch>.csv` into the batch folder.
+
+Make the batch easy to judge in the merge step that writes `candidates.js`: put
+`window.BATCH = {id, title}` on top, and fill the optional fields when you have
+them — `suggested_start` + `heat` (YouTube's most-replayed curve),
+`views`/`channel`/`channel_badge`/`upload_date`/`length`, the user's original
+`request`, `alternatives` (other verified uploads, so a bad pick is a one-click
+swap), and `flags` for anything the maintainer must look at (possible duplicate,
+cover, low views). Keep `notes` to one short line; the page shows views, channel
+and upload date on its own. Unapproved = rejected: anything not approved in the
+export is a silent reject, never "pending".
 
 **8 — Handoff.** Export the approved CSV and hand it to a maintainer to import; the
 import (and all live-DB access) is deliberately out of scope for this tool. Add a
@@ -162,8 +196,10 @@ longest non-duration one:
 Initial load gives ~100 videos (plenty). Some playlists 404 (title shows just
 "YouTube", 0 videos) — pick another, or use hit-charts instead.
 
-**Real-YouTube play-test** — serve on localhost, open `review.html`, in
-`browser_evaluate` click a card's `button.load`, read `player.getPlayerState()` (1=PLAYING).
+**Real-YouTube play-test** — `review_server.py batches/<date>`, open
+`http://localhost:8760/`, click a song row (`.q-row[data-key="<youtube_id>"]`), then
+wait for `YTP.player.getPlayerState() === 1 && YTP.player.getVideoData().video_id === "<id>"`.
+A failed video shows a red banner and is listed in `decisions.json` → `errors`.
 
 ## 6. Known-good sources (reuse these first)
 
@@ -250,6 +286,6 @@ $P $T/parse_playlist.py $B/_dumps/x.json --genre mizrahit --source "yt …" --ou
 # 5. consolidate *_in.csv → $B/master_all.csv (dedup youtube_id)
 $P $T/verify.py $B/master_all.csv --existing $B/prod_catalog.csv --out $B/_verified.js   # sandbox off
 $P $B/validate.py && $P $B/fix.py && $P $B/audit.py        # 6
-cp $B/candidates.js $T/candidates.js                       # 7. open review.html
+(cd $T && python review_server.py batches/$(basename $B) --port 8760)   # 7. → http://localhost:8760/
 # 8. export approved CSV → hand to a maintainer to import (out of scope here)
 ```

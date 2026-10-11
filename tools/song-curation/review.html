@@ -3,62 +3,198 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Sound Clash — Song Curation Review</title>
+    <title>Song review · Sound Clash</title>
     <link rel="preconnect" href="https://www.youtube-nocookie.com" />
     <link rel="preconnect" href="https://i.ytimg.com" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2314120e'/%3E%3Crect x='3' y='7' width='2' height='6' fill='%23ff7a1a'/%3E%3Crect x='7' y='3' width='2' height='10' fill='%23ff7a1a'/%3E%3Crect x='11' y='5' width='2' height='8' fill='%23ff7a1a'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="review.css" />
   </head>
+  <!--
+    Song curation review page. Vanilla HTML/CSS/JS, no build step.
+    Data: window.CANDIDATES (+ optional window.BATCH) from candidates.js.
+      review.html                 -> candidates.js next to this page
+      review.html?batch=<name>    -> batches/<name>/candidates.js
+    Opened through review_server.py, every decision is also saved to
+    <batch>/decisions.json; opened as a file, decisions live in this browser.
+  -->
   <body>
-    <header class="topbar">
-      <div class="topbar-row">
-        <h1>Song Curation Review</h1>
-        <div class="counts" id="counts"></div>
+    <header class="topbar" id="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <div class="brand-text">
+          <div class="brand-name">Song review</div>
+          <div class="batch-name" id="batch-name" dir="auto"></div>
+        </div>
       </div>
 
-      <div class="player-bar">
-        <div class="player-shell">
-          <!-- The YouTube IFrame API replaces this div with its own iframe. -->
-          <div id="player"></div>
-        </div>
-        <div class="player-controls">
-          <div id="now-playing" class="now-playing">Click <strong>▶ Load</strong> on a song to preview it.</div>
-          <div class="player-buttons">
-            <button id="set-start" type="button" disabled>⏱ Set start = current time</button>
-            <span id="player-time" class="player-time"></span>
+      <div class="progress" id="progress" title="Review progress">
+        <div class="progress-bar"><span class="pb-ok" id="pb-ok"></span><span class="pb-bad" id="pb-bad"></span></div>
+        <div class="progress-text" id="progress-text"></div>
+      </div>
+
+      <div class="top-actions">
+        <span class="save-pill" id="save-pill" tabindex="0"></span>
+        <button type="button" class="btn btn-primary" id="btn-export">⬇ Export approved CSV</button>
+        <div class="menu">
+          <button type="button" class="btn btn-icon" id="btn-menu" aria-haspopup="true" aria-expanded="false" title="More">⋯</button>
+          <div class="menu-pop" id="menu-pop" hidden>
+            <button type="button" data-menu="export-json">Export decisions (JSON backup)</button>
+            <button type="button" data-menu="import-json">Import decisions…</button>
+            <hr />
+            <button type="button" data-menu="reset" class="danger">Reset all decisions…</button>
           </div>
-          <div id="player-error" class="player-error" role="alert"></div>
         </div>
-      </div>
-
-      <div class="toolbar">
-        <div class="filters" id="filters">
-          <button data-filter="all" class="active" type="button">All</button>
-          <button data-filter="pending" type="button">Pending</button>
-          <button data-filter="approved" type="button">Approved</button>
-          <button data-filter="rejected" type="button">Rejected</button>
-          <button data-filter="flagged" type="button">Flagged</button>
-        </div>
-        <div class="search-box">
-          <input id="search" type="search" placeholder="Filter by title / artist / genre…" />
-        </div>
-        <div class="actions">
-          <button id="export-csv" type="button" class="primary">⬇ Export approved CSV</button>
-          <button id="reset" type="button" class="danger-ghost">Reset all decisions</button>
-        </div>
+        <button type="button" class="btn btn-icon" id="btn-theater" title="Theater mode: hide the side panels (T)">⤢</button>
+        <button type="button" class="btn btn-icon" id="btn-help" title="Keyboard shortcuts (?)">?</button>
       </div>
     </header>
 
-    <main id="cards" class="cards"></main>
+    <div class="app" id="app">
+      <aside class="queue" id="queue" aria-label="Songs">
+        <div class="queue-head">
+          <input id="search" type="search" placeholder="Search title, artist, channel…   /" dir="auto" autocomplete="off" />
+          <div class="filters" id="filters">
+            <button type="button" data-filter="all" class="active">All <b></b></button>
+            <button type="button" data-filter="pending">Pending <b></b></button>
+            <button type="button" data-filter="approved">Approved <b></b></button>
+            <button type="button" data-filter="rejected">Rejected <b></b></button>
+            <button type="button" data-filter="flagged">Flagged <b></b></button>
+          </div>
+          <div class="queue-tools">
+            <label class="sort">Sort
+              <select id="sort">
+                <option value="batch">Batch order</option>
+                <option value="flagged">Flagged first</option>
+                <option value="views-desc">Most views</option>
+                <option value="views-asc">Fewest views</option>
+                <option value="title">Title A–Z</option>
+              </select>
+            </label>
+            <span class="queue-count" id="queue-count"></span>
+          </div>
+          <div class="all-done" id="all-done" hidden></div>
+        </div>
+        <ol class="queue-list" id="queue-list"></ol>
+      </aside>
 
-    <div id="empty" class="empty hidden">
-      No <code>window.CANDIDATES</code> found. Generate a batch with
-      <code>verify.py</code> and place <code>candidates.js</code> next to this file.
+      <main class="stage" id="stage">
+        <div class="song-head" id="song-head"></div>
+
+        <div class="player-wrap">
+          <div class="player-box" id="player-box">
+            <!-- The iframe is created by review.js (same embed as the game). -->
+            <div class="player-msg" id="player-msg">Loading the YouTube player…</div>
+            <div class="player-alert" id="player-alert" hidden></div>
+          </div>
+        </div>
+
+        <div class="timeline" id="timeline" title="Click to seek · Shift+click to set the start here">
+          <svg class="tl-heat" id="tl-heat" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="heat-grad" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stop-color="#ff7a1a" stop-opacity="0.85" />
+                <stop offset="1" stop-color="#ff7a1a" stop-opacity="0.12" />
+              </linearGradient>
+            </defs>
+            <path id="tl-path" d="" fill="url(#heat-grad)" />
+          </svg>
+          <div class="tl-track"><span class="tl-played" id="tl-played"></span></div>
+          <span class="tl-mark tl-hook" id="tl-hook" hidden><b>★</b></span>
+          <span class="tl-mark tl-start" id="tl-start"><b>S</b></span>
+          <span class="tl-playhead" id="tl-playhead"></span>
+          <span class="tl-hover" id="tl-hover" hidden></span>
+          <span class="tl-label tl-label-l" id="tl-label-l"></span>
+          <span class="tl-label tl-label-r" id="tl-label-r"></span>
+        </div>
+
+        <div class="controls" id="controls">
+          <div class="transport">
+            <button type="button" class="btn btn-icon btn-play" id="btn-play" title="Play / pause (Space)">▶</button>
+            <button type="button" class="btn" id="btn-from-start" title="Play from the start time (P)">⟲ From start <kbd>P</kbd></button>
+            <div class="start-tools" role="group" aria-label="Start time">
+              <span class="start-label">Start</span>
+              <button type="button" class="btn btn-nudge" data-nudge="-5" title="Start −5 s">−5</button>
+              <button type="button" class="btn btn-nudge" data-nudge="-1" title="Start −1 s">−1</button>
+              <input type="text" id="start-input" class="start-input" inputmode="numeric" autocomplete="off" title="Start time (m:ss or seconds), Enter to apply" />
+              <button type="button" class="btn btn-nudge" data-nudge="1" title="Start +1 s">+1</button>
+              <button type="button" class="btn btn-nudge" data-nudge="5" title="Start +5 s">+5</button>
+              <button type="button" class="btn-reset" id="start-reset" title="Back to the proposed start" hidden>↺</button>
+            </div>
+            <button type="button" class="btn" id="btn-set-now" title="Set start = current time (S)">⏱ Set = now <kbd>S</kbd></button>
+            <button type="button" class="btn btn-hook" id="btn-hook" title="Use the most-replayed peak as the start (H)" hidden>★ Hook <span id="hook-time"></span> <kbd>H</kbd></button>
+            <span class="clock" id="clock">0:00 / 0:00</span>
+          </div>
+          <div class="decide">
+            <button type="button" class="btn btn-approve" id="btn-approve" title="Approve and go to the next pending song (A)">✓ Approve <kbd>A</kbd></button>
+            <button type="button" class="btn btn-reject" id="btn-reject" title="Reject and go to the next pending song (R)">✕ Reject <kbd>R</kbd></button>
+            <button type="button" class="btn btn-icon" id="btn-undo" title="Undo the last decision (U)">↶</button>
+            <span class="decide-sep"></span>
+            <button type="button" class="btn btn-icon" id="btn-prev" title="Previous song (K / ↑)">‹</button>
+            <button type="button" class="btn btn-icon" id="btn-next" title="Next song (J / ↓)">›</button>
+          </div>
+        </div>
+
+        <section class="alts" id="alts" hidden></section>
+      </main>
+
+      <aside class="details" id="details" aria-label="Song details"></aside>
     </div>
 
-    <!-- Per-batch data: window.CANDIDATES = [...]. Generated by verify.py; gitignored.
-         Loaded as a plain script (not fetch) so this works from file:// with no server. -->
-    <script src="candidates.js" onerror="window.__noCandidates = true"></script>
-    <script src="https://www.youtube.com/iframe_api"></script>
+    <div class="empty" id="empty" hidden></div>
+
+    <div class="modal" id="help" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="modal-head">
+          <h2 id="help-title">Keyboard shortcuts</h2>
+          <button type="button" class="btn btn-icon" data-close="help">✕</button>
+        </div>
+        <div class="help-grid">
+          <section>
+            <h3>Decide</h3>
+            <dl>
+              <dt><kbd>A</kbd></dt><dd>Approve → next pending</dd>
+              <dt><kbd>R</kbd></dt><dd>Reject → next pending</dd>
+              <dt><kbd>U</kbd></dt><dd>Undo last decision (or set this song back to pending)</dd>
+              <dt><kbd>J</kbd> <kbd>↓</kbd></dt><dd>Next song</dd>
+              <dt><kbd>K</kbd> <kbd>↑</kbd></dt><dd>Previous song</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Play</h3>
+            <dl>
+              <dt><kbd>Space</kbd></dt><dd>Play / pause</dd>
+              <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Seek −5 / +5 s (with <kbd>Shift</kbd>: 1 s)</dd>
+              <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Jump to 10 %–90 % of the video (<kbd>0</kbd> = beginning)</dd>
+              <dt><kbd>P</kbd></dt><dd>Play from the start time</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Start time</h3>
+            <dl>
+              <dt><kbd>S</kbd></dt><dd>Set start = current time</dd>
+              <dt><kbd>H</kbd></dt><dd>Use the hook (most-replayed peak)</dd>
+              <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Start −1 / +1 s (with <kbd>Shift</kbd>: 5 s)</dd>
+              <dt>timeline</dt><dd>Click = seek · <kbd>Shift</kbd>+click = set start</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Other</h3>
+            <dl>
+              <dt><kbd>E</kbd></dt><dd>Edit title (Enter or Esc to leave the field)</dd>
+              <dt><kbd>/</kbd></dt><dd>Search</dd>
+              <dt><kbd>T</kbd></dt><dd>Theater mode</dd>
+              <dt><kbd>?</kbd></dt><dd>This help</dd>
+            </dl>
+          </section>
+        </div>
+        <p class="help-note">Shortcuts work on any keyboard layout (Hebrew too) and keep working after you click inside the YouTube player.</p>
+      </div>
+    </div>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <input type="file" id="import-file" accept=".json,application/json" hidden />
+    <div id="focus-sink" tabindex="-1" aria-hidden="true"></div>
+
     <script src="review.js"></script>
   </body>
 </html>
