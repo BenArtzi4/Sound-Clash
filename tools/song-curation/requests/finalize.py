@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from parse_requests import artist_overlap, norm
+from parse_requests import artist_overlap, excluded_artists, is_excluded, norm
 
 HERE = Path.cwd()  # always run from the batch folder
 GATEWAY = "http://127.0.0.1:8791"
@@ -127,6 +127,7 @@ def main() -> None:
     catalog = json.loads((HERE / "_dumps" / "catalog_raw.json").read_text(encoding="utf-8"))["rows"]
     cat_ids = {c["youtube_id"]: c for c in catalog}
     offers = earlier_offers()
+    excluded = excluded_artists()
 
     report, in_cat, cands, seen_ids = [], [], [], {}
     missing = sorted(set(packets) - {r["req"] for r in research})
@@ -159,6 +160,10 @@ def main() -> None:
             continue
         if status != "new":
             report.append(f"SKIP #{r['req']} {req['title']} — {req['artist']}: {r.get('notes')}")
+            continue
+        hit = is_excluded(r.get("artist") or req["artist"] or "", excluded)
+        if hit:
+            report.append(f"EXCLUDED #{r['req']} {r.get('title')} — {r.get('artist')} (excluded artist: {hit})")
             continue
         vid = r.get("youtube_id")
         if not vid:

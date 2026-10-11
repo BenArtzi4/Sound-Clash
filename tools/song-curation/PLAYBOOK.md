@@ -70,10 +70,12 @@ there** (tweak the artist lists / chart songs for the batch). Per-batch data
   `is_soundtrack` column (older exports) is ignored (derived from genre, mig 028).
 - **Soundtrack convention:** `artist` = film/show name (the answer); `title` = cue,
   or just `title = artist`.
-- **Handoff, not upload:** this tool stops at an *approved CSV*. Importing that CSV
-  into the live catalog is a maintainer-only step and is intentionally **not**
-  documented here — no project ref, no credentials, and no import command live in
-  this repo. Export the CSV, hand it to a maintainer, and add a `### Added`
+- **Upload is a maintainer step:** the tools stop at an *approved CSV* plus
+  generated SQL (`requests/gen_upload.py` → `upload_<batch>.sql` + a read-only
+  `verify_<batch>.sql` and a `--check` that compares the result row by row).
+  Applying the SQL needs the maintainer's own linked Supabase CLI — no project ref
+  and no credentials live in this repo. The `song-requests` skill
+  (`.claude/skills/song-requests/SKILL.md`) has the full sequence. Add a `### Added`
   CHANGELOG line when it ships.
 
 ## 3. Environment gotchas (Windows) — READ THESE
@@ -163,9 +165,11 @@ cover, low views). Keep `notes` to one short line; the page shows views, channel
 and upload date on its own. Unapproved = rejected: anything not approved in the
 export is a silent reject, never "pending".
 
-**8 — Handoff.** Export the approved CSV and hand it to a maintainer to import; the
-import (and all live-DB access) is deliberately out of scope for this tool. Add a
-`### Added` CHANGELOG line when it ships.
+**8 — Upload.** Export the approved CSV, then from the batch folder run
+`requests/gen_upload.py <csv>` → `upload_<batch>.sql` + `verify_<batch>.sql`. A
+maintainer applies the SQL with their own linked Supabase CLI, runs the verify query,
+and checks it with `gen_upload.py <csv> --check <result.json>` (see the
+`song-requests` skill). Add a `### Added` CHANGELOG line when it ships.
 
 ## 5. The Playwright scrape recipe (the workhorse)
 
@@ -287,5 +291,5 @@ $P $T/parse_playlist.py $B/_dumps/x.json --genre mizrahit --source "yt …" --ou
 $P $T/verify.py $B/master_all.csv --existing $B/prod_catalog.csv --out $B/_verified.js   # sandbox off
 $P $B/validate.py && $P $B/fix.py && $P $B/audit.py        # 6
 (cd $T && python review_server.py batches/$(basename $B) --port 8760)   # 7. → http://localhost:8760/
-# 8. export approved CSV → hand to a maintainer to import (out of scope here)
+# 8. export approved CSV → $P requests/gen_upload.py <csv> → maintainer applies + verifies (song-requests skill)
 ```
