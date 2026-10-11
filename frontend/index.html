@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,6 +15,12 @@
     <link rel="canonical" href="https://www.soundclash.org/" />
     <meta name="theme-color" content="#14120e" />
     <meta name="color-scheme" content="dark" />
+    <!-- Chrome/Edge page translation rewrites React-owned text nodes into font
+         elements; the next re-render then throws removeChild NotFoundError and the
+         Display/console drop to the error screen (seen in real games on Hebrew- and
+         Italian-language browsers, 2026-10-06/09). Song titles must not be translated
+         anyway, so opt the whole app out of the translate offer. -->
+    <meta name="google" content="notranslate" />
 
     <!-- PWA: installable to the home screen, launches standalone (no browser
          chrome). The service worker is registered from main.tsx and caches
