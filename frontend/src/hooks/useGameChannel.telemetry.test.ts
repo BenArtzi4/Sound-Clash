@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/supabase", async () => {
   const mod = await import("../test/supabaseMock");
@@ -14,7 +14,7 @@ const telemetry = vi.hoisted(() => ({
 }));
 vi.mock("../lib/telemetry", () => telemetry);
 
-import { LOCKED_RESYNC_INTERVAL_MS, useGameChannel } from "./useGameChannel";
+import { LOCKED_RESYNC_INTERVAL_MS, STALE_LOCK_CONFIRM_MS, useGameChannel } from "./useGameChannel";
 import {
   fireGame,
   fireRound,
@@ -90,32 +90,49 @@ describe("useGameChannel telemetry wiring", () => {
     );
   });
 
-  it("logs a warning when a backstop tick repairs a stale buzz lock (#254)", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      const locked = makeActiveGame({
-        status: "playing",
-        round_number: 3,
-        current_round_id: "r3",
-        buzzed_team_id: "team-2",
-        locked_at: "2026-05-05T12:01:00.000Z",
-      });
+  describe("stale buzz lock diagnostic (#254, #361)", () => {
+    const locked = makeActiveGame({
+      status: "playing",
+      round_number: 3,
+      current_round_id: "r3",
+      buzzed_team_id: "team-2",
+      locked_at: "2026-05-05T12:01:00.000Z",
+    });
+    const cleared = { ...locked, buzzed_team_id: null, locked_at: null };
+
+    function staleLockWarnings() {
+      return telemetry.log.mock.calls.filter((c) => c[1] === "stale_buzz_lock_resynced");
+    }
+
+    // Mount holding team-2's lock, then make the DB clear it, and run the
+    // locked-cadence backstop tick that reads the cleared row.
+    async function tickAfterClear() {
       setHydrate({ game: locked, teams: [], rounds: [makeRound({ id: "r3", round_number: 3 })] });
-      renderHook(() => useGameChannel("ABCDEF"));
+      const hook = renderHook(() => useGameChannel("ABCDEF"));
       await act(async () => {
         await fireSubscribed();
       });
-
-      // The DB cleared the lock but the Realtime UPDATE was lost; the next
-      // locked-cadence backstop tick notices the drift, repairs it, and emits
-      // the diagnostic that makes dropped events visible in Grafana.
-      setHydrate({
-        game: { ...locked, buzzed_team_id: null, locked_at: null },
-        teams: [],
-        rounds: [],
-      });
+      setHydrate({ game: cleared, teams: [], rounds: [] });
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 500);
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 100);
+      });
+      return hook;
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("warns when the clearing Realtime event never arrives", async () => {
+      await tickAfterClear();
+      // The repair is applied at once; the verdict waits for the in-flight
+      // event that would prove nothing was dropped.
+      expect(staleLockWarnings()).toHaveLength(0);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
       });
       expect(telemetry.log).toHaveBeenCalledWith(
         "warn",
@@ -126,8 +143,118 @@ describe("useGameChannel telemetry wiring", () => {
           fresh_team: "none",
         }),
       );
-    } finally {
-      vi.useRealTimers();
-    }
+      expect(staleLockWarnings()).toHaveLength(1);
+    });
+
+    it("stays quiet when the clearing event arrives just after the poll (#361)", async () => {
+      // The poll read the row after the clear committed but its response beat
+      // the Realtime frame (which takes ~150-900 ms). Nothing was dropped.
+      await tickAfterClear();
+      act(() => {
+        fireGame(makePayload("active_games", "UPDATE", { new: cleared }, TS));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(0);
+    });
+
+    it("stays quiet when the clearing event landed before its render committed", async () => {
+      // The frame was received, but the tick's poll resolved before React
+      // re-rendered, so the hook still believed team-2 held the lock.
+      setHydrate({ game: locked, teams: [], rounds: [makeRound({ id: "r3", round_number: 3 })] });
+      renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+      setHydrate({ game: cleared, teams: [], rounds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS - 50);
+      });
+      await act(async () => {
+        fireGame(makePayload("active_games", "UPDATE", { new: cleared }, TS));
+        await vi.advanceTimersByTimeAsync(150);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(0);
+    });
+
+    it("ignores frames from before the lock was learned", async () => {
+      // The usual path: the round-start frame (no lock) arrives, then the
+      // buzz frame. The clear is then lost. That earlier unlocked frame must
+      // not count as having delivered the clear.
+      const unlocked = { ...locked, buzzed_team_id: null, locked_at: null };
+      setHydrate({ game: unlocked, teams: [], rounds: [makeRound({ id: "r3", round_number: 3 })] });
+      renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+      act(() => {
+        fireGame(makePayload("active_games", "UPDATE", { new: unlocked }, TS));
+      });
+      act(() => {
+        fireGame(makePayload("active_games", "UPDATE", { new: locked }, TS));
+      });
+      setHydrate({ game: cleared, teams: [], rounds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 100);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(1);
+    });
+
+    it("still warns when the next round starts inside the window", async () => {
+      // The release frame was lost and the host pressed Next right after the
+      // repair. The new round's frame also has no lock, but it is a later
+      // write, so it does not prove the release was delivered.
+      await tickAfterClear();
+      act(() => {
+        fireGame(
+          makePayload(
+            "active_games",
+            "UPDATE",
+            { new: { ...cleared, round_number: 4, current_round_id: "r4" } },
+            TS,
+          ),
+        );
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(1);
+    });
+
+    it("still warns when a later buzz by another team arrives inside the window", async () => {
+      // A new lock is a different write from the lost clear, so it proves
+      // nothing about whether the clear was delivered.
+      await tickAfterClear();
+      act(() => {
+        fireGame(
+          makePayload(
+            "active_games",
+            "UPDATE",
+            { new: { ...cleared, buzzed_team_id: "team-7" } },
+            TS,
+          ),
+        );
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(1);
+    });
+
+    it("drops a pending verdict on unmount", async () => {
+      const hook = await tickAfterClear();
+      hook.unmount();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STALE_LOCK_CONFIRM_MS);
+      });
+      expect(staleLockWarnings()).toHaveLength(0);
+    });
   });
 });
