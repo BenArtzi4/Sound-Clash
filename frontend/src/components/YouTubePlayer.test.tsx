@@ -263,7 +263,7 @@ describe("YouTubePlayer", () => {
     expect(queryByRole("alert")).toBeNull();
   });
 
-  it("noCover prop renders only the iframe with no overlay element", async () => {
+  it("noCover never shows the error, ended or loading labels", async () => {
     installFakeYT();
     const ref = createRef<YouTubePlayerHandle>();
     const { container, queryByRole, queryByText } = render(<YouTubePlayer ref={ref} noCover />);
@@ -298,6 +298,58 @@ describe("YouTubePlayer", () => {
       lastConfig?.events?.onError?.({ data: 150 });
     });
     expect(onError).toHaveBeenCalledWith(150, null);
+  });
+
+  it("noCover covers the empty player with the idle label until a video loads", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container, queryByText, rerender } = render(
+      <YouTubePlayer ref={ref} noCover idleLabel="Loading player…" />,
+    );
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    expect(queryByText("Loading player…")).not.toBeNull();
+    rerender(<YouTubePlayer ref={ref} noCover idleLabel="Ready — press Start game" />);
+    expect(queryByText("Ready — press Start game")).not.toBeNull();
+    act(() => {
+      ref.current?.loadVideoById("liveVIDEO01", 0);
+    });
+    expect(queryByText("Ready — press Start game")).toBeNull();
+  });
+
+  it("noCover lifts the idle panel once a video is prebuffered, so a promoted standby is never covered", async () => {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const { container, queryByText } = render(
+      <YouTubePlayer ref={ref} noCover idleLabel="Ready — press Start game" />,
+    );
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      ref.current?.prebuffer("nextVIDEO01", 5);
+    });
+    expect(queryByText("Ready — press Start game")).toBeNull();
+    act(() => {
+      ref.current?.commitPrebuffered(5);
+    });
+    expect(queryByText("Ready — press Start game")).toBeNull();
+  });
+
+  it("noCover keeps the idle panel over an empty player that errors", async () => {
+    // YouTube's empty embed sometimes shows its own "An error occurred"
+    // screen (code 2) on the waiting screen; the panel must keep hiding it.
+    installFakeYT();
+    const onError = vi.fn();
+    const { container, queryByText } = render(
+      <YouTubePlayer noCover onError={onError} idleLabel="Ready — press Start game" />,
+    );
+    await flushIframeLoad(container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onError?.({ data: 2 });
+    });
+    expect(onError).toHaveBeenCalledWith(2, null);
+    expect(queryByText("Ready — press Start game")).not.toBeNull();
   });
 
   it("reports the id of the video that failed (load, then prebuffer)", async () => {

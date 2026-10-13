@@ -66,22 +66,20 @@ interface SongRef {
 // Telemetry context for a video the player refused (yt_player_error /
 // yt_preload_error): the catalog song and a watch URL, so the weekly
 // dead-video scan can list real in-game failures by name. `candidates` are the
-// songs the player could have been playing, most likely first; the one whose
-// youtube_id matches the failed video wins. Empty fields are omitted.
+// songs the player could have been playing; only the one whose youtube_id is
+// the failed video is named, never a guess. Empty fields are omitted.
 export function failedVideoContext(
   gameCode: string,
   code: number,
-  videoId: string | null,
+  videoId: string,
   candidates: Array<SongRef | null>,
 ): Record<string, string> {
-  const song =
-    candidates.find((s) => s !== null && (videoId === null || s.youtube_id === videoId)) ?? null;
-  const youtubeId = videoId ?? song?.youtube_id ?? "";
+  const song = candidates.find((s) => s !== null && s.youtube_id === videoId) ?? null;
   const context: Record<string, string> = {
     code: String(code),
     game_code: gameCode,
-    youtube_id: youtubeId,
-    url: youtubeId ? `https://www.youtube.com/watch?v=${youtubeId}` : "",
+    youtube_id: videoId,
+    url: `https://www.youtube.com/watch?v=${videoId}`,
     song_id: song?.id ?? "",
     title: song?.title ?? "",
     artist: song?.artist ?? "",
@@ -282,12 +280,26 @@ export function useSongPrebuffer(
   // live song is fine); just abandon the preload so Next round falls back to a
   // fresh random pick. An error on the live player surfaces as before. Both
   // log the failing song (title, artist, id, URL) so it can be found and fixed.
+  // An error from a player that was never given a video is neither: YouTube's
+  // empty embed sometimes raises its generic "An error occurred" (code 2) on
+  // the waiting screen. No song failed and the idle panel hides YouTube's
+  // screen, so it is only logged; the player's first load resets it.
   function handlePlayerError(
     key: "A" | "B",
     code: number,
     videoId: string | null,
     liveSong: Song | null,
   ) {
+    const isLive = key === activeKeyRef.current;
+    if (videoId === null) {
+      log("warn", "yt_idle_player_error", {
+        code: String(code),
+        game_code: gameCode,
+        player: key,
+        live: String(isLive),
+      });
+      return;
+    }
     const peeked = preloadRef.current;
     const peekedRef: SongRef | null = peeked
       ? {
@@ -297,7 +309,6 @@ export function useSongPrebuffer(
           youtube_id: peeked.youtube_id,
         }
       : null;
-    const isLive = key === activeKeyRef.current;
     const context = failedVideoContext(
       gameCode,
       code,
