@@ -362,7 +362,7 @@ panels.append(timeseries(
     "Warnings by type",
     [loki_target('sum by (message) (count_over_time(' + LOG + ' | logfmt | level="warn" [$__interval]))', legend="{{message}}")],
     gridpos(8, y, 8, 8), LOKI, unit="short",
-    desc="warn-level logs by message: realtime_disconnect, stale_buzz_lock_resynced, yt_player_error, yt_preload_error, preload_peek_failed.",
+    desc="warn-level logs by message: realtime_disconnect, stale_buzz_lock_resynced, yt_player_error, yt_preload_error, yt_idle_player_error, preload_peek_failed.",
     draw="bars", stack=True, legend_table=True))
 panels.append(timeseries(
     "Exceptions & errors",
