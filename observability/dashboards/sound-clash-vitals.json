@@ -1477,7 +1477,7 @@
       "id": 25,
       "type": "timeseries",
       "title": "Warnings by type",
-      "description": "warn-level logs by message: realtime_disconnect, stale_buzz_lock_resynced, yt_player_error, yt_preload_error, preload_peek_failed.",
+      "description": "warn-level logs by message: realtime_disconnect, stale_buzz_lock_resynced, yt_player_error, yt_preload_error, yt_idle_player_error, preload_peek_failed.",
       "datasource": {
         "type": "loki",
         "uid": "grafanacloud-logs"

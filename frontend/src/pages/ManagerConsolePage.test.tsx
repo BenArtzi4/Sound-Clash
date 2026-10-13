@@ -111,6 +111,8 @@ let playerHandles: MockHandle[] = [];
 let onReadyHandlers: Array<(() => void) | undefined> = [];
 let onPlayingHandlers: Array<((d: "statechange" | "poll") => void) | undefined> = [];
 let onErrorHandlers: Array<((code: number, videoId: string | null) => void) | undefined> = [];
+// The idleLabel each player was last rendered with (shown over an empty player).
+let idleLabels: Array<string | undefined> = [];
 
 // Typed accessor (tsconfig has noUncheckedIndexedAccess): the handle is pushed
 // before this is ever read, so a missing index is a test-setup bug.
@@ -128,6 +130,7 @@ vi.mock("../components/YouTubePlayer", () => ({
       onPlaying?: (d: "statechange" | "poll") => void;
       onError?: (code: number, videoId: string | null) => void;
       testId?: string;
+      idleLabel?: string;
     }
   >((props, ref) => {
     const idxRef = useRef<number | null>(null);
@@ -137,6 +140,7 @@ vi.mock("../components/YouTubePlayer", () => ({
       onReadyHandlers.push(props.onReady);
       onPlayingHandlers.push(props.onPlaying);
       onErrorHandlers.push(props.onError);
+      idleLabels.push(props.idleLabel);
     }
     const idx = idxRef.current;
     // Keep the handler captures current across re-renders — the page recreates
@@ -146,6 +150,7 @@ vi.mock("../components/YouTubePlayer", () => ({
     onReadyHandlers[idx] = props.onReady;
     onPlayingHandlers[idx] = props.onPlaying;
     onErrorHandlers[idx] = props.onError;
+    idleLabels[idx] = props.idleLabel;
     if (idx === 0) {
       onReadyHandler = props.onReady ?? null;
       lastHandle = handle(0);
@@ -195,6 +200,7 @@ beforeEach(() => {
   onReadyHandlers = [];
   onPlayingHandlers = [];
   onErrorHandlers = [];
+  idleLabels = [];
   vi.mocked(selectNextSongDirect).mockReset();
   vi.mocked(peekNextSongDirect).mockReset();
   vi.mocked(awardAttemptDirect).mockReset();
@@ -2001,6 +2007,95 @@ describe("ManagerConsolePage", () => {
       title: "Song Two",
       artist: "Artist Two",
     });
+  });
+
+  it("keeps an error from the empty player on the waiting screen silent, and Start game still plays", async () => {
+    // YouTube's empty embed sometimes raises its generic "An error occurred"
+    // (code 2) on the waiting screen, before any video was loaded into it. No
+    // song failed, so there is nothing to tell the host: no toast, a log event
+    // of its own with no song attached, and Start game still commits the
+    // prebuffered first song.
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [],
+      rounds: [],
+    });
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-1",
+      youtube_id: "vid1aaaaaaa",
+      start_time: 12,
+      title: "Song One",
+      artist: "Artist One",
+      is_soundtrack: false,
+    });
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
+      round_id: "r1",
+      round_number: 1,
+      song: {
+        id: "song-1",
+        title: "First",
+        artist: "A",
+        youtube_id: "vid1aaaaaaa",
+        start_time: 12,
+        is_soundtrack: false,
+      },
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    await act(async () => {
+      onReadyHandlers[1]?.();
+    });
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid1aaaaaaa", 12));
+
+    // The visible player (A) has never been given a video when it errors.
+    act(() => {
+      onErrorHandlers[0]?.(2, null);
+    });
+
+    expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_idle_player_error", {
+      code: "2",
+      game_code: "ABCDEF",
+      player: "A",
+      live: "true",
+    });
+    expect(telemetry.log).not.toHaveBeenCalledWith("warn", "yt_player_error", expect.anything());
+    expect(screen.queryByText(/video unavailable/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /start game/i }));
+    await waitFor(() => expect(handle(1).commitPrebuffered).toHaveBeenCalledWith(12));
+    await waitFor(() =>
+      expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-1"),
+    );
+    expect(screen.queryByText(/video unavailable/i)).toBeNull();
+  });
+
+  it("labels the empty player after the Start button: loading, then ready to start", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [],
+      rounds: [],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(idleLabels[0]).toBe("Loading player…");
+    act(() => {
+      onReadyHandler?.();
+    });
+    await waitFor(() => expect(idleLabels[0]).toBe("Ready — press Start game"));
+  });
+
+  it("labels an empty player mid-game as loading the song", async () => {
+    // A host who reloads mid-round gets fresh, empty players until the
+    // current song is loaded back in.
+    await setupPlayingRoundWithBothPlayersReady();
+    expect(idleLabels[0]).toBe("Loading song…");
   });
 
   it("renders the peeked song's metadata in-gesture on the fast path (I-NextMeta)", async () => {

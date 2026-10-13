@@ -32,12 +32,17 @@ interface Props {
   // getByTestId("youtube-player") / "[...] iframe" locators still match exactly
   // one element.
   testId?: string;
-  // When true, render only the iframe — no cover element, no loading / ended /
-  // error / buzz-pause overlay. The host loses the anti-spoiler protection of
-  // the cover (YouTube's own "more videos" UI may briefly show between songs)
-  // in exchange for an always-visible video. Errors surface via `onError` so
-  // the parent can react inline (e.g. toast).
+  // When true, render only the iframe — no loading / ended / error /
+  // buzz-pause overlay. The host loses the anti-spoiler protection of the
+  // cover (YouTube's own "more videos" UI may briefly show between songs) in
+  // exchange for an always-visible video. Errors surface via `onError` so the
+  // parent can react inline (e.g. toast). The one exception is a player that
+  // has never been given a video: a panel showing `idleLabel` covers it,
+  // because YouTube's empty embed sometimes shows its own "An error occurred"
+  // screen (code 2) on the host's waiting screen, where no song has failed.
   noCover?: boolean;
+  // Text on the panel over a still-empty player in `noCover` mode.
+  idleLabel?: string;
   hideOverlay?: boolean;
   // When true, keep the cover visible even while the video is loaded (used by
   // the manager view during a buzz / scoring pause so YouTube's pause-state
@@ -154,6 +159,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     onReady,
     onError,
     onPlaying,
+    idleLabel,
   },
   ref,
 ) {
@@ -165,6 +171,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // iframe again so YouTube's endscreen tiles (which can include other songs
   // from the same channel even with rel=0) don't spoil future rounds.
   const [ended, setEnded] = useState(false);
+  // False until this player is first asked to load or prebuffer a video; in
+  // `noCover` mode the empty player is covered until then.
+  const [hasVideo, setHasVideo] = useState(false);
 
   // Stable callback handles so the mount effect can run with []. Inline
   // onReady/onError props from a parent that re-renders frequently would
@@ -323,6 +332,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         // covered mode) doesn't keep showing "Video unavailable" for what
         // is now a different, valid video.
         setErrorCode(null);
+        setHasVideo(true);
         armPlaying();
         videoIdRef.current = videoId;
         playerRef.current?.unMute();
@@ -345,6 +355,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         }
         setEnded(false);
         setErrorCode(null);
+        setHasVideo(true);
         videoIdRef.current = videoId;
         playerRef.current?.mute();
         playerRef.current?.loadVideoById({
@@ -387,9 +398,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   );
 
   if (noCover) {
-    // No-cover mode: just the iframe. Parents handle error UX themselves via
-    // the onError callback (e.g. surface a toast). data-testid + data-ready
-    // are preserved because E2E specs assert on them.
+    // No-cover mode: just the iframe, plus the idle panel until the first
+    // video. Parents handle error UX themselves via the onError callback (e.g.
+    // surface a toast). data-testid + data-ready are preserved because E2E
+    // specs assert on them.
     return (
       <div className={styles.wrapper} data-testid={testId} data-ready={loaded}>
         <iframe
@@ -400,6 +412,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
           allow="autoplay; encrypted-media"
           allowFullScreen
         />
+        {hasVideo ? null : (
+          <div className={styles.cover} data-testid={`${testId}-idle`}>
+            {idleLabel ? <span className={styles.loading}>{idleLabel}</span> : null}
+          </div>
+        )}
       </div>
     );
   }

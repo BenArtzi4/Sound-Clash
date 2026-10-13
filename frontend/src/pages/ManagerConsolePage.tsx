@@ -260,6 +260,15 @@ export function ManagerConsolePage() {
     : game.status === "waiting"
       ? "Start game"
       : "Next round";
+  // Shown over a player that has not been given a video yet: on the waiting
+  // screen it points at the Start button, and after a mid-game reload it covers
+  // the gap until the current song is loaded back in.
+  const idleLabel =
+    game.status !== "waiting"
+      ? "Loading song…"
+      : player.ready
+        ? "Ready — press Start game"
+        : "Loading player…";
 
   return (
     <main className={styles.shell}>
@@ -312,6 +321,7 @@ export function ManagerConsolePage() {
               onReady={onPlayerReady}
               onPlaying={handlePlayerPlaying}
               onError={(code, videoId) => handlePlayerError("A", code, videoId, currentSong)}
+              idleLabel={idleLabel}
             />
           </div>
           <div
@@ -326,6 +336,7 @@ export function ManagerConsolePage() {
               onReady={onPlayerBReady}
               onPlaying={handlePlayerPlaying}
               onError={(code, videoId) => handlePlayerError("B", code, videoId, currentSong)}
+              idleLabel={idleLabel}
             />
           </div>
         </div>
