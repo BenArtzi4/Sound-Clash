@@ -510,6 +510,8 @@ describe("YouTubePlayer load health", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    // Drop the own-property stub so jsdom's own getter is back for later files.
+    Reflect.deleteProperty(document, "visibilityState");
   });
 
   async function mount(props: Partial<ComponentProps<typeof YouTubePlayer>> = {}) {
@@ -609,12 +611,36 @@ describe("YouTubePlayer load health", () => {
       expect(player.loadVideoById).toHaveBeenCalledTimes(1);
     });
 
-    it("counts only visible time: age is 0 while hidden and restarts on return", async () => {
+    it("adds up the visible time since the prebuffer, across hidden spells", async () => {
       const { ref } = await mount();
       act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      await advance(3000);
+      await advance(9000);
       setVisibility("hidden");
-      await advance(20_000);
+      await advance(2000);
+      expect(ref.current?.prebufferStatus()?.ageMs).toBe(9000);
+      setVisibility("visible");
+      await advance(5000);
+      expect(ref.current?.prebufferStatus()?.ageMs).toBe(14_000);
+    });
+
+    it("keeps the visible time a retry inherits across a hidden spell", async () => {
+      const { ref } = await mount();
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      await advance(6000);
+      setVisibility("hidden");
+      await advance(30_000);
+      setVisibility("visible");
+      await advance(4000);
+      act(() => ref.current?.retryPrebuffer());
+      await advance(1000);
+      expect(ref.current?.prebufferStatus()?.ageMs).toBe(11_000);
+    });
+
+    it("ages a prebuffer issued while hidden only from when the page shows", async () => {
+      const { ref } = await mount();
+      setVisibility("hidden");
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      await advance(5000);
       expect(ref.current?.prebufferStatus()?.ageMs).toBe(0);
       setVisibility("visible");
       await advance(1500);
@@ -687,6 +713,17 @@ describe("YouTubePlayer load health", () => {
       expect(onStartStall).not.toHaveBeenCalled();
     });
 
+    it("stays quiet when the app paused the song before it started (a buzz)", async () => {
+      const onStartStall = vi.fn();
+      const { ref, player } = await mount({ onStartStall });
+      player.getPlayerState.mockReturnValue(3);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(3000);
+      act(() => ref.current?.pause());
+      await advance(30_000);
+      expect(onStartStall).not.toHaveBeenCalled();
+    });
+
     it("never fires after unmount", async () => {
       const onStartStall = vi.fn();
       const { ref, unmount } = await mount({ onStartStall });
@@ -736,6 +773,55 @@ describe("YouTubePlayer load health", () => {
       await advance(300);
       state(2);
       expect(onEarlyPause).toHaveBeenCalledWith(300);
+    });
+
+    // A player is stopped each time Next round demotes it. Its next song must
+    // still be watched, even when only the PLAYING poll sees that song start.
+    it.each([
+      [
+        "a load",
+        (h: YouTubePlayerHandle) => {
+          h.loadVideoById("liveVIDEO01", 0);
+        },
+      ],
+      [
+        "a committed standby",
+        (h: YouTubePlayerHandle) => {
+          h.prebuffer("nextVIDEO01", 0);
+          lastConfig?.events?.onStateChange?.({ data: 1 }); // the freeze
+          h.commitPrebuffered(0);
+        },
+      ],
+    ])("fires for %s after the app's last stop, started by the poll", async (_label, start) => {
+      const onEarlyPause = vi.fn();
+      const { ref, player } = await mount({ onEarlyPause });
+      act(() => ref.current?.stop());
+      player.getPlayerState.mockReturnValue(-1);
+      act(() => {
+        if (ref.current) start(ref.current);
+      });
+      player.getPlayerState.mockReturnValue(1);
+      await advance(250); // the poll sees PLAYING here
+      await advance(300);
+      state(2);
+      expect(onEarlyPause).toHaveBeenCalledWith(300);
+    });
+
+    it("fires after a buzz before the start, once the poll sees the resumed song play", async () => {
+      // pause() before PLAYING, then play(): the app has not paused the song
+      // since it started, so a pause by itself right after is still early.
+      const onEarlyPause = vi.fn();
+      const { ref, player } = await mount({ onEarlyPause });
+      player.getPlayerState.mockReturnValue(3);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(1000);
+      act(() => ref.current?.pause()); // a buzz
+      act(() => ref.current?.play()); // Wrong / Continue
+      player.getPlayerState.mockReturnValue(1);
+      await advance(250); // the poll sees PLAYING here
+      await advance(400);
+      state(2);
+      expect(onEarlyPause).toHaveBeenCalledWith(400);
     });
 
     it("fires for a committed standby that pauses after starting, not for pauses before it starts", async () => {

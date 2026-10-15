@@ -43,8 +43,9 @@ export interface PrebufferStatus {
   loadedFraction: number;
   // YouTube's player state code, for telemetry only.
   state: number;
-  // Visible time since the prebuffer was issued: time while the page is
-  // hidden doesn't count, because a hidden page may not load at all.
+  // Visible time since the song's first prebuffer, added up across hidden
+  // spells: time while the page is hidden doesn't count, because a hidden page
+  // may not load at all.
   ageMs: number;
 }
 
@@ -85,8 +86,8 @@ interface Props {
   // Telemetry for the rare song that stalls on the live player. Fired at most
   // once per load or commit, when the song has not reached PLAYING 10 s
   // later. Not fired when the page was hidden during the wait (a hidden page
-  // may legitimately not play), after a newer load, after stop(), or once
-  // this player became the standby.
+  // may legitimately not play), after a newer load, after pause() or stop(),
+  // or once this player became the standby.
   onStartStall?: (info: { state: number; loadedFraction: number }) => void;
   // Telemetry: the song paused by itself within 5 s of starting (no pause()
   // or stop() from the app, page visible). At most once per load or commit.
@@ -255,13 +256,16 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // onError so a failure can be traced to a catalog song.
   const videoIdRef = useRef<string | null>(null);
 
-  // Load health. `loadAtRef` is when the current prebuffer/load/commit was
-  // issued (Date.now(), so fake timers move it). `visibleSinceRef` is when the
-  // page last became visible (0 = visible since mount) and
-  // `visibilityChangedAtRef` when its visibility last changed at all; a
-  // prebuffer's age and the start watch only count visible time.
-  const loadAtRef = useRef(0);
-  const visibleSinceRef = useRef(0);
+  // Load health, on Date.now() so fake timers move it. A visible-time clock:
+  // `visibleMsRef` holds the visible time of past spells and
+  // `visibleSpellStartRef` when the current visible spell began (null while
+  // hidden). `prebufferVisibleAtRef` is the clock's reading when the song's
+  // first prebuffer was issued, so a prebuffer's age is the visible time
+  // since. `visibilityChangedAtRef` is when visibility last changed at all;
+  // the start watch only counts a wait the page spent visible throughout.
+  const visibleMsRef = useRef(0);
+  const visibleSpellStartRef = useRef<number | null>(null);
+  const prebufferVisibleAtRef = useRef(0);
   const visibilityChangedAtRef = useRef(0);
   // The start watch: one timer per audible load or commit. `startWatchGenRef`
   // is bumped by every load, prebuffer, commit and stop, so a watch armed for
@@ -276,12 +280,26 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   const appPauseRef = useRef(false);
 
   useEffect(() => {
+    if (document.visibilityState === "visible") visibleSpellStartRef.current = Date.now();
     const onVisibility = (): void => {
-      visibilityChangedAtRef.current = Date.now();
-      if (document.visibilityState === "visible") visibleSinceRef.current = Date.now();
+      const now = Date.now();
+      visibilityChangedAtRef.current = now;
+      const spellStart = visibleSpellStartRef.current;
+      if (document.visibilityState === "visible") {
+        if (spellStart === null) visibleSpellStartRef.current = now;
+      } else if (spellStart !== null) {
+        visibleMsRef.current += now - spellStart;
+        visibleSpellStartRef.current = null;
+      }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  // Total visible time so far; only differences between readings mean anything.
+  const visibleClock = useCallback((): number => {
+    const spellStart = visibleSpellStartRef.current;
+    return visibleMsRef.current + (spellStart === null ? 0 : Date.now() - spellStart);
   }, []);
 
   // Cancel any pending start watch and invalidate any already-queued fire.
@@ -335,6 +353,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         !prebufferingRef.current &&
         playerRef.current?.getPlayerState() === YT_STATE_PLAYING
       ) {
+        // As in onStateChange(PLAYING): the song plays, so any app pause is over.
+        appPauseRef.current = false;
         playingFiredRef.current = true;
         playingAtRef.current = Date.now();
         earlyPauseReportedRef.current = false;
@@ -464,8 +484,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         // is now a different, valid video.
         setErrorCode(null);
         setHasVideo(true);
+        // A new song: no app pause of it yet (a stop() at the last swap was
+        // for the previous one).
+        appPauseRef.current = false;
         armPlaying();
-        loadAtRef.current = Date.now();
         armStartWatch();
         videoIdRef.current = videoId;
         playerRef.current?.unMute();
@@ -489,7 +511,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         setEnded(false);
         setErrorCode(null);
         setHasVideo(true);
-        loadAtRef.current = Date.now();
+        prebufferVisibleAtRef.current = visibleClock();
         cancelStartWatch();
         videoIdRef.current = videoId;
         playerRef.current?.mute();
@@ -510,15 +532,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         prebufferPausedRef.current = false;
         setEnded(false);
         setErrorCode(null);
+        appPauseRef.current = false;
         armPlaying();
-        loadAtRef.current = Date.now();
         armStartWatch();
         playerRef.current?.seekTo(start, true);
         playerRef.current?.unMute();
         playerRef.current?.playVideo();
       },
       pause: () => {
+        // A buzz can pause a song before it ever started; that is no stall.
         appPauseRef.current = true;
+        cancelStartWatch();
         playerRef.current?.pauseVideo();
       },
       play: () => playerRef.current?.playVideo(),
@@ -547,16 +571,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       prebufferStatus: () => {
         const player = playerRef.current;
         if (!player || !prebufferingRef.current) return null;
-        const visible = document.visibilityState === "visible";
         return {
           frozen: prebufferPausedRef.current,
           loadedFraction: player.getVideoLoadedFraction() || 0,
           state: player.getPlayerState(),
-          ageMs: visible ? Date.now() - Math.max(loadAtRef.current, visibleSinceRef.current) : 0,
+          ageMs: visibleClock() - prebufferVisibleAtRef.current,
         };
       },
     }),
-    [armPlaying, armStartWatch, cancelStartWatch],
+    [armPlaying, armStartWatch, cancelStartWatch, visibleClock],
   );
 
   if (noCover) {

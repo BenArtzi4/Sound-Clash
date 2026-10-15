@@ -79,13 +79,8 @@ export const STANDBY_CHECK_MS = 10_000;
 
 // Dead: not frozen, nothing loaded, and old enough to judge. A standby that is
 // loading (any bytes) or ready is never treated as dead, however slow.
-export function standbyIsDead(status: PrebufferStatus | null): status is PrebufferStatus {
-  return (
-    status !== null &&
-    !status.frozen &&
-    status.loadedFraction === 0 &&
-    status.ageMs >= STANDBY_CHECK_MS
-  );
+export function standbyIsDead(status: PrebufferStatus): boolean {
+  return !status.frozen && status.loadedFraction === 0 && status.ageMs >= STANDBY_CHECK_MS;
 }
 
 // Telemetry fields for a song, empty ones omitted.
@@ -297,11 +292,14 @@ export function useSongPrebuffer(
       if (!stillOurs) return;
       const target = key === "A" ? playerARef.current : playerBRef.current;
       const status = target?.prebufferStatus() ?? null;
-      // Loading (bytes arriving, however slowly), ready, or gone: never touch.
-      if (!status || status.frozen || status.loadedFraction > 0) return;
-      if (status.ageMs < STANDBY_CHECK_MS) {
-        // Not enough visible time yet (the page was hidden): look again then.
-        standbyCheckRef.current = window.setTimeout(check, STANDBY_CHECK_MS - status.ageMs);
+      if (!status) return;
+      if (!standbyIsDead(status)) {
+        // Loading (bytes arriving, however slowly) or ready: never touched.
+        // Too young to judge (the page was hidden for part of the wait): look
+        // again once it has had 10 s of visible time.
+        if (status.ageMs < STANDBY_CHECK_MS) {
+          standbyCheckRef.current = window.setTimeout(check, STANDBY_CHECK_MS - status.ageMs);
+        }
         return;
       }
       // Nothing loaded after 10 s of visible time: YouTube failed this load
@@ -320,11 +318,12 @@ export function useSongPrebuffer(
 
   // Next round's verdict on the prebuffered song: true when the standby holds
   // a dead load (nothing loaded after 10 s of visible time), so the caller
-  // takes the cold path instead of committing a silent player. A standby that
-  // is loading, however slowly, or too young to judge is used as before.
+  // loads the song on the live player instead of committing a silent one. A
+  // standby that is loading, however slowly, or too young to judge is used as
+  // before.
   function standbyUnusable(peeked: PeekedSong): boolean {
     const status = standbyPlayer()?.prebufferStatus() ?? null;
-    if (!standbyIsDead(status)) return false;
+    if (!status || !standbyIsDead(status)) return false;
     log("warn", "yt_preload_not_ready", {
       game_code: gameCode,
       player: activeKeyRef.current === "A" ? "B" : "A",

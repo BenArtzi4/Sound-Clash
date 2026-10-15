@@ -443,15 +443,15 @@ export function useScoring(
     // Optimistic toast confirms the click immediately.
     toast("Loading next round...", { variant: "info" });
     // Snapshot + clear the prebuffered song now so a late preload can't reuse it.
-    let preloaded = preloadRef.current;
+    const preloaded = preloadRef.current;
     preloadRef.current = null;
     // A standby that has loaded nothing after 10 s of visible time holds a load
     // YouTube failed without an onError; committing it starts a silent round.
-    // Take the cold path instead (a fresh pick, loaded on the live player). A
-    // standby that is loading, however slowly, is committed as before.
-    if (preloaded && standbyUnusable(preloaded)) preloaded = null;
+    // Its song is still known, so it is loaded on the live player instead (see
+    // below). A standby that is loading, however slowly, is committed as before.
+    const deadStandby = preloaded !== null && standbyUnusable(preloaded);
     // Pre-swap snapshot for the rollback in the catch below: which player was
-    // live and which song card was up before the optimistic in-gesture swap.
+    // live and which song card was up before the optimistic in-gesture start.
     const prevKey = activeKeyRef.current;
     const prevSong = currentSong;
 
@@ -465,24 +465,33 @@ export function useScoring(
     // start it before the round is committed server-side. commitPrebuffered
     // resumes an already-downloaded (muted) buffer, so the unmute+play lands in
     // the gesture and the room hears it immediately.
-    let committedPreloaded = false;
+    //
+    // DEAD STANDBY — nothing to resume, but the peeked song is known, so it is
+    // loaded on the live player, still inside the tap: a load issued after the
+    // RPC await is blocked autoplay on iOS. The dead standby is stopped so its
+    // failed load is dropped; it gets the next prebuffer as usual. Same RPC
+    // (with the song's id) and the same rollback as the fast path.
     if (preloaded) {
       songStart.loadIssued();
       armSongStartTimeout();
-      const promoted = standbyPlayer();
-      const demoted = activePlayer();
-      promoted?.commitPrebuffered(preloaded.start_time);
-      demoted?.stop();
-      const nextKey = activeKeyRef.current === "A" ? "B" : "A";
-      activeKeyRef.current = nextKey;
-      setActiveKey(nextKey);
-      committedPreloaded = true;
-      // I-NextMeta: the prebuffered audio is already playing, so render the new
-      // song's card in-gesture from the peeked metadata (mig 038) instead of
-      // leaving the PREVIOUS title up until select_next_song resolves ~150ms
-      // later. Record the id first so the song-resolver effect treats this as an
-      // optimistic lead (not staleness) and doesn't reload the old song. The
-      // RPC's authoritative row reconciles the card below (same values).
+      if (deadStandby) {
+        standbyPlayer()?.stop();
+        activePlayer()?.loadVideoById(preloaded.youtube_id, preloaded.start_time);
+      } else {
+        const promoted = standbyPlayer();
+        const demoted = activePlayer();
+        promoted?.commitPrebuffered(preloaded.start_time);
+        demoted?.stop();
+        const nextKey = activeKeyRef.current === "A" ? "B" : "A";
+        activeKeyRef.current = nextKey;
+        setActiveKey(nextKey);
+      }
+      // I-NextMeta: the new song is already starting, so render its card
+      // in-gesture from the peeked metadata (mig 038) instead of leaving the
+      // PREVIOUS title up until select_next_song resolves ~150ms later. Record
+      // the id first so the song-resolver effect treats this as an optimistic
+      // lead (not staleness) and doesn't reload the old song. The RPC's
+      // authoritative row reconciles the card below (same values).
       optimisticSongIdRef.current = preloaded.song_id;
       setCurrentSong({
         id: preloaded.song_id,
@@ -495,7 +504,7 @@ export function useScoring(
     }
 
     try {
-      if (committedPreloaded && preloaded) {
+      if (preloaded) {
         // Confirm/record the round for the exact song we already started.
         const result = await selectNextSongDirect(gameCode, managerToken, preloaded.song_id);
         roundCommitted = true;
@@ -503,7 +512,8 @@ export function useScoring(
           roundNumber: result.round_number,
           songId: result.song.id,
           youtubeId: result.song.youtube_id,
-          preloaded: true,
+          // A dead standby's song was loaded cold, not resumed from a buffer.
+          preloaded: !deadStandby,
         });
         setCurrentSong(result.song);
         if (result.song.id !== preloaded.song_id) {
@@ -539,15 +549,17 @@ export function useScoring(
       songStartRef.current = null;
       optimisticSongIdRef.current = null;
       // The round failed to advance server-side, so the optimistic in-gesture
-      // swap (which has to happen before the await for mobile autoplay) must
-      // not stand. Roll all of it back: silence the promoted player, restore
-      // the pre-click active player + song card, and reload the still-current
-      // round's song so the room isn't left in silence (best-effort on strict
-      // mobile autoplay — this load lands outside the gesture). The peeked
-      // song goes back into the standby buffer: the round never advanced, so
-      // it is still exactly what select_next_song would record, and a retry
-      // click keeps the in-gesture fast path.
-      if (committedPreloaded && preloaded) {
+      // start (which has to happen before the await for mobile autoplay) must
+      // not stand. Roll all of it back: silence the player that started the
+      // new song, restore the pre-click active player + song card, and reload
+      // the still-current round's song so the room isn't left in silence
+      // (best-effort on strict mobile autoplay — this load lands outside the
+      // gesture). The peeked song goes back into the standby buffer: the round
+      // never advanced, so it is still exactly what select_next_song would
+      // record, and a retry click keeps the in-gesture path. After a dead
+      // standby no players were swapped, so restoring the key is a no-op and
+      // the stopped standby gets a fresh prebuffer of the song.
+      if (preloaded) {
         activePlayer()?.stop();
         activeKeyRef.current = prevKey;
         setActiveKey(prevKey);
