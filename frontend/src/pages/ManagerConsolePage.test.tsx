@@ -85,6 +85,8 @@ interface MockHandle {
   play: ReturnType<typeof vi.fn>;
   resumeIfPaused: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
+  retryPrebuffer: ReturnType<typeof vi.fn>;
+  prebufferStatus: ReturnType<typeof vi.fn>;
 }
 
 function makeMockHandle(): MockHandle {
@@ -96,6 +98,9 @@ function makeMockHandle(): MockHandle {
     play: vi.fn(),
     resumeIfPaused: vi.fn(),
     stop: vi.fn(),
+    retryPrebuffer: vi.fn(),
+    // Default: a healthy standby, already frozen at its start.
+    prebufferStatus: vi.fn(() => ({ frozen: true, loadedFraction: 0.2, state: 2, ageMs: 1000 })),
   };
 }
 
@@ -111,6 +116,9 @@ let playerHandles: MockHandle[] = [];
 let onReadyHandlers: Array<(() => void) | undefined> = [];
 let onPlayingHandlers: Array<((d: "statechange" | "poll") => void) | undefined> = [];
 let onErrorHandlers: Array<((code: number, videoId: string | null) => void) | undefined> = [];
+type StartStall = (info: { state: number; loadedFraction: number }) => void;
+let onStartStallHandlers: Array<StartStall | undefined> = [];
+let onEarlyPauseHandlers: Array<((msAfterStart: number) => void) | undefined> = [];
 // The idleLabel each player was last rendered with (shown over an empty player).
 let idleLabels: Array<string | undefined> = [];
 
@@ -129,6 +137,8 @@ vi.mock("../components/YouTubePlayer", () => ({
       onReady?: () => void;
       onPlaying?: (d: "statechange" | "poll") => void;
       onError?: (code: number, videoId: string | null) => void;
+      onStartStall?: StartStall;
+      onEarlyPause?: (msAfterStart: number) => void;
       testId?: string;
       idleLabel?: string;
     }
@@ -140,6 +150,8 @@ vi.mock("../components/YouTubePlayer", () => ({
       onReadyHandlers.push(props.onReady);
       onPlayingHandlers.push(props.onPlaying);
       onErrorHandlers.push(props.onError);
+      onStartStallHandlers.push(props.onStartStall);
+      onEarlyPauseHandlers.push(props.onEarlyPause);
       idleLabels.push(props.idleLabel);
     }
     const idx = idxRef.current;
@@ -150,6 +162,8 @@ vi.mock("../components/YouTubePlayer", () => ({
     onReadyHandlers[idx] = props.onReady;
     onPlayingHandlers[idx] = props.onPlaying;
     onErrorHandlers[idx] = props.onError;
+    onStartStallHandlers[idx] = props.onStartStall;
+    onEarlyPauseHandlers[idx] = props.onEarlyPause;
     idleLabels[idx] = props.idleLabel;
     if (idx === 0) {
       onReadyHandler = props.onReady ?? null;
@@ -200,6 +214,8 @@ beforeEach(() => {
   onReadyHandlers = [];
   onPlayingHandlers = [];
   onErrorHandlers = [];
+  onStartStallHandlers = [];
+  onEarlyPauseHandlers = [];
   idleLabels = [];
   vi.mocked(selectNextSongDirect).mockReset();
   vi.mocked(peekNextSongDirect).mockReset();
@@ -1900,7 +1916,7 @@ describe("ManagerConsolePage", () => {
       youtube_id: "vid1aaaaaaa",
       start_time: 0,
     });
-    renderConsole();
+    const utils = renderConsole();
     await act(async () => {
       await fireSubscribed();
     });
@@ -1911,7 +1927,322 @@ describe("ManagerConsolePage", () => {
     act(() => {
       onReadyHandlers[1]?.();
     });
+    return utils;
   }
+
+  // ---- song-stall fix (2026-10-15): standby check + live-stall telemetry ----
+  //
+  // When YouTube fails to load a video it often sends no onError: the player
+  // just sits there with nothing loaded. A standby that has loaded nothing
+  // after 10 s of visible time is re-issued once; at Next round such a
+  // standby is skipped for a cold load. A standby that is loading (bytes
+  // arriving, however slowly) or ready is never touched.
+  describe("standby health (song stall)", () => {
+    const SONG2 = {
+      song_id: "song-2",
+      youtube_id: "vid2bbbbbbb",
+      start_time: 30,
+      title: "Song Two",
+      artist: "Artist Two",
+      is_soundtrack: false,
+    };
+    const STALLED = { frozen: false, loadedFraction: 0, state: 3, ageMs: 10_000 };
+    const SONG2_CONTEXT = {
+      youtube_id: "vid2bbbbbbb",
+      song_id: "song-2",
+      title: "Song Two",
+      artist: "Artist Two",
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const advance = (ms: number) =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+
+    // Round 1 is live on A; once it plays, song 2 is peeked and prebuffered
+    // into the standby B.
+    async function prebufferSong2() {
+      const utils = await setupPlayingRoundWithBothPlayersReady();
+      await advance(0);
+      vi.mocked(peekNextSongDirect).mockResolvedValueOnce(SONG2);
+      await act(async () => {
+        onPlayingHandlers[0]?.("statechange");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(handle(1).prebuffer).toHaveBeenCalledWith("vid2bbbbbbb", 30);
+      return utils;
+    }
+    const retried = () =>
+      telemetry.log.mock.calls.filter((c) => c[1] === "yt_preload_retry").length;
+
+    it("re-issues a standby that has loaded nothing after 10 s, once", async () => {
+      await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue(STALLED);
+      await advance(9_999);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
+      await advance(1);
+      // A retry, not a fresh prebuffer: the standby keeps the age of the
+      // song's first load, so Next round still sees it as dead if it stays so.
+      expect(handle(1).retryPrebuffer).toHaveBeenCalledTimes(1);
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_preload_retry", {
+        game_code: "ABCDEF",
+        player: "B",
+        state: "3",
+        ...SONG2_CONTEXT,
+      });
+      // The re-issued load is never retried again.
+      await advance(60_000);
+      expect(handle(1).retryPrebuffer).toHaveBeenCalledTimes(1);
+      expect(retried()).toBe(1);
+    });
+
+    it.each([
+      ["still loading", { frozen: false, loadedFraction: 0.02, state: -1, ageMs: 10_000 }],
+      ["ready", { frozen: true, loadedFraction: 0.2, state: 2, ageMs: 10_000 }],
+      ["no longer holding a prebuffer", null],
+    ])("leaves a standby that is %s alone", async (_label, status) => {
+      await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue(status);
+      await advance(30_000);
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
+    });
+
+    it("judges the standby only after 10 s of visible time", async () => {
+      await prebufferSong2();
+      // The page was hidden for 6 of the first 10 s, so only 4 s count.
+      handle(1).prebufferStatus.mockReturnValue({ ...STALLED, ageMs: 4_000 });
+      await advance(10_000);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
+      handle(1).prebufferStatus.mockReturnValue(STALLED);
+      await advance(5_999);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
+      await advance(1);
+      expect(handle(1).retryPrebuffer).toHaveBeenCalledTimes(1);
+    });
+
+    it("drops the check when Next round swaps the players first", async () => {
+      await prebufferSong2();
+      // Young (3 s) with nothing loaded yet: Next round commits it as before.
+      handle(1).prebufferStatus.mockReturnValue({ ...STALLED, ageMs: 3_000 });
+      vi.mocked(selectNextSongDirect).mockReturnValueOnce(
+        new Promise<SelectSongResponse>(() => {}),
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("start-round"));
+      });
+      expect(handle(1).commitPrebuffered).toHaveBeenCalledWith(30);
+      // Both players now look dead; neither may be touched by the old check.
+      handle(0).prebufferStatus.mockReturnValue(STALLED);
+      handle(1).prebufferStatus.mockReturnValue(STALLED);
+      await advance(30_000);
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(handle(0).prebuffer).not.toHaveBeenCalled();
+      expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
+    });
+
+    it("drops the check on unmount", async () => {
+      const { unmount } = await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue(STALLED);
+      unmount();
+      await advance(30_000);
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
+    });
+
+    it("drops the check when the game ends", async () => {
+      await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue(STALLED);
+      act(() => {
+        fireGame(
+          makePayload("active_games", "UPDATE", {
+            new: makeActiveGame({
+              status: "ended",
+              round_number: 1,
+              current_round_id: "r1",
+              ended_at: "2026-05-05T12:30:00.000Z",
+            }),
+          }),
+        );
+      });
+      await advance(30_000);
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
+    });
+
+    const SONG2_ROW = {
+      id: "song-2",
+      title: "Song Two",
+      artist: "Artist Two",
+      youtube_id: "vid2bbbbbbb",
+      start_time: 30,
+      is_soundtrack: false,
+    };
+    const livePlayerIsA = () =>
+      expect(screen.getAllByTestId(/^youtube-player/)[0]).toHaveAttribute(
+        "data-testid",
+        "youtube-player",
+      );
+
+    it("loads a dead standby's song on the live player inside the tap", async () => {
+      // The dead standby has nothing to resume, but its song is known. Loading
+      // it on the live player before the RPC await keeps the tap's user
+      // gesture, so an iPhone host still hears it.
+      await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue({ ...STALLED, ageMs: 25_000 });
+      let answer: (r: SelectSongResponse) => void = () => {};
+      vi.mocked(selectNextSongDirect).mockReturnValueOnce(
+        new Promise<SelectSongResponse>((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const loadsBefore = handle(0).loadVideoById.mock.calls.length;
+      act(() => {
+        fireEvent.click(screen.getByTestId("start-round"));
+      });
+      // All of this happens before select_next_song answers.
+      expect(handle(1).stop).toHaveBeenCalledTimes(1);
+      expect(handle(1).commitPrebuffered).not.toHaveBeenCalled();
+      expect(handle(0).stop).not.toHaveBeenCalled();
+      expect(handle(0).loadVideoById).toHaveBeenCalledTimes(loadsBefore + 1);
+      expect(handle(0).loadVideoById).toHaveBeenLastCalledWith("vid2bbbbbbb", 30);
+      expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-2");
+      expect(screen.getByText("Song Two")).toBeInTheDocument();
+      livePlayerIsA();
+      expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_preload_not_ready", {
+        game_code: "ABCDEF",
+        player: "B",
+        state: "3",
+        age_ms: "25000",
+        ...SONG2_CONTEXT,
+      });
+
+      await act(async () => {
+        answer({ round_id: "r2", round_number: 2, song: SONG2_ROW });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      // select_next_song answers ~275 ms before the new round's Realtime
+      // event; until it lands, the old round's song must not be fetched and
+      // reloaded over this one, and the song is not loaded a second time.
+      await advance(1000);
+      expect(handle(0).loadVideoById).toHaveBeenCalledTimes(loadsBefore + 1);
+      expect(screen.getByText("Song Two")).toBeInTheDocument();
+      expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
+        expect.objectContaining({ preloaded: false, songId: "song-2" }),
+      );
+    });
+
+    it("puts everything back when Next round fails after loading a dead standby's song", async () => {
+      await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue({ ...STALLED, ageMs: 25_000 });
+      const { RpcError } = await import("../hooks/useManagerActions");
+      vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("network down"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("start-round"));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText(/network down/i)).toBeInTheDocument();
+      // The round never advanced: the live player goes back to its song...
+      expect(handle(0).loadVideoById.mock.calls.slice(-2)).toEqual([
+        ["vid2bbbbbbb", 30],
+        ["vid1aaaaaaa", 0],
+      ]);
+      expect(screen.getByText("First")).toBeInTheDocument();
+      expect(screen.queryByText("Song Two")).not.toBeInTheDocument();
+      livePlayerIsA();
+      // ...and the peeked song is prebuffered afresh into the standby.
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(2);
+      expect(handle(1).prebuffer).toHaveBeenLastCalledWith("vid2bbbbbbb", 30);
+    });
+
+    it.each([
+      ["still loading", { frozen: false, loadedFraction: 0.01, state: 3, ageMs: 25_000 }],
+      [
+        "young, with nothing loaded yet",
+        { frozen: false, loadedFraction: 0, state: 3, ageMs: 3_000 },
+      ],
+    ])("commits a standby that is %s, as before", async (_label, status) => {
+      await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue(status);
+      vi.mocked(selectNextSongDirect).mockReturnValueOnce(
+        new Promise<SelectSongResponse>(() => {}),
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("start-round"));
+      });
+      expect(handle(1).commitPrebuffered).toHaveBeenCalledWith(30);
+      expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-2");
+      expect(telemetry.log).not.toHaveBeenCalledWith(
+        "warn",
+        "yt_preload_not_ready",
+        expect.anything(),
+      );
+    });
+
+    it("records one round for a double click on a dead standby", async () => {
+      await prebufferSong2();
+      handle(1).prebufferStatus.mockReturnValue({ ...STALLED, ageMs: 25_000 });
+      vi.mocked(selectNextSongDirect).mockReturnValueOnce(
+        new Promise<SelectSongResponse>(() => {}),
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("start-round"));
+        fireEvent.click(screen.getByTestId("start-round"));
+      });
+      expect(selectNextSongDirect).toHaveBeenCalledTimes(1);
+      expect(handle(1).commitPrebuffered).not.toHaveBeenCalled();
+    });
+
+    it("logs a start stall on the live player with its song, never one from the standby", async () => {
+      await setupPlayingRoundWithBothPlayersReady();
+      await advance(0);
+      act(() => onStartStallHandlers[1]?.({ state: -1, loadedFraction: 0 }));
+      expect(telemetry.log).not.toHaveBeenCalledWith("warn", "yt_live_stall", expect.anything());
+      act(() => onStartStallHandlers[0]?.({ state: -1, loadedFraction: 0 }));
+      expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_live_stall", {
+        kind: "no_start",
+        game_code: "ABCDEF",
+        player: "A",
+        state: "-1",
+        loaded_fraction: "0",
+        youtube_id: "vid1aaaaaaa",
+        song_id: "song-1",
+        title: "First",
+        artist: "A",
+      });
+    });
+
+    it("logs an early pause on the live player with its song, never one from the standby", async () => {
+      await setupPlayingRoundWithBothPlayersReady();
+      await advance(0);
+      act(() => onEarlyPauseHandlers[1]?.(300));
+      expect(telemetry.log).not.toHaveBeenCalledWith("warn", "yt_live_stall", expect.anything());
+      act(() => onEarlyPauseHandlers[0]?.(300));
+      expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_live_stall", {
+        kind: "early_pause",
+        game_code: "ABCDEF",
+        player: "A",
+        ms_after_start: "300",
+        youtube_id: "vid1aaaaaaa",
+        song_id: "song-1",
+        title: "First",
+        artist: "A",
+      });
+    });
+  });
 
   it("prebuffers the next song once the current one plays, then commits + swaps on Next round", async () => {
     await setupPlayingRoundWithBothPlayersReady();
@@ -2311,6 +2642,74 @@ describe("ManagerConsolePage", () => {
         expect.objectContaining({ preloaded: true, songId: "song-1" }),
       ),
     );
+  });
+
+  // Round 1's song is prebuffered on the waiting screen; YouTube can fail that
+  // load silently too. Start game then loads the song on player A in the tap.
+  async function waitingWithDeadFirstSong() {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [],
+      rounds: [],
+    });
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      song_id: "song-1",
+      youtube_id: "vid1aaaaaaa",
+      start_time: 12,
+      title: "Song One",
+      artist: "Artist One",
+      is_soundtrack: false,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    await act(async () => {
+      onReadyHandlers[1]?.();
+    });
+    await waitFor(() => expect(handle(1).prebuffer).toHaveBeenCalledWith("vid1aaaaaaa", 12));
+    handle(1).prebufferStatus.mockReturnValue({
+      frozen: false,
+      loadedFraction: 0,
+      state: -1,
+      ageMs: 40_000,
+    });
+    const startBtn = screen.getByRole("button", { name: /start game/i });
+    await waitFor(() => expect(startBtn).toBeEnabled());
+    return startBtn;
+  }
+
+  it("Start game loads a dead first-song standby on player A inside the tap", async () => {
+    const startBtn = await waitingWithDeadFirstSong();
+    vi.mocked(selectNextSongDirect).mockReturnValueOnce(new Promise<SelectSongResponse>(() => {}));
+    fireEvent.click(startBtn);
+    // Synchronously in the click, before select_next_song answers.
+    expect(handle(1).stop).toHaveBeenCalledTimes(1);
+    expect(handle(1).commitPrebuffered).not.toHaveBeenCalled();
+    expect(handle(0).loadVideoById).toHaveBeenCalledWith("vid1aaaaaaa", 12);
+    expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-1");
+    expect(telemetry.log).toHaveBeenCalledWith(
+      "warn",
+      "yt_preload_not_ready",
+      expect.objectContaining({ player: "B", song_id: "song-1", age_ms: "40000" }),
+    );
+  });
+
+  it("a failed Start game after loading a dead first-song standby silences player A again", async () => {
+    const startBtn = await waitingWithDeadFirstSong();
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("network down"));
+    fireEvent.click(startBtn);
+    await waitFor(() => expect(screen.getByText(/network down/i)).toBeInTheDocument());
+    expect(handle(0).loadVideoById).toHaveBeenCalledTimes(1);
+    expect(handle(0).stop).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Song One")).not.toBeInTheDocument();
+    // The first song is prebuffered afresh for the retry.
+    expect(handle(1).prebuffer).toHaveBeenCalledTimes(2);
+    expect(handle(1).prebuffer).toHaveBeenLastCalledWith("vid1aaaaaaa", 12);
   });
 
   it("rolls the whole swap back when select_next_song fails after an in-gesture commit (T4.5)", async () => {
