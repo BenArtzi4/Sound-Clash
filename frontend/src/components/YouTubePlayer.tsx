@@ -29,6 +29,11 @@ export interface YouTubePlayerHandle {
   // there, BUFFERING or UNSTARTED, with nothing loaded. So the console judges
   // a standby by what it has loaded, not by its state.
   prebufferStatus: () => PrebufferStatus | null;
+  // Issue the held prebuffer's load again, KEEPING its age: Next round judges a
+  // standby by the time since its song's first prebuffer, so a young retry
+  // can't make a dead standby look fresh. A no-op unless a prebuffer is held
+  // and has not frozen yet.
+  retryPrebuffer: () => void;
 }
 
 export interface PrebufferStatus {
@@ -532,6 +537,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         cancelStartWatch();
         setEnded(true);
         playerRef.current?.stopVideo();
+      },
+      retryPrebuffer: () => {
+        const videoId = videoIdRef.current;
+        if (!prebufferingRef.current || prebufferPausedRef.current || !videoId) return;
+        playerRef.current?.mute();
+        playerRef.current?.loadVideoById({ videoId, startSeconds: prebufferStartRef.current });
       },
       prebufferStatus: () => {
         const player = playerRef.current;

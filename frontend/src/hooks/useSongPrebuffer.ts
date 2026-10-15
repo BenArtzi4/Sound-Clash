@@ -305,15 +305,15 @@ export function useSongPrebuffer(
         return;
       }
       // Nothing loaded after 10 s of visible time: YouTube failed this load
-      // without telling us. Issue it once more; a second failure is caught at
-      // Next round by standbyUnusable.
+      // without telling us. Issue it once more, keeping its age, so a retry
+      // that fails too is still caught at Next round by standbyUnusable.
       log("warn", "yt_preload_retry", {
         game_code: gameCode,
         player: key,
         state: String(status.state),
         ...peekedFields(peeked),
       });
-      target?.prebuffer(peeked.youtube_id, peeked.start_time);
+      target?.retryPrebuffer();
     };
     standbyCheckRef.current = window.setTimeout(check, STANDBY_CHECK_MS);
   }

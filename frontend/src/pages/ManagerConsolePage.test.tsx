@@ -85,6 +85,7 @@ interface MockHandle {
   play: ReturnType<typeof vi.fn>;
   resumeIfPaused: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
+  retryPrebuffer: ReturnType<typeof vi.fn>;
   prebufferStatus: ReturnType<typeof vi.fn>;
 }
 
@@ -97,6 +98,7 @@ function makeMockHandle(): MockHandle {
     play: vi.fn(),
     resumeIfPaused: vi.fn(),
     stop: vi.fn(),
+    retryPrebuffer: vi.fn(),
     // Default: a healthy standby, already frozen at its start.
     prebufferStatus: vi.fn(() => ({ frozen: true, loadedFraction: 0.2, state: 2, ageMs: 1000 })),
   };
@@ -1985,10 +1987,12 @@ describe("ManagerConsolePage", () => {
       await prebufferSong2();
       handle(1).prebufferStatus.mockReturnValue(STALLED);
       await advance(9_999);
-      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
       await advance(1);
-      expect(handle(1).prebuffer).toHaveBeenCalledTimes(2);
-      expect(handle(1).prebuffer).toHaveBeenLastCalledWith("vid2bbbbbbb", 30);
+      // A retry, not a fresh prebuffer: the standby keeps the age of the
+      // song's first load, so Next round still sees it as dead if it stays so.
+      expect(handle(1).retryPrebuffer).toHaveBeenCalledTimes(1);
+      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
       expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_preload_retry", {
         game_code: "ABCDEF",
         player: "B",
@@ -1997,7 +2001,7 @@ describe("ManagerConsolePage", () => {
       });
       // The re-issued load is never retried again.
       await advance(60_000);
-      expect(handle(1).prebuffer).toHaveBeenCalledTimes(2);
+      expect(handle(1).retryPrebuffer).toHaveBeenCalledTimes(1);
       expect(retried()).toBe(1);
     });
 
@@ -2011,6 +2015,7 @@ describe("ManagerConsolePage", () => {
       await advance(30_000);
       expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
       expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
     });
 
     it("judges the standby only after 10 s of visible time", async () => {
@@ -2018,12 +2023,12 @@ describe("ManagerConsolePage", () => {
       // The page was hidden for 6 of the first 10 s, so only 4 s count.
       handle(1).prebufferStatus.mockReturnValue({ ...STALLED, ageMs: 4_000 });
       await advance(10_000);
-      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
       handle(1).prebufferStatus.mockReturnValue(STALLED);
       await advance(5_999);
-      expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
       await advance(1);
-      expect(handle(1).prebuffer).toHaveBeenCalledTimes(2);
+      expect(handle(1).retryPrebuffer).toHaveBeenCalledTimes(1);
     });
 
     it("drops the check when Next round swaps the players first", async () => {
@@ -2044,6 +2049,7 @@ describe("ManagerConsolePage", () => {
       expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
       expect(handle(0).prebuffer).not.toHaveBeenCalled();
       expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
     });
 
     it("drops the check on unmount", async () => {
@@ -2053,6 +2059,7 @@ describe("ManagerConsolePage", () => {
       await advance(30_000);
       expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
       expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
     });
 
     it("drops the check when the game ends", async () => {
@@ -2073,6 +2080,7 @@ describe("ManagerConsolePage", () => {
       await advance(30_000);
       expect(handle(1).prebuffer).toHaveBeenCalledTimes(1);
       expect(retried()).toBe(0);
+      expect(handle(1).retryPrebuffer).not.toHaveBeenCalled();
     });
 
     it("skips a standby that loaded nothing in 10 s and cold-loads a fresh pick", async () => {

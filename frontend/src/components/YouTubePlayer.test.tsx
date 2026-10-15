@@ -571,13 +571,42 @@ describe("YouTubePlayer load health", () => {
       expect(ref.current?.prebufferStatus()).toMatchObject({ frozen: true, loadedFraction: 0.12 });
     });
 
-    it("restarts the age when the same prebuffer is issued again", async () => {
+    it("restarts the age for a fresh prebuffer", async () => {
       const { ref } = await mount();
       act(() => ref.current?.prebuffer("nextVIDEO01", 30));
       await advance(10_000);
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      act(() => ref.current?.prebuffer("nextVIDEO02", 12));
       await advance(2500);
       expect(ref.current?.prebufferStatus()?.ageMs).toBe(2500);
+    });
+
+    it("retryPrebuffer re-issues the same load and keeps its age", async () => {
+      // The age at Next round counts from the song's FIRST prebuffer, so a
+      // retry that is still young can't make a dead standby look fresh.
+      const { ref, player } = await mount();
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      await advance(10_000);
+      act(() => ref.current?.retryPrebuffer());
+      expect(player.loadVideoById).toHaveBeenCalledTimes(2);
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "nextVIDEO01",
+        startSeconds: 30,
+      });
+      expect(player.mute).toHaveBeenCalledTimes(2);
+      await advance(2500);
+      expect(ref.current?.prebufferStatus()).toMatchObject({ frozen: false, ageMs: 12_500 });
+    });
+
+    it("retryPrebuffer does nothing without a prebuffer to retry, or once it froze", async () => {
+      const { ref, player } = await mount();
+      act(() => ref.current?.retryPrebuffer());
+      expect(player.loadVideoById).not.toHaveBeenCalled();
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      state(1); // frozen: ready, nothing to retry
+      act(() => ref.current?.retryPrebuffer());
+      act(() => ref.current?.commitPrebuffered(30));
+      act(() => ref.current?.retryPrebuffer());
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
     });
 
     it("counts only visible time: age is 0 while hidden and restarts on return", async () => {
