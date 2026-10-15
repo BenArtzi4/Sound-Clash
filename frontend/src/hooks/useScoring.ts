@@ -83,6 +83,8 @@ export function useScoring(
     beginSongStart,
     beginRoundCommit,
     endRoundCommit,
+    prebufferInto,
+    standbyUnusable,
   } = prebuffer;
 
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
@@ -441,8 +443,13 @@ export function useScoring(
     // Optimistic toast confirms the click immediately.
     toast("Loading next round...", { variant: "info" });
     // Snapshot + clear the prebuffered song now so a late preload can't reuse it.
-    const preloaded = preloadRef.current;
+    let preloaded = preloadRef.current;
     preloadRef.current = null;
+    // A standby that has loaded nothing after 10 s of visible time holds a load
+    // YouTube failed without an onError; committing it starts a silent round.
+    // Take the cold path instead (a fresh pick, loaded on the live player). A
+    // standby that is loading, however slowly, is committed as before.
+    if (preloaded && standbyUnusable(preloaded)) preloaded = null;
     // Pre-swap snapshot for the rollback in the catch below: which player was
     // live and which song card was up before the optimistic in-gesture swap.
     const prevKey = activeKeyRef.current;
@@ -519,6 +526,11 @@ export function useScoring(
           youtubeId: result.song.youtube_id,
           preloaded: false,
         });
+        // The RPC answers before the new round's Realtime event (measured
+        // ~275 ms), so for a moment the card leads the round, just as on the
+        // fast path. Mark the lead or the song resolver reloads the previous
+        // round's song over this one.
+        optimisticSongIdRef.current = result.song.id;
         setCurrentSong(result.song);
         await loadSongIntoPlayer(result.song);
       }
@@ -542,7 +554,7 @@ export function useScoring(
         setCurrentSong(prevSong);
         if (prevSong) activePlayer()?.loadVideoById(prevSong.youtube_id, prevSong.start_time);
         preloadRef.current = preloaded;
-        standbyPlayer()?.prebuffer(preloaded.youtube_id, preloaded.start_time);
+        prebufferInto(preloaded);
       }
       reportError(err);
     } finally {

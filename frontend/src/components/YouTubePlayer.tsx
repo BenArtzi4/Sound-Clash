@@ -23,6 +23,24 @@ export interface YouTubePlayerHandle {
   // has ENDED, so a finished song is never silently replayed (a spoiler).
   resumeIfPaused: () => void;
   stop: () => void;
+  // How the prebuffer this (standby) player is holding is doing, or null when
+  // it holds none (never prebuffered, or since committed, loaded or stopped).
+  // YouTube often sends no onError when a load fails: the player just sits
+  // there, BUFFERING or UNSTARTED, with nothing loaded. So the console judges
+  // a standby by what it has loaded, not by its state.
+  prebufferStatus: () => PrebufferStatus | null;
+}
+
+export interface PrebufferStatus {
+  // The prebuffer reached PLAYING and was frozen at its start: ready to commit.
+  frozen: boolean;
+  // YouTube's getVideoLoadedFraction(): 0 until the first media bytes arrive.
+  loadedFraction: number;
+  // YouTube's player state code, for telemetry only.
+  state: number;
+  // Visible time since the prebuffer was issued: time while the page is
+  // hidden doesn't count, because a hidden page may not load at all.
+  ageMs: number;
 }
 
 interface Props {
@@ -59,6 +77,15 @@ interface Props {
   // fallback. Used to measure song-start latency; `detection` records which
   // mechanism fired. Fires at most once per load.
   onPlaying?: (detection: "statechange" | "poll") => void;
+  // Telemetry for the rare song that stalls on the live player. Fired at most
+  // once per load or commit, when the song has not reached PLAYING 10 s
+  // later. Not fired when the page was hidden during the wait (a hidden page
+  // may legitimately not play), after a newer load, after stop(), or once
+  // this player became the standby.
+  onStartStall?: (info: { state: number; loadedFraction: number }) => void;
+  // Telemetry: the song paused by itself within 5 s of starting (no pause()
+  // or stop() from the app, page visible). At most once per load or commit.
+  onEarlyPause?: (msAfterStart: number) => void;
 }
 
 interface YTPlayer {
@@ -70,6 +97,7 @@ interface YTPlayer {
   unMute: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   getPlayerState: () => number;
+  getVideoLoadedFraction: () => number;
   destroy: () => void;
 }
 
@@ -90,6 +118,12 @@ const YT_STATE_PAUSED = 2;
 // getPlayerState poll cadence + cap for the PLAYING fallback (~6s).
 const PLAY_POLL_MS = 250;
 const PLAY_POLL_MAX_TICKS = 24;
+// onStartStall waits this long for PLAYING. Real starts in prod Tempo took up
+// to ~8.6 s, so a shorter wait would flag slow-but-fine starts.
+const START_STALL_MS = 10_000;
+// onEarlyPause only counts a pause this soon after PLAYING; later pauses are
+// more likely the host tapping the video.
+const EARLY_PAUSE_WINDOW_MS = 5_000;
 
 interface YTNamespace {
   Player: new (
@@ -159,6 +193,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     onReady,
     onError,
     onPlaying,
+    onStartStall,
+    onEarlyPause,
     idleLabel,
   },
   ref,
@@ -183,10 +219,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   const onReadyRef = useRef(onReady);
   const onErrorRef = useRef(onError);
   const onPlayingRef = useRef(onPlaying);
+  const onStartStallRef = useRef(onStartStall);
+  const onEarlyPauseRef = useRef(onEarlyPause);
   useEffect(() => {
     onReadyRef.current = onReady;
     onErrorRef.current = onError;
     onPlayingRef.current = onPlaying;
+    onStartStallRef.current = onStartStall;
+    onEarlyPauseRef.current = onEarlyPause;
   });
 
   // PLAYING-detection state for the song-start measurement. `playingFiredRef`
@@ -210,6 +250,70 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // onError so a failure can be traced to a catalog song.
   const videoIdRef = useRef<string | null>(null);
 
+  // Load health. `loadAtRef` is when the current prebuffer/load/commit was
+  // issued (Date.now(), so fake timers move it). `visibleSinceRef` is when the
+  // page last became visible (0 = visible since mount) and
+  // `visibilityChangedAtRef` when its visibility last changed at all; a
+  // prebuffer's age and the start watch only count visible time.
+  const loadAtRef = useRef(0);
+  const visibleSinceRef = useRef(0);
+  const visibilityChangedAtRef = useRef(0);
+  // The start watch: one timer per audible load or commit. `startWatchGenRef`
+  // is bumped by every load, prebuffer, commit and stop, so a watch armed for
+  // an older load can never fire.
+  const startWatchRef = useRef<number | null>(null);
+  const startWatchGenRef = useRef(0);
+  // Early pause: when the current load first reached PLAYING, whether it was
+  // already reported, and whether the app itself asked this player to pause
+  // (pause() for a buzz, stop() for a swap) since it last played.
+  const playingAtRef = useRef(0);
+  const earlyPauseReportedRef = useRef(false);
+  const appPauseRef = useRef(false);
+
+  useEffect(() => {
+    const onVisibility = (): void => {
+      visibilityChangedAtRef.current = Date.now();
+      if (document.visibilityState === "visible") visibleSinceRef.current = Date.now();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  // Cancel any pending start watch and invalidate any already-queued fire.
+  // Refs only, so it is stable for the []-memoised handle.
+  const cancelStartWatch = useCallback(() => {
+    startWatchGenRef.current += 1;
+    if (startWatchRef.current !== null) {
+      window.clearTimeout(startWatchRef.current);
+      startWatchRef.current = null;
+    }
+  }, []);
+
+  // Arm the start watch for the audible load or commit just issued.
+  const armStartWatch = useCallback(() => {
+    cancelStartWatch();
+    const gen = startWatchGenRef.current;
+    const armedAt = Date.now();
+    startWatchRef.current = window.setTimeout(() => {
+      startWatchRef.current = null;
+      const player = playerRef.current;
+      if (
+        gen !== startWatchGenRef.current ||
+        !player ||
+        prebufferingRef.current ||
+        playingFiredRef.current ||
+        document.visibilityState !== "visible" ||
+        visibilityChangedAtRef.current > armedAt
+      ) {
+        return;
+      }
+      onStartStallRef.current?.({
+        state: player.getPlayerState(),
+        loadedFraction: player.getVideoLoadedFraction() || 0,
+      });
+    }, START_STALL_MS);
+  }, [cancelStartWatch]);
+
   // Arm (or re-arm) PLAYING detection for an audible load: reset the dedupe
   // flag and start the bounded fallback poll in case onStateChange(PLAYING) is
   // coalesced or missed. The poll self-clears once PLAYING is seen or the cap
@@ -227,6 +331,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         playerRef.current?.getPlayerState() === YT_STATE_PLAYING
       ) {
         playingFiredRef.current = true;
+        playingAtRef.current = Date.now();
+        earlyPauseReportedRef.current = false;
         onPlayingRef.current?.("poll");
       }
       if (
@@ -291,13 +397,32 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
                   prebufferPausedRef.current = true;
                   playerRef.current?.pauseVideo();
                 }
-              } else if (!playingFiredRef.current) {
-                playingFiredRef.current = true;
-                if (playWatchRef.current !== null) {
-                  window.clearInterval(playWatchRef.current);
-                  playWatchRef.current = null;
+              } else {
+                appPauseRef.current = false;
+                if (!playingFiredRef.current) {
+                  playingFiredRef.current = true;
+                  playingAtRef.current = Date.now();
+                  earlyPauseReportedRef.current = false;
+                  if (playWatchRef.current !== null) {
+                    window.clearInterval(playWatchRef.current);
+                    playWatchRef.current = null;
+                  }
+                  onPlayingRef.current?.("statechange");
                 }
-                onPlayingRef.current?.("statechange");
+              }
+            }
+            if (
+              event.data === YT_STATE_PAUSED &&
+              !prebufferingRef.current &&
+              playingFiredRef.current &&
+              !appPauseRef.current &&
+              !earlyPauseReportedRef.current &&
+              document.visibilityState === "visible"
+            ) {
+              const msAfterStart = Date.now() - playingAtRef.current;
+              if (msAfterStart <= EARLY_PAUSE_WINDOW_MS) {
+                earlyPauseReportedRef.current = true;
+                onEarlyPauseRef.current?.(msAfterStart);
               }
             }
             if (event.data === YT_STATE_ENDED) {
@@ -314,10 +439,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         window.clearInterval(playWatchRef.current);
         playWatchRef.current = null;
       }
+      cancelStartWatch();
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, []);
+  }, [cancelStartWatch]);
 
   useImperativeHandle(
     ref,
@@ -334,6 +460,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         setErrorCode(null);
         setHasVideo(true);
         armPlaying();
+        loadAtRef.current = Date.now();
+        armStartWatch();
         videoIdRef.current = videoId;
         playerRef.current?.unMute();
         playerRef.current?.loadVideoById({
@@ -356,6 +484,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         setEnded(false);
         setErrorCode(null);
         setHasVideo(true);
+        loadAtRef.current = Date.now();
+        cancelStartWatch();
         videoIdRef.current = videoId;
         playerRef.current?.mute();
         playerRef.current?.loadVideoById({
@@ -376,11 +506,16 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         setEnded(false);
         setErrorCode(null);
         armPlaying();
+        loadAtRef.current = Date.now();
+        armStartWatch();
         playerRef.current?.seekTo(start, true);
         playerRef.current?.unMute();
         playerRef.current?.playVideo();
       },
-      pause: () => playerRef.current?.pauseVideo(),
+      pause: () => {
+        appPauseRef.current = true;
+        playerRef.current?.pauseVideo();
+      },
       play: () => playerRef.current?.playVideo(),
       resumeIfPaused: () => {
         // Only resume from a genuine PAUSED state so a finished (ENDED) clip is
@@ -390,11 +525,27 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         }
       },
       stop: () => {
+        // A stopped player holds no prebuffer and has no start to watch.
+        prebufferingRef.current = false;
+        prebufferPausedRef.current = false;
+        appPauseRef.current = true;
+        cancelStartWatch();
         setEnded(true);
         playerRef.current?.stopVideo();
       },
+      prebufferStatus: () => {
+        const player = playerRef.current;
+        if (!player || !prebufferingRef.current) return null;
+        const visible = document.visibilityState === "visible";
+        return {
+          frozen: prebufferPausedRef.current,
+          loadedFraction: player.getVideoLoadedFraction() || 0,
+          state: player.getPlayerState(),
+          ageMs: visible ? Date.now() - Math.max(loadAtRef.current, visibleSinceRef.current) : 0,
+        };
+      },
     }),
-    [armPlaying],
+    [armPlaying, armStartWatch, cancelStartWatch],
   );
 
   if (noCover) {

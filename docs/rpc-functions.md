@@ -425,6 +425,7 @@ Behavior:
 - **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "nothing to prebuffer"; the real `no_more_songs` still surfaces from the eventual `select_next_song` commit.
 - On the actual "Next round" click the browser commits the peeked song via `select_next_song(..., p_song_id => <peeked id>)` (manual-pick path), so the buffered video and the started round can never disagree.
+- **Standby check (browser side, 2026-10-15).** YouTube often fails a load without an `onError`: the hidden player just sits there, BUFFERING or UNSTARTED, with nothing loaded. So the console judges the standby by its loaded fraction, never by its state. If the standby has loaded **nothing** after 10 s of visible time, its prebuffer is issued once more (`yt_preload_retry`). If it still holds nothing when Next round is clicked, the click skips the fast path and takes the random cold path, `select_next_song` without `p_song_id`, loaded on the live player (`yt_preload_not_ready`). A standby that is loading, however slowly, or is less than 10 s old, is committed as before. See `frontend/src/hooks/useSongPrebuffer.ts`.
 
 ### Idempotency
 

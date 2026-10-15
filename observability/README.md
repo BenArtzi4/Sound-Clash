@@ -36,6 +36,9 @@ Faro tags every signal `service_name="sound-clash-web"`,
 |---|---|---|
 | `stale_buzz_lock_resynced` (warn) | log | `context_game_code`, `context_stale_team`, `context_fresh_team`, `session_id`, `page_id` |
 | `realtime_disconnect` (warn) | log | `context_game_code`, `context_sub_status` |
+| `yt_preload_retry` (warn) | log | The host's hidden standby had loaded nothing 10 s after its prebuffer, so it was issued once more. `context_game_code`, `context_player`, `context_state`, `context_youtube_id`, `context_song_id`, `context_title`, `context_artist` |
+| `yt_preload_not_ready` (warn) | log | At Next round the standby still held nothing, so the round took the cold path instead of starting a silent player. Same fields plus `context_age_ms` |
+| `yt_live_stall` (warn) | log | Telemetry only, playback untouched. `context_kind=no_start`: the live song had not reached PLAYING 10 s after its load (`context_state`, `context_loaded_fraction`). `context_kind=early_pause`: it paused by itself within 5 s of starting (`context_ms_after_start`). Both carry `context_game_code`, `context_player` and the song fields |
 | `realtime_fanout` | event | `event_data_event_type` (game/team/round), `event_data_fanout_ms` |
 | web-vitals | measurement | `type="web-vitals"`, `lcp` / `inp` / `fcp` / `ttfb`, `context_rating` |
 | Tempo spans | — | `game.buzz.e2e` (`outcome`, `realtime.fanout_ms`), `game.score.e2e`, `game.song_start` (`preloaded`), `db.rpc` (`rpc.name`), `game.player_init` |

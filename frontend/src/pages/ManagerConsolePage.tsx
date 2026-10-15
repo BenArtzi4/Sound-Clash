@@ -77,6 +77,8 @@ export function ManagerConsolePage() {
     onPlayerBReady,
     handlePlayerPlaying,
     handlePlayerError,
+    handleStartStall,
+    handleEarlyPause,
     activePlayer,
   } = prebuffer;
   const scoring = useScoring(gameCode, managerToken, state, player, prebuffer);
@@ -321,6 +323,8 @@ export function ManagerConsolePage() {
               onReady={onPlayerReady}
               onPlaying={handlePlayerPlaying}
               onError={(code, videoId) => handlePlayerError("A", code, videoId, currentSong)}
+              onStartStall={(info) => handleStartStall("A", info, currentSong)}
+              onEarlyPause={(ms) => handleEarlyPause("A", ms, currentSong)}
               idleLabel={idleLabel}
             />
           </div>
@@ -336,6 +340,8 @@ export function ManagerConsolePage() {
               onReady={onPlayerBReady}
               onPlaying={handlePlayerPlaying}
               onError={(code, videoId) => handlePlayerError("B", code, videoId, currentSong)}
+              onStartStall={(info) => handleStartStall("B", info, currentSong)}
+              onEarlyPause={(ms) => handleEarlyPause("B", ms, currentSong)}
               idleLabel={idleLabel}
             />
           </div>

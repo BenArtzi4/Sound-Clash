@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, render, waitFor } from "@testing-library/react";
-import { createRef } from "react";
+import { createRef, type ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { YouTubePlayer, type YouTubePlayerHandle } from "./YouTubePlayer";
 
@@ -14,6 +14,7 @@ interface FakeYTPlayer {
   unMute: ReturnType<typeof vi.fn>;
   seekTo: ReturnType<typeof vi.fn>;
   getPlayerState: ReturnType<typeof vi.fn>;
+  getVideoLoadedFraction: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
 }
 
@@ -46,6 +47,7 @@ function installFakeYT() {
       unMute: vi.fn(),
       seekTo: vi.fn(),
       getPlayerState: vi.fn(() => 1),
+      getVideoLoadedFraction: vi.fn(() => 0),
       destroy: vi.fn(),
     };
     lastConfig = config;
@@ -481,6 +483,289 @@ describe("YouTubePlayer", () => {
     });
     await flushIframeLoad(container);
     await waitFor(() => expect(lastPlayer).not.toBeNull());
+  });
+});
+
+// Song-stall work (2026-10-15). When YouTube fails to load a video it often
+// sends no onError at all: the player just sits there, BUFFERING or UNSTARTED,
+// with nothing loaded. The console needs to see that on the hidden standby
+// (prebufferStatus) and to log it on the live player (onStartStall,
+// onEarlyPause). All timing below runs on fake timers, which fake Date too.
+describe("YouTubePlayer load health", () => {
+  let visibility: "visible" | "hidden" = "visible";
+  function setVisibility(v: "visible" | "hidden") {
+    visibility = v;
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+  }
+
+  beforeEach(() => {
+    visibility = "visible";
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => visibility,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function mount(props: Partial<ComponentProps<typeof YouTubePlayer>> = {}) {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const utils = render(<YouTubePlayer ref={ref} noCover {...props} />);
+    await flushIframeLoad(utils.container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    vi.useFakeTimers();
+    const player = lastPlayer;
+    if (!player) throw new Error("player not constructed");
+    return { ref, player, ...utils };
+  }
+  const state = (data: number) =>
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data });
+    });
+  const advance = (ms: number) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+
+  describe("prebufferStatus", () => {
+    it("is null unless the player is holding a prebuffer", async () => {
+      const { ref } = await mount();
+      expect(ref.current?.prebufferStatus()).toBeNull();
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      expect(ref.current?.prebufferStatus()).not.toBeNull();
+      act(() => ref.current?.commitPrebuffered(30));
+      expect(ref.current?.prebufferStatus()).toBeNull();
+
+      act(() => ref.current?.prebuffer("nextVIDEO02", 0));
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      expect(ref.current?.prebufferStatus()).toBeNull();
+
+      act(() => ref.current?.prebuffer("nextVIDEO03", 0));
+      act(() => ref.current?.stop());
+      expect(ref.current?.prebufferStatus()).toBeNull();
+    });
+
+    it("reports the load's age, loaded fraction and player state, then the freeze", async () => {
+      const { ref, player } = await mount();
+      player.getPlayerState.mockReturnValue(3);
+      player.getVideoLoadedFraction.mockReturnValue(0);
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      await advance(4000);
+      expect(ref.current?.prebufferStatus()).toEqual({
+        frozen: false,
+        loadedFraction: 0,
+        state: 3,
+        ageMs: 4000,
+      });
+
+      player.getVideoLoadedFraction.mockReturnValue(0.12);
+      state(1); // first PLAYING: the prebuffer freezes it
+      expect(ref.current?.prebufferStatus()).toMatchObject({ frozen: true, loadedFraction: 0.12 });
+    });
+
+    it("restarts the age when the same prebuffer is issued again", async () => {
+      const { ref } = await mount();
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      await advance(10_000);
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      await advance(2500);
+      expect(ref.current?.prebufferStatus()?.ageMs).toBe(2500);
+    });
+
+    it("counts only visible time: age is 0 while hidden and restarts on return", async () => {
+      const { ref } = await mount();
+      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
+      await advance(3000);
+      setVisibility("hidden");
+      await advance(20_000);
+      expect(ref.current?.prebufferStatus()?.ageMs).toBe(0);
+      setVisibility("visible");
+      await advance(1500);
+      expect(ref.current?.prebufferStatus()?.ageMs).toBe(1500);
+    });
+  });
+
+  describe("onStartStall", () => {
+    it("fires once when a loaded song has not started 10 s later", async () => {
+      const onStartStall = vi.fn();
+      const { ref, player } = await mount({ onStartStall });
+      player.getPlayerState.mockReturnValue(-1);
+      player.getVideoLoadedFraction.mockReturnValue(0);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 90));
+      await advance(9999);
+      expect(onStartStall).not.toHaveBeenCalled();
+      await advance(1);
+      expect(onStartStall).toHaveBeenCalledTimes(1);
+      expect(onStartStall).toHaveBeenCalledWith({ state: -1, loadedFraction: 0 });
+      await advance(30_000);
+      expect(onStartStall).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a committed standby that never starts, with what it had loaded", async () => {
+      const onStartStall = vi.fn();
+      const { ref, player } = await mount({ onStartStall });
+      act(() => ref.current?.prebuffer("nextVIDEO01", 0));
+      state(1); // frozen
+      player.getPlayerState.mockReturnValue(2);
+      player.getVideoLoadedFraction.mockReturnValue(0.3);
+      act(() => ref.current?.commitPrebuffered(0));
+      await advance(10_000);
+      expect(onStartStall).toHaveBeenCalledWith({ state: 2, loadedFraction: 0.3 });
+    });
+
+    it("stays quiet once the song reaches PLAYING", async () => {
+      const onStartStall = vi.fn();
+      const { ref } = await mount({ onStartStall });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(8600); // the slowest real start seen in prod Tempo
+      state(1);
+      await advance(10_000);
+      expect(onStartStall).not.toHaveBeenCalled();
+    });
+
+    it("measures from the latest load only", async () => {
+      const onStartStall = vi.fn();
+      const { ref, player } = await mount({ onStartStall });
+      player.getPlayerState.mockReturnValue(-1);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(6000);
+      act(() => ref.current?.loadVideoById("liveVIDEO02", 0));
+      await advance(6000);
+      expect(onStartStall).not.toHaveBeenCalled();
+      await advance(4000);
+      expect(onStartStall).toHaveBeenCalledTimes(1);
+    });
+
+    it("never fires after the player is stopped or turned into the standby", async () => {
+      const onStartStall = vi.fn();
+      const { ref } = await mount({ onStartStall });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(3000);
+      act(() => ref.current?.stop());
+      await advance(10_000);
+      act(() => ref.current?.loadVideoById("liveVIDEO02", 0));
+      await advance(3000);
+      act(() => ref.current?.prebuffer("nextVIDEO01", 0));
+      await advance(10_000);
+      expect(onStartStall).not.toHaveBeenCalled();
+    });
+
+    it("never fires after unmount", async () => {
+      const onStartStall = vi.fn();
+      const { ref, unmount } = await mount({ onStartStall });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      unmount();
+      await advance(10_000);
+      expect(onStartStall).not.toHaveBeenCalled();
+    });
+
+    it("stays quiet when the page was hidden at any point of the wait", async () => {
+      const onStartStall = vi.fn();
+      const { ref } = await mount({ onStartStall });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(2000);
+      setVisibility("hidden");
+      await advance(1000);
+      setVisibility("visible");
+      await advance(7000);
+      expect(onStartStall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("onEarlyPause", () => {
+    it("fires when the song pauses by itself right after it started", async () => {
+      const onEarlyPause = vi.fn();
+      const { ref, player } = await mount({ onEarlyPause });
+      player.getPlayerState.mockReturnValue(-1);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(400);
+      state(1);
+      await advance(300);
+      state(2);
+      expect(onEarlyPause).toHaveBeenCalledTimes(1);
+      expect(onEarlyPause).toHaveBeenCalledWith(300);
+    });
+
+    it("times the window from a start the PLAYING poll detected", async () => {
+      // onStateChange(PLAYING) can be coalesced or missed; the 250 ms poll
+      // then detects the start, and the early-pause window must run from it.
+      const onEarlyPause = vi.fn();
+      const { ref, player } = await mount({ onEarlyPause });
+      player.getPlayerState.mockReturnValue(-1);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(250);
+      player.getPlayerState.mockReturnValue(1);
+      await advance(250); // the poll sees PLAYING here
+      await advance(300);
+      state(2);
+      expect(onEarlyPause).toHaveBeenCalledWith(300);
+    });
+
+    it("fires for a committed standby that pauses after starting, not for pauses before it starts", async () => {
+      const onEarlyPause = vi.fn();
+      const { ref } = await mount({ onEarlyPause });
+      act(() => ref.current?.prebuffer("nextVIDEO01", 0));
+      state(1); // the freeze: pauseVideo while prebuffering
+      state(2);
+      act(() => ref.current?.commitPrebuffered(0));
+      state(2); // still paused, before the resume reaches PLAYING
+      expect(onEarlyPause).not.toHaveBeenCalled();
+      state(1);
+      await advance(300);
+      state(2);
+      expect(onEarlyPause).toHaveBeenCalledWith(300);
+    });
+
+    it("ignores pauses the app asked for, including a stop", async () => {
+      const onEarlyPause = vi.fn();
+      const { ref } = await mount({ onEarlyPause });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      state(1);
+      await advance(500);
+      act(() => ref.current?.pause()); // a buzz
+      state(2);
+      act(() => ref.current?.play()); // Wrong / Continue
+      state(1);
+      await advance(200);
+      act(() => ref.current?.stop()); // Next round demotes it
+      state(2);
+      expect(onEarlyPause).not.toHaveBeenCalled();
+    });
+
+    it("ignores a pause after the first 5 s", async () => {
+      const onEarlyPause = vi.fn();
+      const { ref } = await mount({ onEarlyPause });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      state(1);
+      await advance(5001);
+      state(2);
+      expect(onEarlyPause).not.toHaveBeenCalled();
+    });
+
+    it("fires at most once per start and never while the page is hidden", async () => {
+      const onEarlyPause = vi.fn();
+      const { ref } = await mount({ onEarlyPause });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      state(1);
+      setVisibility("hidden");
+      state(2); // the browser pauses a hidden tab's media
+      expect(onEarlyPause).not.toHaveBeenCalled();
+      setVisibility("visible");
+      state(1);
+      await advance(100);
+      state(2);
+      state(1);
+      state(2);
+      expect(onEarlyPause).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { YouTubePlayerHandle } from "../components/YouTubePlayer";
+import type { PrebufferStatus, YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useToast } from "../context/useToast";
 import { peekNextSongDirect, type PeekedSong } from "./usePeekNextSong";
 import { log, startSongStart, type SongStartHandle } from "../lib/telemetry";
@@ -31,6 +31,12 @@ export interface SongPrebuffer {
     videoId: string | null,
     liveSong: Song | null,
   ) => void;
+  handleStartStall: (
+    key: "A" | "B",
+    info: { state: number; loadedFraction: number },
+    liveSong: Song | null,
+  ) => void;
+  handleEarlyPause: (key: "A" | "B", msAfterStart: number, liveSong: Song | null) => void;
 
   // Imperative surface for handleNextRound + the mid-round song resolver.
   activePlayer: () => YouTubePlayerHandle | null;
@@ -44,6 +50,8 @@ export interface SongPrebuffer {
   loadSongIntoPlayer: (song: Song) => Promise<void>;
   armSongStartTimeout: () => void;
   maybePreloadNext: () => void;
+  prebufferInto: (peeked: PeekedSong) => void;
+  standbyUnusable: (peeked: PeekedSong) => boolean;
   beginSongStart: () => SongStartHandle;
   beginRoundCommit: () => void;
   endRoundCommit: (committed: boolean) => void;
@@ -61,6 +69,46 @@ interface SongRef {
   title: string;
   artist: string;
   youtube_id: string;
+}
+
+// A standby is judged only after this much visible time since its prebuffer
+// was issued. Measured on 2026-10-15: a healthy load has bytes within ~0.5 s,
+// within 2.3-5.3 s on Fast 3G; a load YouTube failed stays at 0 bytes forever,
+// usually without any onError.
+export const STANDBY_CHECK_MS = 10_000;
+
+// Dead: not frozen, nothing loaded, and old enough to judge. A standby that is
+// loading (any bytes) or ready is never treated as dead, however slow.
+export function standbyIsDead(status: PrebufferStatus | null): status is PrebufferStatus {
+  return (
+    status !== null &&
+    !status.frozen &&
+    status.loadedFraction === 0 &&
+    status.ageMs >= STANDBY_CHECK_MS
+  );
+}
+
+// Telemetry fields for a song, empty ones omitted.
+function songFields(
+  song: { id: string; title: string; artist: string; youtube_id: string } | null,
+): Record<string, string> {
+  if (!song) return {};
+  const fields: Record<string, string> = {
+    youtube_id: song.youtube_id,
+    song_id: song.id,
+    title: song.title,
+    artist: song.artist,
+  };
+  return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== ""));
+}
+
+function peekedFields(peeked: PeekedSong): Record<string, string> {
+  return songFields({
+    id: peeked.song_id,
+    title: peeked.title,
+    artist: peeked.artist,
+    youtube_id: peeked.youtube_id,
+  });
 }
 
 // Telemetry context for a video the player refused (yt_player_error /
@@ -155,6 +203,24 @@ export function useSongPrebuffer(
   const songStartRef = useRef<SongStartHandle | null>(null);
   const songStartTimeoutRef = useRef<number | null>(null);
 
+  // The standby check (song-stall fix, 2026-10-15). One timer at a time, for
+  // the prebuffer issued last. Every fire re-checks that the same song is
+  // still prebuffered into the same standby in the same preload epoch, so a
+  // Next round, a swap, an error that dropped the preload, or a newer
+  // prebuffer silently retires it. Cleared on unmount. The game status is
+  // mirrored into a ref because the timer outlives the render that armed it.
+  const standbyCheckRef = useRef<number | null>(null);
+  const gameStatusRef = useRef(state?.game.status);
+  useEffect(() => {
+    gameStatusRef.current = state?.game.status;
+  });
+  useEffect(
+    () => () => {
+      if (standbyCheckRef.current !== null) window.clearTimeout(standbyCheckRef.current);
+    },
+    [],
+  );
+
   // Warm up the FIRST song during the pre-game "waiting" screen. Mobile
   // browsers block unmuted playback that resumes after an `await`, so if the
   // first video isn't loaded until after select_next_song returns, round 1
@@ -203,7 +269,7 @@ export function useSongPrebuffer(
         if (epoch !== preloadEpochRef.current) return;
         if (!peeked) return; // pool exhausted -> nothing to prebuffer
         preloadRef.current = peeked;
-        standbyPlayer()?.prebuffer(peeked.youtube_id, peeked.start_time);
+        prebufferInto(peeked);
       } catch (err) {
         log("warn", "preload_peek_failed", {
           message: err instanceof Error ? err.message : String(err),
@@ -212,6 +278,91 @@ export function useSongPrebuffer(
         preloadInFlightRef.current = false;
       }
     })();
+  }
+
+  // Prebuffer `peeked` (already in preloadRef) into the current standby and
+  // arm the standby check for it.
+  function prebufferInto(peeked: PeekedSong) {
+    const key = activeKeyRef.current === "A" ? "B" : "A";
+    const epoch = preloadEpochRef.current;
+    standbyPlayer()?.prebuffer(peeked.youtube_id, peeked.start_time);
+    if (standbyCheckRef.current !== null) window.clearTimeout(standbyCheckRef.current);
+    const check = (): void => {
+      standbyCheckRef.current = null;
+      const stillOurs =
+        epoch === preloadEpochRef.current &&
+        key === (activeKeyRef.current === "A" ? "B" : "A") &&
+        preloadRef.current === peeked &&
+        (gameStatusRef.current === "playing" || gameStatusRef.current === "waiting");
+      if (!stillOurs) return;
+      const target = key === "A" ? playerARef.current : playerBRef.current;
+      const status = target?.prebufferStatus() ?? null;
+      // Loading (bytes arriving, however slowly), ready, or gone: never touch.
+      if (!status || status.frozen || status.loadedFraction > 0) return;
+      if (status.ageMs < STANDBY_CHECK_MS) {
+        // Not enough visible time yet (the page was hidden): look again then.
+        standbyCheckRef.current = window.setTimeout(check, STANDBY_CHECK_MS - status.ageMs);
+        return;
+      }
+      // Nothing loaded after 10 s of visible time: YouTube failed this load
+      // without telling us. Issue it once more; a second failure is caught at
+      // Next round by standbyUnusable.
+      log("warn", "yt_preload_retry", {
+        game_code: gameCode,
+        player: key,
+        state: String(status.state),
+        ...peekedFields(peeked),
+      });
+      target?.prebuffer(peeked.youtube_id, peeked.start_time);
+    };
+    standbyCheckRef.current = window.setTimeout(check, STANDBY_CHECK_MS);
+  }
+
+  // Next round's verdict on the prebuffered song: true when the standby holds
+  // a dead load (nothing loaded after 10 s of visible time), so the caller
+  // takes the cold path instead of committing a silent player. A standby that
+  // is loading, however slowly, or too young to judge is used as before.
+  function standbyUnusable(peeked: PeekedSong): boolean {
+    const status = standbyPlayer()?.prebufferStatus() ?? null;
+    if (!standbyIsDead(status)) return false;
+    log("warn", "yt_preload_not_ready", {
+      game_code: gameCode,
+      player: activeKeyRef.current === "A" ? "B" : "A",
+      state: String(status.state),
+      age_ms: String(Math.round(status.ageMs)),
+      ...peekedFields(peeked),
+    });
+    return true;
+  }
+
+  // Telemetry only: the live song has not started 10 s after its load or
+  // commit (the player's own start watch), or paused by itself right after
+  // starting. Neither changes playback. Reports from the standby are ignored.
+  function handleStartStall(
+    key: "A" | "B",
+    info: { state: number; loadedFraction: number },
+    liveSong: Song | null,
+  ) {
+    if (key !== activeKeyRef.current) return;
+    log("warn", "yt_live_stall", {
+      kind: "no_start",
+      game_code: gameCode,
+      player: key,
+      state: String(info.state),
+      loaded_fraction: String(info.loadedFraction),
+      ...songFields(liveSong),
+    });
+  }
+
+  function handleEarlyPause(key: "A" | "B", msAfterStart: number, liveSong: Song | null) {
+    if (key !== activeKeyRef.current) return;
+    log("warn", "yt_live_stall", {
+      kind: "early_pause",
+      game_code: gameCode,
+      player: key,
+      ms_after_start: String(Math.round(msAfterStart)),
+      ...songFields(liveSong),
+    });
   }
 
   // Bound the song-start span so a video that never reaches PLAYING (autoplay
@@ -359,6 +510,8 @@ export function useSongPrebuffer(
     onPlayerBReady,
     handlePlayerPlaying,
     handlePlayerError,
+    handleStartStall,
+    handleEarlyPause,
     activePlayer,
     standbyPlayer,
     activeKeyRef,
@@ -370,6 +523,8 @@ export function useSongPrebuffer(
     loadSongIntoPlayer,
     armSongStartTimeout,
     maybePreloadNext,
+    prebufferInto,
+    standbyUnusable,
     beginSongStart,
     beginRoundCommit,
     endRoundCommit,
