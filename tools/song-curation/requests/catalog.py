@@ -6,7 +6,6 @@
                                           insensitive, Hebrew יי/וו collapsed)
 One line per hit: title | artist | youtube_id | year | genres
 """
-import json
 import sys
 import unicodedata
 from pathlib import Path
@@ -28,7 +27,8 @@ def main() -> None:
         print(__doc__)
         return
     needles = [norm(a) for a in sys.argv[1:]]
-    rows = json.loads((HERE / "_dumps" / "catalog_raw.json").read_text(encoding="utf-8"))["rows"]
+    from parse_requests import load_catalog  # skips CLI chatter before the JSON
+    rows = load_catalog()
     hits = 0
     for r in rows:
         hay = norm(r["title"]) + " | " + norm(r["artist"])

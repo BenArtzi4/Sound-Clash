@@ -56,12 +56,13 @@ frontend/coverage/
 Thumbs.db
 
 # Claude Code local-only directory (project rules referenced from CLAUDE.md are committed via @-imports; the directory itself is not)
-# Exception: the song-requests skill is shared so songs can be added from any computer.
+# Exception: the song-catalog skills are shared so songs can be added and audited from any computer.
 # Everything else in .claude/ (secrets, settings, rules, worktrees, other skills) stays local.
 .claude/*
 !.claude/skills/
 .claude/skills/*
-!.claude/skills/song-requests/
+!.claude/skills/add-songs/
+!.claude/skills/audit-songs/
 
 # Supabase local
 supabase/.branches/

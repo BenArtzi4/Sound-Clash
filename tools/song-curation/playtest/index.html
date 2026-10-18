@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>playtest</title></head>
+<body>
+<!-- Mirrors frontend/src/components/YouTubePlayer.tsx: same nocookie host and
+     player params, iframe rendered first, YT.Player attached after its load. -->
+<iframe id="yt" width="480" height="270" allow="autoplay; encrypted-media"></iframe>
+<script>
+  const params = new URLSearchParams({
+    enablejsapi: "1", origin: location.origin, modestbranding: "1", rel: "0",
+    controls: "0", disablekb: "1", playsinline: "1", hl: "en",
+  });
+  const iframe = document.getElementById("yt");
+  window.__ready = false;
+  window.__events = [];
+  iframe.addEventListener("load", () => {
+    const s = document.createElement("script");
+    s.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(s);
+  }, { once: true });
+  iframe.src = "https://www.youtube-nocookie.com/embed/?" + params.toString();
+  window.onYouTubeIframeAPIReady = () => {
+    window.player = new YT.Player(iframe, {
+      events: {
+        onReady: () => { window.__ready = true; },
+        onError: (e) => window.__events.push({ t: "error", code: e.data }),
+        onStateChange: (e) => window.__events.push({ t: "state", s: e.data }),
+      },
+    });
+  };
+  // Load one video and resolve with PLAYING / error code / timeout.
+  window.tryPlay = (id, start) => new Promise((resolve) => {
+    window.__events = [];
+    player.mute();
+    player.loadVideoById({ videoId: id, startSeconds: start });
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const err = window.__events.find((e) => e.t === "error");
+      if (err) { clearInterval(iv); resolve({ ok: false, why: "error " + err.code }); return; }
+      if (player.getPlayerState() === 1 && player.getCurrentTime() > start) {
+        clearInterval(iv);
+        resolve({ ok: true, ms: Date.now() - t0, dur: Math.round(player.getDuration()) });
+        return;
+      }
+      if (Date.now() - t0 > 25000) {
+        clearInterval(iv);
+        resolve({ ok: false, why: "timeout, state " + player.getPlayerState() });
+      }
+    }, 250);
+  });
+</script>
+</body>
+</html>

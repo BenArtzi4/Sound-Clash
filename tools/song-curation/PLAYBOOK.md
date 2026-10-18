@@ -74,8 +74,8 @@ there** (tweak the artist lists / chart songs for the batch). Per-batch data
   generated SQL (`requests/gen_upload.py` → `upload_<batch>.sql` + a read-only
   `verify_<batch>.sql` and a `--check` that compares the result row by row).
   Applying the SQL needs the maintainer's own linked Supabase CLI — no project ref
-  and no credentials live in this repo. The `song-requests` skill
-  (`.claude/skills/song-requests/SKILL.md`) has the full sequence. Add a `### Added`
+  and no credentials live in this repo. The `add-songs` skill
+  (`.claude/skills/add-songs/SKILL.md`) has the full sequence. Add a `### Added`
   CHANGELOG line when it ships.
 
 ## 3. Environment gotchas (Windows) — READ THESE
@@ -169,7 +169,7 @@ export is a silent reject, never "pending".
 `requests/gen_upload.py <csv>` → `upload_<batch>.sql` + `verify_<batch>.sql`. A
 maintainer applies the SQL with their own linked Supabase CLI, runs the verify query,
 and checks it with `gen_upload.py <csv> --check <result.json>` (see the
-`song-requests` skill). Add a `### Added` CHANGELOG line when it ships.
+`add-songs` skill). Add a `### Added` CHANGELOG line when it ships.
 
 ## 5. The Playwright scrape recipe (the workhorse)
 
@@ -282,7 +282,7 @@ acts: `"<artist> <song> official video"`.
 ## 8. One-screen cheat sheet
 
 ```bash
-P="PYTHONUTF8=1 backend/.venv/Scripts/python.exe"; T=tools/song-curation; B=$T/batches/$(date +%F)
+export PYTHONUTF8=1; P="$PWD/backend/.venv/Scripts/python.exe"; T=tools/song-curation; B=$T/batches/$(date +%F)
 mkdir -p $B/_dumps; cp $T/{validate,fix,audit,chart_songs}.py $B/   # copy templates from tool root
 # 1. get a catalog export from a maintainer → $B/prod_catalog.csv
 # 2. scrape playlists (Playwright §5) → $B/_dumps/*.json   |  or WebFetch Mako chart + WebSearch ids
@@ -291,5 +291,5 @@ $P $T/parse_playlist.py $B/_dumps/x.json --genre mizrahit --source "yt …" --ou
 $P $T/verify.py $B/master_all.csv --existing $B/prod_catalog.csv --out $B/_verified.js   # sandbox off
 $P $B/validate.py && $P $B/fix.py && $P $B/audit.py        # 6
 (cd $T && python review_server.py batches/$(basename $B) --port 8760)   # 7. → http://localhost:8760/
-# 8. export approved CSV → $P requests/gen_upload.py <csv> → maintainer applies + verifies (song-requests skill)
+# 8. export approved CSV → (cd $B && $P ../../requests/gen_upload.py <csv>) → maintainer applies + verifies (add-songs skill)
 ```

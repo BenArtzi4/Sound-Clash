@@ -2,14 +2,15 @@
 
 Sound Clash is a live music-trivia buzzer game for an Israeli audience. A host
 plays a song from YouTube; teams buzz and must name the **song title** and the
-**artist**. Players sent the maintainer a list of songs they want added. Your
-job: research every song in your packet so the maintainer can review them on a
+**artist**. The maintainer wants the songs in your packet added: usually a list
+players sent, sometimes a wish-list we built (an artist's best-known songs, a
+chart, a playlist). Your job: research every song in your packet so the maintainer can review them on a
 review page and approve with one click. **You never write to any database and
 never touch git.** You only write your results file.
 
 Working directory (run every command from here): `{BATCH_DIR}`
 Tools folder: `{TOOLS}`
-Python: the repo's `backend/.venv/Scripts/python.exe` — always `PYTHONUTF8=1`.
+Python: `{PYTHON}` (written `python` below; a bare `python` can be the Windows Store stub) — always `PYTHONUTF8=1`.
 Network commands need the Bash tool's `dangerouslyDisableSandbox: true`.
 Hebrew printed to the Bash console can come out garbled: redirect tool output to a
 file under `_dumps/` (e.g. `_dumps/<your packet>_tmp.txt`) and read it with the Read tool.
@@ -42,7 +43,7 @@ song by an overlapping artist: `title | artist | youtube_id | year | genres`).
 
 ## What to decide for each song
 
-**Identity.** The real song the player meant, its official title, and its real performer(s). Players often credit only the best-known name, credit the wrong singer, or misspell. In the October 2026 batch about 1 request in 8 named a performer who has no song by that title: trust the TITLE first, find who actually sings it, fix the artist and add a warn flag ("Player credited X; the song is by Y"). Record what you changed in `notes`.
+**Identity.** The real song the player meant, its official title, and its real performer(s). Players often credit only the best-known name, credit the wrong singer, or misspell. In the October 2026 batch about 1 request in 8 named a performer who has no song by that title: trust the TITLE first, find who actually sings it, fix the artist and add a warn flag ("Player credited X; the song is by Y"). Record what you changed in `notes`. **Exception, artist wish-lists** (the packet's songs were picked as *this artist's* songs, not sent by players): if the song turns out not to be that artist's, return `status: "skip"` with the reason in `notes` instead of re-crediting it; the maintainer asked for that artist.
 
 **Maybe-meant songs.** If the request resolves to a song the catalog already has (or to nothing) but there is a clearly plausible, popular, NOT-yet-in-catalog song the player may have meant (e.g. requested 'תותים' → catalog has Ethnix's; Hanan Ben Ari's 'החיים שלנו תותים' is missing), add it as `maybe_meant` (`{title, artist, youtube_id, release_year, genres, why}`, id verified like any other). It becomes its own low-confidence card.
 - `title`: as the artist/label officially writes it. Hebrew songs in Hebrew script; English-language songs (e.g. Eurovision entries) in English. Straight quotes `'` `"` only (not ׳ ״).

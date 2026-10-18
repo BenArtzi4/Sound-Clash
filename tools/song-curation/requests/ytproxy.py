@@ -10,9 +10,11 @@ the catalog, 2 = background search sweep of the catalog.
 
   GET /info?id=<11 chars>       watch-page metadata (see fetch_meta.extract)
   GET /search?q=<query>&n=<k>   search results (relevance, videos only)
+      &sort=views               ... most viewed first (one page, ~20 results)
   GET /status                   queue sizes, cooldown, counters
 
-usage: python ytproxy.py catalog.json [--port 8790]
+usage: python ytproxy.py <rows.json> [--port 8791] [--prefetch N]
+(rows = wanted.json for song requests, catalog.json for the catalog audit)
 """
 from __future__ import annotations
 import hashlib, itertools, json, queue, sys, threading, time, urllib.parse, urllib.request
@@ -37,7 +39,7 @@ SEARCH.mkdir(exist_ok=True)
 UA = fm.UA
 
 PACE = 1.5          # seconds between YouTube requests
-state = {"cooldown_until": 0.0, "n429": 0, "done": 0, "errors": 0, "last": 0.0}
+state = {"cooldown_until": 0.0, "n429": 0, "done": 0, "errors": 0, "last": 0.0, "busy": False, "sweep": "none"}
 jobs: "queue.PriorityQueue" = queue.PriorityQueue()
 seq = itertools.count()
 inflight: dict = {}
@@ -105,12 +107,14 @@ def do_job(kind: str, arg: str):
         d = fm.extract(arg, html)
         p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         return d
-    if kind == "search":
-        p = SEARCH / f"{search_key(arg)}.json"
+    if kind in ("search", "vsearch"):
+        p = SEARCH / f"{'v_' if kind == 'vsearch' else ''}{search_key(arg)}.json"
         if p.exists():
             return json.loads(p.read_text(encoding="utf-8"))["results"]
+        # sp: EgIQAQ== = videos only, by relevance; CAMSAhAB = videos only, most viewed
+        sp = "CAMSAhAB" if kind == "vsearch" else "EgIQAQ%253D%253D"
         url = ("https://www.youtube.com/results?hl=en&gl=IL&search_query="
-               + urllib.parse.quote_plus(arg) + "&sp=EgIQAQ%253D%253D")
+               + urllib.parse.quote_plus(arg) + "&sp=" + sp)
         res = parse_search(http_get(url))
         p.write_text(json.dumps({"q": arg, "results": res}, ensure_ascii=False), encoding="utf-8")
         return res
@@ -120,18 +124,20 @@ def do_job(kind: str, arg: str):
 def cached(kind: str, arg: str) -> bool:
     if kind == "info":
         return (META / f"{arg}.json").exists()
-    return (SEARCH / f"{search_key(arg)}.json").exists()
+    return (SEARCH / f"{'v_' if kind == 'vsearch' else ''}{search_key(arg)}.json").exists()
 
 
 def worker():
     while True:
         prio, n, kind, arg, holder = jobs.get()
+        state["busy"] = True
         if cached(kind, arg):
             try:
                 holder["result"] = do_job(kind, arg)
             except Exception as e:  # noqa: BLE001
                 holder["error"] = str(e)
             holder["event"].set()
+            state["busy"] = False
             continue
         attempts = 0
         while True:
@@ -156,6 +162,7 @@ def worker():
                     break
                 time.sleep(3 * attempts)
         holder["event"].set()
+        state["busy"] = False
 
 
 def submit(prio: int, kind: str, arg: str):
@@ -185,10 +192,14 @@ class H(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(u.query)
         if u.path == "/status":
+            # "finished": the background sweep has fed every row and nothing is queued or running
             return self._send(200, {"queued": jobs.qsize(), **state,
+                                    "finished": state["sweep"] != "running" and jobs.qsize() == 0 and not state["busy"],
                                     "cooldown_left": max(0, round(state["cooldown_until"] - time.time()))})
         if u.path in ("/info", "/search"):
             kind = u.path[1:]
+            if kind == "search" and (qs.get("sort") or [""])[0] == "views":
+                kind = "vsearch"
             arg = (qs.get("id") or qs.get("q") or [""])[0].strip()
             if not arg:
                 return self._send(400, {"error": "missing id/q"})
@@ -198,13 +209,13 @@ class H(BaseHTTPRequestHandler):
             if "error" in h:
                 return self._send(502, {"error": h["error"]})
             res = h["result"]
-            if kind == "search":
+            if kind in ("search", "vsearch"):
                 res = res[: int((qs.get("n") or ["10"])[0])]
             return self._send(200, res)
         self._send(404, {"error": "not found"})
 
 
-PREFETCH_TOP = 4  # watch-page info for the top-N hits of every background search
+PREFETCH_TOP = 4  # watch-page info for the top-N hits of every background search (--prefetch N)
 
 
 def prefetch_after_search(q: str):
@@ -220,23 +231,34 @@ def prefetch_after_search(q: str):
 
 def sweeper(queries):
     """Feed searches one by one (prio 2) and follow each with its top-hit infos (prio 1)."""
-    for q in queries:
+    state["sweep"] = "running"
+    for q in dict.fromkeys(queries):
         h = submit(2, "search", q)
         h["event"].wait(900)
         prefetch_after_search(q)
+    state["sweep"] = "done"
+    print(f"sweep done: {len(set(queries))} searches, errors so far {state['errors']}", flush=True)
 
 
 def main():
-    """usage: python ytproxy.py wanted.json [--port 8791]
+    """usage: python ytproxy.py [rows.json] [--port 8791] [--prefetch N]
 
     Rows with a youtube_id get their watch page prefetched; rows with
-    title/artist get a background search + info for the top hits."""
-    rows = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    title/artist get a background search + info for the top N hits (default 4;
+    the catalog audit passes 0, it only needs the search results). Without a
+    rows file it only answers yt.py (e.g. building an artist wish-list)."""
+    global PREFETCH_TOP
+    src = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else None
+    rows = json.loads(Path(src).read_text(encoding="utf-8")) if src else []
     port = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8791
+    if "--prefetch" in sys.argv:
+        PREFETCH_TOP = int(sys.argv[sys.argv.index("--prefetch") + 1])
     for r in rows:
         if r.get("youtube_id") and not cached("info", r["youtube_id"]):
             submit(1, "info", r["youtube_id"])
     queries = [song_query(r) for r in rows if r.get("title")]
+    if queries:
+        state["sweep"] = "running"  # before the threads start, so "finished" can't flash true
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=sweeper, args=(queries,), daemon=True).start()
     print(f"ytproxy on :{port}, {len(queries)} searches to sweep", flush=True)
