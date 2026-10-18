@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from parse_requests import artist_overlap, excluded_artists, is_excluded, norm
+from parse_requests import artist_overlap, earlier_offers, excluded_artists, is_excluded, load_catalog, norm
 
 HERE = Path.cwd()  # always run from the batch folder
 GATEWAY = "http://127.0.0.1:8791"
@@ -30,21 +30,6 @@ BATCH = {
     "id": HERE.name,
     "title": sys.argv[sys.argv.index("--title") + 1] if "--title" in sys.argv else f"Song batch {HERE.name}",
 }
-
-
-def earlier_offers() -> list:
-    """Every card shown in a sibling batch's candidates.js: (batch, title, artist)."""
-    out = []
-    for f in sorted(HERE.parent.glob("*/candidates.js")):
-        if f.parent == HERE:
-            continue
-        s = f.read_text(encoding="utf-8")
-        try:
-            rows = json.loads(s[s.index("["):s.rindex("]") + 1])
-        except ValueError:
-            continue
-        out += [(f.parent.name, r.get("title", ""), r.get("artist", "")) for r in rows]
-    return out
 
 
 def history_flags(title: str, artist: str, offers: list, catalog: list) -> list:
@@ -124,7 +109,7 @@ def main() -> None:
     research = []
     for p in sorted((HERE / "research").glob("p*.json")):
         research += json.loads(p.read_text(encoding="utf-8"))
-    catalog = json.loads((HERE / "_dumps" / "catalog_raw.json").read_text(encoding="utf-8"))["rows"]
+    catalog = load_catalog()
     cat_ids = {c["youtube_id"]: c for c in catalog}
     offers = earlier_offers()
     excluded = excluded_artists()

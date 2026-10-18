@@ -8,6 +8,7 @@ Run from the batch folder AFTER the human review:
                                     safe to re-run (present songs are skipped,
                                     genre links use ON CONFLICT DO NOTHING)
                verify_<batch>.sql   read-only SELECT of the same youtube_ids
+               playtest_songs.json  every id + start, for playtest/playtest.mjs
 
     python <tools>/requests/gen_upload.py approved-songs-<date>.csv --check verify_result.json
         compares the verify query's JSON output (what `supabase db query` prints)
@@ -115,8 +116,12 @@ COMMIT;
     up, ve = HERE / f"upload_{name}.sql", HERE / f"verify_{name}.sql"
     up.write_text(sql, encoding="utf-8", newline="\n")
     ve.write_text(verify, encoding="utf-8", newline="\n")
+    play = [{"id": r["youtube_id"].strip(), "start": int((r.get("start_time") or "0").strip() or 0),
+             "title": r["title"].strip()} for r in rows]
+    (HERE / "playtest_songs.json").write_text(json.dumps(play, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"wrote {up.name}: {len(svals)} songs, {len(gvals)} genre links")
     print(f"wrote {ve.name} (read-only; run it after applying, save the JSON, then --check it)")
+    print("wrote playtest_songs.json (for tools/song-curation/playtest/playtest.mjs)")
 
 
 def check(rows: list, result: Path) -> None:
