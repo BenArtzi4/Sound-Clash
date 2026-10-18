@@ -5,7 +5,11 @@ Also dedups against the live catalog snapshot (_dumps/catalog_raw.json, the
 JSON a maintainer provides: {"rows": [{title, artist, youtube_id, release_year, genres}]})
 and inside the list itself.
 
-usage (from the batch folder): python <tools>/requests/parse_requests.py "<requests.txt>"
+usage (from the batch folder): python <tools>/requests/parse_requests.py "<requests.txt>" [--drop-offered]
+  --drop-offered  also skip songs an earlier batch offered and the maintainer did not
+                  approve (unapproved = rejected). Use it for lists WE built (artist
+                  wish-lists, charts, playlists); for lists players sent, leave it off:
+                  finalize.py flags those re-requests so the maintainer can decide.
 writes: wanted.json      net-new songs to research
         in_catalog.json  requests the catalog already has (with the match)
         report.txt       human-readable summary
@@ -87,15 +91,39 @@ def is_excluded(artist: str, names: list) -> str | None:
     return None
 
 
+def load_catalog() -> list:
+    """Rows of _dumps/catalog_raw.json: `supabase db query` output (CLI chatter
+    before the JSON is skipped) or a bare list of rows."""
+    t = (HERE / "_dumps" / "catalog_raw.json").read_text(encoding="utf-8")
+    i = min([x for x in (t.find("{"), t.find("[")) if x >= 0])
+    obj, _ = json.JSONDecoder().raw_decode(t[i:])
+    return obj["rows"] if isinstance(obj, dict) else obj
+
+
+def earlier_offers() -> list:
+    """Every card shown in a sibling batch's candidates.js: (batch, title, artist)."""
+    out = []
+    for f in sorted(HERE.parent.glob("*/candidates.js")):
+        if f.parent == HERE or f.parent.name.startswith(("_", "zz")):  # _sample and test folders
+            continue
+        s = f.read_text(encoding="utf-8")
+        try:
+            rows = json.loads(s[s.index("["):s.rindex("]") + 1])
+        except ValueError:
+            continue
+        out += [(f.parent.name, r.get("title", ""), r.get("artist", "")) for r in rows]
+    return out
+
+
 def main() -> None:
     src = Path(sys.argv[1])
-    raw = json.loads((HERE / "_dumps" / "catalog_raw.json").read_text(encoding="utf-8"))
-    catalog = raw["rows"] if isinstance(raw, dict) else raw
+    catalog = load_catalog()
     by_title = {}
     for c in catalog:
         by_title.setdefault(norm(c["title"]), []).append(c)
+    offers = earlier_offers() if "--drop-offered" in sys.argv else []
 
-    wanted, in_cat, seen, skipped = [], [], {}, []
+    wanted, in_cat, seen, skipped, dropped = [], [], {}, [], []
     excluded = excluded_artists()
     lines = src.read_text(encoding="utf-8").splitlines()
     report = []
@@ -127,8 +155,13 @@ def main() -> None:
         if hit:
             rec["credited_to_excluded_artist"] = hit
         if exact:
-            rec["catalog"] = [{k: c[k] for k in ("title", "artist", "youtube_id", "release_year", "genres")} for c in exact]
+            rec["catalog"] = [{k: c.get(k) for k in ("title", "artist", "youtube_id", "release_year", "genres",
+                                                     "unavailable_at")} for c in exact]
             in_cat.append(rec)
+            continue
+        before = sorted({b for b, t, a in offers if norm(t) == norm(title) and artist_overlap(artist, a)})
+        if before:
+            dropped.append(f"  #{n} {title} — {artist}  (offered in {', '.join(before)}, not approved)")
             continue
         if same_title:
             rec["same_title_in_catalog"] = [
@@ -138,7 +171,12 @@ def main() -> None:
     (HERE / "wanted.json").write_text(json.dumps(wanted, ensure_ascii=False, indent=1), encoding="utf-8")
     (HERE / "in_catalog.json").write_text(json.dumps(in_cat, ensure_ascii=False, indent=1), encoding="utf-8")
     report.insert(0, f"requests parsed: {len(seen)} unique | already in catalog: {len(in_cat)} | "
-                     f"to research: {len(wanted)} (of which credited to an excluded artist: {len(skipped)})")
+                     f"to research: {len(wanted)} (of which credited to an excluded artist: {len(skipped)})"
+                     + (f" | dropped as rejected before: {len(dropped)}" if offers else ""))
+    if dropped:
+        report.append("")
+        report.append("== offered in an earlier batch and not approved (= rejected): dropped ==")
+        report += dropped
     if skipped:
         report.append("")
         report.append("== credited to an excluded artist (local exclusion list) — research checks who really sings it ==")
@@ -147,7 +185,8 @@ def main() -> None:
     report.append("== already in catalog ==")
     for r in in_cat:
         c = r["catalog"][0]
-        report.append(f"  #{r['req']} {r['title']} — {r['artist']}  ==  {c['title']} — {c['artist']} ({c['youtube_id']})")
+        dead = "  [its video is flagged unavailable: fix it with the audit-songs skill]" if c.get("unavailable_at") else ""
+        report.append(f"  #{r['req']} {r['title']} — {r['artist']}  ==  {c['title']} — {c['artist']} ({c['youtube_id']}){dead}")
     report.append("")
     report.append("== same title, different artist in catalog (check: cover/other song?) ==")
     for r in wanted:

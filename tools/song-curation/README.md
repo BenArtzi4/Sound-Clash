@@ -3,6 +3,12 @@
 > **Adding songs? Read [`PLAYBOOK.md`](./PLAYBOOK.md) first** — it's the full
 > step-by-step process (find → verify → validate → review → upload) a future
 > agent can execute end-to-end. This README is just the tool reference.
+>
+> The two current workflows are the Claude Code skills `add-songs` (new songs from
+> requests, artists, charts or playlists: [`requests/`](./requests/README.md)) and
+> `audit-songs` (fix the songs already in the game: better videos, duplicates, names,
+> genres: [`audit/`](./audit/README.md)). Both play-test new videos with
+> [`playtest/playtest.mjs`](./playtest/playtest.mjs).
 
 
 A small, reusable workflow for adding popular songs to the Sound Clash catalog
@@ -188,8 +194,8 @@ mizrahit, israeli-soundtracks`.
 4. **Upload:** `requests/gen_upload.py <csv>` (run from the batch folder) writes the
    idempotent upload SQL and a read-only verify query; a maintainer applies it with
    their own linked Supabase CLI and checks the result with `--check`. No project ref
-   or credentials live in this repo. Full sequence: the `song-requests` skill
-   (`.claude/skills/song-requests/SKILL.md`).
+   or credentials live in this repo. Full sequence: the `add-songs` skill
+   (`.claude/skills/add-songs/SKILL.md`).
 
 ## Validate the export before uploading
 

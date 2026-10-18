@@ -2,8 +2,10 @@
 """CLI for the local YouTube gateway (ytproxy.py on :8791). Never call YouTube
 directly from an agent: go through this so requests are paced and cached.
 
-  yt.py search "artist song" [-n 8]   one line per hit:
+  yt.py search "artist song" [-n 8] [--views]   one line per hit:
         id | views | m:ss | channel [badge] | title | age
+        (--views: most viewed first instead of relevance; one page, ~20 hits,
+        so vary the query — "<artist>", "<artist> Topic", album names — for more)
   yt.py info ID [ID ...]              one block per video:
         status/embed/IL, views, length, upload date, channel [badge], title,
         YouTube's own music credits (song / artist / album) when present
@@ -43,7 +45,8 @@ def main():
     elif cmd == "search":
         n = int(sys.argv[sys.argv.index("-n") + 1]) if "-n" in sys.argv else 8
         q = sys.argv[2]
-        for h in get(f"/search?n={n}&q=" + urllib.parse.quote(q)):
+        sort = "&sort=views" if "--views" in sys.argv else ""
+        for h in get(f"/search?n={n}{sort}&q=" + urllib.parse.quote(q)):
             badge = f" [{h['badge']}]" if h.get("badge") else ""
             print(f"{h['id']} | {human(h['views'])} | {mmss(h['length'])} | {h['channel']}{badge} | {h['title']} | {h.get('age') or ''}")
     elif cmd == "info":
