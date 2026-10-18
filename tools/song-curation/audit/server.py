@@ -6,7 +6,9 @@ folder it is started in: every decision is saved to decisions.json there, so
 the review survives browser switches and can span several sittings. Read-only
 with respect to the live database: applying approved fixes is a separate step.
 
-  GET  /                 review.html
+  GET  /                 review.html  (+ review.js, review.css from this folder)
+  GET  /base.css         ../review.css: the add-songs review page's design system,
+                         so both review pages look and behave the same
   GET  /api/items        items.json   (the proposals to review)
   GET  /api/decisions    decisions.json
   POST /api/decisions    {"item": "<id>", "decision": {...} | null}
@@ -36,7 +38,8 @@ ITEMS = DATA / "items.json"
 DECISIONS = DATA / "decisions.json"
 lock = threading.Lock()
 STATIC = {"/": ("review.html", "text/html"), "/review.html": ("review.html", "text/html"),
-          "/review.js": ("review.js", "text/javascript"), "/review.css": ("review.css", "text/css")}
+          "/review.js": ("review.js", "text/javascript"), "/review.css": ("review.css", "text/css"),
+          "/base.css": ("../review.css", "text/css")}
 
 
 def load(p: Path, default):

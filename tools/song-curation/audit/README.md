@@ -22,7 +22,7 @@ including the prod queries and the apply, is the `audit-songs` skill
 | `merge.py` | scan cards + `proposals/*.json` → `items.json`; verifies every proposed video, warns on wrong performers, resolves overlaps, drops year changes on `israeli-cover` songs, anything an earlier audit already rejected, and any card id listed in `drop_items.txt`. |
 | `videos.py` | every video-changing card, current vs proposed, into `_dumps/videos.txt` for the mandatory eyeball pass. |
 | `simulate.py` | approve-everything dry run in `sim/` (one card per "approve only one" pair): proves the SQL builds. |
-| `server.py` + `review.html/js/css` | the review page; decisions go to the batch's `decisions.json`. |
+| `server.py` + `review.html/js/css` | the review page; decisions go to the batch's `decisions.json`. It uses the add-songs review page's design system (`server.py` serves `../review.css` as `base.css`; `review.css` here only adds the audit parts), so both pages look and work the same. |
 | `make_sql.py` | approved decisions → `apply.sql`, `apply_dryrun.sql` (ends in a rollback sentinel), `apply_plan.json`. |
 | `preflight.py <fresh dump>` | pre-apply checks: the songs in the plan are unchanged on prod, playable videos, starts inside videos, genres; writes `playtest_plan.json` to play-test the new videos before applying. |
 | `validate.py <dump after apply>` | every approved card live exactly as decided, nothing else changed; writes `playtest_songs.json`. |

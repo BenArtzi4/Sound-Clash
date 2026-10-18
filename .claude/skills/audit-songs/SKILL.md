@@ -80,10 +80,13 @@ Every step before that is read-only on prod.
    `curl -s http://localhost:8770/api/items` returns the cards, then give the maintainer
    **`http://localhost:8770/`** (not `127.0.0.1`: YouTube refuses some label videos there; never
    `file://`). Never approve or reject anything yourself: every click lands in their review.
-   Suggested order for them: "Must-fix only" → Broken video → Duplicate → Title / artist (pairs
-   marked "⚠ approve only one") → Better video (play the new one; set the start with ⏱ when the card
-   says the length differs) → Genre / year → Possible duplicate (reject = keep both) → Style (bulk
-   approve) → "Summary of approved". Clicks save to `$B/decisions.json`. If the top bar says
+   The page has the same design and keys as the add-songs review page (queue on the left, one card
+   at a time, `A`/`R`/`U`, `J`/`K`, `Space`, `S` = set start, `?` = help). Suggested order for them:
+   the "Must-fix" chip first, then the Issue menu: Broken video → Duplicate (pick the copy to keep)
+   → Title / artist (pairs marked "⚠ approve only one") → Better video (play both; the "Use:" chips
+   pick the video; set the start with `S` when the card says the length differs) → Genre / year →
+   Possible duplicate (reject = keep both) → Style (a table with "Approve all shown") → the
+   "Summary of approved" button, top right. Clicks save to `$B/decisions.json`. If the top bar says
    "Server not reachable — … kept in this browser, retrying", the server died: restart it detached;
    the page replays the queued clicks. A reboot stops it too, so also give them the restart they can
    run in their own PowerShell window: `cd <abs $B>; & <abs python> ..\..\audit\server.py --port 8770`.

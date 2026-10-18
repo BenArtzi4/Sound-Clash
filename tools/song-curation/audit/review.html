@@ -1,34 +1,123 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Catalog Audit</title>
-<link rel="stylesheet" href="review.css">
-</head>
-<body>
-<header class="top">
-  <div class="topRow">
-    <h1>Catalog audit</h1>
-    <div id="progress" class="progress"></div>
-    <div id="saveState" class="saveState"></div>
-  </div>
-  <nav id="tabs" class="tabs" aria-label="Issue type"></nav>
-  <div class="filters">
-    <div class="seg" id="statusSeg" role="group" aria-label="Status">
-      <button data-status="pending" class="on">To review</button>
-      <button data-status="approved">Approved</button>
-      <button data-status="rejected">Rejected</button>
-      <button data-status="all">All</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Catalog audit · Sound Clash</title>
+    <link rel="preconnect" href="https://www.youtube-nocookie.com" />
+    <link rel="preconnect" href="https://i.ytimg.com" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2314120e'/%3E%3Crect x='3' y='7' width='2' height='6' fill='%23ff7a1a'/%3E%3Crect x='7' y='3' width='2' height='10' fill='%23ff7a1a'/%3E%3Crect x='11' y='5' width='2' height='8' fill='%23ff7a1a'/%3E%3C/svg%3E" />
+    <!-- base.css = tools/song-curation/review.css (the add-songs page's design system), served by server.py -->
+    <link rel="stylesheet" href="base.css" />
+    <link rel="stylesheet" href="review.css" />
+  </head>
+  <!--
+    Catalog audit review page. Vanilla HTML/CSS/JS, no build step, served by
+    audit/server.py from the audit's batch folder: cards from items.json,
+    every decision saved to decisions.json there (localStorage only queues
+    clicks the server hasn't confirmed yet).
+  -->
+  <body>
+    <header class="topbar" id="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <div class="brand-text">
+          <div class="brand-name">Catalog audit</div>
+          <div class="batch-name" id="batch-name" dir="auto"></div>
+        </div>
+      </div>
+
+      <div class="progress" id="progress" title="Review progress">
+        <div class="progress-bar"><span class="pb-ok" id="pb-ok"></span><span class="pb-bad" id="pb-bad"></span></div>
+        <div class="progress-text" id="progress-text"></div>
+      </div>
+
+      <div class="top-actions">
+        <span class="save-pill" id="save-pill"></span>
+        <button type="button" class="btn btn-primary" id="btn-summary" title="Everything that will change when you tell Claude to apply">Summary of approved</button>
+        <button type="button" class="btn btn-icon" id="btn-help" title="Keyboard shortcuts (?)">?</button>
+      </div>
+    </header>
+
+    <div class="app" id="app">
+      <aside class="queue" id="queue" aria-label="Cards">
+        <div class="queue-head">
+          <input id="search" type="search" placeholder="Search title, artist, note…   /" dir="auto" autocomplete="off" />
+          <div class="filters" id="filters"></div>
+          <div class="queue-tools">
+            <label class="sort">Issue
+              <select id="kind"></select>
+            </label>
+            <span class="queue-count" id="queue-count"></span>
+          </div>
+        </div>
+        <ol class="queue-list" id="queue-list"></ol>
+      </aside>
+
+      <main class="stage" id="stage"></main>
+
+      <aside class="details" id="details" aria-label="Changes"></aside>
     </div>
-    <input id="q" type="search" placeholder="Search title / artist / note…" dir="auto">
-    <label class="chk"><input id="highOnly" type="checkbox"> Must-fix only</label>
-    <span class="keys">Keys: <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>a</kbd> approve · <kbd>r</kbd> reject · <kbd>space</kbd> play</span>
-  </div>
-</header>
-<main id="list" class="list"></main>
-<template id="emptyTpl"><p class="empty">Nothing here. Pick another tab or status.</p></template>
-<script src="https://www.youtube.com/iframe_api"></script>
-<script src="review.js"></script>
-</body>
+
+    <div class="modal" id="summary" hidden>
+      <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="summary-title">
+        <div class="modal-head">
+          <h2 id="summary-title">Summary of approved</h2>
+          <button type="button" class="btn btn-icon" data-close="summary">✕</button>
+        </div>
+        <div id="summary-body"></div>
+      </div>
+    </div>
+
+    <div class="modal" id="help" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="modal-head">
+          <h2 id="help-title">Keyboard shortcuts</h2>
+          <button type="button" class="btn btn-icon" data-close="help">✕</button>
+        </div>
+        <div class="help-grid">
+          <section>
+            <h3>Decide</h3>
+            <dl>
+              <dt><kbd>A</kbd></dt><dd>Approve → next card</dd>
+              <dt><kbd>R</kbd></dt><dd>Reject → next card</dd>
+              <dt><kbd>U</kbd></dt><dd>Undo this card's decision (or the last one)</dd>
+              <dt><kbd>J</kbd> <kbd>↓</kbd></dt><dd>Next card</dd>
+              <dt><kbd>K</kbd> <kbd>↑</kbd></dt><dd>Previous card</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Play</h3>
+            <dl>
+              <dt><kbd>Space</kbd></dt><dd>Play / pause (the video that will be used)</dd>
+              <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Play the 1st / 2nd / 3rd video on the card</dd>
+              <dt><kbd>P</kbd></dt><dd>Play the chosen video from the start time</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Start time</h3>
+            <dl>
+              <dt><kbd>S</kbd></dt><dd>Set start = where the chosen video is now</dd>
+              <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Start −1 / +1 s (with <kbd>Shift</kbd>: 5 s)</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Other</h3>
+            <dl>
+              <dt><kbd>/</kbd></dt><dd>Search</dd>
+              <dt><kbd>?</kbd></dt><dd>This help</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Close a window / leave a field</dd>
+            </dl>
+          </section>
+        </div>
+        <p class="help-note">Every click is saved to the audit's <code>decisions.json</code> right away, so you can stop and continue another day. Shortcuts work on any keyboard layout (Hebrew too) and keep working after you click inside a YouTube player.</p>
+      </div>
+    </div>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <div id="focus-sink" tabindex="-1" aria-hidden="true"></div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="review.js"></script>
+  </body>
 </html>
