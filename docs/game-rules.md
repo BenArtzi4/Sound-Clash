@@ -139,6 +139,7 @@ A separate manager action, independent of round and buzz state.
 - Anytime during a `playing` or `waiting` game, the manager can press **+4 Bonus** in the console.
 - A team picker appears listing every team currently in the game. The manager picks one, and that team's score gains **+4** (configurable via the API; the UI uses the default).
 - The bonus does **not** end a round, does not touch `game_rounds`, and is not visible in the round-detail breakdown; only in the team's running `game_teams.score`.
+- **Year question (optional).** The console shows the current song's release year in a chip beside the title (migration 050), on the host's screen only. The host may ask the teams for the year and award a correct answer with this Bonus; the game itself never scores the year. For a few reviewed covers the year is the cover's recording year, not the original's.
 - Endpoint: `POST /games/{code}/bonus` (see `api-contracts.md §2.6`). Function: `award_bonus` (see `rpc-functions.md §3a`).
 
 ## 5. Song Selection

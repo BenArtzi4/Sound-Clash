@@ -47,6 +47,12 @@ export const FilmIcon = (p: IconProps) => (
     <path d="M3 9h18M3 15h18M8 4v16M16 4v16" />
   </Icon>
 );
+export const CalendarIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 10h18M8 3v4M16 3v4" />
+  </Icon>
+);
 export const SpeakerIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M4 9v6h4l5 4V5L8 9H4z" />

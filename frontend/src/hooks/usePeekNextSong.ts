@@ -30,6 +30,8 @@ export interface PeekedSong {
   title: string;
   artist: string;
   is_soundtrack: boolean;
+  // Migration 050: shown to the host next to the title, for a year bonus.
+  release_year: number | null;
 }
 
 interface PeekNextSongRow {
@@ -39,6 +41,8 @@ interface PeekNextSongRow {
   song_title: string;
   song_artist: string;
   is_soundtrack: boolean;
+  // Optional: absent until migration 050 is applied.
+  release_year?: number | null;
 }
 
 export async function peekNextSongDirect(
@@ -63,5 +67,6 @@ export async function peekNextSongDirect(
     title: row.song_title,
     artist: row.song_artist,
     is_soundtrack: row.is_soundtrack,
+    release_year: row.release_year ?? null,
   };
 }

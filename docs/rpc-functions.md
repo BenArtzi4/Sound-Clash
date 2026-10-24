@@ -345,7 +345,8 @@ CREATE OR REPLACE FUNCTION select_next_song(
   song_artist   text,
   youtube_id    text,
   start_time    integer,
-  is_soundtrack boolean
+  is_soundtrack boolean,
+  release_year  integer   -- migration 050; NULL when unknown
 ) LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public;
@@ -361,6 +362,7 @@ Behavior:
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
 - Returns one row with the new round + the picked song's metadata.
 - The returned `is_soundtrack` flag is **computed** (migration 028), not read from a column — `songs.is_soundtrack` was dropped. It is `EXISTS(SELECT 1 FROM song_genres sg JOIN genres g ON g.id = sg.genre_id WHERE sg.song_id = <picked> AND g.slug IN ('soundtracks', 'israeli-soundtracks'))`, i.e. true when the song belongs to a soundtrack genre. The `RETURNS TABLE` shape is unchanged, so PostgREST routing and the realtime/frontend contract are identical.
+- **`release_year` (migration 050)** is `songs.release_year` passed through (`NULL` when unknown). The host console shows it as a chip beside the title so the host can ask for the year and award it with Bonus; players and the Display never see it. Adding the column changed the `RETURNS TABLE`, so 050 did `DROP FUNCTION` + `CREATE` in one transaction and re-granted EXECUTE to `anon, authenticated, service_role`; the new column is last, so every existing column keeps its position.
 
 ### Idempotency
 
@@ -412,7 +414,8 @@ CREATE OR REPLACE FUNCTION peek_next_song(
   start_time    integer,
   song_title    text,     -- migration 038 (I-NextMeta)
   song_artist   text,     -- migration 038 (I-NextMeta)
-  is_soundtrack boolean   -- migration 038 (I-NextMeta); computed, same as select_next_song
+  is_soundtrack boolean,  -- migration 038 (I-NextMeta); computed, same as select_next_song
+  release_year  integer   -- migration 050; NULL when unknown
 ) LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public;
@@ -422,7 +425,7 @@ Behavior:
 - Token + game-state gate runs first, **identical** to `select_next_song`: raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) / `no_genres_selected` (`22023`) before returning any candidate.
 - Calls the **same** `pick_next_song` helper as `select_next_song`'s random path (genre rotation, balance and artist spacing, migrations 048/049 — §3cc), so the decade filter (migration 032), the dead-video auto-skip (migration 045) and the genre balance are identical by construction: a peeked candidate is always one the random path could have chosen at this point of the game, and a prebuffered video is never a dead one.
 - **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
-- **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves.
+- **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves. Migration 050 added `release_year` for the same reason: the host's year chip arrives with the card instead of a round-trip later.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "nothing to prebuffer"; the real `no_more_songs` still surfaces from the eventual `select_next_song` commit.
 - On the actual "Next round" click the browser commits the peeked song via `select_next_song(..., p_song_id => <peeked id>)` (manual-pick path), so the buffered video and the started round can never disagree.
 - **Standby check (browser side, 2026-10-15).** YouTube often fails a load without an `onError`: the hidden player just sits there, BUFFERING or UNSTARTED, with nothing loaded. So the console judges the standby by its loaded fraction, never by its state. If the standby has loaded **nothing** after 10 s of visible time, its load is issued once more (`yt_preload_retry`). The retry keeps the age of the song's first prebuffer. If the standby still holds nothing when Next round is clicked, 10 s or more after that first prebuffer, the click skips the fast path (`yt_preload_not_ready`). It stops the standby and loads the same peeked song on the live player, synchronously inside the tap so mobile browsers still allow unmuted playback, then calls `select_next_song` with that `p_song_id`. If the RPC fails, the live player goes back to the current round's song and the peeked song is prebuffered afresh into the standby. The 10 s count adds up visible time across hidden spells. A standby that is loading, however slowly, or that was first prebuffered less than 10 s ago, is committed as before. See `frontend/src/hooks/useSongPrebuffer.ts`.

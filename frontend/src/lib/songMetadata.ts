@@ -31,7 +31,7 @@ export async function fetchSongById(
     try {
       const { data, error } = await supabase
         .from("songs")
-        .select("id,title,artist,youtube_id,start_time,song_genres(genres(slug))")
+        .select("id,title,artist,youtube_id,start_time,release_year,song_genres(genres(slug))")
         .eq("id", songId)
         .maybeSingle();
       if (isCancelled()) return null;
