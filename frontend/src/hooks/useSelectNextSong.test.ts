@@ -21,6 +21,7 @@ function row(overrides: Record<string, unknown> = {}) {
     youtube_id: "abcdefghijk",
     start_time: 0,
     is_soundtrack: false,
+    release_year: 1975,
     ...overrides,
   };
 }
@@ -90,5 +91,19 @@ describe("selectNextSongDirect", () => {
     setRpcResponse({ data: [row({ is_soundtrack: true })], error: null });
     const result = await selectNextSongDirect("ABCDEF", TOKEN);
     expect(result.song.is_soundtrack).toBe(true);
+  });
+
+  it("passes the song's release_year through for the host's year chip (mig 050)", async () => {
+    setRpcResponse({ data: [row()], error: null });
+    const result = await selectNextSongDirect("ABCDEF", TOKEN);
+    expect(result.song.release_year).toBe(1975);
+  });
+
+  it("maps a missing release_year to null (database without mig 050)", async () => {
+    const withoutYear: Record<string, unknown> = row();
+    delete withoutYear.release_year;
+    setRpcResponse({ data: [withoutYear], error: null });
+    const result = await selectNextSongDirect("ABCDEF", TOKEN);
+    expect(result.song.release_year).toBeNull();
   });
 });

@@ -188,6 +188,47 @@
   margin: 0.2rem 0 0;
 }
 
+/* The answer line plus the host-only year chip at its right end. The chip
+   shares the title's first line, so the card is no taller with it (the #177
+   one-screen phone fit holds); a long title wraps beside it. */
+.songLineRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.songLineRow .songLine {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Bone ink and a strong border, so it reads apart from the muted Song/Artist
+   token chips below; the margin centres it on the title's first line. */
+.yearChip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 2px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--bone);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.yearChip svg {
+  flex: none;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
 /* Reserved status strip. Always mounted during play at a fixed min-height so
    the scoring buttons below never move when a buzz lands. The locked and
    waiting variants share identical box metrics (padding, min-height, border
@@ -608,6 +649,12 @@
   }
   .songMeta {
     font-size: 0.85rem;
+  }
+  .yearChip {
+    margin-top: 0;
+    padding: 2px 9px;
+    gap: 5px;
+    font-size: 0.78rem;
   }
   .tokenChips {
     margin-bottom: 0.45rem;

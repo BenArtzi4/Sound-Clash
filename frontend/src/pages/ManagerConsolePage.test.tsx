@@ -368,6 +368,7 @@ describe("ManagerConsolePage", () => {
         youtube_id: "abcdefghijk",
         start_time: 0,
         is_soundtrack: true,
+        release_year: 1992,
       },
     });
     renderConsole();
@@ -385,6 +386,8 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(screen.getByText("Wayne's World")).toBeInTheDocument());
     // Soundtrack rounds: show name is the only label; no "from X" subline.
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
+    // The year from select_next_song's row (mig 050) sits beside the film name.
+    expect(screen.getByTestId("song-year")).toHaveTextContent("1992");
   });
 
   it("opens a song-start span and reports rpcDone when Start is pressed", async () => {
@@ -728,6 +731,60 @@ describe("ManagerConsolePage", () => {
     // The song/clip name (title) appears only as a secondary hint.
     expect(screen.getByText("He's a Pirate")).toBeInTheDocument();
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
+  });
+
+  it("shows the host the song's release year beside the title", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        current_round_id: "r1",
+        current_song_id: "song-Y",
+        round_number: 1,
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-Y" })],
+    });
+    setSongFetch({
+      id: "song-Y",
+      title: "Bohemian Rhapsody",
+      artist: "Queen",
+      youtube_id: "abcdefghijk",
+      release_year: 1975,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    // Host-only hint for an optional year bonus question.
+    await waitFor(() => expect(screen.getByTestId("song-year")).toHaveTextContent("1975"));
+    expect(screen.getByText("Bohemian Rhapsody")).toBeInTheDocument();
+    expect(screen.getByText("Queen")).toBeInTheDocument();
+  });
+
+  it("shows no year chip when the song's release year is unknown", async () => {
+    setHydrate({
+      game: makeActiveGame({
+        status: "playing",
+        current_round_id: "r1",
+        current_song_id: "song-Z",
+        round_number: 1,
+      }),
+      teams: [makeTeam({ id: "t1", name: "Alice" })],
+      rounds: [makeRound({ id: "r1", round_number: 1, song_id: "song-Z" })],
+    });
+    setSongFetch({
+      id: "song-Z",
+      title: "Undated Song",
+      artist: "Someone",
+      youtube_id: "abcdefghijk",
+      release_year: null,
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(screen.getByText("Undated Song")).toBeInTheDocument());
+    expect(screen.queryByTestId("song-year")).not.toBeInTheDocument();
   });
 
   it("retries the post-refresh song resolve so the round recovers from a transient blip", async () => {
@@ -1945,6 +2002,7 @@ describe("ManagerConsolePage", () => {
       title: "Song Two",
       artist: "Artist Two",
       is_soundtrack: false,
+      release_year: null,
     };
     const STALLED = { frozen: false, loadedFraction: 0, state: 3, ageMs: 10_000 };
     const SONG2_CONTEXT = {
@@ -2253,6 +2311,7 @@ describe("ManagerConsolePage", () => {
       title: "Song Two",
       artist: "Artist Two",
       is_soundtrack: false,
+      release_year: null,
     });
     vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r2",
@@ -2319,6 +2378,7 @@ describe("ManagerConsolePage", () => {
       title: "Song Two",
       artist: "Artist Two",
       is_soundtrack: false,
+      release_year: null,
     });
     await act(async () => {
       onPlayingHandlers[0]?.("statechange");
@@ -2358,6 +2418,7 @@ describe("ManagerConsolePage", () => {
       title: "Song One",
       artist: "Artist One",
       is_soundtrack: false,
+      release_year: null,
     });
     vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r1",
@@ -2441,6 +2502,7 @@ describe("ManagerConsolePage", () => {
       title: "Peeked Title",
       artist: "Peeked Artist",
       is_soundtrack: false,
+      release_year: 1999,
     });
     // Freeze select_next_song so the card stays at its in-gesture state (the
     // peeked metadata) and the RPC's authoritative reconciliation never runs.
@@ -2460,6 +2522,8 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByText("Peeked Title")).toBeInTheDocument();
     expect(screen.getByText("Peeked Artist")).toBeInTheDocument();
     expect(screen.queryByText("First")).not.toBeInTheDocument();
+    // The peeked year (mig 050) arrives with the card, not a round-trip later.
+    expect(screen.getByTestId("song-year")).toHaveTextContent("1999");
   });
 
   it("falls back to a cold random pick when the pool is empty at peek time", async () => {
@@ -2509,6 +2573,7 @@ describe("ManagerConsolePage", () => {
         title: "Song Two",
         artist: "Artist Two",
         is_soundtrack: false,
+        release_year: null,
       })
       .mockResolvedValueOnce(null);
     let resolveSelect: (value: Awaited<ReturnType<typeof selectNextSongDirect>>) => void = () => {};
@@ -2598,6 +2663,7 @@ describe("ManagerConsolePage", () => {
       title: "Song One",
       artist: "Artist One",
       is_soundtrack: false,
+      release_year: null,
     });
     vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
       round_id: "r1",
@@ -2659,6 +2725,7 @@ describe("ManagerConsolePage", () => {
       title: "Song One",
       artist: "Artist One",
       is_soundtrack: false,
+      release_year: null,
     });
     renderConsole();
     await act(async () => {
@@ -2726,6 +2793,7 @@ describe("ManagerConsolePage", () => {
       title: "Song Two",
       artist: "Artist Two",
       is_soundtrack: false,
+      release_year: null,
     });
     const { RpcError } = await import("../hooks/useManagerActions");
     vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("network down"));
@@ -2764,6 +2832,7 @@ describe("ManagerConsolePage", () => {
       title: "Song Two",
       artist: "Artist Two",
       is_soundtrack: false,
+      release_year: null,
     });
     const { RpcError } = await import("../hooks/useManagerActions");
     vi.mocked(selectNextSongDirect)

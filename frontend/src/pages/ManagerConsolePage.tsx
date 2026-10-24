@@ -10,6 +10,7 @@ import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { TeamRescueModal } from "../components/TeamRescueModal";
 import { YouTubePlayer } from "../components/YouTubePlayer";
 import {
+  CalendarIcon,
   CheckIcon,
   CloseIcon,
   FilmIcon,
@@ -237,6 +238,9 @@ export function ManagerConsolePage() {
       songSecondaryLine = currentSong.artist;
     }
   }
+  // Host-only: the host may ask the teams for the year and award it with
+  // Bonus. Players and the Display never see it.
+  const songYear = currentSong?.release_year ?? null;
   const titleActionDisabled = !lockedTeam || titleClaimedById != null || pendingTitle === round?.id;
   const artistActionDisabled =
     !lockedTeam || artistClaimedById != null || pendingArtist === round?.id;
@@ -351,7 +355,15 @@ export function ManagerConsolePage() {
           {currentSong ? (
             <div className={styles.songBlock}>
               {isSoundtrackRound ? <SoundtrackBadge /> : null}
-              <p className={styles.songLine}>{songPrimaryLine}</p>
+              <div className={styles.songLineRow}>
+                <p className={styles.songLine}>{songPrimaryLine}</p>
+                {songYear != null ? (
+                  <span className={styles.yearChip} data-testid="song-year">
+                    <CalendarIcon />
+                    {songYear}
+                  </span>
+                ) : null}
+              </div>
               {songSecondaryLine ? <p className={styles.songMeta}>{songSecondaryLine}</p> : null}
             </div>
           ) : (

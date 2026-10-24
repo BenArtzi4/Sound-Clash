@@ -204,9 +204,14 @@ Frontend wrapper: `frontend/src/hooks/useSelectNextSong.ts::selectNextSongDirect
   "song_artist": "Artist Name",
   "youtube_id": "dQw4w9WgXcQ",
   "start_time": 30,
-  "is_soundtrack": false
+  "is_soundtrack": false,
+  "release_year": 1975
 }]
 ```
+
+`release_year` (migration 050) is `null` when the song's year is unknown. The
+host console shows it beside the title for an optional year bonus question;
+players and the Display never see it. `peek_next_song` returns the same field.
 
 **Errors** (raised as PostgrestError with the named code in `message`):
 - `manager_token_required` (sqlstate `28000`) — bad/missing token.
