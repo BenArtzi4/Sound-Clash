@@ -500,6 +500,7 @@ export function useScoring(
         youtube_id: preloaded.youtube_id,
         start_time: preloaded.start_time,
         is_soundtrack: preloaded.is_soundtrack,
+        release_year: preloaded.release_year,
       });
     }
 

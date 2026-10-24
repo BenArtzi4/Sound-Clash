@@ -26,6 +26,7 @@ describe("peekNextSongDirect", () => {
           song_title: "Peeked Title",
           song_artist: "Peeked Artist",
           is_soundtrack: false,
+          release_year: 1999,
         },
       ],
       error: null,
@@ -40,11 +41,30 @@ describe("peekNextSongDirect", () => {
       title: "Peeked Title",
       artist: "Peeked Artist",
       is_soundtrack: false,
+      release_year: 1999,
     });
     expect(supabaseMock.rpc).toHaveBeenCalledWith("peek_next_song", {
       p_game_code: "ABCDEF",
       p_manager_token: TOKEN,
     });
+  });
+
+  it("maps a missing release_year to null (database without mig 050)", async () => {
+    setRpcResponse({
+      data: [
+        {
+          song_id: "s-1",
+          youtube_id: "abcdefghijk",
+          start_time: 12,
+          song_title: "Peeked Title",
+          song_artist: "Peeked Artist",
+          is_soundtrack: false,
+        },
+      ],
+      error: null,
+    });
+    const result = await peekNextSongDirect("ABCDEF", TOKEN);
+    expect(result?.release_year).toBeNull();
   });
 
   it("returns null when the pool is exhausted (zero rows)", async () => {

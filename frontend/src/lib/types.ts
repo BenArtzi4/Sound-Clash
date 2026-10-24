@@ -48,9 +48,10 @@ export interface Song {
   artist: string;
   youtube_id: string;
   start_time: number;
-  // Original release year of the song (mig 031). Null when unknown / not yet
-  // backfilled; optional because the `select_next_song` RPC returns
-  // Song-shaped rows without it.
+  // Original release year of the song (mig 031). Null when unknown; the host
+  // console shows it next to the title (mig 050 added it to the
+  // select_next_song / peek_next_song rows). Optional because some Song-shaped
+  // objects (test fixtures, older callers) still omit it.
   release_year?: number | null;
   is_soundtrack: boolean;
   // Optional because the `select_next_song` RPC returns Song-shaped rows

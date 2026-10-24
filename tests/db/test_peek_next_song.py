@@ -136,14 +136,18 @@ async def test_peek_returns_song_metadata(db: asyncpg.Connection) -> None:
     rock = (await _genre_ids(db, "rock"))[0]
     await _set_selected_genres(db, game_code, [rock])
     sid = await create_test_song(
-        db, title="My Song", artist="My Artist", youtube_id=uuid.uuid4().hex[:11]
+        db,
+        title="My Song",
+        artist="My Artist",
+        youtube_id=uuid.uuid4().hex[:11],
+        release_year=1975,
     )
     await _attach_song_to_genre(db, sid, rock)
     token = await fetch_manager_token(db, game_code)
 
     rows = await db.fetch(
-        "SELECT song_id, youtube_id, start_time, song_title, song_artist, is_soundtrack "
-        "FROM peek_next_song($1, $2)",
+        "SELECT song_id, youtube_id, start_time, song_title, song_artist, is_soundtrack, "
+        "release_year FROM peek_next_song($1, $2)",
         game_code,
         token,
     )
@@ -154,6 +158,23 @@ async def test_peek_returns_song_metadata(db: asyncpg.Connection) -> None:
     assert row["song_artist"] == "My Artist"
     # A plain rock song is not a soundtrack; the flag is computed, not stored.
     assert row["is_soundtrack"] is False
+    # Migration 050: the year rides along for the host console's year chip.
+    assert row["release_year"] == 1975
+
+
+@pytest.mark.asyncio
+async def test_peek_returns_null_release_year_when_unknown(db: asyncpg.Connection) -> None:
+    """Migration 050: a song with no release_year peeks as NULL, not an error."""
+    game_code = await create_test_game(db, status="playing")
+    rock = (await _genre_ids(db, "rock"))[0]
+    await _set_selected_genres(db, game_code, [rock])
+    sid = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=None)
+    await _attach_song_to_genre(db, sid, rock)
+    token = await fetch_manager_token(db, game_code)
+
+    rows = await db.fetch("SELECT release_year FROM peek_next_song($1, $2)", game_code, token)
+    assert len(rows) == 1
+    assert rows[0]["release_year"] is None
 
 
 @pytest.mark.asyncio

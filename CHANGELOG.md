@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-10-24: **The host now sees each song's release year.** A small year chip sits beside the song title on the host console, so the host can ask "what year?" and give a correct answer the +4 Bonus. Only the host sees it, not the players or the big screen. (PR #TBD)
 - 2026-10-11: Added **63 more songs from five favourite artists** (1549 → 1612), human-reviewed: Arik Einstein (+22), the Beatles (+16), Shlomo Artzi (+11, including his duets with Omer Adam, Dudu Tassa, Avraham Tal and Arik Einstein), Queen (+8) and Led Zeppelin (+6). (#368)
 - 2026-10-11: Added **93 songs players asked for** (1456 → 1549), human-reviewed from a list of requests: Israeli pop and Mizrahit hits from Noa Kirel, Eden Hason, Hanan Ben Ari, Ishay Ribo (his first songs in the game), Omer Adam, Moshe Peretz, Idan Amedi, Idan Raichel, Avraham Tal, Static & Ben El, Itay Levi, Benaia Barbi and more, plus classics from Yehuda Poliker, Miri Mesika and Arik Einstein. (#365)
 - 2026-10-09: Added **171 new songs** to the catalog (1350 → 1521), human-reviewed from four sources: two family-playlist CSVs (classic rock/disco/soul plus Mizrahit party hits), a family WhatsApp chat of classic Israeli singer-songwriter music (Arik Einstein, Chava Alberstein, Meir Ariel, Ehud Banai, Matti Caspi, David Broza, and more), and an OCR'd notebook of Hebrew poems set to music (Bialik, Rachel, Alterman, Leah Goldberg, Naomi Shemer, Ehud Manor, and more poets).

@@ -94,7 +94,7 @@ async def _call(
 ) -> list[asyncpg.Record]:
     return await conn.fetch(
         "SELECT round_id, round_number, song_id, song_title, song_artist, "
-        "youtube_id, start_time, is_soundtrack "
+        "youtube_id, start_time, is_soundtrack, release_year "
         "FROM select_next_song($1, $2, $3)",
         game_code,
         token,
@@ -131,6 +131,26 @@ async def test_random_pick_returns_a_song_in_selected_genres(db: asyncpg.Connect
     assert game["current_song_id"] == row["song_id"]
     assert game["buzzed_team_id"] is None
     assert game["locked_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_returns_song_release_year(db: asyncpg.Connection) -> None:
+    """Migration 050: the row carries the song's release_year so the host console
+    can show it next to the title. A song with no year comes back as NULL."""
+    game_code = await create_test_game(db, status="waiting")
+    rock = (await _genre_ids(db, "rock"))[0]
+    await _set_selected_genres(db, game_code, [rock])
+    dated = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=1975)
+    undated = await create_test_song(db, youtube_id=uuid.uuid4().hex[:11], release_year=None)
+    for sid in (dated, undated):
+        await _attach_song_to_genre(db, sid, rock)
+    token = await fetch_manager_token(db, game_code)
+
+    rows = await _call(db, game_code, token, song_id=dated)
+    assert rows[0]["release_year"] == 1975
+
+    rows = await _call(db, game_code, token, song_id=undated)
+    assert rows[0]["release_year"] is None
 
 
 @pytest.mark.asyncio

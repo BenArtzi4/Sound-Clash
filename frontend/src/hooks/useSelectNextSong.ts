@@ -24,6 +24,8 @@ interface SelectNextSongRow {
   youtube_id: string;
   start_time: number;
   is_soundtrack: boolean;
+  // Migration 050. Optional: absent until that migration is applied.
+  release_year?: number | null;
 }
 
 export async function selectNextSongDirect(
@@ -56,6 +58,7 @@ export async function selectNextSongDirect(
       youtube_id: row.youtube_id,
       start_time: row.start_time,
       is_soundtrack: row.is_soundtrack,
+      release_year: row.release_year ?? null,
     },
   };
 }
