@@ -935,7 +935,7 @@ describe("YouTubePlayer host transport", () => {
     expect(screen.queryByTestId("youtube-player-toggle")).toBeNull();
   });
 
-  it("keeps the buttons disabled until the song plays, and again after a new load or the end", async () => {
+  it("keeps the buttons disabled until the song plays, and again after a new load", async () => {
     const { ref } = await mount();
     act(() => ref.current?.loadVideoById("liveVIDEO01", 30));
     expect(btn("back").disabled).toBe(true);
@@ -951,8 +951,6 @@ describe("YouTubePlayer host transport", () => {
     expect(btn("back").disabled).toBe(true);
     state(1);
     expect(btn("back").disabled).toBe(false);
-    state(0);
-    expect(btn("back").disabled).toBe(true);
   });
 
   it("back jumps 10 s earlier, down to 0:00", async () => {
@@ -1074,6 +1072,141 @@ describe("YouTubePlayer host transport", () => {
     fireEvent.click(btn("back"));
     expect(player.seekTo).toHaveBeenLastCalledWith(40, true);
     expect(player.playVideo).not.toHaveBeenCalled();
+  });
+
+  // A song that played to its end: YouTube reports ENDED and the player stops
+  // it (fixed 2026-10-27: the buttons used to go dead here). On a stopped
+  // video playVideo and seekTo both start at 0:00, so a replay loads the song
+  // again at the point.
+  describe("after the song ends", () => {
+    async function ended(props: Partial<ComponentProps<typeof YouTubePlayer>> = {}) {
+      const utils = await playing(props); // liveVIDEO01, start point 30
+      utils.player.getDuration.mockReturnValue(200);
+      state(0);
+      utils.player.getPlayerState.mockReturnValue(5);
+      utils.player.getCurrentTime.mockReturnValue(0);
+      utils.player.loadVideoById.mockClear();
+      utils.player.seekTo.mockClear();
+      utils.player.playVideo.mockClear();
+      return utils;
+    }
+    const replayedFrom = (player: FakeYTPlayer, videoId: string, startSeconds: number) => {
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({ videoId, startSeconds });
+      expect(player.seekTo).not.toHaveBeenCalled();
+      expect(player.playVideo).not.toHaveBeenCalled();
+    };
+
+    it("offers back and Replay, not forward", async () => {
+      await ended();
+      expect(btn("back").disabled).toBe(false);
+      expect(btn("forward").disabled).toBe(true);
+      expect(btn("toggle").disabled).toBe(false);
+      expect(btn("toggle").getAttribute("aria-label")).toBe("Replay the song");
+    });
+
+    it("back replays the last 10 s, and the buttons go back to playing", async () => {
+      const { player } = await ended();
+      fireEvent.click(btn("back"));
+      replayedFrom(player, "liveVIDEO01", 190);
+      expect(screen.getByText("−10s")).toBeInTheDocument();
+      expect(btn("toggle").getAttribute("aria-label")).toBe("Pause the song");
+      expect(btn("forward").disabled).toBe(false);
+    });
+
+    it("back from the end of a song shorter than 10 s starts it at 0:00", async () => {
+      const { player } = await playing();
+      player.getDuration.mockReturnValue(6);
+      state(0);
+      fireEvent.click(btn("back"));
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "liveVIDEO01",
+        startSeconds: 0,
+      });
+    });
+
+    it("forward does nothing on a finished song", async () => {
+      const { player } = await ended();
+      fireEvent.click(btn("forward"));
+      expect(player.loadVideoById).not.toHaveBeenCalled();
+      expect(player.seekTo).not.toHaveBeenCalled();
+      expect(player.playVideo).not.toHaveBeenCalled();
+    });
+
+    it("Replay plays the song again from its start point", async () => {
+      const { player } = await ended();
+      fireEvent.click(btn("toggle"));
+      replayedFrom(player, "liveVIDEO01", 30);
+      expect(btn("toggle").getAttribute("aria-label")).toBe("Pause the song");
+    });
+
+    it("offers back and Replay again when a replay ends", async () => {
+      const { player } = await ended();
+      fireEvent.click(btn("back"));
+      state(1);
+      state(0);
+      expect(btn("toggle").getAttribute("aria-label")).toBe("Replay the song");
+      fireEvent.click(btn("back"));
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "liveVIDEO01",
+        startSeconds: 190,
+      });
+    });
+
+    it("during a buzz back only picks the point, and play() starts the song there", async () => {
+      const { ref, player } = await ended({ holdPlayback: true });
+      expect(btn("toggle").disabled).toBe(true);
+      fireEvent.click(btn("back"));
+      fireEvent.click(btn("back"));
+      expect(player.loadVideoById).not.toHaveBeenCalled();
+      expect(player.playVideo).not.toHaveBeenCalled();
+      expect(screen.getByText("−10s")).toBeInTheDocument();
+
+      act(() => ref.current?.play()); // Wrong / Continue round
+      replayedFrom(player, "liveVIDEO01", 180);
+    });
+
+    it("play() starts a finished song from its start point, not 0:00", async () => {
+      const { ref, player } = await ended();
+      act(() => ref.current?.play());
+      replayedFrom(player, "liveVIDEO01", 30);
+    });
+
+    it("replays a committed prebuffer from that song's own start point", async () => {
+      const { ref, player } = await mount();
+      act(() => ref.current?.prebuffer("nextVIDEO01", 45));
+      state(1); // the freeze
+      act(() => ref.current?.commitPrebuffered(45));
+      state(1);
+      player.getDuration.mockReturnValue(200);
+      state(0);
+      player.loadVideoById.mockClear();
+      fireEvent.click(btn("toggle"));
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "nextVIDEO01",
+        startSeconds: 45,
+      });
+    });
+
+    it("a new song drops the ended state and the picked point", async () => {
+      const { ref, player } = await ended({ holdPlayback: true });
+      fireEvent.click(btn("back")); // picks 190
+      act(() => ref.current?.loadVideoById("liveVIDEO02", 12));
+      expect(btn("back").disabled).toBe(true);
+      state(1);
+      player.loadVideoById.mockClear();
+      act(() => ref.current?.play());
+      expect(player.loadVideoById).not.toHaveBeenCalled();
+      expect(player.playVideo).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not report a replay as a new song start", async () => {
+      const onPlaying = vi.fn();
+      await ended({ onPlaying });
+      expect(onPlaying).toHaveBeenCalledTimes(1);
+      fireEvent.click(btn("back"));
+      state(1);
+      expect(onPlaying).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
