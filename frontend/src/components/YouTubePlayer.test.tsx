@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef, type ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { YouTubePlayer, type YouTubePlayerHandle } from "./YouTubePlayer";
@@ -13,6 +13,8 @@ interface FakeYTPlayer {
   mute: ReturnType<typeof vi.fn>;
   unMute: ReturnType<typeof vi.fn>;
   seekTo: ReturnType<typeof vi.fn>;
+  getCurrentTime: ReturnType<typeof vi.fn>;
+  getDuration: ReturnType<typeof vi.fn>;
   getPlayerState: ReturnType<typeof vi.fn>;
   getVideoLoadedFraction: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
@@ -46,6 +48,8 @@ function installFakeYT() {
       mute: vi.fn(),
       unMute: vi.fn(),
       seekTo: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      getDuration: vi.fn(() => 0),
       getPlayerState: vi.fn(() => 1),
       getVideoLoadedFraction: vi.fn(() => 0),
       destroy: vi.fn(),
@@ -881,6 +885,195 @@ describe("YouTubePlayer load health", () => {
       state(2);
       expect(onEarlyPause).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// Host transport (2026-10-27): back 10 s, pause / play and forward 10 s over
+// the live player's picture on the host console.
+describe("YouTubePlayer host transport", () => {
+  async function mount(props: Partial<ComponentProps<typeof YouTubePlayer>> = {}) {
+    installFakeYT();
+    const ref = createRef<YouTubePlayerHandle>();
+    const utils = render(<YouTubePlayer ref={ref} noCover controls {...props} />);
+    await flushIframeLoad(utils.container);
+    await waitFor(() => expect(lastConfig).not.toBeNull());
+    act(() => {
+      lastConfig?.events?.onReady?.();
+    });
+    const player = lastPlayer;
+    if (!player) throw new Error("player not constructed");
+    return { ref, player, ...utils };
+  }
+  const state = (data: number) =>
+    act(() => {
+      lastConfig?.events?.onStateChange?.({ data });
+    });
+  const btn = (name: "back" | "toggle" | "forward") =>
+    screen.getByTestId<HTMLButtonElement>(`youtube-player-${name}`);
+  // A song that has been loaded and reached PLAYING.
+  async function playing(props: Partial<ComponentProps<typeof YouTubePlayer>> = {}) {
+    const utils = await mount(props);
+    act(() => utils.ref.current?.loadVideoById("liveVIDEO01", 30));
+    state(1);
+    return utils;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("renders no buttons before a song is loaded", async () => {
+    await mount();
+    expect(screen.queryByTestId("youtube-player-back")).toBeNull();
+  });
+
+  it("renders no buttons without `controls` (the hidden standby)", async () => {
+    const { ref } = await mount({ controls: false });
+    act(() => ref.current?.loadVideoById("liveVIDEO01", 30));
+    state(1);
+    expect(screen.queryByTestId("youtube-player-back")).toBeNull();
+    expect(screen.queryByTestId("youtube-player-toggle")).toBeNull();
+  });
+
+  it("keeps the buttons disabled until the song plays, and again after a new load or the end", async () => {
+    const { ref } = await mount();
+    act(() => ref.current?.loadVideoById("liveVIDEO01", 30));
+    expect(btn("back").disabled).toBe(true);
+    expect(btn("toggle").disabled).toBe(true);
+    expect(btn("forward").disabled).toBe(true);
+
+    state(1);
+    expect(btn("back").disabled).toBe(false);
+    expect(btn("toggle").disabled).toBe(false);
+    expect(btn("forward").disabled).toBe(false);
+
+    act(() => ref.current?.loadVideoById("liveVIDEO02", 0));
+    expect(btn("back").disabled).toBe(true);
+    state(1);
+    expect(btn("back").disabled).toBe(false);
+    state(0);
+    expect(btn("back").disabled).toBe(true);
+  });
+
+  it("back jumps 10 s earlier, down to 0:00", async () => {
+    const { player } = await playing();
+    player.getCurrentTime.mockReturnValue(42);
+    fireEvent.click(btn("back"));
+    expect(player.seekTo).toHaveBeenLastCalledWith(32, true);
+
+    player.getCurrentTime.mockReturnValue(4);
+    fireEvent.click(btn("back"));
+    expect(player.seekTo).toHaveBeenLastCalledWith(0, true);
+  });
+
+  it("forward jumps 10 s later, stopping a second short of the end", async () => {
+    const { player } = await playing();
+    player.getCurrentTime.mockReturnValue(50);
+    player.getDuration.mockReturnValue(200);
+    fireEvent.click(btn("forward"));
+    expect(player.seekTo).toHaveBeenLastCalledWith(60, true);
+
+    player.getCurrentTime.mockReturnValue(100);
+    player.getDuration.mockReturnValue(105);
+    fireEvent.click(btn("forward"));
+    expect(player.seekTo).toHaveBeenLastCalledWith(104, true);
+
+    // Duration not known yet: a plain jump.
+    player.getCurrentTime.mockReturnValue(20);
+    player.getDuration.mockReturnValue(0);
+    fireEvent.click(btn("forward"));
+    expect(player.seekTo).toHaveBeenLastCalledWith(30, true);
+  });
+
+  it("moves nothing when YouTube has no song playing, paused or buffering", async () => {
+    const { player } = await playing();
+    player.seekTo.mockClear();
+    for (const s of [-1, 0, 5]) {
+      player.getPlayerState.mockReturnValue(s);
+      fireEvent.click(btn("back"));
+      fireEvent.click(btn("forward"));
+    }
+    expect(player.seekTo).not.toHaveBeenCalled();
+  });
+
+  it("shows −10s / +10s on the picture for 900 ms", async () => {
+    const { player } = await playing();
+    vi.useFakeTimers();
+    player.getCurrentTime.mockReturnValue(42);
+    fireEvent.click(btn("back"));
+    expect(screen.getByText("−10s")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(899);
+    });
+    expect(screen.getByText("−10s")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.queryByText("−10s")).toBeNull();
+
+    fireEvent.click(btn("forward"));
+    expect(screen.getByText("+10s")).toBeInTheDocument();
+  });
+
+  it("Pause pauses the song and Play plays it, and the button's label follows", async () => {
+    const { player } = await playing();
+    expect(btn("toggle").getAttribute("aria-label")).toBe("Pause the song");
+    fireEvent.click(btn("toggle"));
+    expect(player.pauseVideo).toHaveBeenCalledTimes(1);
+    expect(btn("toggle").getAttribute("aria-label")).toBe("Play the song");
+
+    fireEvent.click(btn("toggle"));
+    expect(player.playVideo).toHaveBeenCalledTimes(1);
+    expect(btn("toggle").getAttribute("aria-label")).toBe("Pause the song");
+  });
+
+  it("keeps a host-paused song paused through resumeIfPaused until play() or a new load", async () => {
+    const { ref, player } = await playing();
+    fireEvent.click(btn("toggle"));
+    state(2);
+    player.getPlayerState.mockReturnValue(2);
+
+    act(() => ref.current?.resumeIfPaused());
+    expect(player.playVideo).not.toHaveBeenCalled();
+
+    // Continue round / Wrong restart the song, which clears the host pause.
+    act(() => ref.current?.play());
+    expect(player.playVideo).toHaveBeenCalledTimes(1);
+    state(1);
+    act(() => ref.current?.pause()); // a buzz
+    state(2);
+    act(() => ref.current?.resumeIfPaused());
+    expect(player.playVideo).toHaveBeenCalledTimes(2);
+
+    // So does the next song.
+    state(1);
+    fireEvent.click(btn("toggle"));
+    state(2);
+    act(() => ref.current?.loadVideoById("liveVIDEO02", 0));
+    act(() => ref.current?.resumeIfPaused());
+    expect(player.playVideo).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not report the host's own pause as an early pause", async () => {
+    const onEarlyPause = vi.fn();
+    await playing({ onEarlyPause });
+    fireEvent.click(btn("toggle"));
+    state(2);
+    expect(onEarlyPause).not.toHaveBeenCalled();
+  });
+
+  it("during a buzz locks Play but still moves the paused song", async () => {
+    const { ref, player } = await playing({ holdPlayback: true });
+    act(() => ref.current?.pause());
+    state(2);
+    player.getPlayerState.mockReturnValue(2);
+    expect(btn("toggle").disabled).toBe(true);
+    expect(btn("toggle").getAttribute("aria-label")).toBe("Play the song");
+
+    player.getCurrentTime.mockReturnValue(50);
+    fireEvent.click(btn("back"));
+    expect(player.seekTo).toHaveBeenLastCalledWith(40, true);
+    expect(player.playVideo).not.toHaveBeenCalled();
   });
 });
 

@@ -127,6 +127,19 @@ export const PlayIcon = (p: IconProps) => (
     <path d="M8 5.5v13l10.5-6.5z" />
   </Icon>
 );
+export const PauseIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 5.5v13M15 5.5v13" />
+  </Icon>
+);
+// The host's jump back / forward buttons: RefreshIcon's arrow and its mirror.
+export const RewindIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 12a8 8 0 1 0 2.3-5.7" />
+    <path d="M4 4v5h5" />
+  </Icon>
+);
+export const ForwardIcon = RefreshIcon;
 export const ShareIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 3v12" />

@@ -121,6 +121,9 @@ let onStartStallHandlers: Array<StartStall | undefined> = [];
 let onEarlyPauseHandlers: Array<((msAfterStart: number) => void) | undefined> = [];
 // The idleLabel each player was last rendered with (shown over an empty player).
 let idleLabels: Array<string | undefined> = [];
+// Each player's last `controls` / `holdPlayback` props (the host's buttons).
+let playerControls: Array<boolean | undefined> = [];
+let playerHold: Array<boolean | undefined> = [];
 
 // Typed accessor (tsconfig has noUncheckedIndexedAccess): the handle is pushed
 // before this is ever read, so a missing index is a test-setup bug.
@@ -141,6 +144,8 @@ vi.mock("../components/YouTubePlayer", () => ({
       onEarlyPause?: (msAfterStart: number) => void;
       testId?: string;
       idleLabel?: string;
+      controls?: boolean;
+      holdPlayback?: boolean;
     }
   >((props, ref) => {
     const idxRef = useRef<number | null>(null);
@@ -165,6 +170,8 @@ vi.mock("../components/YouTubePlayer", () => ({
     onStartStallHandlers[idx] = props.onStartStall;
     onEarlyPauseHandlers[idx] = props.onEarlyPause;
     idleLabels[idx] = props.idleLabel;
+    playerControls[idx] = props.controls;
+    playerHold[idx] = props.holdPlayback;
     if (idx === 0) {
       onReadyHandler = props.onReady ?? null;
       lastHandle = handle(0);
@@ -217,6 +224,8 @@ beforeEach(() => {
   onStartStallHandlers = [];
   onEarlyPauseHandlers = [];
   idleLabels = [];
+  playerControls = [];
+  playerHold = [];
   vi.mocked(selectNextSongDirect).mockReset();
   vi.mocked(peekNextSongDirect).mockReset();
   vi.mocked(awardAttemptDirect).mockReset();
@@ -326,6 +335,39 @@ describe("ManagerConsolePage", () => {
     fireVisibilityChange();
 
     expect(handle(0).resumeIfPaused).not.toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
+  it("puts the host's back / pause / forward buttons on the live player only", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [makeTeam({ id: "t1", name: "Team 1" })],
+      rounds: [makeRound({ round_number: 1 })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(playerControls).toEqual([true, false]);
+    expect(playerHold).toEqual([false, false]);
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
+  it("locks the host's Play button while a team holds the buzz", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1, buzzed_team_id: "t1" }),
+      teams: [makeTeam({ id: "t1", name: "Team 1" })],
+      rounds: [makeRound({ round_number: 1 })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(playerHold).toEqual([true, true]);
     await act(async () => {
       await Promise.resolve();
     });
@@ -2347,6 +2389,8 @@ describe("ManagerConsolePage", () => {
         expect.objectContaining({ preloaded: true, songId: "song-2" }),
       ),
     );
+    // The host's buttons moved to the promoted player with the swap.
+    expect(playerControls).toEqual([false, true]);
   });
 
   it("logs the failing live song's name and URL when the video errors", async () => {

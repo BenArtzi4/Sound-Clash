@@ -629,13 +629,16 @@
   .column {
     gap: 0.6rem;
   }
-  /* Shrink the 16:9 player to a compact, centred strip (audio is the point on a
-     phone). height + aspect-ratio derive the width; both player layers still
-     render at full opacity/visibility for the standby buffer's media pipeline. */
+  /* The player is as wide as the console when the screen is tall enough, and
+     shrinks (centred) only as far as the round buttons need to stay on screen.
+     Measured 2026-10-27: everything but the player takes 471px down to the
+     lowest round button; the budget adds 25px for a song title that wraps to
+     two lines and a 12px margin. The floor is the old strip's 116px height.
+     The width drives the height through the base aspect-ratio, so the picture
+     stays 16:9. Both player layers still render (the standby's media pipeline
+     needs it). */
   .playerStack {
-    width: auto;
-    max-width: 100%;
-    height: clamp(116px, 19dvh, 168px);
+    width: min(100%, max(206px, calc((100dvh - 508px) * 16 / 9)));
     margin: 0 auto;
   }
   .card {
@@ -708,8 +711,9 @@
   .column {
     gap: 0.45rem;
   }
+  /* Same rule on the squeezed layout: 447px + 25px + 12px; floor 96px tall. */
   .playerStack {
-    height: clamp(96px, 16dvh, 140px);
+    width: min(100%, max(171px, calc((100dvh - 484px) * 16 / 9)));
   }
   .card {
     padding: 0.7rem;

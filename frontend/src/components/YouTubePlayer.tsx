@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { startPlayerInit } from "../lib/telemetry";
+import { ForwardIcon, PauseIcon, PlayIcon, RewindIcon } from "./icons";
 import styles from "./YouTubePlayer.module.css";
 
 export interface YouTubePlayerHandle {
@@ -67,6 +68,15 @@ interface Props {
   noCover?: boolean;
   // Text on the panel over a still-empty player in `noCover` mode.
   idleLabel?: string;
+  // `noCover` mode only: the host's buttons over the picture (back 10 s,
+  // pause / play, forward 10 s). They stay disabled until the song is playing.
+  // Give it only to the live player: the hidden standby's buttons would still
+  // take keyboard focus.
+  controls?: boolean;
+  // A team holds the buzz, so the song is paused for scoring and Play is
+  // disabled (Wrong and Continue round restart it). Back / forward still move
+  // the paused song, and it stays paused.
+  holdPlayback?: boolean;
   hideOverlay?: boolean;
   // When true, keep the cover visible even while the video is loaded (used by
   // the manager view during a buzz / scoring pause so YouTube's pause-state
@@ -102,6 +112,8 @@ interface YTPlayer {
   mute: () => void;
   unMute: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
   getPlayerState: () => number;
   getVideoLoadedFraction: () => number;
   destroy: () => void;
@@ -121,6 +133,11 @@ interface YTStateChangeEvent {
 const YT_STATE_ENDED = 0;
 const YT_STATE_PLAYING = 1;
 const YT_STATE_PAUSED = 2;
+const YT_STATE_BUFFERING = 3;
+// How far one tap of the host's back / forward buttons moves the song, and how
+// long the "−10s" confirmation stays on the picture.
+const SEEK_STEP_S = 10;
+const SEEK_FLASH_MS = 900;
 // getPlayerState poll cadence + cap for the PLAYING fallback (~6s).
 const PLAY_POLL_MS = 250;
 const PLAY_POLL_MAX_TICKS = 24;
@@ -202,6 +219,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     onStartStall,
     onEarlyPause,
     idleLabel,
+    controls,
+    holdPlayback,
   },
   ref,
 ) {
@@ -216,6 +235,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // False until this player is first asked to load or prebuffer a video; in
   // `noCover` mode the empty player is covered until then.
   const [hasVideo, setHasVideo] = useState(false);
+  // What the host's buttons act on: "idle" until the current audible load
+  // reaches PLAYING (and again once it ends or the player is stopped or turned
+  // into the standby), then "playing" or "paused".
+  const [transport, setTransport] = useState<"idle" | "playing" | "paused">("idle");
+  // The "−10s" / "+10s" confirmation on the picture. `n` remounts it so a
+  // second tap restarts its fade.
+  const [seekFlash, setSeekFlash] = useState<{ text: string; n: number } | null>(null);
+  const seekFlashTimerRef = useRef<number | null>(null);
+  // The host paused the song with the Pause button. resumeIfPaused leaves such
+  // a song paused; play(), a new load, a commit and stop() clear it.
+  const hostPausedRef = useRef(false);
 
   // Stable callback handles so the mount effect can run with []. Inline
   // onReady/onError props from a parent that re-renders frequently would
@@ -355,6 +385,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       ) {
         // As in onStateChange(PLAYING): the song plays, so any app pause is over.
         appPauseRef.current = false;
+        setTransport("playing");
         playingFiredRef.current = true;
         playingAtRef.current = Date.now();
         earlyPauseReportedRef.current = false;
@@ -424,6 +455,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
                 }
               } else {
                 appPauseRef.current = false;
+                setTransport("playing");
                 if (!playingFiredRef.current) {
                   playingFiredRef.current = true;
                   playingAtRef.current = Date.now();
@@ -435,6 +467,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
                   onPlayingRef.current?.("statechange");
                 }
               }
+            }
+            if (
+              event.data === YT_STATE_PAUSED &&
+              !prebufferingRef.current &&
+              playingFiredRef.current
+            ) {
+              setTransport("paused");
             }
             if (
               event.data === YT_STATE_PAUSED &&
@@ -452,6 +491,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             }
             if (event.data === YT_STATE_ENDED) {
               setEnded(true);
+              setTransport("idle");
               playerRef.current?.stopVideo();
             }
           },
@@ -465,6 +505,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         playWatchRef.current = null;
       }
       cancelStartWatch();
+      if (seekFlashTimerRef.current !== null) window.clearTimeout(seekFlashTimerRef.current);
       playerRef.current?.destroy();
       playerRef.current = null;
     };
@@ -487,6 +528,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         // A new song: no app pause of it yet (a stop() at the last swap was
         // for the previous one).
         appPauseRef.current = false;
+        hostPausedRef.current = false;
+        setTransport("idle");
         armPlaying();
         armStartWatch();
         videoIdRef.current = videoId;
@@ -511,6 +554,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         setEnded(false);
         setErrorCode(null);
         setHasVideo(true);
+        hostPausedRef.current = false;
+        setTransport("idle");
         prebufferVisibleAtRef.current = visibleClock();
         cancelStartWatch();
         videoIdRef.current = videoId;
@@ -533,6 +578,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         setEnded(false);
         setErrorCode(null);
         appPauseRef.current = false;
+        hostPausedRef.current = false;
+        setTransport("idle");
         armPlaying();
         armStartWatch();
         playerRef.current?.seekTo(start, true);
@@ -545,10 +592,16 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         cancelStartWatch();
         playerRef.current?.pauseVideo();
       },
-      play: () => playerRef.current?.playVideo(),
+      play: () => {
+        // Wrong / Continue round restart the song, also one the host paused.
+        hostPausedRef.current = false;
+        playerRef.current?.playVideo();
+      },
       resumeIfPaused: () => {
         // Only resume from a genuine PAUSED state so a finished (ENDED) clip is
         // never replayed and a live/buffering/idle player is left untouched.
+        // A song the host paused stays paused.
+        if (hostPausedRef.current) return;
         if (playerRef.current?.getPlayerState() === YT_STATE_PAUSED) {
           playerRef.current.playVideo();
         }
@@ -558,8 +611,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         prebufferingRef.current = false;
         prebufferPausedRef.current = false;
         appPauseRef.current = true;
+        hostPausedRef.current = false;
         cancelStartWatch();
         setEnded(true);
+        setTransport("idle");
         playerRef.current?.stopVideo();
       },
       retryPrebuffer: () => {
@@ -582,6 +637,50 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     [armPlaying, armStartWatch, cancelStartWatch, visibleClock],
   );
 
+  // The host's back / forward buttons. Acts only on a song that is playing,
+  // paused or buffering: before it starts, once it has ended (stopped) and
+  // while this player holds a prebuffer there is nothing to move. YouTube keeps
+  // a paused song paused across seekTo, so a jump during a buzz stays silent.
+  function seekBy(deltaSeconds: number): void {
+    const player = playerRef.current;
+    if (!player || prebufferingRef.current) return;
+    const state = player.getPlayerState();
+    if (state !== YT_STATE_PLAYING && state !== YT_STATE_PAUSED && state !== YT_STATE_BUFFERING) {
+      return;
+    }
+    const now = player.getCurrentTime() || 0;
+    const duration = player.getDuration() || 0;
+    let target = Math.max(0, now + deltaSeconds);
+    // Stop a second short of the end: a jump past it would end the song.
+    if (duration > 0) target = Math.min(target, Math.max(now, duration - 1));
+    player.seekTo(target, true);
+    const text = deltaSeconds < 0 ? `−${-deltaSeconds}s` : `+${deltaSeconds}s`;
+    setSeekFlash((prev) => ({ text, n: (prev?.n ?? 0) + 1 }));
+    if (seekFlashTimerRef.current !== null) window.clearTimeout(seekFlashTimerRef.current);
+    seekFlashTimerRef.current = window.setTimeout(() => {
+      seekFlashTimerRef.current = null;
+      setSeekFlash(null);
+    }, SEEK_FLASH_MS);
+  }
+
+  // The host's Pause / Play button.
+  function togglePlayback(): void {
+    const player = playerRef.current;
+    if (!player || holdPlayback) return;
+    if (transport === "playing") {
+      // An app pause for the early-pause telemetry, and no start to watch.
+      hostPausedRef.current = true;
+      appPauseRef.current = true;
+      cancelStartWatch();
+      player.pauseVideo();
+      setTransport("paused");
+    } else if (transport === "paused") {
+      hostPausedRef.current = false;
+      player.playVideo();
+      setTransport("playing");
+    }
+  }
+
   if (noCover) {
     // No-cover mode: just the iframe, plus the idle panel until the first
     // video. Parents handle error UX themselves via the onError callback (e.g.
@@ -602,6 +701,47 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             {idleLabel ? <span className={styles.loading}>{idleLabel}</span> : null}
           </div>
         )}
+        {controls && hasVideo ? (
+          <div className={styles.transport}>
+            <button
+              type="button"
+              className={styles.transportBtn}
+              onClick={() => seekBy(-SEEK_STEP_S)}
+              disabled={transport === "idle"}
+              aria-label={`Back ${SEEK_STEP_S} seconds`}
+              data-testid={`${testId}-back`}
+            >
+              <RewindIcon />
+              <span>{SEEK_STEP_S}</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.transportBtn} ${styles.transportToggle}`}
+              onClick={togglePlayback}
+              disabled={transport === "idle" || holdPlayback}
+              aria-label={transport === "paused" ? "Play the song" : "Pause the song"}
+              data-testid={`${testId}-toggle`}
+            >
+              {transport === "paused" ? <PlayIcon /> : <PauseIcon />}
+            </button>
+            <button
+              type="button"
+              className={styles.transportBtn}
+              onClick={() => seekBy(SEEK_STEP_S)}
+              disabled={transport === "idle"}
+              aria-label={`Forward ${SEEK_STEP_S} seconds`}
+              data-testid={`${testId}-forward`}
+            >
+              <span>{SEEK_STEP_S}</span>
+              <ForwardIcon />
+            </button>
+            {seekFlash ? (
+              <span key={seekFlash.n} className={styles.seekFlash} aria-hidden="true">
+                {seekFlash.text}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     );
   }
