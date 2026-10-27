@@ -197,6 +197,37 @@ describe("DisplayPage board", () => {
     expect(screen.getByText(/waiting for teams/i)).toBeInTheDocument();
   });
 
+  it("gives the join QR half the frame before the game starts", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting" }),
+      teams: [makeTeam({ id: "t1", name: "Alice", score: 0 })],
+      rounds: [],
+    });
+    const { container } = renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(container.querySelector("main")).toHaveAttribute("data-phase", "waiting");
+    const panel = screen.getByText("Scan to join").parentElement?.parentElement;
+    expect(panel?.className).toMatch(/_fill_/);
+  });
+
+  it("puts the join QR back in the narrow sidebar once the game starts", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [makeTeam({ id: "t1", name: "Alice", score: 0 })],
+      rounds: [],
+    });
+    const { container } = renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(container.querySelector("main")).toHaveAttribute("data-phase", "playing");
+    const panel = screen.getByText("Scan to join").parentElement?.parentElement;
+    expect(panel?.className).toMatch(/_panel_/);
+    expect(panel?.className).not.toMatch(/_fill_/);
+  });
+
   it("pops a +N pill when a team's score goes up", async () => {
     const alice = makeTeam({ id: "t1", name: "Alice", score: 0 });
     setHydrate({

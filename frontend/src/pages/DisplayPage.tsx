@@ -285,6 +285,8 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const rowsPerColumn = Math.max(1, teams.length);
   // QR shrinks on shorter (often OS-scaled) laptop frames so the footer doesn't
   // starve the scoreboard; on a tall projector it stays large and scannable.
+  // On a TV's waiting screen the CSS sizes the QR from its half of the frame
+  // instead (QRPanel `fill`), so this is the in-game and phone size.
   const qrSize =
     viewportHeight < 700 ? 96 : viewportHeight < 820 ? 118 : viewportHeight < 950 ? 140 : 172;
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
@@ -324,7 +326,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const timerActive = game.status === "playing" && lockedTeam != null && lockedAt != null;
 
   return (
-    <main className={styles.shell} data-density={density}>
+    <main className={styles.shell} data-density={density} data-phase={game.status}>
       <div className={styles.pointStack} aria-live="polite">
         {pointEvents.map((ev) => (
           <PointChange
@@ -444,6 +446,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
             gameCode={gameCode}
             joinUrl={`${window.location.origin}/join/${gameCode}`}
             size={qrSize}
+            fill={game.status === "waiting"}
           />
         </footer>
       </aside>
@@ -452,7 +455,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         {teams.length === 0 ? (
           <div className={styles.emptyBoard}>
             <p className={styles.emptyBoardTitle}>Waiting for teams</p>
-            <p className={styles.emptyBoardHint}>Scan the code below or enter it on your phone.</p>
+            <p className={styles.emptyBoardHint}>Scan the code or enter it on your phone.</p>
           </div>
         ) : (
           <ol
