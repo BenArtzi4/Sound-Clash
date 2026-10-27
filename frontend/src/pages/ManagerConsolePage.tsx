@@ -313,7 +313,9 @@ export function ManagerConsolePage() {
       <div className={styles.column}>
         {/* Two overlaid players: the active one (audible, on top) and the
             standby that silently prebuffers the next song. testId follows the
-            active player so E2E's strict youtube-player locators stay valid. */}
+            active player so E2E's strict youtube-player locators stay valid.
+            So do the host's back / pause / forward buttons: only the active
+            player renders them. */}
         <div className={styles.playerStack}>
           <div
             className={`${styles.playerLayer} ${
@@ -330,6 +332,8 @@ export function ManagerConsolePage() {
               onStartStall={(info) => handleStartStall("A", info, currentSong)}
               onEarlyPause={(ms) => handleEarlyPause("A", ms, currentSong)}
               idleLabel={idleLabel}
+              controls={activeKey === "A"}
+              holdPlayback={game.buzzed_team_id != null}
             />
           </div>
           <div
@@ -347,6 +351,8 @@ export function ManagerConsolePage() {
               onStartStall={(info) => handleStartStall("B", info, currentSong)}
               onEarlyPause={(ms) => handleEarlyPause("B", ms, currentSong)}
               idleLabel={idleLabel}
+              controls={activeKey === "B"}
+              holdPlayback={game.buzzed_team_id != null}
             />
           </div>
         </div>
