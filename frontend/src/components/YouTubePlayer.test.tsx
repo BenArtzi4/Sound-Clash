@@ -1161,14 +1161,38 @@ describe("YouTubePlayer host transport", () => {
       expect(player.playVideo).not.toHaveBeenCalled();
       expect(screen.getByText("−10s")).toBeInTheDocument();
 
-      act(() => ref.current?.play()); // Wrong / Continue round
-      replayedFrom(player, "liveVIDEO01", 180);
+      // Wrong / Continue round: play() as before (a fresh load after their
+      // RPC await could be blocked on iOS), moved to the point on PLAYING.
+      act(() => ref.current?.play());
+      expect(player.playVideo).toHaveBeenCalledTimes(1);
+      expect(player.loadVideoById).not.toHaveBeenCalled();
+      expect(player.seekTo).not.toHaveBeenCalled();
+      state(1);
+      expect(player.seekTo).toHaveBeenCalledWith(180, true);
+      state(3);
+      state(1);
+      expect(player.seekTo).toHaveBeenCalledTimes(1);
     });
 
-    it("play() starts a finished song from its start point, not 0:00", async () => {
+    it("play() moves a finished song to its start point, not 0:00", async () => {
       const { ref, player } = await ended();
       act(() => ref.current?.play());
-      replayedFrom(player, "liveVIDEO01", 30);
+      expect(player.playVideo).toHaveBeenCalledTimes(1);
+      expect(player.loadVideoById).not.toHaveBeenCalled();
+      state(1);
+      expect(player.seekTo).toHaveBeenCalledWith(30, true);
+      expect(btn("toggle").getAttribute("aria-label")).toBe("Pause the song");
+    });
+
+    it("play() does not move a finished song whose round starts at 0:00", async () => {
+      const { ref, player } = await mount();
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      state(1);
+      state(0);
+      act(() => ref.current?.play());
+      state(1);
+      expect(player.playVideo).toHaveBeenCalledTimes(1);
+      expect(player.seekTo).not.toHaveBeenCalled();
     });
 
     it("replays a committed prebuffer from that song's own start point", async () => {

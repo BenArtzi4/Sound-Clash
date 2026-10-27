@@ -259,6 +259,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // During a buzz after the end, the point the host picked with back: play()
   // (Wrong / Continue round) starts the song there. null: the start point.
   const replayFromRef = useRef<number | null>(null);
+  // Where play() restarts a finished song: it plays from 0:00, so the first
+  // PLAYING moves it here (see play()).
+  const seekOnPlayRef = useRef<number | null>(null);
 
   // Stable callback handles so the mount effect can run with []. Inline
   // onReady/onError props from a parent that re-renders frequently would
@@ -424,6 +427,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     if (!player || !videoId) return;
     songEndedRef.current = false;
     replayFromRef.current = null;
+    seekOnPlayRef.current = null;
     hostPausedRef.current = false;
     setEnded(false);
     setTransport("playing");
@@ -485,6 +489,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
               } else {
                 appPauseRef.current = false;
                 setTransport("playing");
+                const seekTo = seekOnPlayRef.current;
+                if (seekTo !== null) {
+                  seekOnPlayRef.current = null;
+                  playerRef.current?.seekTo(seekTo, true);
+                }
                 if (!playingFiredRef.current) {
                   playingFiredRef.current = true;
                   playingAtRef.current = Date.now();
@@ -524,6 +533,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
                 endedAtRef.current = player?.getDuration() || player?.getCurrentTime() || 0;
                 songEndedRef.current = true;
                 replayFromRef.current = null;
+                seekOnPlayRef.current = null;
               }
               setEnded(true);
               setTransport(prebufferingRef.current ? "idle" : "ended");
@@ -566,6 +576,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         hostPausedRef.current = false;
         songEndedRef.current = false;
         replayFromRef.current = null;
+        seekOnPlayRef.current = null;
         songStartRef.current = startSeconds ?? 0;
         setTransport("idle");
         armPlaying();
@@ -595,6 +606,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         hostPausedRef.current = false;
         songEndedRef.current = false;
         replayFromRef.current = null;
+        seekOnPlayRef.current = null;
         setTransport("idle");
         prebufferVisibleAtRef.current = visibleClock();
         cancelStartWatch();
@@ -621,6 +633,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         hostPausedRef.current = false;
         songEndedRef.current = false;
         replayFromRef.current = null;
+        seekOnPlayRef.current = null;
         songStartRef.current = start;
         setTransport("idle");
         armPlaying();
@@ -638,12 +651,20 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       play: () => {
         // Wrong / Continue round restart the song, also one the host paused.
         hostPausedRef.current = false;
-        // A song that played to its end was stopped: start it from the point
-        // the host picked with back during the buzz, else from where the round
-        // started (playVideo alone would start it at 0:00).
+        // A song that played to its end was stopped, and playVideo starts it
+        // at 0:00. A reload at the point (as the buttons do) is not used here:
+        // Wrong / Continue call play() after an RPC await, where a fresh load
+        // can be blocked autoplay on iOS. So it plays as before, and its first
+        // PLAYING moves it to the point the host picked with back during the
+        // buzz, else to where the round started.
         if (songEndedRef.current) {
-          replay(replayFromRef.current ?? songStartRef.current);
-          return;
+          const from = replayFromRef.current ?? songStartRef.current;
+          songEndedRef.current = false;
+          replayFromRef.current = null;
+          seekOnPlayRef.current = null;
+          setEnded(false);
+          setTransport("playing");
+          seekOnPlayRef.current = from > 0 ? from : null;
         }
         playerRef.current?.playVideo();
       },
@@ -664,6 +685,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         hostPausedRef.current = false;
         songEndedRef.current = false;
         replayFromRef.current = null;
+        seekOnPlayRef.current = null;
         cancelStartWatch();
         setEnded(true);
         setTransport("idle");
@@ -686,7 +708,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         };
       },
     }),
-    [armPlaying, armStartWatch, cancelStartWatch, replay, visibleClock],
+    [armPlaying, armStartWatch, cancelStartWatch, visibleClock],
   );
 
   // The "−10s" / "+10s" confirmation for a jump.
