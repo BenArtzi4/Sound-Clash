@@ -146,9 +146,7 @@ export function Setlist({ game, rounds, teams }: Props) {
       }
     }
     try {
-      await navigator.clipboard.writeText(`${text}
-
-Played on Sound Clash: ${url}`);
+      await navigator.clipboard.writeText(`${text}\n\nPlayed on Sound Clash: ${url}`);
       flash("copied");
     } catch {
       flash("failed");
