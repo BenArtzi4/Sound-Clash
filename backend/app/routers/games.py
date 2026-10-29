@@ -61,8 +61,26 @@ router = APIRouter(tags=["games"])
 # ---------------------------------------------------------------------------
 
 
+def is_test_request(request: Request) -> bool:
+    """True when a game is being created by a test, not a real host.
+
+    Real hosts always use a browser, whose User-Agent starts with "Mozilla/".
+    Harnesses are headless browsers ("HeadlessChrome") or plain HTTP clients
+    (Node fetch, curl, httpx). A real browser running a check sends
+    ``X-Sound-Clash-Test: 1`` (the create page does this for ``?test=1``).
+    """
+    if request.headers.get("x-sound-clash-test") == "1":
+        return True
+    agent = request.headers.get("user-agent", "")
+    return "Headless" in agent or not agent.startswith("Mozilla/")
+
+
 def _insert_game_blocking(
-    client: SupabaseClientLike, code: str, genre_ids: list[str], decades: list[int]
+    client: SupabaseClientLike,
+    code: str,
+    genre_ids: list[str],
+    decades: list[int],
+    is_test: bool = False,
 ) -> dict[str, Any]:
     payload = {
         "game_code": code,
@@ -84,6 +102,11 @@ def _insert_game_blocking(
     if not srows:
         raise NotFoundError("manager secret was not provisioned")
     game["manager_token"] = srows[0]["manager_token"]
+    if is_test:
+        # Migration 051: archive_game copies this into game_history.is_test, so
+        # test runs never count as real games.
+        with mapped_postgrest_errors():
+            client.table("game_secrets").update({"is_test": True}).eq("game_code", code).execute()
     return game
 
 
@@ -272,13 +295,14 @@ async def create_game(request: Request, body: CreateGameRequest) -> CreateGameRe
     client = get_supabase_client()
     genre_ids = [str(g) for g in body.selected_genres]
     decades = list(body.selected_decades)
+    is_test = is_test_request(request)
 
     inserted: dict[str, Any] = {}
 
     async def insert(code: str) -> None:
         nonlocal inserted
         inserted = await anyio.to_thread.run_sync(
-            _insert_game_blocking, client, code, genre_ids, decades
+            _insert_game_blocking, client, code, genre_ids, decades, is_test
         )
 
     await generate_unique_code(insert)
