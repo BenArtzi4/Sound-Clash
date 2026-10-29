@@ -169,6 +169,28 @@ describe("api - public routes", () => {
     expect(headers["X-Manager-Token"]).toBeUndefined();
   });
 
+  it("createGame sends the test-run header only when asked", async () => {
+    const created = {
+      game_code: "ABCDEF",
+      status: "waiting",
+      selected_genres: [],
+      selected_decades: [],
+      started_at: "2026-05-05T12:00:00Z",
+      expires_at: "2026-05-05T16:00:00Z",
+      manager_token: "11111111-1111-1111-1111-111111111111",
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, created));
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, created));
+    await createGame({ selected_genres: ["g1"], selected_decades: [] }, { testRun: true });
+    await createGame({ selected_genres: ["g1"], selected_decades: [] });
+    const header = (i: number) =>
+      ((fetchMock.mock.calls[i] as [string, RequestInit])[1].headers as Record<string, string>)[
+        "X-Sound-Clash-Test"
+      ];
+    expect(header(0)).toBe("1");
+    expect(header(1)).toBeUndefined();
+  });
+
   it("createGame is unauthenticated and returns the manager token", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(201, {

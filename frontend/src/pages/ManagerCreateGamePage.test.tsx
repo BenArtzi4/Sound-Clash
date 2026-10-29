@@ -36,9 +36,9 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-function renderPage() {
+function renderPage(entry = "/manager/create") {
   return render(
-    <MemoryRouter initialEntries={["/manager/create"]}>
+    <MemoryRouter initialEntries={[entry]}>
       <ToastProvider>
         <Routes>
           <Route path="/" element={<div>home page</div>} />
@@ -71,6 +71,25 @@ describe("ManagerCreateGamePage", () => {
     expect(submit).toBeEnabled();
   });
 
+  it("marks the game as a test run when the page was opened with ?test=1", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
+    vi.mocked(createGame).mockResolvedValueOnce({
+      game_code: "TTTTTT",
+      status: "waiting",
+      selected_genres: ["g1"],
+      selected_decades: [],
+      started_at: "2026-05-05T12:00:00Z",
+      expires_at: "2026-05-05T16:00:00Z",
+      manager_token: "test-token",
+    });
+    renderPage("/manager/create?test=1");
+    await waitFor(() => screen.getByText("Rock"));
+    fireEvent.click(screen.getByLabelText(/rock/i));
+    fireEvent.click(screen.getByRole("button", { name: /create game/i }));
+    await waitFor(() => expect(createGame).toHaveBeenCalled());
+    expect(vi.mocked(createGame).mock.calls[0]?.[1]).toEqual({ testRun: true });
+  });
+
   it("creates the game, stores the manager token, and navigates", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
     vi.mocked(createGame).mockResolvedValueOnce({
@@ -93,10 +112,10 @@ describe("ManagerCreateGamePage", () => {
     await waitFor(() => expect(screen.getByText("game console")).toBeInTheDocument(), {
       timeout: 5000,
     });
-    expect(createGame).toHaveBeenCalledWith({
-      selected_genres: ["g1"],
-      selected_decades: [],
-    });
+    expect(createGame).toHaveBeenCalledWith(
+      { selected_genres: ["g1"], selected_decades: [] },
+      { testRun: false },
+    );
     expect(getManagerToken("ZZZZZZ")).toBe("abc-token-123");
   });
 
@@ -124,10 +143,10 @@ describe("ManagerCreateGamePage", () => {
     fireEvent.click(submit);
 
     await waitFor(() => expect(createGame).toHaveBeenCalled());
-    expect(createGame).toHaveBeenCalledWith({
-      selected_genres: ["g1"],
-      selected_decades: [1980],
-    });
+    expect(createGame).toHaveBeenCalledWith(
+      { selected_genres: ["g1"], selected_decades: [1980] },
+      { testRun: false },
+    );
   });
 
   // Regression for the decade-pill tap flash fix (Task 3): the toggle logic
@@ -229,10 +248,10 @@ describe("ManagerCreateGamePage", () => {
 
       fireEvent.click(submit);
       await waitFor(() => expect(createGame).toHaveBeenCalled());
-      expect(createGame).toHaveBeenCalledWith({
-        selected_genres: ["g-ipop", "g-pop"],
-        selected_decades: [2010, 2020],
-      });
+      expect(createGame).toHaveBeenCalledWith(
+        { selected_genres: ["g-ipop", "g-pop"], selected_decades: [2010, 2020] },
+        { testRun: false },
+      );
     });
 
     it("the Everything preset selects every loaded genre and no decade", async () => {
