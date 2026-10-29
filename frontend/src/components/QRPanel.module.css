@@ -9,9 +9,8 @@
 }
 
 .qrFrame {
-  /* Caller drives size via the --qr-frame-size custom property; the
-     mobile media query below caps it for small viewports so a desktop
-     callsite passing 420px doesn't blow the phone layout. */
+  /* Caller drives size via the --qr-frame-size custom property (the display
+     picks a smaller one on phones, where the board shares the frame). */
   width: var(--qr-frame-size, 132px);
   height: var(--qr-frame-size, 132px);
   border-radius: var(--radius-sm);
@@ -76,22 +75,27 @@
   line-height: 1.35;
 }
 
-@media (max-width: 600px) {
-  .panel {
-    flex-direction: column;
-    text-align: center;
-  }
-  .qrFrame {
-    width: 160px;
-    height: 160px;
-  }
+/* `compact` (the display's phone frames during a game, 2026-10-29): the
+   board shares the frame, so the panel keeps only the QR and the code. A late
+   joiner who can't scan enters the code on the home page instead. */
+.compact {
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.compact .code {
+  font-size: 1.3rem;
+}
+
+.compact .url {
+  display: none;
 }
 
 /* `fill` mode (the display's waiting screen, 2026-10-27): inside a size
    container the panel stacks and the QR grows to the biggest square that
    leaves room for the text under it, so the room can scan it from the sofa.
-   With no size container around the panel (a phone, the in-game sidebar)
-   this query never matches and the panel keeps its normal layout. */
+   With no size container around the panel (an upright phone, the in-game
+   sidebar) this query never matches and the panel keeps its normal layout. */
 @container (min-width: 0px) {
   .fill {
     flex-direction: column;
@@ -121,5 +125,31 @@
   }
   .fill .url {
     font-size: 1.15rem;
+  }
+}
+
+/* A short column (a sideways phone's waiting screen, 2026-10-29): the stacked
+   panel above would leave the QR a sliver, so the QR sits beside the text and
+   takes the column's height. 176px is the text's width plus the gap and the
+   panel's side padding. */
+@container (max-height: 479px) {
+  .fill {
+    flex-direction: row;
+    gap: 16px;
+    padding: 12px;
+    text-align: left;
+  }
+  .fill .qrFrame {
+    width: min(100cqh - 24px, 100cqw - 176px);
+    padding: 8px;
+  }
+  .fill .body {
+    align-items: flex-start;
+  }
+  .fill .code {
+    font-size: 1.75rem;
+  }
+  .fill .url {
+    font-size: 0.75rem;
   }
 }

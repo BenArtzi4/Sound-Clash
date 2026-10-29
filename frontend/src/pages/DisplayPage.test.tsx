@@ -228,6 +228,188 @@ describe("DisplayPage board", () => {
     expect(panel?.className).not.toMatch(/_fill_/);
   });
 
+  describe("on a phone frame", () => {
+    const tv = { width: window.innerWidth, height: window.innerHeight };
+    function setFrame(width: number, height: number) {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+    }
+    afterEach(() => setFrame(tv.width, tv.height));
+
+    it("cuts the join panel to the QR and code during a game", async () => {
+      setFrame(390, 844);
+      setHydrate({
+        game: makeActiveGame({ status: "playing", round_number: 1 }),
+        teams: [makeTeam({ id: "t1", name: "Alice", score: 0 })],
+        rounds: [],
+      });
+      renderAt("/display/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const panel = screen.getByText("Scan to join").parentElement?.parentElement;
+      expect(panel?.className).toMatch(/_compact_/);
+      // The CSS sizes the QR from this: smaller than the TV's 140+ on a phone.
+      const frame = panel?.firstElementChild as HTMLElement;
+      expect(frame.style.getPropertyValue("--qr-frame-size")).toBe("92px");
+    });
+
+    it("keeps the full join panel before the game starts", async () => {
+      setFrame(390, 844);
+      setHydrate({
+        game: makeActiveGame({ status: "waiting" }),
+        teams: [makeTeam({ id: "t1", name: "Alice", score: 0 })],
+        rounds: [],
+      });
+      renderAt("/display/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const panel = screen.getByText("Scan to join").parentElement?.parentElement;
+      expect(panel?.className).not.toMatch(/_compact_/);
+      const frame = panel?.firstElementChild as HTMLElement;
+      expect(frame.style.getPropertyValue("--qr-frame-size")).toBe("140px");
+    });
+
+    it("follows the frame when the phone turns sideways", async () => {
+      setFrame(390, 844);
+      setHydrate({
+        game: makeActiveGame({ status: "playing", round_number: 1 }),
+        teams: [makeTeam({ id: "t1", name: "Alice", score: 0 })],
+        rounds: [],
+      });
+      renderAt("/display/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      act(() => {
+        setFrame(844, 390);
+        window.dispatchEvent(new Event("resize"));
+      });
+      const panel = screen.getByText("Scan to join").parentElement?.parentElement;
+      expect(panel?.className).toMatch(/_compact_/);
+      const frame = panel?.firstElementChild as HTMLElement;
+      expect(frame.style.getPropertyValue("--qr-frame-size")).toBe("64px");
+    });
+  });
+
+  it("keeps the full join panel on a TV during a game", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [makeTeam({ id: "t1", name: "Alice", score: 0 })],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const panel = screen.getByText("Scan to join").parentElement?.parentElement;
+    expect(panel?.className).not.toMatch(/_compact_/);
+  });
+
+  it("carries the turn-sideways tip before the game starts, not during it", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting" }),
+      teams: [],
+      rounds: [],
+    });
+    renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    expect(screen.getByTestId("display-rotate-tip")).toHaveTextContent(/turn your phone sideways/i);
+
+    await act(async () => {
+      fireGame(
+        makePayload<ActiveGame>("active_games", "UPDATE", {
+          new: makeActiveGame({ status: "playing", round_number: 1 }),
+        }),
+      );
+    });
+    expect(screen.queryByTestId("display-rotate-tip")).not.toBeInTheDocument();
+  });
+
+  describe("full screen", () => {
+    afterEach(() => {
+      Reflect.deleteProperty(document, "fullscreenEnabled");
+      Reflect.deleteProperty(document, "fullscreenElement");
+      Reflect.deleteProperty(document.documentElement, "requestFullscreen");
+    });
+
+    it("offers a full-screen button where the browser allows it, gone once full screen", async () => {
+      const request = vi.fn(() => Promise.resolve());
+      Object.defineProperty(document, "fullscreenEnabled", { configurable: true, value: true });
+      Object.defineProperty(document.documentElement, "requestFullscreen", {
+        configurable: true,
+        value: request,
+      });
+      setHydrate({ game: makeActiveGame({ status: "waiting" }), teams: [], rounds: [] });
+      renderAt("/display/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+      expect(request).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        Object.defineProperty(document, "fullscreenElement", {
+          configurable: true,
+          value: document.documentElement,
+        });
+        document.dispatchEvent(new Event("fullscreenchange"));
+      });
+      expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();
+    });
+
+    it("renders no button where the page can't go full screen (iPhone Safari)", async () => {
+      setHydrate({ game: makeActiveGame({ status: "waiting" }), teams: [], rounds: [] });
+      renderAt("/display/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      expect(screen.queryByRole("button", { name: "Full screen" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the screen awake while the board is open", async () => {
+    const release = vi.fn(() => Promise.resolve());
+    const request = vi.fn(() => Promise.resolve({ release, addEventListener: vi.fn() }));
+    Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request } });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    try {
+      setHydrate({ game: makeActiveGame({ status: "waiting" }), teams: [], rounds: [] });
+      const { unmount } = renderAt("/display/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      expect(request).toHaveBeenCalledWith("screen");
+      unmount();
+      expect(release).toHaveBeenCalledTimes(1);
+    } finally {
+      Reflect.deleteProperty(navigator, "wakeLock");
+      Reflect.deleteProperty(document, "visibilityState");
+    }
+  });
+
+  it("fits the final screen to the frame", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "ended" }),
+      teams: [makeTeam({ id: "t1", name: "Alice", score: 12 })],
+      rounds: [],
+    });
+    const { container } = renderAt("/display/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const end = container.querySelector("[data-fit]");
+    expect(end).not.toBeNull();
+    expect(end?.parentElement?.className).toMatch(/_endFrame_/);
+    expect(container.querySelector("main")?.className).toMatch(/_shellEnd_/);
+  });
+
   it("pops a +N pill when a team's score goes up", async () => {
     const alice = makeTeam({ id: "t1", name: "Alice", score: 0 });
     setHydrate({
@@ -536,7 +718,7 @@ describe("DisplayPage final board (I-FinalBoard)", () => {
       ],
       rounds: [],
     });
-    renderAt("/display/ABCDEF");
+    const { container } = renderAt("/display/ABCDEF");
     await act(async () => {
       await fireSubscribed();
     });
@@ -550,6 +732,8 @@ describe("DisplayPage final board (I-FinalBoard)", () => {
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
     expect(screen.getAllByText("Alice").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
+    // The podium under the banner still fits the frame.
+    expect(container.querySelector("[data-fit]")).not.toBeNull();
   });
 
   it("shows only the banner when the display opened onto an already-swept game", async () => {

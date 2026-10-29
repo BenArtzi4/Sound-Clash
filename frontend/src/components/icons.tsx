@@ -160,6 +160,12 @@ export const DownloadIcon = (p: IconProps) => (
     <path d="M5 20h14" />
   </Icon>
 );
+// The display's full-screen button: four corners pointing out.
+export const ExpandIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </Icon>
+);
 export const EqualizerMark = (p: IconProps) => (
   <Icon {...p}>
     <path d="M5 15v-6" strokeWidth="2.5" />

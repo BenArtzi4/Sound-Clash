@@ -18,6 +18,16 @@ describe("EndScreen", () => {
     window.matchMedia = realMatchMedia;
   });
 
+  it("fits the frame only in the display's version", () => {
+    const { container, rerender } = render(<EndScreen teams={[]} gameCode="ABCDEF" />);
+    const shell = container.firstElementChild!;
+    expect(shell).not.toHaveAttribute("data-fit");
+    expect(shell.className).not.toMatch(/_fit_/);
+    rerender(<EndScreen teams={[]} gameCode="ABCDEF" fit />);
+    expect(container.firstElementChild).toHaveAttribute("data-fit", "true");
+    expect(container.firstElementChild!.className).toMatch(/_fit_/);
+  });
+
   it("shows the FINAL RESULTS heading and game code", () => {
     render(<EndScreen teams={[]} gameCode="ABCDEF" />);
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
@@ -156,6 +166,36 @@ describe("EndScreen", () => {
     // Carol (10 pts) also shows up in the scoreboard at rank 2 (dense ranking).
     const scoreboard = screen.getByTestId("final-scoreboard");
     expect(scoreboard.querySelector('[data-team-id="3"]')?.getAttribute("data-rank")).toBe("2");
+  });
+
+  it("lists a tie as one group over the shared score in the display's version", () => {
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 30 },
+      { ...baseTeam, id: "2", name: "Bob", score: 30 },
+      { ...baseTeam, id: "3", name: "Carol", score: 10 },
+    ];
+    const { container } = render(<EndScreen teams={teams} gameCode="ABCDEF" fit />);
+    const winnersCard = screen.getByText(/winners/i).parentElement!;
+    const names = [...winnersCard.querySelectorAll("[dir=auto]")].map((n) => n.textContent);
+    expect(names).toEqual(["Alice", "Bob"]);
+    // One score for the pair, not one per team.
+    expect(winnersCard.textContent?.match(/30/g)).toHaveLength(1);
+    // Each team still has its own leaderboard row, and the list knows how many
+    // rows it has (the fitted rows size themselves from it).
+    const list = container.querySelector('[data-testid="final-scoreboard"] ol') as HTMLElement;
+    expect(list.querySelectorAll("li")).toHaveLength(3);
+    expect(list.style.getPropertyValue("--rows")).toBe("3");
+  });
+
+  it("keeps one entry per tied team on the phones' version", () => {
+    const teams: Team[] = [
+      { ...baseTeam, id: "1", name: "Alice", score: 30 },
+      { ...baseTeam, id: "2", name: "Bob", score: 30 },
+    ];
+    render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    const winnersCard = screen.getByText(/winners/i).parentElement!;
+    expect(winnersCard.querySelectorAll("[dir=auto]")).toHaveLength(0);
+    expect(winnersCard.textContent?.match(/30/g)).toHaveLength(2);
   });
 
   it("ties at second/third stack on the same podium card", () => {

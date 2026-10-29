@@ -1,5 +1,7 @@
 // Display fit: the read-only top-5 board must render fully on screen with no
-// page scroll at every realistic display/laptop resolution. Issue #179 caps the
+// page scroll at every realistic display/laptop resolution, and since
+// 2026-10-29 on phones too, upright and sideways (a host with no computer
+// mirrors a phone to the TV). Issue #179 caps the
 // board at five teams, so the old many-team clip risk is gone — but this still
 // guards that five roomy rows plus the reveal panel, token chips, timer, the
 // "+N more teams" hint and the QR footer all fit without clipping or scrolling,
@@ -12,7 +14,8 @@
 // DB via the service role (the display reads Supabase directly — no manager /
 // team / backend flow needed), in the worst-case "playing + a team buzzed"
 // state where the reveal panel, token chips and timer all consume vertical
-// space above the standings.
+// space above the standings. The final screen gets the same check: podium and
+// leaderboard on one frame, at every size.
 
 import { test, expect, type Page } from "@playwright/test";
 
@@ -92,6 +95,11 @@ interface FitResult {
   clipped: string[];
   pageScrolls: boolean;
   emptyScores: string[];
+  qrOut: boolean;
+  // A non-scrolling frame can't "scroll", so also: rows squeezed below their
+  // own content, and content overflowing the frame itself.
+  squeezed: string[];
+  frameOverflow: boolean;
 }
 
 async function measureFit(page: Page): Promise<FitResult> {
@@ -101,7 +109,17 @@ async function measureFit(page: Page): Promise<FitResult> {
     const rows = [...document.querySelectorAll("[data-team-id]")];
     const clipped: string[] = [];
     const emptyScores: string[] = [];
+    const squeezed: string[] = [];
     for (const r of rows) {
+      // Squeezed: a rank, name or score box sticking out of its row. (Not
+      // scrollHeight: the display face's ascent overflows its tight line box
+      // without any visible ink being cut.)
+      const inner = r.getBoundingClientRect().top + r.clientTop;
+      const cut = [...r.children].some((c) => {
+        const cb = c.getBoundingClientRect();
+        return cb.top < inner - 1 || cb.bottom > inner + r.clientHeight + 1;
+      });
+      if (cut) squeezed.push(r.textContent ?? "?");
       const b = r.getBoundingClientRect();
       const name = r.querySelector("span:nth-child(2)")?.textContent ?? "?";
       const score = r.querySelector("span:nth-child(3)")?.textContent ?? "";
@@ -110,18 +128,23 @@ async function measureFit(page: Page): Promise<FitResult> {
       if (score.trim() === "") emptyScores.push(name);
     }
     const doc = document.scrollingElement!;
+    const qr = document.querySelector("main footer svg")?.getBoundingClientRect();
+    const main = document.querySelector("main")!;
     return {
+      squeezed,
+      frameOverflow: main.scrollHeight > main.clientHeight + 2,
       total: rows.length,
       clipped,
       pageScrolls: doc.scrollHeight > doc.clientHeight + 2,
       emptyScores,
+      qrOut:
+        !!qr && (qr.top < -1 || qr.bottom > vh + 1 || qr.left < -1 || qr.right > vw + 1),
     };
   });
 }
 
 // Realistic display + laptop resolutions, incl. OS-scaled short frames down to
-// the 640px fit-frame floor. (Below 640 the layout intentionally falls back to
-// a scrolling page for phones / tiny windows.)
+// the TV layout's 640px floor.
 const VIEWPORTS = [
   { w: 1920, h: 1080 },
   { w: 1600, h: 900 },
@@ -133,6 +156,23 @@ const VIEWPORTS = [
   { w: 1366, h: 680 },
   { w: 1280, h: 640 },
   { w: 1024, h: 640 },
+];
+
+// Phones upright and sideways (browser bars included where they apply), a
+// portrait tablet and a netbook: the frames below the TV layout, which get
+// their own non-scrolling layouts.
+const SMALL_VIEWPORTS = [
+  { w: 360, h: 640 },
+  { w: 375, h: 548 }, // iPhone SE, Safari with both bars
+  { w: 375, h: 667 },
+  { w: 390, h: 844 },
+  { w: 768, h: 1024 },
+  { w: 568, h: 320 },
+  { w: 640, h: 360 },
+  { w: 740, h: 300 }, // Android sideways, status bar + Chrome toolbar
+  { w: 844, h: 390 },
+  { w: 932, h: 430 },
+  { w: 1024, h: 600 },
 ];
 
 const CAP = 5; // issue #179: the board shows only the top 5
@@ -164,7 +204,7 @@ for (const { code, teams } of CASES) {
       await expect(page.getByTestId("more-teams")).toHaveCount(0);
     }
 
-    for (const vp of VIEWPORTS) {
+    for (const vp of [...VIEWPORTS, ...SMALL_VIEWPORTS]) {
       await page.setViewportSize({ width: vp.w, height: vp.h });
       // The elastic grid + JS-driven QR size settle on resize; poll until the
       // board is fully on-screen (or fail with the offending rows named).
@@ -180,6 +220,9 @@ for (const { code, teams } of CASES) {
       expect(fit.clipped, `top ${shown} @ ${vp.w}x${vp.h}: clipped rows`).toEqual([]);
       expect(fit.pageScrolls, `top ${shown} @ ${vp.w}x${vp.h}: page must not scroll`).toBe(false);
       expect(fit.emptyScores, `top ${shown} @ ${vp.w}x${vp.h}: rows with no score`).toEqual([]);
+      expect(fit.qrOut, `top ${shown} @ ${vp.w}x${vp.h}: join QR leaves the frame`).toBe(false);
+      expect(fit.squeezed, `top ${shown} @ ${vp.w}x${vp.h}: rows squeezed`).toEqual([]);
+      expect(fit.frameOverflow, `top ${shown} @ ${vp.w}x${vp.h}: frame overflows`).toBe(false);
     }
   });
 }
@@ -271,6 +314,164 @@ for (const { code, teams } of LOBBY_CASES) {
       );
       const fit = await measureFit(page);
       expect(fit.clipped, `${teams} teams @ ${vp.w}x${vp.h}: clipped rows`).toEqual([]);
+    }
+
+    // Below the TV layout the QR is smaller (the board shares the frame), but
+    // the panel, the teams and the frame still have to fit.
+    for (const vp of SMALL_VIEWPORTS) {
+      await page.setViewportSize({ width: vp.w, height: vp.h });
+      await expect
+        .poll(async () => (await measureFit(page)).clipped.length, {
+          timeout: 8_000,
+          message: `${teams} teams @ ${vp.w}x${vp.h}: some rows are clipped off-screen`,
+        })
+        .toBe(0);
+      const lobby = await measureLobby(page);
+      expect(lobby.panelOut, `${teams} teams @ ${vp.w}x${vp.h}: join panel leaves the frame`).toBe(
+        false,
+      );
+      expect(lobby.pageScrolls, `${teams} teams @ ${vp.w}x${vp.h}: page must not scroll`).toBe(
+        false,
+      );
+      const fit = await measureFit(page);
+      expect(fit.squeezed, `${teams} teams @ ${vp.w}x${vp.h}: rows squeezed`).toEqual([]);
+      expect(fit.frameOverflow, `${teams} teams @ ${vp.w}x${vp.h}: frame overflows`).toBe(false);
+    }
+  });
+}
+
+// The final screen (2026-10-29): the podium and the top-5 leaderboard on one
+// frame with no scroll, at every size. Before, a 1366x768 laptop showed no
+// leaderboard row and a sideways phone only the heading.
+async function injectEndedGame(code: string, scores: number[]): Promise<void> {
+  await rest("DELETE", `active_games?game_code=eq.${code}`); // cascades teams
+  await rest("POST", "active_games", { game_code: code, status: "waiting" });
+  await rest(
+    "POST",
+    "game_teams",
+    scores.map((score, i) => ({
+      game_code: code,
+      name: i === 1 ? "Los Hermanos del Ritmo" : `Team ${String(i + 1).padStart(2, "0")}`,
+      score,
+    })),
+  );
+  await rest("PATCH", `active_games?game_code=eq.${code}`, {
+    status: "ended",
+    ended_at: new Date().toISOString(),
+  });
+}
+
+interface EndFit {
+  rows: number;
+  clipped: number;
+  squeezed: number;
+  winnerOut: boolean;
+  headingCovered: boolean;
+  pageScrolls: boolean;
+}
+
+async function measureEnd(page: Page): Promise<EndFit> {
+  return page.evaluate(() => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const out = (b: DOMRect) => b.top < -1 || b.bottom > vh + 1 || b.left < -1 || b.right > vw + 1;
+    const rows = [...document.querySelectorAll('[data-testid="final-scoreboard"] li')];
+    const winner = [...document.querySelectorAll("main div")].find((el) =>
+      /^WINNERS?$/.test(el.textContent ?? ""),
+    );
+    // The label must sit inside its own card, and the podium below the heading.
+    const card = winner?.parentElement?.getBoundingClientRect();
+    const wb = winner?.getBoundingClientRect();
+    const heading = document.querySelector("main h1")!.getBoundingClientRect();
+    const podium = winner?.parentElement?.parentElement?.getBoundingClientRect();
+    const main = document.querySelector("main")!;
+    return {
+      rows: rows.length,
+      clipped: rows.filter((r) => out(r.getBoundingClientRect())).length,
+      squeezed: rows.filter((r) => {
+        const inner = r.getBoundingClientRect().top + r.clientTop;
+        return [...r.children].some((c) => {
+          const cb = c.getBoundingClientRect();
+          return cb.top < inner - 1 || cb.bottom > inner + r.clientHeight + 1;
+        });
+      }).length,
+      winnerOut:
+        !wb || !card || out(wb) || wb.top < card.top - 1 || wb.bottom > card.bottom + 1,
+      headingCovered: !!podium && podium.top < heading.bottom - 1,
+      pageScrolls: main.scrollHeight > main.clientHeight + 2,
+    };
+  });
+}
+
+// Ties are the hard part: tied teams share a podium card, and a tie across
+// the fifth place keeps every tied team on the leaderboard (issue #180).
+// `strict` also requires every leaderboard row to hold its own content; the
+// all-zero game (the host ended before anyone scored) lists eight rows, which
+// an upright phone can only show smaller than that.
+const END_CASES: Array<{
+  code: string;
+  label: string;
+  scores: number[];
+  rows: number;
+  strict: boolean;
+}> = [
+  {
+    code: "FITEND",
+    label: "distinct scores",
+    scores: [90, 81, 72, 63, 54, 45, 36, 27],
+    rows: 5,
+    strict: true,
+  },
+  {
+    code: "FITTIE",
+    label: "three tied for first",
+    scores: [50, 50, 50, 40, 30, 20, 10, 5],
+    rows: 5,
+    strict: true,
+  },
+  {
+    code: "FITCUT",
+    label: "four tied across fifth place",
+    scores: [44, 35, 26, 17, 0, 0, 0, 0],
+    rows: 8,
+    strict: true,
+  },
+  {
+    code: "FITZRO",
+    label: "everyone on zero",
+    scores: [0, 0, 0, 0, 0, 0, 0, 0],
+    rows: 8,
+    strict: false,
+  },
+];
+
+for (const { code, label, scores, rows, strict } of END_CASES) {
+  test(`final screen (${label}): podium and leaderboard fit across resolutions`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await injectEndedGame(code, scores);
+    await page.goto(`/display/${code}`);
+    await expect(page.getByTestId("final-scoreboard")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[data-testid="final-scoreboard"] li')).toHaveCount(rows);
+
+    for (const vp of [...VIEWPORTS, ...SMALL_VIEWPORTS]) {
+      await page.setViewportSize({ width: vp.w, height: vp.h });
+      await expect
+        .poll(async () => (await measureEnd(page)).clipped, {
+          timeout: 8_000,
+          message: `${label} @ ${vp.w}x${vp.h}: leaderboard rows off-screen`,
+        })
+        .toBe(0);
+      const end = await measureEnd(page);
+      expect(end.winnerOut, `${label} @ ${vp.w}x${vp.h}: WINNER label off its card`).toBe(false);
+      expect(end.headingCovered, `${label} @ ${vp.w}x${vp.h}: podium covers the heading`).toBe(
+        false,
+      );
+      expect(end.pageScrolls, `${label} @ ${vp.w}x${vp.h}: frame overflows`).toBe(false);
+      if (strict) {
+        expect(end.squeezed, `${label} @ ${vp.w}x${vp.h}: rows squeezed`).toBe(0);
+      }
     }
   });
 }
