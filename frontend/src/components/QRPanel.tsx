@@ -3,7 +3,10 @@ import { useQrSvg } from "../hooks/useQrSvg";
 import styles from "./QRPanel.module.css";
 
 interface Props {
+  /** The address printed under the code, for people who type it. */
   joinUrl: string;
+  /** What the QR code encodes, when it differs from joinUrl (a tracking tag). */
+  qrUrl?: string;
   gameCode: string;
   size?: number;
   // Inside a size container, stack the panel and grow the QR to fill the
@@ -15,8 +18,15 @@ interface Props {
   compact?: boolean;
 }
 
-export function QRPanel({ joinUrl, gameCode, size = 220, fill = false, compact = false }: Props) {
-  const { svg, error } = useQrSvg(joinUrl, size);
+export function QRPanel({
+  joinUrl,
+  qrUrl,
+  gameCode,
+  size = 220,
+  fill = false,
+  compact = false,
+}: Props) {
+  const { svg, error } = useQrSvg(qrUrl ?? joinUrl, size);
 
   return (
     <div

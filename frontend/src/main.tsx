@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { App } from "./App";
+import { captureLanding } from "./lib/funnel";
 import { isPrerenderedFor } from "./lib/prerendered";
 import { installPreloadErrorHandler } from "./lib/preloadError";
 import { installErrorBuffer, loadSentry } from "./lib/sentry";
@@ -18,6 +19,11 @@ installErrorBuffer();
 // fresh index.html pulls the new content-hashes, instead of a blank screen.
 // Cheap (one window listener); the app-level ErrorBoundary is the backstop.
 installPreloadErrorHandler();
+
+// Note where this visit came from and take our tracking tags (?ref=, ?qr, ...)
+// off the address bar before the router reads it. The event waits in
+// telemetry's queue until Faro loads at idle.
+captureLanding();
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("#root element not found");
@@ -55,9 +61,8 @@ function whenIdle(cb: () => void): void {
 // Defer everything non-essential off the first-paint critical path. Sentry and
 // the Faro latency SDK are both lazy chunks; we load them once the page has
 // loaded and the tab is idle so neither competes with rendering or the buzzer.
-// (`initTelemetry` is a no-op when VITE_FARO_URL is unset — which it now is in
-// prod — so the Faro chunk isn't fetched at all; the idle-defer is belt-and-
-// suspenders and the correct pattern regardless.)
+// (`initTelemetry` is a no-op when VITE_FARO_URL is unset: dev, tests and PR
+// previews. Prod sets it, so the Faro chunk loads here, after first paint.)
 window.addEventListener("load", () => {
   whenIdle(() => {
     void loadSentry();

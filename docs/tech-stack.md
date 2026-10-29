@@ -14,7 +14,7 @@ For quota analysis (capacity in games/month), see `free-tier-budget.md`. For why
 | DNS | Namecheap BasicDNS | Free with the domain |
 | CI/CD | GitHub Actions | Unlimited for public repos |
 | Error tracking | Sentry | 5,000 errors/mo (errors only; tracing off) |
-| Latency observability | Grafana Cloud (Faro + OTel) | ~50 GB traces + 50 GB logs/mo, 14-day retention |
+| Latency observability | Grafana Cloud (Faro + OTel) | ~50 GB traces + 50 GB logs/mo; Loki held 30 days of Faro events when measured on 2026-10-29 |
 | Render keepalive | cron-job.org | 50 cron jobs |
 | Domain | Namecheap (existing) | $12/yr (only paid item) |
 
@@ -218,6 +218,26 @@ by the maintainer in Grafana Explore and by Claude via the Grafana MCP.
 | `http.client` | each REST call to FastAPI (id-normalized route) |
 | `game.player_init` | YouTube IFrame API load → player ready |
 | `realtime_fanout` (event) | Postgres commit → client receipt, per table |
+
+### Product events (the visitor funnel)
+
+`frontend/src/lib/funnel.ts`, sent through `trackEvent` / `trackView` in
+`telemetry.ts`. They can fire before Faro has loaded, so they wait in a short
+queue (50 events at most, nothing at all when Faro is off) and flush in order on
+init.
+
+| Event | When | Data |
+|---|---|---|
+| `landing` | once per page load, before the app renders | `view` (route template), `ref_host` (referrer hostname, empty when direct or same-site), `ref`, `src` (`qr` from the Display QR's `?qr` flag), `utm_source` / `utm_medium` / `utm_campaign` / `utm_content` |
+| `view` | every route change (also sets Faro's view, so later events carry `view_name`) | `view`: `/`, `/join/*`, `/manager/game/*`, a landing-page path, or `/other` |
+| `cta` | a click that moves a visitor along | `id`: `home_host` / `home_play` / `home_display` / `home_howto`, `landing_host` / `landing_join`, `setlist_share` / `setlist_play_all` / `setlist_save` |
+| `team_joined` | a team joined through the form | `source`: `qr` (the Display's QR), `link` (another `/join/<CODE>` link), `typed` |
+| `game_created` | `POST /games` succeeded | `genres_count`, `decades_count`, `returning` (this browser created a game before; `localStorage` key `sound-clash:hosted-before`) |
+
+Privacy: the referrer's hostname only, tags cut to short plain tokens, route
+templates instead of game codes, no names. `captureLanding` takes `ref`, `src`,
+`qr` and `utm_*` off the address bar after reading them, so copied links stay
+clean; every other parameter and the `#rt=` / `#mt=` fragments are kept.
 
 The hot path is browser→Supabase direct, so the signal is almost entirely
 client-side. Sampling is per-game (`SAMPLE_RATE` in `telemetry.ts`); Grafana's

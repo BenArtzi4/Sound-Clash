@@ -40,6 +40,11 @@ Faro tags every signal `service_name="sound-clash-web"`,
 | `yt_preload_not_ready` (warn) | log | At Next round the standby still held nothing, so its song was loaded on the live player inside the tap instead of starting a silent player. Same fields plus `context_age_ms` |
 | `yt_live_stall` (warn) | log | Telemetry only, playback untouched. `context_kind=no_start`: the live song had not reached PLAYING 10 s after its load and was not paused by the app meanwhile (`context_state`, `context_loaded_fraction`). `context_kind=early_pause`: it paused by itself within 5 s of starting (`context_ms_after_start`). Both carry `context_game_code`, `context_player` and the song fields |
 | `realtime_fanout` | event | `event_data_event_type` (game/team/round), `event_data_fanout_ms` |
+| `landing` | event | `event_data_view`, `event_data_ref_host`, `event_data_ref`, `event_data_src`, `event_data_utm_*`. One per page load: where the visit came from |
+| `view` | event | `event_data_view` (route template). One per route reached |
+| `cta` | event | `event_data_id` (`home_host`, `landing_host`, `setlist_share`, ...) |
+| `team_joined` | event | `event_data_source` (`qr` / `link` / `typed`) |
+| `game_created` | event | `event_data_genres_count`, `event_data_decades_count`, `event_data_returning` |
 | web-vitals | measurement | `type="web-vitals"`, `lcp` / `inp` / `fcp` / `ttfb`, `context_rating` |
 | Tempo spans | — | `game.buzz.e2e` (`outcome`, `realtime.fanout_ms`), `game.score.e2e`, `game.song_start` (`preloaded`), `db.rpc` (`rpc.name`), `game.player_init` |
 
@@ -148,3 +153,24 @@ Actions → **Stale buzz-lock scan → Run workflow**: `dry_run = true`, and an
 (14 days on the free tier). For example `end_time = 2026-10-04T21:45:03Z`
 reports that it *would file* the `YQFDR6` incident (5 repairs) and prints the
 full issue body, without creating anything. Then let the schedule take over.
+
+## Visitor funnel queries
+
+Real browsers on the live site only (a local prod-mode build reports into the
+same app, and harnesses run headless):
+
+```logql
+# Where visits came from, last 7 days
+sum by (event_data_ref_host, event_data_ref, event_data_src) (count_over_time(
+  {service_name="sound-clash-web", kind="event"} |= "event_name=landing" | logfmt
+  | page_url=~"https://(www\.)?soundclash\.org.*" | browser_userAgent!~".*Headless.*" [7d]))
+
+# Steps of the host funnel, last 7 days (Home view → Host click → game created)
+sum by (event_name, event_data_view, event_data_id) (count_over_time(
+  {service_name="sound-clash-web", kind="event"} |~ "event_name=(view|cta|game_created)" | logfmt
+  | page_url=~"https://(www\.)?soundclash\.org.*" | browser_userAgent!~".*Headless.*" [7d]))
+
+# How teams joined
+sum by (event_data_source) (count_over_time(
+  {service_name="sound-clash-web", kind="event"} |= "event_name=team_joined" | logfmt [7d]))
+```
