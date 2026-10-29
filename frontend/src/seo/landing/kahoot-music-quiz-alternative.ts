@@ -35,7 +35,7 @@ export const page: LandingContent = {
         "Answering: Kahoot! players tap an answer on their screen. Sound Clash teams say it out loud and the host judges it, so a near miss can still raise a laugh or earn a +4 bonus.",
         "Racing: only one team can hold the Sound Clash buzzer at a time, so being first matters.",
         "Groups: Kahoot! players usually answer one per device, and it also has a team mode. Sound Clash is built for teams, one phone per team, and has no solo mode.",
-        "Cost: Kahoot! has free and paid plans. Sound Clash is free, with no account, no app and no ads.",
+        "Cost: Kahoot! has free and paid plans. Sound Clash is free, with no account and no app, and it shows no ads.",
       ],
     },
     {

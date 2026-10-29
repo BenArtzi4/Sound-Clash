@@ -27,7 +27,8 @@ export function SiteFooter() {
         </ul>
       </nav>
       <p className={styles.note}>
-        Sound Clash is a free guess-the-song party game. No app, no account, no ads.
+        Sound Clash is a free guess-the-song party game. No app, no account, and Sound Clash shows
+        no ads.
       </p>
     </footer>
   );

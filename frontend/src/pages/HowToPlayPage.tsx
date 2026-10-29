@@ -2,7 +2,14 @@ import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { SetupSchematic } from "../components/SetupSchematic";
 import { SiteFooter } from "../components/SiteFooter";
-import { ArrowLeftIcon, HostIcon, PhoneIcon, SpeakerIcon, TvIcon } from "../components/icons";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  HostIcon,
+  PhoneIcon,
+  SpeakerIcon,
+  TvIcon,
+} from "../components/icons";
 import styles from "./HowToPlayPage.module.css";
 
 type Step = { title: string; body: React.ReactNode };
@@ -157,7 +164,7 @@ export function HowToPlayPage() {
               </span>
               <h3 className={styles.roleTitle}>Display</h3>
               <p className={styles.roleText}>
-                Shows the scoreboard and plays the YouTube clip on the big screen.
+                Shows the join QR code and the live scoreboard on the big screen.
               </p>
             </article>
           </div>
@@ -226,6 +233,9 @@ export function HowToPlayPage() {
         <div className={styles.backRow}>
           <Link to="/" className="btn btn-ghost">
             <ArrowLeftIcon /> Back
+          </Link>
+          <Link to="/manager/create" className="btn btn-primary">
+            Start a game <ArrowRightIcon />
           </Link>
         </div>
       </main>
