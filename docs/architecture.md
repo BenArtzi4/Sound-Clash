@@ -12,7 +12,7 @@ This is the executive summary of the system. It points to the deeper docs rather
 - For local dev, see **`local-development.md`**.
 - For free-tier capacity planning, see **`free-tier-budget.md`**.
 - For dev/CI tooling reference (workflows, CodeQL, Dependabot, Codecov, …), see **`tooling.md`**.
-- For search and link-preview metadata (per-page titles, sitemap, robots, noindex rules), see **`seo.md`**.
+- For search, AI-crawler and link-preview concerns (the build-time prerender of the content pages, the search landing pages, per-page titles, structured data, sitemap, `llms.txt`, robots, noindex rules and the 404 routing), see **`seo.md`**.
 
 ## 1. Goals
 

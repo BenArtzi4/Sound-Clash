@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import { App } from "./App";
+import { isPrerenderedFor } from "./lib/prerendered";
 import { installPreloadErrorHandler } from "./lib/preloadError";
 import { installErrorBuffer, loadSentry } from "./lib/sentry";
 import { initTelemetry } from "./lib/telemetry";
@@ -21,11 +22,24 @@ installPreloadErrorHandler();
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("#root element not found");
 
-createRoot(rootEl).render(
+const app = (
   <StrictMode>
     <App />
-  </StrictMode>,
+  </StrictMode>
 );
+
+// Content pages arrive with their markup already in #root (written at build
+// time by scripts/prerender.mjs from src/entry-server.tsx); hydrate it in place
+// so nothing repaints. Anything else starts empty and renders fresh. The path
+// check keeps a prerendered file that is served at another URL (vite preview's
+// SPA fallback serves index.html everywhere) from being hydrated as the wrong
+// page: that markup is dropped and the right page renders instead.
+if (isPrerenderedFor(rootEl, window.location.pathname)) {
+  hydrateRoot(rootEl, app);
+} else {
+  rootEl.replaceChildren();
+  createRoot(rootEl).render(app);
+}
 
 // Run a callback once the tab is idle (bounded by a timeout so error reporting
 // still comes up under sustained load). Falls back to a near-immediate timeout

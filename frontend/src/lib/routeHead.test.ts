@@ -136,9 +136,44 @@ describe("src/seo/pages.json", () => {
   it("has unique absolute paths that are real routes", () => {
     const paths = seo.pages.map((p) => p.path);
     expect(new Set(paths).size).toBe(paths.length);
-    for (const path of paths) {
-      expect(path.startsWith("/")).toBe(true);
-      expect(routes).toContain(path);
+    // Landing pages are routed by App.tsx's LANDING_PATHS loop, not a literal.
+    expect(appSource).toMatch(/LANDING_PATHS\.map\(\(path\) =>/);
+    for (const page of seo.pages) {
+      expect(page.path.startsWith("/")).toBe(true);
+      if (!page.landing) expect(routes).toContain(page.path);
+    }
+  });
+
+  it("names, for each prerendered lazy page, the chunk App.tsx lazy-imports", () => {
+    for (const page of seo.pages.filter((p) => p.prerender && p.path !== "/")) {
+      expect(page.module, page.path).toMatch(/^src\/pages\/[A-Za-z]+\.tsx$/);
+      const name = page.module?.slice("src/pages/".length, -".tsx".length);
+      expect(appSource).toContain(`import("./pages/${name}")`);
+    }
+  });
+
+  it("dates, prerenders and links every sitemap page", () => {
+    for (const page of seo.pages.filter((p) => p.inSitemap)) {
+      expect(page.updated, page.path).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(page.prerender, page.path).toBe(true);
+      expect(page.nav, page.path).toBeTruthy();
+    }
+  });
+
+  it("routes every landing page through LandingPage and lists it in the sitemap", () => {
+    const landing = seo.pages.filter((p) => p.landing);
+    expect(landing.length).toBeGreaterThanOrEqual(1);
+    for (const page of landing) {
+      expect(page.inSitemap).toBe(true);
+      expect(page.module).toBe("src/pages/LandingPage.tsx");
+    }
+  });
+
+  // Home's tests and the e2e suite find these links by name and expect one
+  // match; a footer label containing one of them would break that.
+  it("keeps footer labels clear of Home's link names", () => {
+    for (const page of seo.pages.filter((p) => p.nav)) {
+      expect(page.nav).not.toMatch(/how to play|host a game|join a game|display screen/i);
     }
   });
 
