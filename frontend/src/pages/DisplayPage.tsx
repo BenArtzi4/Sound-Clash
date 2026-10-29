@@ -15,9 +15,11 @@ import { QRPanel } from "../components/QRPanel";
 import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
-import { CheckIcon, FilmIcon, MicIcon, NoteIcon } from "../components/icons";
+import { CheckIcon, ExpandIcon, FilmIcon, MicIcon, NoteIcon } from "../components/icons";
 import { useCountUp } from "../hooks/useCountUp";
+import { useFullscreen } from "../hooks/useFullscreen";
 import { useGameChannel } from "../hooks/useGameChannel";
+import { useWakeLock } from "../hooks/useWakeLock";
 import { CODE_RE, normalizeCode } from "../lib/gameCode";
 import { fetchSongById } from "../lib/songMetadata";
 import type { Song, Team } from "../lib/types";
@@ -179,18 +181,24 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   const [boardRef] = useAutoAnimate<HTMLOListElement>({ duration: 400 });
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  // Track the frame height so the QR footer can shrink on short / OS-scaled
-  // laptop displays instead of starving the scoreboard (the CSS grid already
-  // shrinks the rows to fit, but a 220px QR block on a 720px frame left the
-  // standings almost no room).
-  const [viewportHeight, setViewportHeight] = useState(
-    typeof window !== "undefined" ? window.innerHeight : 1080,
+  // Track the frame size so the QR footer can shrink on short / OS-scaled
+  // laptop displays and on phones instead of starving the scoreboard (the CSS
+  // grid already shrinks the rows to fit, but a 220px QR block on a 720px
+  // frame left the standings almost no room).
+  const [viewport, setViewport] = useState(() =>
+    typeof window !== "undefined"
+      ? { width: window.innerWidth, height: window.innerHeight }
+      : { width: 1920, height: 1080 },
   );
   useEffect(() => {
-    const onResize = () => setViewportHeight(window.innerHeight);
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  const fullscreen = useFullscreen();
+  // A display that dims or locks takes the TV with it (a mirrored phone locks
+  // after a minute untouched). Held until the game row is gone.
+  useWakeLock(status !== "gone");
   const prevScoresRef = useRef<Record<string, number>>({});
   const eventSeqRef = useRef(0);
 
@@ -246,10 +254,12 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     // No snapshot (this screen never saw the live game — e.g. it opened
     // straight onto an already-swept code) falls back to the bare banner.
     return (
-      <main className={styles.shell}>
+      <main className={finalBoard ? `${styles.shell} ${styles.shellEnd}` : styles.shell}>
         <div className={`${styles.banner} ${styles.bannerEnded}`}>Game has ended or expired.</div>
         {finalBoard ? (
-          <EndScreen teams={Array.from(finalBoard.teams.values())} gameCode={gameCode} />
+          <div className={styles.endFrame}>
+            <EndScreen teams={Array.from(finalBoard.teams.values())} gameCode={gameCode} fit />
+          </div>
         ) : null}
       </main>
     );
@@ -286,9 +296,29 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
   // QR shrinks on shorter (often OS-scaled) laptop frames so the footer doesn't
   // starve the scoreboard; on a tall projector it stays large and scannable.
   // On a TV's waiting screen the CSS sizes the QR from its half of the frame
-  // instead (QRPanel `fill`), so this is the in-game and phone size.
-  const qrSize =
-    viewportHeight < 700 ? 96 : viewportHeight < 820 ? 118 : viewportHeight < 950 ? 140 : 172;
+  // instead (QRPanel `fill`), so this is the in-game and phone size. Phones
+  // and short landscape frames (the fit frames below the TV breakpoint in
+  // DisplayPage.module.css) share one screen with all five rows, so they get a
+  // smaller one, a little bigger before the game starts when the board is
+  // the only other thing on screen.
+  const tvFrame = viewport.width >= 769 && viewport.height >= 640;
+  const qrSize = tvFrame
+    ? viewport.height < 700
+      ? 96
+      : viewport.height < 820
+        ? 118
+        : viewport.height < 950
+          ? 140
+          : 172
+    : game.status === "waiting"
+      ? viewport.height < 700
+        ? 112
+        : 140
+      : viewport.height < 420
+        ? 64
+        : viewport.height < 700
+          ? 76
+          : 92;
   const lockedTeam = game.buzzed_team_id != null ? state.teams.get(game.buzzed_team_id) : null;
   const round = state.currentRound;
   const titleClaimedById = round?.title_claimed_by ?? null;
@@ -304,8 +334,10 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     // so an unsorted Map dump is fine.
     const boardTeams = finalBoard ? Array.from(finalBoard.teams.values()) : teams;
     return (
-      <main className={styles.shell}>
-        <EndScreen teams={boardTeams} gameCode={gameCode} />
+      <main className={`${styles.shell} ${styles.shellEnd}`}>
+        <div className={styles.endFrame}>
+          <EndScreen teams={boardTeams} gameCode={gameCode} fit />
+        </div>
       </main>
     );
   }
@@ -342,6 +374,20 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
       <header className={styles.header}>
         <h1>Sound Clash</h1>
         <div className={styles.headerActions}>
+          {/* Touch screens only (the CSS hides it elsewhere): the phone that is
+              mirrored to the TV. Gone once the page is full screen. */}
+          {fullscreen.supported && !fullscreen.active ? (
+            <button
+              type="button"
+              className={styles.fullscreenButton}
+              onClick={fullscreen.enter}
+              aria-label="Full screen"
+              title="Full screen"
+              data-testid="display-fullscreen"
+            >
+              <ExpandIcon />
+            </button>
+          ) : null}
           <span className={styles.code}>{gameCode}</span>
         </div>
       </header>
@@ -350,6 +396,14 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         <span className={styles.bannerText}>{bannerText}</span>
         {showRoundSubhead ? <span className={styles.bannerSubhead}>{roundLabel}</span> : null}
       </div>
+
+      {/* Shown only on a phone held upright (CSS): mirrored to a TV, an upright
+          phone fills a third of the screen and a sideways one fills all of it. */}
+      {game.status === "waiting" ? (
+        <p className={styles.rotateTip} data-testid="display-rotate-tip">
+          Showing this on a TV? Turn your phone sideways for a bigger picture.
+        </p>
+      ) : null}
 
       {/* Everything that is not the standings: on a TV (>=769px) this is the
           right-hand column of the frame; below that it un-wraps (display:
@@ -401,7 +455,8 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
               Song{" "}
               {titleClaimedById ? (
                 <>
-                  <CheckIcon /> {titleClaimedByName ?? "?"}
+                  <CheckIcon />
+                  <span className={styles.tokenChipName}>{titleClaimedByName ?? "?"}</span>
                 </>
               ) : (
                 "open"
@@ -415,7 +470,8 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
               Artist{" "}
               {artistClaimedById ? (
                 <>
-                  <CheckIcon /> {artistClaimedByName ?? "?"}
+                  <CheckIcon />
+                  <span className={styles.tokenChipName}>{artistClaimedByName ?? "?"}</span>
                 </>
               ) : (
                 "open"
@@ -447,6 +503,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
             joinUrl={`${window.location.origin}/join/${gameCode}`}
             size={qrSize}
             fill={game.status === "waiting"}
+            compact={!tvFrame && game.status !== "waiting"}
           />
         </footer>
       </aside>

@@ -429,3 +429,293 @@
     display: none;
   }
 }
+
+/* ------------------------------------------------------- fit (the display) */
+/* The display's final screen fits its frame with no scroll, from a phone
+   mirrored to a TV up to a 4K TV (2026-10-29): nobody scrolls a TV, and
+   before this a 1366x768 laptop showed no leaderboard at all and a landscape
+   phone only the heading. Everything is sized from the frame, in cq units of
+   DisplayPage's endFrame size container, and tops out at the column's own
+   sizes. An upright frame keeps the stacked column (with the three-card
+   podium even on a phone); a landscape one puts the leaderboard beside the
+   podium. The leaderboard rows give up height last, so a tie that stretches
+   it past five rows squeezes the rows instead of pushing one out of view. */
+.shell.fit {
+  height: 100%;
+  justify-content: center;
+  gap: clamp(0.4rem, 2.4cqh, 2.25rem);
+  padding: clamp(0.25rem, 1.5cqh, 1.5rem) 0;
+}
+
+.fit .heading {
+  gap: clamp(0.1rem, 0.8cqh, 0.6rem);
+}
+
+.fit .trophy {
+  font-size: clamp(20px, 6.5cqh, 72px);
+}
+
+.fit .title {
+  font-size: clamp(1.4rem, 6.5cqh, 4.5rem);
+  line-height: 1;
+}
+
+.fit .subtitle {
+  font-size: clamp(0.8rem, 1.8cqh, 1rem);
+}
+
+.fit .podium {
+  flex: 0 1 auto;
+  min-height: 0;
+  grid-template-columns: 1fr 1.35fr 1fr;
+  gap: clamp(0.35rem, 1.5cqw, 1rem);
+  align-items: end;
+}
+
+.fit .podiumPlaceholder {
+  display: block;
+}
+
+.fit .podiumCard {
+  gap: clamp(0.15rem, 0.7cqh, 0.5rem);
+  padding: clamp(0.4rem, 2cqh, 1.5rem) clamp(0.35rem, 1.2cqw, 1rem);
+}
+
+.fit .gold {
+  order: 0;
+  min-height: clamp(130px, 25cqh, 320px);
+}
+
+.fit .silver {
+  min-height: clamp(105px, 19.5cqh, 250px);
+}
+
+.fit .bronze {
+  min-height: clamp(85px, 15.5cqh, 200px);
+}
+
+.fit .crown {
+  top: clamp(-18px, -1.7cqh, -11px);
+  width: clamp(26px, 4.1cqh, 44px);
+  height: clamp(26px, 4.1cqh, 44px);
+}
+
+.fit .medal {
+  width: clamp(28px, 5.2cqh, 56px);
+  height: clamp(28px, 5.2cqh, 56px);
+  font-size: clamp(0.95rem, 2.9cqh, 1.6rem);
+}
+
+.fit .gold .medal {
+  width: clamp(34px, 6.7cqh, 72px);
+  height: clamp(34px, 6.7cqh, 72px);
+  font-size: clamp(1.1rem, 3.6cqh, 2rem);
+}
+
+/* A card never grows past the podium's height: a tie too big for the frame
+   clips its names inside the card rather than covering the heading (the
+   leaderboard still lists every team). */
+.fit .podiumCard {
+  max-height: 100%;
+}
+
+.fit .podiumTeams {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  gap: clamp(0.2rem, 1cqh, 0.55rem);
+}
+
+.fit .podiumTeam {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+/* Only a tie's names give way; the medal, the score and the label keep
+   their size. */
+.fit .medal,
+.fit .winnerLabel,
+.fit .teamScore {
+  flex: none;
+}
+
+/* A tie: the names as small pills that wrap, over the one score they share. */
+.fit .tiedNames {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
+  gap: 0.25em;
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: clamp(0.75rem, min(2.1cqh, 2.6cqw), 1.15rem);
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.fit .gold .tiedNames {
+  font-size: clamp(0.8rem, min(2.5cqh, 3.1cqw), 1.4rem);
+}
+
+.fit .tiedName {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.05em 0.45em;
+  overflow-wrap: anywhere;
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+}
+
+.fit .teamName {
+  font-size: clamp(0.9rem, 2.5cqh, 1.35rem);
+  line-height: 1.1;
+}
+
+.fit .gold .teamName {
+  font-size: clamp(1rem, 3.1cqh, 1.7rem);
+}
+
+.fit .teamScore {
+  font-size: clamp(1.2rem, 3.7cqh, 2rem);
+  line-height: 1;
+}
+
+.fit .gold .teamScore {
+  font-size: clamp(1.45rem, 4.8cqh, 2.6rem);
+}
+
+.fit .winnerLabel {
+  margin-top: clamp(0rem, 0.9cqh, 0.5rem);
+  padding: 2px 10px;
+  font-size: clamp(0.65rem, 1.5cqh, 0.8rem);
+}
+
+/* The leaderboard is an elastic grid, like the live board's: the rows split
+   whatever height the list has (up to a cap per row) and each row's type is
+   sized from its own height (cq units of the list), so a short frame, or a
+   tie that lists more than five rows (--rows, set inline), shrinks the rows
+   instead of squeezing their content. */
+.fit .scoreboard {
+  --sb-gap: clamp(0.2rem, 0.75cqh, 0.5rem);
+  --sb-row-max: 56px;
+  --sb-font-max: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.fit .scoreboardTitle {
+  flex: none;
+  font-size: clamp(1.05rem, 3.4cqh, 2.125rem);
+  margin-bottom: clamp(0.2rem, 1.5cqh, 1rem);
+}
+
+.fit .scoreboardList {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: calc(var(--rows, 5) * var(--sb-row-max) + (var(--rows, 5) - 1) * var(--sb-gap));
+  display: grid;
+  grid-template-rows: repeat(var(--rows, 5), minmax(0, 1fr));
+  gap: var(--sb-gap);
+  container-type: size;
+}
+
+.fit .scoreboardRow {
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: 2.4em 1fr auto;
+  gap: 0.9em;
+  padding: 0 clamp(0.6rem, 1.5cqw, 1.1rem);
+  font-size: clamp(0.6rem, calc(40cqh / var(--rows, 5)), var(--sb-font-max));
+}
+
+/* The ring never outgrows its row: 75% of an average row (cq units of the
+   list) once the type has hit its floor. */
+.fit .scoreboardRank {
+  width: min(2.1em, calc(75cqh / var(--rows, 5)));
+  height: min(2.1em, calc(75cqh / var(--rows, 5)));
+}
+
+.fit .scoreboardScore {
+  font-size: 1.3em;
+}
+
+.fit .scoreboardMore {
+  flex: none;
+  margin-top: clamp(0.2rem, 1cqh, 0.85rem);
+  font-size: clamp(0.75rem, 1.7cqh, 0.9rem);
+}
+
+.fit .thanks {
+  font-size: clamp(0.8rem, 1.8cqh, 1rem);
+}
+
+/* The sign-off gives its line back on short frames and on upright phones,
+   where the stacked column needs every pixel. */
+@container (max-height: 480px) {
+  .fit .thanks {
+    display: none;
+  }
+}
+
+@container (orientation: portrait) and (max-height: 999px) {
+  .fit .thanks {
+    display: none;
+  }
+}
+
+/* Landscape: the heading over the podium on the left, the leaderboard down
+   the whole right side, where its rows grow with the frame up to TV size.
+   minmax(0, auto) + align-content: the left column sits in the middle of a
+   tall frame, and on a short one the podium row gives up height (a big tie's
+   names clip inside its card) instead of overflowing. */
+@container (orientation: landscape) {
+  .shell.fit {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, auto) auto;
+    grid-template-areas:
+      "heading board"
+      "podium  board"
+      "thanks  thanks";
+    align-content: center;
+    align-items: center;
+    justify-items: center;
+    column-gap: clamp(1rem, 4cqw, 4rem);
+    row-gap: clamp(0.4rem, 2.4cqh, 2.25rem);
+  }
+  .fit .heading {
+    grid-area: heading;
+  }
+  .fit .podium {
+    grid-area: podium;
+    align-self: stretch;
+  }
+  .fit .gold {
+    min-height: clamp(130px, 30cqh, 320px);
+  }
+  .fit .silver {
+    min-height: clamp(105px, 23.5cqh, 250px);
+  }
+  .fit .bronze {
+    min-height: clamp(85px, 19cqh, 200px);
+  }
+  .fit .scoreboard {
+    --sb-row-max: 88px;
+    --sb-font-max: 1.5rem;
+    grid-area: board;
+    align-self: stretch;
+  }
+  .fit .thanks {
+    grid-area: thanks;
+  }
+  .fit .noTeams {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

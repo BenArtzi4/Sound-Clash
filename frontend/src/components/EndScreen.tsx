@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { useCountUp } from "../hooks/useCountUp";
 import type { Team } from "../lib/types";
 import styles from "./EndScreen.module.css";
@@ -7,6 +7,11 @@ import { LaurelIcon } from "./icons";
 interface Props {
   teams: Team[];
   gameCode: string;
+  // The display's version: the whole screen fits its frame with no scroll
+  // (podium beside the leaderboard on a landscape frame). The phones keep the
+  // scrolling column. Needs a size container around it (DisplayPage's
+  // endFrame), which the CSS sizes everything from.
+  fit?: boolean;
 }
 
 // The final results screen shows only the top teams so the "who won" moment
@@ -82,11 +87,13 @@ function PodiumCard({
   place,
   className,
   startDelayMs,
+  fit,
 }: {
   teams: Team[];
   place: 1 | 2 | 3;
   className: string | undefined;
   startDelayMs: number;
+  fit: boolean;
 }) {
   const isWinner = place === 1;
   return (
@@ -102,15 +109,34 @@ function PodiumCard({
           grows to fit them (min-height, no internal scroll — issue #180); a
           realistic tie is a handful of teams. */}
       <div className={styles.podiumTeams}>
-        {teams.map((t, i) => (
-          <div key={t.id} className={styles.podiumTeam}>
-            <div className={styles.teamName}>{t.name}</div>
+        {fit && teams.length > 1 ? (
+          // The display's frame can't grow, so a tie lists its names as one
+          // wrapped group over the score they share. Each team still has its
+          // own row on the leaderboard beside the podium.
+          <div className={styles.podiumTeam}>
+            <div className={styles.tiedNames}>
+              {teams.map((t) => (
+                <span key={t.id} className={styles.tiedName} dir="auto">
+                  {t.name}
+                </span>
+              ))}
+            </div>
             <div className={styles.teamScore}>
-              <Score value={t.score} delay={startDelayMs + i * 150} />
+              <Score value={teams[0]!.score} delay={startDelayMs} />
               <span className={styles.scoreUnit}>pts</span>
             </div>
           </div>
-        ))}
+        ) : (
+          teams.map((t, i) => (
+            <div key={t.id} className={styles.podiumTeam}>
+              <div className={styles.teamName}>{t.name}</div>
+              <div className={styles.teamScore}>
+                <Score value={t.score} delay={startDelayMs + i * 150} />
+                <span className={styles.scoreUnit}>pts</span>
+              </div>
+            </div>
+          ))
+        )}
       </div>
       {isWinner ? (
         <div className={styles.winnerLabel}>{teams.length > 1 ? "WINNERS" : "WINNER"}</div>
@@ -119,7 +145,7 @@ function PodiumCard({
   );
 }
 
-export function EndScreen({ teams, gameCode }: Props) {
+export function EndScreen({ teams, gameCode, fit = false }: Props) {
   const groups = useMemo(() => groupByScore(teams), [teams]);
   const { visible: scoreboard, hidden: hiddenCount } = useMemo(
     () => capScoreboard(flattenWithRanks(groups)),
@@ -132,7 +158,10 @@ export function EndScreen({ teams, gameCode }: Props) {
   const teamCount = teams.length;
 
   return (
-    <div className={styles.shell}>
+    <div
+      className={fit ? `${styles.shell} ${styles.fit}` : styles.shell}
+      data-fit={fit || undefined}
+    >
       <header className={styles.heading}>
         <span className={styles.trophy} aria-hidden="true">
           <LaurelIcon />
@@ -156,13 +185,20 @@ export function EndScreen({ teams, gameCode }: Props) {
                 place={2}
                 className={styles.silver}
                 startDelayMs={400}
+                fit={fit}
               />
             ) : (
               <div className={styles.podiumPlaceholder} />
             )}
 
             {goldGroup ? (
-              <PodiumCard teams={goldGroup} place={1} className={styles.gold} startDelayMs={800} />
+              <PodiumCard
+                teams={goldGroup}
+                place={1}
+                className={styles.gold}
+                startDelayMs={800}
+                fit={fit}
+              />
             ) : null}
 
             {bronzeGroup ? (
@@ -171,6 +207,7 @@ export function EndScreen({ teams, gameCode }: Props) {
                 place={3}
                 className={styles.bronze}
                 startDelayMs={200}
+                fit={fit}
               />
             ) : (
               <div className={styles.podiumPlaceholder} />
@@ -185,7 +222,12 @@ export function EndScreen({ teams, gameCode }: Props) {
               teams below the cut line are summarized as "…and N more". */}
           <div className={styles.scoreboard} data-testid="final-scoreboard">
             <h2 className={styles.scoreboardTitle}>Leaderboard</h2>
-            <ol className={styles.scoreboardList}>
+            {/* --rows: the fitted version shrinks the rows when a tie at the cut
+                line lists more than five. */}
+            <ol
+              className={styles.scoreboardList}
+              style={{ "--rows": scoreboard.length } as CSSProperties}
+            >
               {scoreboard.map(({ team, rank }) => (
                 <li
                   key={team.id}

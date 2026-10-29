@@ -10,13 +10,20 @@ interface Props {
   // container (the display's waiting screen). `size` still applies anywhere
   // there is no size container around the panel.
   fill?: boolean;
+  // Smaller padding and code, no URL line: the display's phone frames during
+  // a game, where every row of the board needs the height.
+  compact?: boolean;
 }
 
-export function QRPanel({ joinUrl, gameCode, size = 220, fill = false }: Props) {
+export function QRPanel({ joinUrl, gameCode, size = 220, fill = false, compact = false }: Props) {
   const { svg, error } = useQrSvg(joinUrl, size);
 
   return (
-    <div className={fill ? `${styles.panel} ${styles.fill}` : styles.panel}>
+    <div
+      className={[styles.panel, fill ? styles.fill : "", compact ? styles.compact : ""]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div
         className={styles.qrFrame}
         aria-hidden="true"
