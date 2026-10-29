@@ -96,6 +96,10 @@ interface FitResult {
   pageScrolls: boolean;
   emptyScores: string[];
   qrOut: boolean;
+  // A non-scrolling frame can't "scroll", so also: rows squeezed below their
+  // own content, and content overflowing the frame itself.
+  squeezed: string[];
+  frameOverflow: boolean;
 }
 
 async function measureFit(page: Page): Promise<FitResult> {
@@ -105,7 +109,17 @@ async function measureFit(page: Page): Promise<FitResult> {
     const rows = [...document.querySelectorAll("[data-team-id]")];
     const clipped: string[] = [];
     const emptyScores: string[] = [];
+    const squeezed: string[] = [];
     for (const r of rows) {
+      // Squeezed: a rank, name or score box sticking out of its row. (Not
+      // scrollHeight: the display face's ascent overflows its tight line box
+      // without any visible ink being cut.)
+      const inner = r.getBoundingClientRect().top + r.clientTop;
+      const cut = [...r.children].some((c) => {
+        const cb = c.getBoundingClientRect();
+        return cb.top < inner - 1 || cb.bottom > inner + r.clientHeight + 1;
+      });
+      if (cut) squeezed.push(r.textContent ?? "?");
       const b = r.getBoundingClientRect();
       const name = r.querySelector("span:nth-child(2)")?.textContent ?? "?";
       const score = r.querySelector("span:nth-child(3)")?.textContent ?? "";
@@ -115,7 +129,10 @@ async function measureFit(page: Page): Promise<FitResult> {
     }
     const doc = document.scrollingElement!;
     const qr = document.querySelector("main footer svg")?.getBoundingClientRect();
+    const main = document.querySelector("main")!;
     return {
+      squeezed,
+      frameOverflow: main.scrollHeight > main.clientHeight + 2,
       total: rows.length,
       clipped,
       pageScrolls: doc.scrollHeight > doc.clientHeight + 2,
@@ -204,6 +221,8 @@ for (const { code, teams } of CASES) {
       expect(fit.pageScrolls, `top ${shown} @ ${vp.w}x${vp.h}: page must not scroll`).toBe(false);
       expect(fit.emptyScores, `top ${shown} @ ${vp.w}x${vp.h}: rows with no score`).toEqual([]);
       expect(fit.qrOut, `top ${shown} @ ${vp.w}x${vp.h}: join QR leaves the frame`).toBe(false);
+      expect(fit.squeezed, `top ${shown} @ ${vp.w}x${vp.h}: rows squeezed`).toEqual([]);
+      expect(fit.frameOverflow, `top ${shown} @ ${vp.w}x${vp.h}: frame overflows`).toBe(false);
     }
   });
 }
@@ -314,6 +333,9 @@ for (const { code, teams } of LOBBY_CASES) {
       expect(lobby.pageScrolls, `${teams} teams @ ${vp.w}x${vp.h}: page must not scroll`).toBe(
         false,
       );
+      const fit = await measureFit(page);
+      expect(fit.squeezed, `${teams} teams @ ${vp.w}x${vp.h}: rows squeezed`).toEqual([]);
+      expect(fit.frameOverflow, `${teams} teams @ ${vp.w}x${vp.h}: frame overflows`).toBe(false);
     }
   });
 }
@@ -321,16 +343,16 @@ for (const { code, teams } of LOBBY_CASES) {
 // The final screen (2026-10-29): the podium and the top-5 leaderboard on one
 // frame with no scroll, at every size. Before, a 1366x768 laptop showed no
 // leaderboard row and a sideways phone only the heading.
-async function injectEndedGame(code: string, n: number): Promise<void> {
+async function injectEndedGame(code: string, scores: number[]): Promise<void> {
   await rest("DELETE", `active_games?game_code=eq.${code}`); // cascades teams
   await rest("POST", "active_games", { game_code: code, status: "waiting" });
   await rest(
     "POST",
     "game_teams",
-    Array.from({ length: n }, (_, i) => ({
+    scores.map((score, i) => ({
       game_code: code,
       name: i === 1 ? "Los Hermanos del Ritmo" : `Team ${String(i + 1).padStart(2, "0")}`,
-      score: 90 - i * 9,
+      score,
     })),
   );
   await rest("PATCH", `active_games?game_code=eq.${code}`, {
@@ -342,7 +364,9 @@ async function injectEndedGame(code: string, n: number): Promise<void> {
 interface EndFit {
   rows: number;
   clipped: number;
+  squeezed: number;
   winnerOut: boolean;
+  headingCovered: boolean;
   pageScrolls: boolean;
 }
 
@@ -355,33 +379,99 @@ async function measureEnd(page: Page): Promise<EndFit> {
     const winner = [...document.querySelectorAll("main div")].find((el) =>
       /^WINNERS?$/.test(el.textContent ?? ""),
     );
-    const doc = document.scrollingElement!;
+    // The label must sit inside its own card, and the podium below the heading.
+    const card = winner?.parentElement?.getBoundingClientRect();
+    const wb = winner?.getBoundingClientRect();
+    const heading = document.querySelector("main h1")!.getBoundingClientRect();
+    const podium = winner?.parentElement?.parentElement?.getBoundingClientRect();
+    const main = document.querySelector("main")!;
     return {
       rows: rows.length,
       clipped: rows.filter((r) => out(r.getBoundingClientRect())).length,
-      winnerOut: !winner || out(winner.getBoundingClientRect()),
-      pageScrolls: doc.scrollHeight > doc.clientHeight + 2,
+      squeezed: rows.filter((r) => {
+        const inner = r.getBoundingClientRect().top + r.clientTop;
+        return [...r.children].some((c) => {
+          const cb = c.getBoundingClientRect();
+          return cb.top < inner - 1 || cb.bottom > inner + r.clientHeight + 1;
+        });
+      }).length,
+      winnerOut:
+        !wb || !card || out(wb) || wb.top < card.top - 1 || wb.bottom > card.bottom + 1,
+      headingCovered: !!podium && podium.top < heading.bottom - 1,
+      pageScrolls: main.scrollHeight > main.clientHeight + 2,
     };
   });
 }
 
-test("final screen: podium and leaderboard fit across resolutions", async ({ page }) => {
-  test.setTimeout(120_000);
-  await injectEndedGame("FITEND", 8);
-  await page.goto(`/display/FITEND`);
-  await expect(page.getByTestId("final-scoreboard")).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('[data-testid="final-scoreboard"] li')).toHaveCount(CAP);
+// Ties are the hard part: tied teams share a podium card, and a tie across
+// the fifth place keeps every tied team on the leaderboard (issue #180).
+// `strict` also requires every leaderboard row to hold its own content; the
+// all-zero game (the host ended before anyone scored) lists eight rows, which
+// an upright phone can only show smaller than that.
+const END_CASES: Array<{
+  code: string;
+  label: string;
+  scores: number[];
+  rows: number;
+  strict: boolean;
+}> = [
+  {
+    code: "FITEND",
+    label: "distinct scores",
+    scores: [90, 81, 72, 63, 54, 45, 36, 27],
+    rows: 5,
+    strict: true,
+  },
+  {
+    code: "FITTIE",
+    label: "three tied for first",
+    scores: [50, 50, 50, 40, 30, 20, 10, 5],
+    rows: 5,
+    strict: true,
+  },
+  {
+    code: "FITCUT",
+    label: "four tied across fifth place",
+    scores: [44, 35, 26, 17, 0, 0, 0, 0],
+    rows: 8,
+    strict: true,
+  },
+  {
+    code: "FITZRO",
+    label: "everyone on zero",
+    scores: [0, 0, 0, 0, 0, 0, 0, 0],
+    rows: 8,
+    strict: false,
+  },
+];
 
-  for (const vp of [...VIEWPORTS, ...SMALL_VIEWPORTS]) {
-    await page.setViewportSize({ width: vp.w, height: vp.h });
-    await expect
-      .poll(async () => (await measureEnd(page)).clipped, {
-        timeout: 8_000,
-        message: `final screen @ ${vp.w}x${vp.h}: leaderboard rows off-screen`,
-      })
-      .toBe(0);
-    const end = await measureEnd(page);
-    expect(end.winnerOut, `final screen @ ${vp.w}x${vp.h}: winner off-screen`).toBe(false);
-    expect(end.pageScrolls, `final screen @ ${vp.w}x${vp.h}: page must not scroll`).toBe(false);
-  }
-});
+for (const { code, label, scores, rows, strict } of END_CASES) {
+  test(`final screen (${label}): podium and leaderboard fit across resolutions`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await injectEndedGame(code, scores);
+    await page.goto(`/display/${code}`);
+    await expect(page.getByTestId("final-scoreboard")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[data-testid="final-scoreboard"] li')).toHaveCount(rows);
+
+    for (const vp of [...VIEWPORTS, ...SMALL_VIEWPORTS]) {
+      await page.setViewportSize({ width: vp.w, height: vp.h });
+      await expect
+        .poll(async () => (await measureEnd(page)).clipped, {
+          timeout: 8_000,
+          message: `${label} @ ${vp.w}x${vp.h}: leaderboard rows off-screen`,
+        })
+        .toBe(0);
+      const end = await measureEnd(page);
+      expect(end.winnerOut, `${label} @ ${vp.w}x${vp.h}: WINNER label off its card`).toBe(false);
+      expect(end.headingCovered, `${label} @ ${vp.w}x${vp.h}: podium covers the heading`).toBe(
+        false,
+      );
+      expect(end.pageScrolls, `${label} @ ${vp.w}x${vp.h}: frame overflows`).toBe(false);
+      if (strict) {
+        expect(end.squeezed, `${label} @ ${vp.w}x${vp.h}: rows squeezed`).toBe(0);
+      }
+    }
+  });
+}

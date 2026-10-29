@@ -904,6 +904,15 @@
   container-type: size;
 }
 
+/* The "game has ended" banner over the final screen: one short line on a
+   phone, so the podium and leaderboard keep the height. */
+@media (max-width: 768px), (orientation: landscape) and (max-height: 639px) {
+  .shell.shellEnd .banner {
+    padding: 0.3rem 1rem;
+    font-size: 1.05rem;
+  }
+}
+
 @media (max-width: 768px) {
   .shell[data-density] {
     height: 100dvh;
@@ -1001,8 +1010,14 @@
     gap: var(--list-gap, 12px) 24px;
     container-type: size;
   }
+  /* The rank ring also stays 4px inside its row, which the type floor alone
+     can't promise on the shortest frames (an iPhone SE upright in Safari). */
   .shell[data-density] .bigRow {
     --rf: clamp(0.72rem, calc(42cqh / var(--rows, 1)), var(--row-font, 1.8rem));
+    --ring: min(
+      calc(var(--rf) * 1.9),
+      calc((100cqh - (var(--rows, 1) - 1) * var(--list-gap, 12px)) / var(--rows, 1) - 4px)
+    );
     padding: 0 clamp(0.6rem, 2.4cqw, 1.25rem);
     gap: clamp(0.5rem, 2cqw, 1rem);
     line-height: 1.05;

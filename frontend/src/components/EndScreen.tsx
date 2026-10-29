@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { useCountUp } from "../hooks/useCountUp";
 import type { Team } from "../lib/types";
 import styles from "./EndScreen.module.css";
@@ -87,11 +87,13 @@ function PodiumCard({
   place,
   className,
   startDelayMs,
+  fit,
 }: {
   teams: Team[];
   place: 1 | 2 | 3;
   className: string | undefined;
   startDelayMs: number;
+  fit: boolean;
 }) {
   const isWinner = place === 1;
   return (
@@ -107,15 +109,34 @@ function PodiumCard({
           grows to fit them (min-height, no internal scroll — issue #180); a
           realistic tie is a handful of teams. */}
       <div className={styles.podiumTeams}>
-        {teams.map((t, i) => (
-          <div key={t.id} className={styles.podiumTeam}>
-            <div className={styles.teamName}>{t.name}</div>
+        {fit && teams.length > 1 ? (
+          // The display's frame can't grow, so a tie lists its names as one
+          // wrapped group over the score they share. Each team still has its
+          // own row on the leaderboard beside the podium.
+          <div className={styles.podiumTeam}>
+            <div className={styles.tiedNames}>
+              {teams.map((t) => (
+                <span key={t.id} className={styles.tiedName} dir="auto">
+                  {t.name}
+                </span>
+              ))}
+            </div>
             <div className={styles.teamScore}>
-              <Score value={t.score} delay={startDelayMs + i * 150} />
+              <Score value={teams[0]!.score} delay={startDelayMs} />
               <span className={styles.scoreUnit}>pts</span>
             </div>
           </div>
-        ))}
+        ) : (
+          teams.map((t, i) => (
+            <div key={t.id} className={styles.podiumTeam}>
+              <div className={styles.teamName}>{t.name}</div>
+              <div className={styles.teamScore}>
+                <Score value={t.score} delay={startDelayMs + i * 150} />
+                <span className={styles.scoreUnit}>pts</span>
+              </div>
+            </div>
+          ))
+        )}
       </div>
       {isWinner ? (
         <div className={styles.winnerLabel}>{teams.length > 1 ? "WINNERS" : "WINNER"}</div>
@@ -164,13 +185,20 @@ export function EndScreen({ teams, gameCode, fit = false }: Props) {
                 place={2}
                 className={styles.silver}
                 startDelayMs={400}
+                fit={fit}
               />
             ) : (
               <div className={styles.podiumPlaceholder} />
             )}
 
             {goldGroup ? (
-              <PodiumCard teams={goldGroup} place={1} className={styles.gold} startDelayMs={800} />
+              <PodiumCard
+                teams={goldGroup}
+                place={1}
+                className={styles.gold}
+                startDelayMs={800}
+                fit={fit}
+              />
             ) : null}
 
             {bronzeGroup ? (
@@ -179,6 +207,7 @@ export function EndScreen({ teams, gameCode, fit = false }: Props) {
                 place={3}
                 className={styles.bronze}
                 startDelayMs={200}
+                fit={fit}
               />
             ) : (
               <div className={styles.podiumPlaceholder} />
@@ -193,7 +222,12 @@ export function EndScreen({ teams, gameCode, fit = false }: Props) {
               teams below the cut line are summarized as "…and N more". */}
           <div className={styles.scoreboard} data-testid="final-scoreboard">
             <h2 className={styles.scoreboardTitle}>Leaderboard</h2>
-            <ol className={styles.scoreboardList}>
+            {/* --rows: the fitted version shrinks the rows when a tie at the cut
+                line lists more than five. */}
+            <ol
+              className={styles.scoreboardList}
+              style={{ "--rows": scoreboard.length } as CSSProperties}
+            >
               {scoreboard.map(({ team, rank }) => (
                 <li
                   key={team.id}
