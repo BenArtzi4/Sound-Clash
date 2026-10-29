@@ -6,13 +6,17 @@ interface Props {
   joinUrl: string;
   gameCode: string;
   size?: number;
+  // Inside a size container, stack the panel and grow the QR to fill the
+  // container (the display's waiting screen). `size` still applies anywhere
+  // there is no size container around the panel.
+  fill?: boolean;
 }
 
-export function QRPanel({ joinUrl, gameCode, size = 220 }: Props) {
+export function QRPanel({ joinUrl, gameCode, size = 220, fill = false }: Props) {
   const { svg, error } = useQrSvg(joinUrl, size);
 
   return (
-    <div className={styles.panel}>
+    <div className={fill ? `${styles.panel} ${styles.fill}` : styles.panel}>
       <div
         className={styles.qrFrame}
         aria-hidden="true"

@@ -86,3 +86,40 @@
     height: 160px;
   }
 }
+
+/* `fill` mode (the display's waiting screen, 2026-10-27): inside a size
+   container the panel stacks and the QR grows to the biggest square that
+   leaves room for the text under it, so the room can scan it from the sofa.
+   With no size container around the panel (a phone, the in-game sidebar)
+   this query never matches and the panel keeps its normal layout. */
+@container (min-width: 0px) {
+  .fill {
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px;
+    text-align: center;
+  }
+  .fill .qrFrame {
+    /* 48px is the panel's side padding. 230px is everything above and below
+       the QR: the panel's padding, the gap, the three text lines and a little
+       slack. */
+    width: min(100cqw - 48px, 100cqh - 230px);
+    height: auto;
+    aspect-ratio: 1;
+    padding: 14px;
+  }
+  .fill .body {
+    align-items: center;
+  }
+  .fill .hint {
+    font-size: 1rem;
+  }
+  .fill .code {
+    font-size: 4rem;
+    line-height: 1.05;
+    letter-spacing: 0.14em;
+  }
+  .fill .url {
+    font-size: 1.15rem;
+  }
+}
