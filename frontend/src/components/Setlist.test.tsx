@@ -178,7 +178,9 @@ describe("Setlist", () => {
     fireEvent.click(button);
 
     await screen.findByText("Copied");
-    expect(writeText).toHaveBeenCalledWith("A - One\nB - Two");
+    expect(writeText).toHaveBeenCalledWith(
+      `A - One\nB - Two\n\nPlayed on Sound Clash: ${window.location.origin}/?src=setlist`,
+    );
   });
 
   it("says so when the copy fails", async () => {
@@ -218,6 +220,7 @@ describe("Setlist", () => {
         expect(share).toHaveBeenCalledWith({
           title: "Sound Clash setlist · 5 Sep 2026",
           text: "A - One\nB - Two",
+          url: `${window.location.origin}/?src=setlist`,
         }),
       );
     });
@@ -239,7 +242,11 @@ describe("Setlist", () => {
       expect(writeText).not.toHaveBeenCalled();
 
       fireEvent.click(button);
-      await waitFor(() => expect(writeText).toHaveBeenCalledWith("A - One\nB - Two"));
+      await waitFor(() =>
+        expect(writeText).toHaveBeenCalledWith(
+          `A - One\nB - Two\n\nPlayed on Sound Clash: ${window.location.origin}/?src=setlist`,
+        ),
+      );
     });
   });
 
