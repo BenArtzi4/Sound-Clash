@@ -837,3 +837,335 @@
     font-size: 1.25rem;
   }
 }
+
+/* ------------------------------------------------- phones and small frames -- */
+/* A host with no computer mirrors a phone to the TV (2026-10-29). Before
+   these blocks a phone got a scrolling page: upright, the QR and the bottom
+   rows sat below the fold; sideways (no width rule matched) it got the
+   desktop sizes and showed one row of five. Now every live board is one
+   non-scrolling frame, like the TV's: upright phones stack, and any
+   landscape frame shorter than the TV breakpoint's 640px gets the TV's two
+   columns. Mirrored, the share of the frame is what the room sees, so the
+   rows are sized from the frame and the top matter is kept small. The TV
+   block above (769x640 and up) is untouched. */
+
+/* Full screen hides the phone's status bar and browser toolbar, which the
+   mirror would otherwise put on the TV. Touch screens only, so the TV and
+   laptop frames do not change. */
+.fullscreenButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  font-size: 1.35rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .fullscreenButton {
+    display: inline-flex;
+  }
+}
+
+/* Upright phones only, before the game starts: sideways fills the TV. */
+.rotateTip {
+  display: none;
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-body);
+  color: var(--text-muted);
+}
+
+@media (max-width: 768px) and (orientation: portrait) and (pointer: coarse) {
+  .rotateTip {
+    display: block;
+  }
+}
+
+/* The final screen fills one frame too; EndScreen's `fit` sizes itself from
+   endFrame (a size container). */
+.shell.shellEnd {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  padding: clamp(0.5rem, 2vh, 1.25rem) var(--space-4);
+  gap: 0.5rem;
+}
+
+.endFrame {
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
+}
+
+@media (max-width: 768px) {
+  .shell[data-density] {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    padding: 0.6rem var(--space-4);
+    gap: 0.5rem;
+    --row-h: 76px;
+    --row-font: 1.6rem;
+    --list-gap: 8px;
+  }
+  .shell[data-density] .header {
+    padding: 0.35rem 0.85rem;
+  }
+  .shell[data-density] .header h1 {
+    font-size: 1.25rem;
+  }
+  .shell[data-density] .code {
+    font-size: 1.35rem;
+  }
+  .shell[data-density] .fullscreenButton {
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 1.15rem;
+  }
+  .shell[data-density] .banner {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    padding: 0.5rem 1rem;
+    font-size: 1.2rem;
+  }
+  .shell[data-density] .bannerSubhead {
+    font-size: var(--text-caption);
+  }
+  .shell[data-density] .rotateTip {
+    font-size: var(--text-caption);
+  }
+  .shell[data-density] .revealPanel {
+    padding: 0.4rem 0.75rem;
+    gap: 0.2rem;
+  }
+  .shell[data-density] .revealRow {
+    font-size: 1.05rem;
+  }
+  .shell[data-density] .tokenChip {
+    padding: 3px 10px;
+  }
+  .shell[data-density] .timerSlot {
+    min-height: 40px;
+  }
+  .shell[data-density] .timer {
+    padding: 0.3rem 0.9rem;
+    gap: 0.75rem;
+  }
+  .shell[data-density] .timerValue {
+    font-size: 1.3rem;
+  }
+  .shell[data-density] .moreTeams {
+    font-size: var(--text-caption);
+  }
+  .shell[data-density] .joinFooter {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .shell[data-density] .emptyBoard {
+    padding: 1rem;
+    gap: 0.5rem;
+  }
+}
+
+/* Shared by both small-frame layouts: the board takes whatever height the
+   rest leaves and its rows divide it (the TV block's elastic grid). */
+@media (max-width: 768px), (orientation: landscape) and (max-height: 639px) {
+  .shell[data-density] .scores {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .shell[data-density] .bigList {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: calc(
+      var(--rows, 1) * var(--row-h, 78px) + (var(--rows, 1) - 1) * var(--list-gap, 12px)
+    );
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    gap: var(--list-gap, 12px) 24px;
+    container-type: size;
+  }
+  .shell[data-density] .bigRow {
+    --rf: clamp(0.72rem, calc(42cqh / var(--rows, 1)), var(--row-font, 1.8rem));
+    padding: 0 clamp(0.6rem, 2.4cqw, 1.25rem);
+    gap: clamp(0.5rem, 2cqw, 1rem);
+    line-height: 1.05;
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* One line of chips: two wrapped lines took the height of a row or of the
+     answer card. A claimed chip cuts a long team name with an ellipsis; an
+     open chip and the check mark keep their size. */
+  .shell[data-density] .tokenChips {
+    flex-wrap: nowrap;
+  }
+  .shell[data-density] .tokenChip {
+    flex: none;
+    white-space: nowrap;
+  }
+  .shell[data-density] .tokenChipClaimed {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .shell[data-density] .tokenChip svg {
+    flex: none;
+  }
+  .shell[data-density] .tokenChipName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Upright phones: the banner keeps to one line (the round number returns
+   when the buzz is released), and under 700px the chips go: the answer card
+   above them already shows what has been guessed. */
+@media (max-width: 768px) and (orientation: portrait) {
+  .shell[data-density] .bannerSubhead {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) and (orientation: portrait) and (max-height: 699px) {
+  .shell[data-density] .tokenChips {
+    display: none;
+  }
+}
+
+/* Sideways phones and other frames under 640px tall: the TV's two columns,
+   with the top matter cut to one short line each. */
+@media (orientation: landscape) and (max-height: 639px) {
+  .shell[data-density] {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    padding: 0.4rem var(--space-4);
+    display: grid;
+    gap: 0.4rem var(--space-4);
+    grid-template-columns: minmax(0, 1fr) clamp(200px, 32vw, 320px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "header header"
+      "banner banner"
+      "scores side"
+      "more   side";
+    --row-h: 80px;
+    --row-font: 1.7rem;
+    --list-gap: 6px;
+  }
+  /* Before the game starts the join panel gets half the frame, as on the TV
+     (QRPanel `fill` sizes the QR from the column). */
+  .shell[data-phase="waiting"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .shell[data-phase="waiting"] .side {
+    container-type: size;
+  }
+  .shell[data-density] .header {
+    grid-area: header;
+    padding: 0.15rem 0.85rem;
+  }
+  .shell[data-density] .header h1 {
+    font-size: 1.1rem;
+  }
+  .shell[data-density] .code {
+    font-size: 1.2rem;
+  }
+  .shell[data-density] .fullscreenButton {
+    width: 1.9rem;
+    height: 1.9rem;
+    font-size: 1.05rem;
+  }
+  .shell[data-density] .banner {
+    grid-area: banner;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    padding: 0.2rem 1rem;
+    font-size: 1.1rem;
+  }
+  .shell[data-density] .bannerSubhead {
+    padding: 0 10px;
+    font-size: var(--text-caption);
+  }
+  .shell[data-density] .scores {
+    grid-area: scores;
+  }
+  .shell[data-density] .moreTeams {
+    grid-area: more;
+    font-size: var(--text-caption);
+  }
+  .shell[data-density] .side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 0;
+  }
+  .shell[data-density] .revealPanel {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 3.25rem;
+    overflow: hidden;
+    padding: 0.3rem 0.7rem;
+    gap: 0.2rem;
+  }
+  .shell[data-density] .revealRow {
+    font-size: clamp(0.95rem, 4.6vh, 1.3rem);
+  }
+  /* A long title wraps in the narrow column, two lines at most. */
+  .shell[data-density] .revealText {
+    white-space: normal;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+  .shell[data-density] .tokenChip {
+    padding: 2px 10px;
+  }
+  .shell[data-density] .timerSlot {
+    min-height: 30px;
+  }
+  .shell[data-density] .timer {
+    padding: 0.2rem 0.8rem;
+    gap: 0.6rem;
+  }
+  .shell[data-density] .timerValue {
+    font-size: 1.15rem;
+  }
+  .shell[data-density] .joinFooter {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .shell[data-density] .emptyBoard {
+    padding: 0.75rem;
+    gap: 0.4rem;
+  }
+  .shell[data-density] .emptyBoardTitle {
+    font-size: 1.3rem;
+  }
+  .shell[data-density] .emptyBoardHint {
+    font-size: var(--text-body);
+  }
+}

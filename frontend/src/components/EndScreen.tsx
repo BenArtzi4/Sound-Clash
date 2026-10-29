@@ -7,6 +7,11 @@ import { LaurelIcon } from "./icons";
 interface Props {
   teams: Team[];
   gameCode: string;
+  // The display's version: the whole screen fits its frame with no scroll
+  // (podium beside the leaderboard on a landscape frame). The phones keep the
+  // scrolling column. Needs a size container around it (DisplayPage's
+  // endFrame), which the CSS sizes everything from.
+  fit?: boolean;
 }
 
 // The final results screen shows only the top teams so the "who won" moment
@@ -119,7 +124,7 @@ function PodiumCard({
   );
 }
 
-export function EndScreen({ teams, gameCode }: Props) {
+export function EndScreen({ teams, gameCode, fit = false }: Props) {
   const groups = useMemo(() => groupByScore(teams), [teams]);
   const { visible: scoreboard, hidden: hiddenCount } = useMemo(
     () => capScoreboard(flattenWithRanks(groups)),
@@ -132,7 +137,10 @@ export function EndScreen({ teams, gameCode }: Props) {
   const teamCount = teams.length;
 
   return (
-    <div className={styles.shell}>
+    <div
+      className={fit ? `${styles.shell} ${styles.fit}` : styles.shell}
+      data-fit={fit || undefined}
+    >
       <header className={styles.heading}>
         <span className={styles.trophy} aria-hidden="true">
           <LaurelIcon />

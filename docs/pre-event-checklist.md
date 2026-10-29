@@ -36,7 +36,7 @@ This is the reusable distillation of the full validation run performed before th
 - The **4-hour expiry clock starts at game creation**, not the first round. Create the real game shortly before kickoff.
 - Song-pool exhaustion: Next round with no songs left → "All songs in your selected genres have been played…" toast and no advance. Pick enough genres (≥3) for 12+ rounds.
 - No "Kick team" button in the UI; kicking is a token-gated `DELETE /games/<code>/teams/<id>` API call.
-- Display shows the **top 5 teams** (with a "+N more teams playing" hint below), auto-fitting screens from 1080p down to short/OS-scaled laptops — regression-tested by `tests/e2e/display_fit.spec.ts`. Every other team still sees its own place + score on its phone.
+- Display shows the **top 5 teams** (with a "+N more teams playing" hint below), auto-fitting screens from 1080p down to short/OS-scaled laptops and phones (upright and sideways, for a phone mirrored to the TV), the final results included — regression-tested by `tests/e2e/display_fit.spec.ts`. Every other team still sees its own place + score on its phone.
 
 ## 1. Pre-flight (agent)
 
@@ -71,6 +71,7 @@ Requires Docker + `supabase start`. If the local stack can't come up, skip and n
 ## 5. Scale + known-risk (agent, prod)
 
 - [ ] Join 10 teams; display shows **all** rows + QR on a 1080p window *and* a short window (~1280×720).
+- [ ] No computer for the TV? Open the display on a phone, turn it sideways, tap the full-screen button (Android) and mirror it: all five rows, the code and the QR on the TV with no scrolling, and the phone does not lock mid-game.
 - [ ] Advance ≥12 rounds without pool exhaustion using the real event genres.
 - [ ] A burst of rapid joins produces no 429s (or, if it ever does, players switch to cellular data).
 

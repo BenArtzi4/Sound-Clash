@@ -18,6 +18,16 @@ describe("EndScreen", () => {
     window.matchMedia = realMatchMedia;
   });
 
+  it("fits the frame only in the display's version", () => {
+    const { container, rerender } = render(<EndScreen teams={[]} gameCode="ABCDEF" />);
+    const shell = container.firstElementChild!;
+    expect(shell).not.toHaveAttribute("data-fit");
+    expect(shell.className).not.toMatch(/_fit_/);
+    rerender(<EndScreen teams={[]} gameCode="ABCDEF" fit />);
+    expect(container.firstElementChild).toHaveAttribute("data-fit", "true");
+    expect(container.firstElementChild!.className).toMatch(/_fit_/);
+  });
+
   it("shows the FINAL RESULTS heading and game code", () => {
     render(<EndScreen teams={[]} gameCode="ABCDEF" />);
     expect(screen.getByText(/final results/i)).toBeInTheDocument();
