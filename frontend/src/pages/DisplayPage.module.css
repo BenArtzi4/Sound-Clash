@@ -611,6 +611,18 @@
     min-height: 0;
   }
 
+  /* The waiting screen (2026-10-27): before the game starts, joining is the
+     only job, so the join panel gets half the frame. Its column becomes a size
+     container, and QRPanel's `fill` mode sizes the QR from it (about 610px on
+     a 1080p TV, up from 172). When the game starts, the narrow sidebar and its
+     small QR come back for late joiners. */
+  .shell[data-phase="waiting"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .shell[data-phase="waiting"] .side {
+    container-type: size;
+  }
+
   /* Trim the fixed top matter so the scoreboard gets more of the frame. */
   .header {
     padding: 0.5rem 1.25rem;
