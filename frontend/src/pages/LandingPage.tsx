@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { trackCta } from "../lib/funnel";
 import { Logo } from "../components/Logo";
 import { SiteFooter } from "../components/SiteFooter";
 import { ArrowRightIcon } from "../components/icons";
@@ -26,10 +27,14 @@ export function LandingPage({ path }: { path: string }) {
           <h1 className={styles.title}>{page.h1}</h1>
           <p className={styles.lede}>{page.lede}</p>
           <div className={styles.ctas}>
-            <Link to="/manager/create" className="btn btn-primary">
+            <Link
+              to="/manager/create"
+              className="btn btn-primary"
+              onClick={() => trackCta("landing_host")}
+            >
               Host a free game <ArrowRightIcon />
             </Link>
-            <Link to="/join" className="btn btn-ghost">
+            <Link to="/join" className="btn btn-ghost" onClick={() => trackCta("landing_join")}>
               Join with a code
             </Link>
           </div>
@@ -77,7 +82,11 @@ export function LandingPage({ path }: { path: string }) {
         <section className={styles.closing}>
           <h2 className={styles.closingTitle}>{page.closing}</h2>
           <div className={styles.ctas}>
-            <Link to="/manager/create" className="btn btn-primary">
+            <Link
+              to="/manager/create"
+              className="btn btn-primary"
+              onClick={() => trackCta("landing_host")}
+            >
               Host a game <ArrowRightIcon />
             </Link>
             <Link to="/how-to-play" className="btn btn-ghost">

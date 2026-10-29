@@ -16,7 +16,8 @@ const h = vi.hoisted(() => {
   };
   const pushEvent = vi.fn();
   const pushLog = vi.fn();
-  const faro = { api: { getOTEL: vi.fn(() => otel), pushEvent, pushLog } };
+  const setView = vi.fn();
+  const faro = { api: { getOTEL: vi.fn(() => otel), pushEvent, pushLog, setView } };
   const initializeFaro = vi.fn(() => faro);
   const envMock: {
     VITE_SUPABASE_URL: string;
@@ -31,7 +32,7 @@ const h = vi.hoisted(() => {
     VITE_SENTRY_DSN: undefined,
     VITE_FARO_URL: undefined,
   };
-  return { makeSpan, startSpan, otel, pushEvent, pushLog, faro, initializeFaro, envMock };
+  return { makeSpan, startSpan, otel, pushEvent, pushLog, setView, faro, initializeFaro, envMock };
 });
 
 vi.mock("./env", () => ({ env: h.envMock }));
@@ -294,5 +295,67 @@ describe("telemetry (enabled)", () => {
     tele._resetTelemetry();
     await tele.initTelemetry();
     expect(tele.isEnabled()).toBe(false);
+  });
+});
+
+describe("telemetry product events (the visitor funnel)", () => {
+  it("queues events fired before Faro loads and flushes them in order on init", async () => {
+    h.envMock.VITE_FARO_URL = FARO_URL;
+    tele._resetTelemetry();
+    h.pushEvent.mockClear();
+    tele.trackEvent("landing", { view: "/", ref: "producthunt", empty: undefined });
+    tele.trackEvent("cta", { id: "home_host" });
+    expect(h.pushEvent).not.toHaveBeenCalled();
+
+    await tele.initTelemetry();
+    expect(h.pushEvent.mock.calls).toEqual([
+      ["landing", { view: "/", ref: "producthunt" }],
+      ["cta", { id: "home_host" }],
+    ]);
+  });
+
+  it("pushes straight through once Faro is up, with every value as a string", async () => {
+    await enable();
+    h.pushEvent.mockClear();
+    tele.trackEvent("game_created", { genres_count: 3, returning: true });
+    expect(h.pushEvent).toHaveBeenCalledWith("game_created", {
+      genres_count: "3",
+      returning: "true",
+    });
+  });
+
+  it("holds nothing when telemetry is off", async () => {
+    await disable();
+    h.pushEvent.mockClear();
+    tele.trackEvent("landing", { view: "/" });
+    h.envMock.VITE_FARO_URL = FARO_URL;
+    await tele.initTelemetry();
+    expect(h.pushEvent).not.toHaveBeenCalled();
+  });
+
+  it("tags later events with the view and sends one view event per route change", async () => {
+    await enable();
+    h.pushEvent.mockClear();
+    h.setView.mockClear();
+    tele.trackView("/manager/create");
+    tele.trackView("/manager/create");
+    tele.trackView("/manager/game/*");
+    expect(h.setView.mock.calls).toEqual([
+      [{ name: "/manager/create" }],
+      [{ name: "/manager/game/*" }],
+    ]);
+    expect(h.pushEvent.mock.calls).toEqual([
+      ["view", { view: "/manager/create" }],
+      ["view", { view: "/manager/game/*" }],
+    ]);
+  });
+
+  it("sets the view reached before Faro loaded once it does", async () => {
+    h.envMock.VITE_FARO_URL = FARO_URL;
+    tele._resetTelemetry();
+    h.setView.mockClear();
+    tele.trackView("/join/*");
+    await tele.initTelemetry();
+    expect(h.setView).toHaveBeenCalledWith({ name: "/join/*" });
   });
 });

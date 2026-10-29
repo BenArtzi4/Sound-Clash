@@ -5,6 +5,7 @@ import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { createGame, getCachedGenres, listGenres } from "../lib/api";
+import { trackGameCreated } from "../lib/funnel";
 import { setManagerToken } from "../lib/managerToken";
 import type { Genre } from "../lib/types";
 import { Logo } from "../components/Logo";
@@ -187,6 +188,7 @@ export function ManagerCreateGamePage() {
         selected_decades: Array.from(selectedDecades),
       });
       setManagerToken(game.game_code, game.manager_token);
+      trackGameCreated(selected.size, selectedDecades.size);
       toast(`Game ${game.game_code} created`, { variant: "success" });
       // Fetch the console's code first: the router would hold this page while
       // it downloads, and `finally` below would re-enable the button meanwhile,

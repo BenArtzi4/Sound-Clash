@@ -501,6 +501,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           <QRPanel
             gameCode={gameCode}
             joinUrl={`${window.location.origin}/join/${gameCode}`}
+            qrUrl={`${window.location.origin}/join/${gameCode}?qr`}
             size={qrSize}
             fill={game.status === "waiting"}
             compact={!tvFrame && game.status !== "waiting"}

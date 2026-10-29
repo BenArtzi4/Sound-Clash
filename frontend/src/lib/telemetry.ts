@@ -104,6 +104,7 @@ export async function initTelemetry(): Promise<void> {
     otel = instance.api.getOTEL();
     tracer = otel?.trace.getTracer("sound-clash-web");
     faro = instance;
+    flushProductEvents(instance);
   } catch {
     // Swallow: telemetry is best-effort and must not affect gameplay.
     faro = undefined;
@@ -369,6 +370,64 @@ export function recordFanout(eventType: "game" | "team" | "round", commitTimesta
 }
 
 // ---------------------------------------------------------------------------
+// Product events (the visitor funnel in lib/funnel.ts) → Loki. Unlike the
+// spans above they can fire before Faro has loaded (the landing event fires on
+// the first tick, Faro at idle), so they wait in a short queue and flush in
+// order on init. Nothing queues when telemetry is off, so dev and tests hold
+// no events.
+// ---------------------------------------------------------------------------
+
+type EventAttrs = Record<string, AttrValue>;
+
+const MAX_PENDING_EVENTS = 50;
+const pendingEvents: { name: string; data: Record<string, string> }[] = [];
+let currentView: string | undefined;
+
+function eventData(attrs: EventAttrs): Record<string, string> {
+  const data: Record<string, string> = {};
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v !== undefined && v !== null) data[k] = String(v);
+  }
+  return data;
+}
+
+function flushProductEvents(instance: Faro): void {
+  try {
+    if (currentView) instance.api.setView({ name: currentView });
+    for (const e of pendingEvents.splice(0)) instance.api.pushEvent(e.name, e.data);
+  } catch {
+    // best-effort
+  }
+}
+
+/** Push a product event (`landing`, `view`, `cta`, ...). Never throws. */
+export function trackEvent(name: string, attrs: EventAttrs = {}): void {
+  try {
+    const data = eventData(attrs);
+    if (faro) {
+      faro.api.pushEvent(name, data);
+    } else if (env.VITE_FARO_URL && pendingEvents.length < MAX_PENDING_EVENTS) {
+      pendingEvents.push({ name, data });
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+/** Record a route change: tags every later Faro event with the view, and
+ * pushes a `view` event so the funnel can count screens reached. */
+export function trackView(view: string): void {
+  if (view === currentView) return;
+  currentView = view;
+  try {
+    faro?.api.setView({ name: view });
+  } catch {
+    // best-effort
+  }
+  trackEvent("view", { view });
+}
+
+// ---------------------------------------------------------------------------
 // YouTube player init: mount → first onReady. One span per page load.
 // ---------------------------------------------------------------------------
 
@@ -426,4 +485,6 @@ export function _resetTelemetry(): void {
   initStarted = false;
   buzzSpans.clear();
   scoreSpans.clear();
+  pendingEvents.length = 0;
+  currentView = undefined;
 }
