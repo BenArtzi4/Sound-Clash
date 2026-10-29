@@ -1,6 +1,13 @@
-# Everything public may be crawled. Per-game pages stay crawlable on purpose:
-# they are kept out of the index by the X-Robots-Tag in _headers, which a
-# crawler can only see if robots.txt lets it fetch the page.
+# Everything public may be crawled, by search engines and AI search and
+# answer crawlers alike (OAI-SearchBot, ChatGPT-User, Claude-SearchBot,
+# PerplexityBot, ...): the one rule below covers them all.
+#
+# Per-game pages stay crawlable on purpose: they are kept out of the index by
+# the X-Robots-Tag in _headers, which a crawler can only see if robots.txt lets
+# it fetch the page.
+#
+# A plain-text summary for language models is at /llms.txt, and the full text
+# of the guides at /llms-full.txt.
 User-agent: *
 Allow: /
 

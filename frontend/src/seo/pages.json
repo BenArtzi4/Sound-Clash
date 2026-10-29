@@ -9,14 +9,93 @@
       "title": "Sound Clash – Guess the Song Music Trivia Party Game",
       "description": "Free guess-the-song party game: the host plays the music, teams buzz in from their phones to name the title and artist. Hebrew & English hits, no app, no sign-up.",
       "ogTitle": "Sound Clash",
-      "ogDescription": "Real-time multiplayer music trivia. Buzz in, name the tune, win the round."
+      "ogDescription": "Real-time multiplayer music trivia. Buzz in, name the tune, win the round.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "nav": "Home"
     },
     {
       "path": "/how-to-play",
       "file": "how-to-play.html",
       "inSitemap": true,
       "title": "How to Play Sound Clash – Rules, Scoring & Setup",
-      "description": "Set up in two minutes: the host picks genres, teams join with a 6-letter code and buzz in to name the song (+10) and the artist (+5). Wrong buzz −3. Full rules and FAQ."
+      "description": "Set up in two minutes: the host picks genres, teams join with a 6-letter code and buzz in to name the song (+10) and the artist (+5). Wrong buzz −3. Full rules and FAQ.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "module": "src/pages/HowToPlayPage.tsx",
+      "nav": "Game rules"
+    },
+    {
+      "path": "/guess-the-song-with-friends",
+      "file": "guess-the-song-with-friends.html",
+      "inSitemap": true,
+      "title": "Guess the Song with Friends – Group Music Game | Sound Clash",
+      "description": "Guess the song with friends in one room: teams buzz in from their phones, a host judges, and the TV keeps score. Free, in the browser, no app or sign-up.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "module": "src/pages/LandingPage.tsx",
+      "landing": true,
+      "nav": "Guess the song with friends"
+    },
+    {
+      "path": "/music-trivia-buzzer-game",
+      "file": "music-trivia-buzzer-game.html",
+      "inSitemap": true,
+      "title": "Music Trivia Buzzer Game – Phones as Buzzers | Sound Clash",
+      "description": "A music trivia buzzer game with no hardware: each team's phone is its buzzer, the first buzz locks the rest out, and the TV shows the score. Free, no app.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "module": "src/pages/LandingPage.tsx",
+      "landing": true,
+      "nav": "Music trivia buzzer game"
+    },
+    {
+      "path": "/music-trivia-night",
+      "file": "music-trivia-night.html",
+      "inSitemap": true,
+      "title": "How to Host a Music Trivia Night – Free Guide | Sound Clash",
+      "description": "A host's guide to a music trivia night: speaker and room setup, picking genres and decades, pacing, bonus questions and ties. Free, in the browser, no app.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "module": "src/pages/LandingPage.tsx",
+      "landing": true,
+      "nav": "Music trivia night guide"
+    },
+    {
+      "path": "/soundtrack-quiz",
+      "file": "soundtrack-quiz.html",
+      "inSitemap": true,
+      "title": "Movie Soundtrack Quiz – Name the Film | Sound Clash",
+      "description": "Movie soundtrack quiz rounds: a song plays, teams buzz in from their phones and name the film, TV show or musical for 15 points. Disney, TV themes, Hebrew too.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "module": "src/pages/LandingPage.tsx",
+      "landing": true,
+      "nav": "Movie soundtrack quiz"
+    },
+    {
+      "path": "/kahoot-music-quiz-alternative",
+      "file": "kahoot-music-quiz-alternative.html",
+      "inSitemap": true,
+      "title": "Kahoot! Music Quiz Alternative – Real Songs | Sound Clash",
+      "description": "Want a music round where teams hear the song and buzz in? Sound Clash is a free Kahoot! music quiz alternative: no questions to write, no app, no sign-up.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "module": "src/pages/LandingPage.tsx",
+      "landing": true,
+      "nav": "Kahoot! music quiz alternative"
+    },
+    {
+      "path": "/hitster-alternative",
+      "file": "hitster-alternative.html",
+      "inSitemap": true,
+      "title": "Hitster Alternative – Free, No Cards Needed | Sound Clash",
+      "description": "A free Hitster alternative in the browser, with no cards and no Spotify: the host plays songs and teams buzz from their phones to name the title and artist.",
+      "updated": "2026-10-29",
+      "prerender": true,
+      "module": "src/pages/LandingPage.tsx",
+      "landing": true,
+      "nav": "Hitster alternative"
     },
     {
       "path": "/join",

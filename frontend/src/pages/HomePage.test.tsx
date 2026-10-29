@@ -54,6 +54,33 @@ describe("HomePage", () => {
     );
   });
 
+  it("adds the guess-the-song section and the site footer below the first screen", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+    const page = container.firstElementChild;
+    // The full-height first screen comes first and is unchanged; the new
+    // section and footer are siblings after it, not children of it.
+    expect(page?.querySelector("nav[aria-label='Choose your role']")).not.toBeNull();
+    expect(page?.querySelector("footer")).toBeNull();
+    expect(
+      screen.getByRole("heading", { level: 2, name: /guess-the-song game for the whole room/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: /is sound clash free/i }),
+    ).toBeInTheDocument();
+    const footer = screen.getByRole("navigation", { name: /sound clash pages/i });
+    expect(footer.closest("footer")).not.toBeNull();
+    expect(screen.getByRole("link", { name: /guess the song with friends/i })).toHaveAttribute(
+      "href",
+      "/guess-the-song-with-friends",
+    );
+    // Home does not link to itself.
+    expect(screen.queryByRole("link", { name: /^home$/i })).toBeNull();
+  });
+
   it("links to the dedicated How to Play page", () => {
     render(
       <MemoryRouter>
