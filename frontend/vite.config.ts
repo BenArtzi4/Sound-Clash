@@ -1,14 +1,20 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   plugins: [react()],
   server: {
     port: 5173,
   },
   build: {
-    outDir: "dist",
-    sourcemap: true,
+    // The server build (`vite build --ssr src/entry-server.tsx`, see
+    // scripts/prerender.mjs) writes beside dist/, never into it: it is a
+    // build-time renderer, not something to deploy.
+    outDir: isSsrBuild ? "dist-ssr" : "dist",
+    sourcemap: !isSsrBuild,
+    // The client build's manifest tells scripts/prerender.mjs which stylesheet
+    // and chunks each lazy page needs; the script deletes it afterwards.
+    manifest: !isSsrBuild,
     rollupOptions: {
       output: {
         // Split the rarely-changing framework runtime into its own long-lived
@@ -25,4 +31,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

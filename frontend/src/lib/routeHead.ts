@@ -3,7 +3,7 @@ import pagesJson from "../seo/pages.json";
 // Keeps <head> in step with the route after a client-side navigation.
 //
 // The first load is already right: `npm run build` writes one HTML file per
-// public page from the same pages.json (scripts/prerender-heads.mjs). But a tap
+// public page from the same pages.json (scripts/prerender.mjs). But a tap
 // from Home to How to play never reloads the document, so without this the tab
 // would keep Home's title, and Google, which renders the SPA, would read the
 // previous page's description and canonical.
@@ -20,6 +20,16 @@ export type SeoPage = {
   description: string;
   ogTitle?: string;
   ogDescription?: string;
+  // The date the page's text last changed; the sitemap's lastmod.
+  updated?: string;
+  // The build writes the page's body into its HTML (src/entry-server.tsx).
+  prerender?: boolean;
+  // A prerendered page's lazy chunk, whose stylesheet the HTML links.
+  module?: string;
+  // A search landing page: routed to LandingPage, text in landingContent.ts.
+  landing?: boolean;
+  // The page's link text in the site footer (SiteFooter); unlisted if absent.
+  nav?: string;
 };
 
 export type SeoConfig = {

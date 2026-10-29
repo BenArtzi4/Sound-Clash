@@ -30,6 +30,9 @@ frontend/dist/
 # (`vite build --mode development --outDir dist-local`). Untracked it also
 # kept tripping `eslint .`, which lints the whole emitted bundle.
 frontend/dist-local/
+# The build-time server bundle (`vite build --ssr src/entry-server.tsx`); the
+# prerender script deletes it, but a failed build leaves it behind.
+frontend/dist-ssr/
 frontend/.vite/
 frontend/coverage/
 

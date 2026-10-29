@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { SetupSchematic } from "../components/SetupSchematic";
+import { SiteFooter } from "../components/SiteFooter";
 import { ArrowLeftIcon, HostIcon, PhoneIcon, SpeakerIcon, TvIcon } from "../components/icons";
 import styles from "./HowToPlayPage.module.css";
 
@@ -228,6 +229,7 @@ export function HowToPlayPage() {
           </Link>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

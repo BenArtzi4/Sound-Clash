@@ -5,6 +5,7 @@ import { RouteFallback } from "./components/RouteFallback";
 import { RouteHead } from "./components/RouteHead";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { ToastProvider } from "./context/ToastContext";
+import { seo } from "./lib/routeHead";
 import { HomePage } from "./pages/HomePage";
 import { JoinTeamPage } from "./pages/JoinTeamPage";
 
@@ -31,6 +32,47 @@ const AdminSongsPage = lazy(() =>
 const DisplayPage = lazy(() =>
   import("./pages/DisplayPage").then((m) => ({ default: m.DisplayPage })),
 );
+// The search landing pages (/guess-the-song-game and friends) share one
+// component and one lazy chunk; their routes come from src/seo/pages.json so a
+// new page is a pages.json entry plus its text in src/seo/landingContent.ts.
+const LandingPage = lazy(() =>
+  import("./pages/LandingPage").then((m) => ({ default: m.LandingPage })),
+);
+const LANDING_PATHS = seo.pages.filter((p) => p.landing).map((p) => p.path);
+
+// Everything inside the router. The build renders this same tree under a
+// StaticRouter (src/entry-server.tsx) to write each content page's HTML, and
+// main.tsx hydrates that HTML with <App />, so the two must stay one tree: a
+// wrapper that adds a DOM node here and not there would make React throw the
+// server markup away (src/entry-server.test.tsx catches that).
+export function AppRoutes() {
+  return (
+    <>
+      <ScrollToTop />
+      <RouteHead />
+      <ToastProvider>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/how-to-play" element={<HowToPlayPage />} />
+            {LANDING_PATHS.map((path) => (
+              <Route key={path} path={path} element={<LandingPage path={path} />} />
+            ))}
+            <Route path="/join" element={<JoinTeamPage />} />
+            <Route path="/join/:gameCode" element={<JoinTeamPage />} />
+            <Route path="/team/:gameCode" element={<TeamGameplayPage />} />
+            <Route path="/manager/create" element={<ManagerCreateGamePage />} />
+            <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
+            <Route path="/admin/songs" element={<AdminSongsPage />} />
+            <Route path="/display" element={<DisplayPage />} />
+            <Route path="/display/:gameCode" element={<DisplayPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </ToastProvider>
+    </>
+  );
+}
 
 export function App() {
   return (
@@ -39,25 +81,7 @@ export function App() {
     // instead of a blank page. See lib/preloadError.ts for the auto-reload path.
     <ErrorBoundary>
       <BrowserRouter>
-        <ScrollToTop />
-        <RouteHead />
-        <ToastProvider>
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/how-to-play" element={<HowToPlayPage />} />
-              <Route path="/join" element={<JoinTeamPage />} />
-              <Route path="/join/:gameCode" element={<JoinTeamPage />} />
-              <Route path="/team/:gameCode" element={<TeamGameplayPage />} />
-              <Route path="/manager/create" element={<ManagerCreateGamePage />} />
-              <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
-              <Route path="/admin/songs" element={<AdminSongsPage />} />
-              <Route path="/display" element={<DisplayPage />} />
-              <Route path="/display/:gameCode" element={<DisplayPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </ToastProvider>
+        <AppRoutes />
       </BrowserRouter>
     </ErrorBoundary>
   );
