@@ -26,6 +26,17 @@
       "nav": "Game rules"
     },
     {
+      "path": "/privacy",
+      "file": "privacy.html",
+      "inSitemap": false,
+      "title": "Privacy – Sound Clash",
+      "description": "What Sound Clash stores while you play, for how long, and which services see it. No accounts, no cookies of its own, and Sound Clash shows no ads.",
+      "updated": "2026-10-30",
+      "prerender": true,
+      "module": "src/pages/PrivacyPage.tsx",
+      "nav": "Privacy"
+    },
+    {
       "path": "/guess-the-song-with-friends",
       "file": "guess-the-song-with-friends.html",
       "inSitemap": true,
