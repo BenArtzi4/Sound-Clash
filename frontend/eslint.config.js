@@ -5,7 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 
 export default [
-  { ignores: ["dist", "node_modules", "coverage"] },
+  { ignores: ["dist", "dist-ssr", "node_modules", "coverage"] },
   js.configs.recommended,
   {
     // The PWA service worker runs in ServiceWorkerGlobalScope, not the DOM, so

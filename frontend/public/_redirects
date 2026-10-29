@@ -1,3 +1,15 @@
-# A previous owner of the domain left /html/en/welcome/ in search indexes; must precede the /* catch-all (rules match top-down).
+# A previous owner of the domain left /html/en/welcome/ in search indexes; must precede the rules below (rules match top-down).
 /html/*    /    301
-/*    /index.html   200
+
+# The per-game and admin screens have no file of their own: serve the empty
+# SPA shell (dist/spa-shell.html, written by scripts/prerender.mjs) and let the
+# router draw the screen. Every public page is a real file (index.html,
+# how-to-play.html, join.html, ...), which Pages serves before any rule here.
+# There is deliberately no /* catch-all: any other URL gets dist/404.html with
+# a real 404 status, so a missing page is never a soft 200 to search engines.
+# A new client-side route with a URL parameter needs its line here.
+/join/*           /spa-shell   200
+/team/*           /spa-shell   200
+/manager/game/*   /spa-shell   200
+/display/*        /spa-shell   200
+/admin/*          /spa-shell   200

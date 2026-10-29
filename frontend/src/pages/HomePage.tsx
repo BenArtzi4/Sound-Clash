@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { HomeAbout } from "../components/HomeAbout";
 import { Logo } from "../components/Logo";
+import { SiteFooter } from "../components/SiteFooter";
 import { ArrowRightIcon, HostIcon, PhoneIcon, TvIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
 import { prefetchQuietly } from "../lib/preloadError";
@@ -65,8 +67,10 @@ function whenIdle(run: () => void): () => void {
 // replay it: remounting at opacity 0 blanked the first frame after a
 // back-swipe, which on an iPhone reads as "loads, flashes, loads again"
 // (10-touch-and-route-motion.md). HomePage is an eager import, so this runs
-// once at startup and sees the path the page load began on.
-let introPending = window.location.pathname === "/";
+// once at startup and sees the path the page load began on. The build renders
+// Home only at "/" (src/entry-server.tsx, where there is no window), so the
+// prerendered markup carries the intro and hydration finds it already there.
+let introPending = typeof window === "undefined" || window.location.pathname === "/";
 
 // Rendered twice per card: once as the resting face, once inside the clipped
 // fill layer with the ink inverted. Two copies are what let the text flip at
@@ -167,50 +171,56 @@ export function HomePage() {
     });
   }, []);
 
+  // HomeAbout and the footer sit after the full-height .page, so the first
+  // screen is exactly what it was; they are what a scroll (or a crawler) finds.
   return (
-    <div className={styles.page} data-intro={intro ? "true" : undefined}>
-      <main className={styles.main}>
-        <section className={styles.hero}>
-          <Logo size="hero" />
-          {/* The wordmark above is not a heading, so the H1 carries the brand
+    <>
+      <div className={styles.page} data-intro={intro ? "true" : undefined}>
+        <main className={styles.main}>
+          <section className={styles.hero}>
+            <Logo size="hero" />
+            {/* The wordmark above is not a heading, so the H1 carries the brand
               for screen readers and search engines without showing it twice. */}
-          <h1 className={styles.title}>
-            <span className="visually-hidden">Sound Clash: </span>Name the song. Buzz first.
-          </h1>
-          <p className={styles.subtitle}>
-            Real-time music trivia for a room full of people and one TV.
-          </p>
-        </section>
-        <nav className={styles.roles} aria-label="Choose your role">
-          {ROLES.map((r, i) => (
-            <Link
-              key={r.to}
-              to={r.to}
-              className={styles.role}
-              aria-label={r.name}
-              data-role={r.role}
-              style={{ "--i": i } as CSSProperties}
-              onClick={(e) => leaveCleanly(e, r.to)}
-              onPointerDown={rippleOn}
-              onPointerUp={rippleOff}
-              onPointerCancel={rippleOff}
-              onPointerLeave={rippleOff}
-            >
-              <span className={styles.roleFace}>
-                <RoleFace icon={r.icon} title={r.title} desc={r.desc} cue={r.cue} />
-              </span>
-              <span className={styles.roleFill} aria-hidden="true">
-                <RoleFace icon={r.icon} title={r.title} desc={r.desc} cue={r.cue} />
-              </span>
+            <h1 className={styles.title}>
+              <span className="visually-hidden">Sound Clash: </span>Name the song. Buzz first.
+            </h1>
+            <p className={styles.subtitle}>
+              Real-time music trivia for a room full of people and one TV.
+            </p>
+          </section>
+          <nav className={styles.roles} aria-label="Choose your role">
+            {ROLES.map((r, i) => (
+              <Link
+                key={r.to}
+                to={r.to}
+                className={styles.role}
+                aria-label={r.name}
+                data-role={r.role}
+                style={{ "--i": i } as CSSProperties}
+                onClick={(e) => leaveCleanly(e, r.to)}
+                onPointerDown={rippleOn}
+                onPointerUp={rippleOff}
+                onPointerCancel={rippleOff}
+                onPointerLeave={rippleOff}
+              >
+                <span className={styles.roleFace}>
+                  <RoleFace icon={r.icon} title={r.title} desc={r.desc} cue={r.cue} />
+                </span>
+                <span className={styles.roleFill} aria-hidden="true">
+                  <RoleFace icon={r.icon} title={r.title} desc={r.desc} cue={r.cue} />
+                </span>
+              </Link>
+            ))}
+          </nav>
+          <p className={styles.howTo}>
+            <Link to="/how-to-play">
+              How to play <ArrowRightIcon />
             </Link>
-          ))}
-        </nav>
-        <p className={styles.howTo}>
-          <Link to="/how-to-play">
-            How to play <ArrowRightIcon />
-          </Link>
-        </p>
-      </main>
-    </div>
+          </p>
+        </main>
+      </div>
+      <HomeAbout />
+      <SiteFooter />
+    </>
   );
 }

@@ -1,0 +1,77 @@
+/* Home's below-the-fold section (HomeAbout.tsx): two columns on wide screens,
+   stacked on phones. Kept quieter than the first screen so the role cards stay
+   the page's call to action. */
+
+.about {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-5);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-7);
+  border-top: 1px solid var(--border);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.heading {
+  font-size: var(--text-display-s);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.text {
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.steps li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  color: var(--bone);
+  font-weight: 600;
+}
+
+.faq {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.question {
+  font-family: var(--font-ui);
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--bone);
+  margin-bottom: var(--space-1);
+}
+
+@media (max-width: 900px) {
+  .about {
+    grid-template-columns: 1fr;
+    padding: var(--space-7) var(--space-5);
+  }
+}
