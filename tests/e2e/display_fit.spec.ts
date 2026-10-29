@@ -183,3 +183,94 @@ for (const { code, teams } of CASES) {
     }
   });
 }
+
+// The waiting screen gives the join panel half the frame and grows the QR to
+// fill it (2026-10-27), so the room can scan it from across the room. Guard
+// that the big QR and its text stay inside the frame, that the teams who have
+// joined still fit, and that the QR really is big: at least twice its in-game
+// size at every resolution.
+async function injectWaitingGame(code: string, n: number): Promise<void> {
+  await rest("DELETE", `active_games?game_code=eq.${code}`); // cascades teams
+  await rest("POST", "active_games", { game_code: code, status: "waiting" });
+  if (n > 0) {
+    await rest(
+      "POST",
+      "game_teams",
+      Array.from({ length: n }, (_, i) => ({
+        game_code: code,
+        name: `Team ${String(i + 1).padStart(2, "0")}`,
+        score: 0,
+      })),
+    );
+  }
+}
+
+// DisplayPage.tsx's in-game QR size for a frame of height h.
+function inGameQr(h: number): number {
+  return h < 700 ? 96 : h < 820 ? 118 : h < 950 ? 140 : 172;
+}
+
+interface LobbyFit {
+  qr: number;
+  panelOut: boolean;
+  pageScrolls: boolean;
+}
+
+async function measureLobby(page: Page): Promise<LobbyFit> {
+  return page.evaluate(() => {
+    const panel = document.querySelector("main footer > div")!.getBoundingClientRect();
+    const qr = document.querySelector("main footer svg")!.getBoundingClientRect();
+    const doc = document.scrollingElement!;
+    return {
+      qr: Math.round(qr.width),
+      panelOut:
+        panel.top < -1 ||
+        panel.left < -1 ||
+        panel.bottom > window.innerHeight + 1 ||
+        panel.right > window.innerWidth + 1,
+      pageScrolls: doc.scrollHeight > doc.clientHeight + 2,
+    };
+  });
+}
+
+const LOBBY_CASES: Array<{ code: string; teams: number }> = [
+  { code: "FITLBY", teams: 0 },
+  { code: "FITLBT", teams: 3 },
+  { code: "FITLBE", teams: 8 },
+];
+
+for (const { code, teams } of LOBBY_CASES) {
+  const shown = Math.min(teams, CAP);
+  test(`waiting screen: big join QR and ${teams} teams fit across resolutions`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await injectWaitingGame(code, teams);
+    await page.goto(`/display/${code}`);
+    await expect(page.getByText("Waiting for the host…")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("[data-team-id]")).toHaveCount(shown, { timeout: 20_000 });
+    await expect(page.locator("main footer svg")).toBeVisible();
+
+    for (const vp of VIEWPORTS) {
+      await page.setViewportSize({ width: vp.w, height: vp.h });
+      const min = 2 * inGameQr(vp.h);
+      await expect
+        .poll(async () => (await measureLobby(page)).qr, {
+          timeout: 8_000,
+          message: `${teams} teams @ ${vp.w}x${vp.h}: QR should be at least ${min}px`,
+        })
+        .toBeGreaterThanOrEqual(min);
+
+      const lobby = await measureLobby(page);
+      console.log(`waiting, ${teams} teams @ ${vp.w}x${vp.h}: QR ${lobby.qr}px`);
+      expect(lobby.panelOut, `${teams} teams @ ${vp.w}x${vp.h}: join panel leaves the frame`).toBe(
+        false,
+      );
+      expect(lobby.pageScrolls, `${teams} teams @ ${vp.w}x${vp.h}: page must not scroll`).toBe(
+        false,
+      );
+      const fit = await measureFit(page);
+      expect(fit.clipped, `${teams} teams @ ${vp.w}x${vp.h}: clipped rows`).toEqual([]);
+    }
+  });
+}
