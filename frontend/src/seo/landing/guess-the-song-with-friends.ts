@@ -55,7 +55,7 @@ export const page: LandingContent = {
     {
       question: "Is there a free way to guess the song with friends?",
       answer:
-        "Sound Clash is free to host and to join, with no ads, no account and nothing to download. Everything runs in the web browser on the phones and screens you already have.",
+        "Sound Clash is free to host and to join, with no account and nothing to download, and it shows no ads. Everything runs in the web browser on the phones and screens you already have.",
     },
     {
       question: "How big a group can play together?",

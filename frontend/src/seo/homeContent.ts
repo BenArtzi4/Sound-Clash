@@ -21,12 +21,18 @@ export const HOME_ABOUT = {
 export const HOME_FAQ: Faq[] = [
   {
     question: "Is Sound Clash free?",
-    answer: "Yes. Hosting and playing are free, with no ads, no account and nothing to install.",
+    answer:
+      "Yes. Hosting and playing are free, with no account and nothing to install, and Sound Clash shows no ads.",
   },
   {
     question: "Do players need to download an app?",
     answer:
       "No. Everyone plays in the web browser. Teams join by scanning the QR code or typing the 6-letter code at soundclash.org/join.",
+  },
+  {
+    question: "Do we need Spotify or a music subscription?",
+    answer:
+      "No. The songs play as YouTube clips from the host's phone or laptop, so nobody needs Spotify, a music app or an account.",
   },
   {
     question: "How many people can play?",
