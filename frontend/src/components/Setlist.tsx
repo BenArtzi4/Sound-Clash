@@ -133,9 +133,11 @@ export function Setlist({ game, rounds, teams }: Props) {
   async function shareList() {
     trackCta("setlist_share");
     const text = buildSongsText(songs);
+    // A link back, so a friend who sees the list can host their own game.
+    const url = `${window.location.origin}/?src=setlist`;
     if (nativeShare) {
       try {
-        await navigator.share({ title: `Sound Clash setlist · ${dateLabel}`, text });
+        await navigator.share({ title: `Sound Clash setlist · ${dateLabel}`, text, url });
         return;
       } catch (err) {
         // Closing the sheet is a choice, not a failure. Anything else (no
@@ -144,7 +146,9 @@ export function Setlist({ game, rounds, teams }: Props) {
       }
     }
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(`${text}
+
+Played on Sound Clash: ${url}`);
       flash("copied");
     } catch {
       flash("failed");

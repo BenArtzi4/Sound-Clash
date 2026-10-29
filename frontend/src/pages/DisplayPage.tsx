@@ -9,6 +9,7 @@ import {
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { EndScreen } from "../components/EndScreen";
+import { HostYourOwnTv } from "../components/HostYourOwn";
 import { GameCodeField } from "../components/GameCodeField";
 import { PointChange } from "../components/PointChange";
 import { QRPanel } from "../components/QRPanel";
@@ -338,6 +339,7 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
         <div className={styles.endFrame}>
           <EndScreen teams={boardTeams} gameCode={gameCode} fit />
         </div>
+        <HostYourOwnTv />
       </main>
     );
   }
