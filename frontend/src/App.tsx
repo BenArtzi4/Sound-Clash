@@ -4,6 +4,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RouteFallback } from "./components/RouteFallback";
 import { RouteHead } from "./components/RouteHead";
 import { ScrollToTop } from "./components/ScrollToTop";
+import { ViewTracker } from "./components/ViewTracker";
 import { ToastProvider } from "./context/ToastContext";
 import { seo } from "./lib/routeHead";
 import { HomePage } from "./pages/HomePage";
@@ -50,6 +51,7 @@ export function AppRoutes() {
     <>
       <ScrollToTop />
       <RouteHead />
+      <ViewTracker />
       <ToastProvider>
         <Suspense fallback={<RouteFallback />}>
           <Routes>

@@ -6,6 +6,7 @@ import { Logo } from "../components/Logo";
 import { SiteFooter } from "../components/SiteFooter";
 import { ArrowRightIcon, HostIcon, PhoneIcon, TvIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
+import { trackCta } from "../lib/funnel";
 import { prefetchQuietly } from "../lib/preloadError";
 import styles from "./HomePage.module.css";
 
@@ -197,7 +198,10 @@ export function HomePage() {
                 aria-label={r.name}
                 data-role={r.role}
                 style={{ "--i": i } as CSSProperties}
-                onClick={(e) => leaveCleanly(e, r.to)}
+                onClick={(e) => {
+                  trackCta(`home_${r.role}`);
+                  leaveCleanly(e, r.to);
+                }}
                 onPointerDown={rippleOn}
                 onPointerUp={rippleOff}
                 onPointerCancel={rippleOff}
@@ -213,7 +217,7 @@ export function HomePage() {
             ))}
           </nav>
           <p className={styles.howTo}>
-            <Link to="/how-to-play">
+            <Link to="/how-to-play" onClick={() => trackCta("home_howto")}>
               How to play <ArrowRightIcon />
             </Link>
           </p>

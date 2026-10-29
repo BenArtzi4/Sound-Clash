@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSetlist } from "../hooks/useSetlist";
 import { loadExportFonts } from "../lib/exportFonts";
+import { trackCta } from "../lib/funnel";
 import {
   buildPlaylistParts,
   buildSongsHtml,
@@ -130,6 +131,7 @@ export function Setlist({ game, rounds, teams }: Props) {
   }
 
   async function shareList() {
+    trackCta("setlist_share");
     const text = buildSongsText(songs);
     if (nativeShare) {
       try {
@@ -150,6 +152,7 @@ export function Setlist({ game, rounds, teams }: Props) {
   }
 
   function saveFile() {
+    trackCta("setlist_save");
     const sorted = [...teams].sort(
       (a, b) => b.score - a.score || a.joined_at.localeCompare(b.joined_at),
     );
@@ -230,6 +233,7 @@ export function Setlist({ game, rounds, teams }: Props) {
               href={p.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackCta("setlist_play_all")}
               data-testid={i === 0 ? "export-playlist" : `export-playlist-${i + 1}`}
             >
               <PlayIcon /> {playlistPartLabel(p, parts.length)}

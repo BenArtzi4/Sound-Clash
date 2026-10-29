@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { GameCodeField } from "../components/GameCodeField";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
+import { trackTeamJoined } from "../lib/funnel";
 import { CODE_RE, normalizeCode } from "../lib/gameCode";
 import { getStoredTeam, parseRejoinHash, sameTeamName, setStoredTeam } from "../lib/teamStorage";
 import { Logo } from "../components/Logo";
@@ -88,6 +89,7 @@ export function JoinTeamPage() {
     try {
       const team = await joinTeam(code, trimmedName);
       setStoredTeam(code, { id: team.id, name: team.name });
+      trackTeamJoined(Boolean(paramCode));
       // Deliberately NOT a view transition. A running view transition suspends
       // pointer hit-testing document-wide for its duration, and measured on a
       // preview build the arriving buzz button swallowed a real pointerdown for
