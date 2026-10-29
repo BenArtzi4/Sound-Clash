@@ -22,7 +22,7 @@ const url = (path: string) => seo.origin + (path === "/" ? "/" : path);
 const SUMMARY =
   "Sound Clash is a free, browser-based guess-the-song party game for a room full of people. " +
   `The host plays song clips, teams buzz in from their phones, and the first team to buzz names the song title (+${TITLE_POINTS}) and the artist (+${ARTIST_POINTS}). ` +
-  "No app, no account, no ads.";
+  "No app, no account, and Sound Clash shows no ads.";
 
 const FACTS = [
   "Roles: one **host** runs the game from a phone or laptop (picks genres and decades, starts rounds, judges answers); each **team** uses one phone as its buzzer and joins with a 6-letter code or a QR code; an optional **display** (TV, projector or laptop) shows the join QR code, the live scoreboard and the song reveal.",

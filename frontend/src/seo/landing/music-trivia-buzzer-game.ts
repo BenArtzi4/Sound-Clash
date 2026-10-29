@@ -75,7 +75,7 @@ export const page: LandingContent = {
     {
       question: "Is this music trivia buzzer game free?",
       answer:
-        "Yes. Sound Clash is free, with no ads, no account and nothing to install. Setting up a game takes about two minutes.",
+        "Yes. Sound Clash is free, with no account and nothing to install, and it shows no ads. Setting up a game takes about two minutes.",
     },
     {
       question: "How many teams can buzz in one game?",

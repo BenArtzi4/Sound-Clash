@@ -92,4 +92,24 @@ describe("HowToPlayPage", () => {
     const back = screen.getByRole("link", { name: /back/i });
     expect(back).toHaveAttribute("href", "/");
   });
+
+  it("ends with a button that starts hosting a game", () => {
+    render(
+      <MemoryRouter>
+        <HowToPlayPage />
+      </MemoryRouter>,
+    );
+    const start = screen.getByRole("link", { name: /start a game/i });
+    expect(start).toHaveAttribute("href", "/manager/create");
+  });
+
+  it("says the TV shows the board, not that it plays the music", () => {
+    render(
+      <MemoryRouter>
+        <HowToPlayPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/shows the join qr code and the live scoreboard/i)).toBeInTheDocument();
+    expect(screen.queryByText(/plays the youtube clip/i)).not.toBeInTheDocument();
+  });
 });
