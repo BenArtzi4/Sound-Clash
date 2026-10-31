@@ -1,6 +1,7 @@
-/* Home's below-the-fold section (HomeAbout.tsx): two columns on wide screens,
-   stacked on phones. Kept quieter than the first screen so the role cards stay
-   the page's call to action. */
+/* Home's below-the-fold section (HomeAbout.tsx): on wide screens the words
+   and the how-to-play video side by side, then the questions across both
+   columns; stacked on phones. Kept quieter than the first screen so the role
+   cards stay the page's call to action. */
 
 .about {
   width: 100%;
@@ -55,10 +56,14 @@
   font-weight: 600;
 }
 
+.questions {
+  grid-column: 1 / -1;
+}
+
 .faq {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5) var(--space-7);
 }
 
 .question {
@@ -73,5 +78,9 @@
   .about {
     grid-template-columns: 1fr;
     padding: var(--space-7) var(--space-5);
+  }
+  .faq {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
   }
 }

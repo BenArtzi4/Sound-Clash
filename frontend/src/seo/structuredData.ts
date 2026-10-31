@@ -1,5 +1,5 @@
 import { seo } from "../lib/routeHead";
-import { HOME_FAQ } from "./homeContent";
+import { HOME_FAQ, HOME_VIDEO } from "./homeContent";
 import { LANDING_CONTENT, type Faq } from "./landingContent";
 
 // JSON-LD for each public page, written into its <head> at build time by
@@ -54,6 +54,25 @@ export const APP_JSON_LD = {
   ],
 };
 
+// The how-to-play video on Home. Home shows it as a poster until it is tapped
+// (components/HomeVideo.tsx), so a crawler finds no player in the HTML; this
+// block is how it learns the video is there. Google only shows video results
+// for pages whose main content is the video, so Home earns no video snippet
+// and Search Console may list it as "not on a watch page"; that is expected.
+export const VIDEO_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  "@id": `${url("/")}#video`,
+  name: HOME_VIDEO.title,
+  description: HOME_VIDEO.description,
+  thumbnailUrl: [HOME_VIDEO.thumbnail, `https://i.ytimg.com/vi/${HOME_VIDEO.id}/hqdefault.jpg`],
+  uploadDate: HOME_VIDEO.uploadDate,
+  duration: HOME_VIDEO.duration,
+  embedUrl: `https://www.youtube.com/embed/${HOME_VIDEO.id}`,
+  inLanguage: "en",
+  publisher: { "@id": ORGANIZATION_JSON_LD["@id"] },
+};
+
 export function faqPageJsonLd(path: string, faq: Faq[]) {
   return {
     "@context": "https://schema.org",
@@ -69,7 +88,9 @@ export function faqPageJsonLd(path: string, faq: Faq[]) {
 }
 
 export function structuredDataFor(path: string): object[] {
-  if (path === "/") return [ORGANIZATION_JSON_LD, APP_JSON_LD, faqPageJsonLd("/", HOME_FAQ)];
+  if (path === "/") {
+    return [ORGANIZATION_JSON_LD, APP_JSON_LD, VIDEO_JSON_LD, faqPageJsonLd("/", HOME_FAQ)];
+  }
   const landing = LANDING_CONTENT.find((p) => p.path === path);
   if (landing && landing.faq.length > 0) return [faqPageJsonLd(path, landing.faq)];
   return [];
