@@ -1,0 +1,96 @@
+/* Team phone: a quiet card between the final results and the setlist. */
+.card {
+  margin: 0 var(--space-4) var(--space-5);
+  padding: var(--space-5) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.small {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+
+/* Display: one row under the final results. Its height is held from the first
+   frame (only the opacity changes), so the elastic leaderboard above it is
+   sized once. Sized from the viewport height so a sideways phone mirrored to a
+   TV keeps most of the frame for the board. */
+.tv {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.75rem, 2.5vh, 2rem);
+  padding-top: clamp(0.25rem, 1vh, 1rem);
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.tv[data-shown] {
+  opacity: 1;
+}
+
+.tvQr {
+  height: clamp(56px, 13vh, 190px);
+  aspect-ratio: 1;
+  padding: clamp(4px, 0.8vh, 10px);
+  border-radius: var(--radius-sm);
+  background: var(--bone);
+}
+
+.qrSvg,
+.qrSvg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tvText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+  min-width: 0;
+}
+
+.tvTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 4.2vh, 3rem);
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tvSub {
+  margin: 0;
+  font-size: clamp(0.75rem, 2.2vh, 1.5rem);
+  color: var(--text-muted);
+}
+
+/* An upright phone used as the display has no height to spare: the strip
+   squeezed the final leaderboard's rows (measured with display-fit at
+   360x640, 375x667 and 390x664), so it stays off there. Sideways phones,
+   tablets, laptops and TVs keep it. */
+@media (orientation: portrait) and (max-height: 759px) {
+  .tv {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv {
+    transition: none;
+  }
+}
