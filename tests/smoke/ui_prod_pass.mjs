@@ -83,10 +83,19 @@ async function bundleInfo() {
 }
 
 async function supabaseClient() {
-  const { js } = await bundleInfo();
-  const bundle = await fetch(SITE + js).then((r) => r.text());
-  const url = bundle.match(/https:\/\/[a-z]+\.supabase\.co/)?.[0];
-  const anon = bundle.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/)?.[0];
+  const { html, js } = await bundleInfo();
+  // The Supabase URL and anon key sit in whichever shared chunk the bundler
+  // puts the env module in (since #395 a `telemetry-*.js` chunk, not
+  // index-*.js), so search the entry and every script the page preloads.
+  const scripts = [js, ...new Set(html.match(/\/assets\/[A-Za-z0-9_-]+\.js/g) ?? [])];
+  let url;
+  let anon;
+  for (const path of new Set(scripts)) {
+    const bundle = await fetch(SITE + path).then((r) => r.text());
+    url ??= bundle.match(/https:\/\/[a-z]+\.supabase\.co/)?.[0];
+    anon ??= bundle.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/)?.[0];
+    if (url && anon) break;
+  }
   if (!url || !anon) throw new Error("could not read the Supabase URL / anon key out of the bundle");
   const headers = { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" };
   return {
