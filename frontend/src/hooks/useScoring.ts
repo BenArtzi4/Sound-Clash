@@ -19,17 +19,14 @@ import {
 import { failScore, log, markScoreStart } from "../lib/telemetry";
 import { fetchSongById } from "../lib/songMetadata";
 import type { GameState, Song } from "../lib/types";
-import type { SongPrebuffer } from "./useSongPrebuffer";
+import type { HostPlayer } from "./useHostPlayer";
 
 // Extracted from ManagerConsolePage (T7.2). Owns the manager scoring + round
 // actions: the direct-RPC calls (award_attempt / release_buzz_lock /
 // select_next_song / extend_game) and the FastAPI-routed ones (bonus / end),
 // the optimistic-toast-then-await ordering, the per-action in-flight guards, and
-// the pending-flag handoffs that bridge the RPC → Realtime gap. Behaviour is a
-// pure move — the same RPCs with the same args, the same toast timing, the same
-// busy/pending gating. handleNextRound drives the double-buffer swap via the
-// SongPrebuffer surface passed in, so the two hooks compose exactly as the
-// single component did.
+// the pending-flag handoffs that bridge the RPC → Realtime gap. handleNextRound
+// drives the host's player through the HostPlayer surface passed in.
 
 interface PlayerReadyHandle {
   ready: boolean;
@@ -64,28 +61,21 @@ export function useScoring(
   managerToken: string | null,
   state: GameState | null,
   player: PlayerReadyHandle,
-  prebuffer: SongPrebuffer,
+  hostPlayer: HostPlayer,
 ): Scoring {
   const { toast } = useToast();
   const {
-    activePlayer,
-    standbyPlayer,
-    activeKeyRef,
-    setActiveKey,
-    preloadRef,
-    preloadEpochRef,
+    livePlayer,
+    peekedRef,
+    peekEpochRef,
     optimisticSongIdRef,
     songStartRef,
-    playerARef,
-    playerBRef,
     loadSongIntoPlayer,
     armSongStartTimeout,
     beginSongStart,
     beginRoundCommit,
     endRoundCommit,
-    prebufferInto,
-    standbyUnusable,
-  } = prebuffer;
+  } = hostPlayer;
 
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [busy, setBusy] = useState(false);
@@ -134,9 +124,7 @@ export function useScoring(
   // When we get the buzz lock signal, pause playback on the live player.
   useEffect(() => {
     if (state?.game.buzzed_team_id != null) {
-      // activePlayer() reads activeKeyRef synchronously, so it always pauses
-      // whichever player is live regardless of swaps.
-      activePlayer()?.pause();
+      livePlayer()?.pause();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.game.buzzed_team_id]);
@@ -194,7 +182,7 @@ export function useScoring(
       if (cancelled || !song) return;
       setCurrentSong(song);
       if (playerReady) {
-        activePlayer()?.loadVideoById(song.youtube_id, song.start_time);
+        livePlayer()?.loadVideoById(song.youtube_id, song.start_time);
       } else {
         player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
       }
@@ -382,7 +370,7 @@ export function useScoring(
     setPendingContinue(state?.currentRound?.id ?? null);
     try {
       await releaseBuzzLockDirect(gameCode, managerToken);
-      activePlayer()?.play();
+      livePlayer()?.play();
     } catch (err) {
       setPendingContinue(null);
       reportError(err);
@@ -417,7 +405,7 @@ export function useScoring(
         artist_correct: false,
         wrong_buzz: true,
       });
-      activePlayer()?.play();
+      livePlayer()?.play();
     } catch (err) {
       setPendingWrong(null);
       reportError(err);
@@ -430,9 +418,9 @@ export function useScoring(
     if (nextRoundInFlightRef.current) return;
     if (!managerToken) return;
     nextRoundInFlightRef.current = true;
-    // Bump the preload epoch so any in-flight peek is discarded rather than
-    // buffering into a player we're about to repurpose.
-    preloadEpochRef.current += 1;
+    // Bump the peek epoch so an in-flight peek is discarded: it answers for
+    // the round we are leaving.
+    peekEpochRef.current += 1;
     // Hold the next peek until select_next_song has recorded this round, so the
     // picker compares against the song that is about to play (mig 049).
     beginRoundCommit();
@@ -442,93 +430,71 @@ export function useScoring(
     const songStart = beginSongStart();
     // Optimistic toast confirms the click immediately.
     toast("Loading next round...", { variant: "info" });
-    // Snapshot + clear the prebuffered song now so a late preload can't reuse it.
-    const preloaded = preloadRef.current;
-    preloadRef.current = null;
-    // A standby that has loaded nothing after 10 s of visible time holds a load
-    // YouTube failed without an onError; committing it starts a silent round.
-    // Its song is still known, so it is loaded on the live player instead (see
-    // below). A standby that is loading, however slowly, is committed as before.
-    const deadStandby = preloaded !== null && standbyUnusable(preloaded);
-    // Pre-swap snapshot for the rollback in the catch below: which player was
-    // live and which song card was up before the optimistic in-gesture start.
-    const prevKey = activeKeyRef.current;
+    // Snapshot + clear the peeked song now so a late peek can't reuse it.
+    const peeked = peekedRef.current;
+    peekedRef.current = null;
+    // Snapshot for the rollback in the catch below: the song card that was up
+    // before the in-tap start.
     const prevSong = currentSong;
 
-    // FAST PATH — start the prebuffered song *synchronously inside this tap*,
-    // BEFORE awaiting the RPC. Mobile browsers only allow unmuted playback that
-    // begins within a user gesture; resuming after `await select_next_song`
-    // counts as blocked autoplay, which is exactly the reported bug (round 1 /
-    // Next round stayed silent until a stray buzz + Continue finally unlocked
-    // it). We pass preloaded.song_id to the RPC below, so the video we begin
-    // playing here is guaranteed to be the one the round records — it's safe to
-    // start it before the round is committed server-side. commitPrebuffered
-    // resumes an already-downloaded (muted) buffer, so the unmute+play lands in
-    // the gesture and the room hears it immediately.
-    //
-    // DEAD STANDBY — nothing to resume, but the peeked song is known, so it is
-    // loaded on the live player, still inside the tap: a load issued after the
-    // RPC await is blocked autoplay on iOS. The dead standby is stopped so its
-    // failed load is dropped; it gets the next prebuffer as usual. Same RPC
-    // (with the song's id) and the same rollback as the fast path.
-    if (preloaded) {
+    // IN-TAP PATH — load the peeked song on the visible player *synchronously
+    // inside this tap*, BEFORE awaiting the RPC. Mobile browsers only allow
+    // unmuted playback that begins within a user gesture; a load issued after
+    // `await select_next_song` counts as blocked autoplay, which is exactly the
+    // reported bug (round 1 / Next round stayed silent until a stray buzz +
+    // Continue finally unlocked it). We pass peeked.song_id to the RPC below,
+    // so the video we begin loading here is guaranteed to be the one the round
+    // records — it's safe to start it before the round is committed
+    // server-side. Nothing is buffered ahead: YouTube's rules allow no hidden
+    // player that plays (see useHostPlayer.ts), so this is a fresh load.
+    if (peeked) {
       songStart.loadIssued();
       armSongStartTimeout();
-      if (deadStandby) {
-        standbyPlayer()?.stop();
-        activePlayer()?.loadVideoById(preloaded.youtube_id, preloaded.start_time);
-      } else {
-        const promoted = standbyPlayer();
-        const demoted = activePlayer();
-        promoted?.commitPrebuffered(preloaded.start_time);
-        demoted?.stop();
-        const nextKey = activeKeyRef.current === "A" ? "B" : "A";
-        activeKeyRef.current = nextKey;
-        setActiveKey(nextKey);
-      }
+      livePlayer()?.loadVideoById(peeked.youtube_id, peeked.start_time);
       // I-NextMeta: the new song is already starting, so render its card
       // in-gesture from the peeked metadata (mig 038) instead of leaving the
       // PREVIOUS title up until select_next_song resolves ~150ms later. Record
       // the id first so the song-resolver effect treats this as an optimistic
       // lead (not staleness) and doesn't reload the old song. The RPC's
       // authoritative row reconciles the card below (same values).
-      optimisticSongIdRef.current = preloaded.song_id;
+      optimisticSongIdRef.current = peeked.song_id;
       setCurrentSong({
-        id: preloaded.song_id,
-        title: preloaded.title,
-        artist: preloaded.artist,
-        youtube_id: preloaded.youtube_id,
-        start_time: preloaded.start_time,
-        is_soundtrack: preloaded.is_soundtrack,
-        release_year: preloaded.release_year,
+        id: peeked.song_id,
+        title: peeked.title,
+        artist: peeked.artist,
+        youtube_id: peeked.youtube_id,
+        start_time: peeked.start_time,
+        is_soundtrack: peeked.is_soundtrack,
+        release_year: peeked.release_year,
       });
     }
 
     try {
-      if (preloaded) {
+      if (peeked) {
         // Confirm/record the round for the exact song we already started.
-        const result = await selectNextSongDirect(gameCode, managerToken, preloaded.song_id);
+        const result = await selectNextSongDirect(gameCode, managerToken, peeked.song_id);
         roundCommitted = true;
         songStart.rpcDone({
           roundNumber: result.round_number,
           songId: result.song.id,
           youtubeId: result.song.youtube_id,
-          // A dead standby's song was loaded cold, not resumed from a buffer.
-          preloaded: !deadStandby,
+          // Nothing is prebuffered any more (2026-10-31): every song is a
+          // fresh load. Kept so old and new spans stay comparable.
+          preloaded: false,
         });
         setCurrentSong(result.song);
-        if (result.song.id !== preloaded.song_id) {
-          // Defensive: the RPC picked something other than what we prebuffered
-          // and already began playing (should not happen with an explicit
-          // song_id). Cold-load the real song onto the now-live player.
+        if (result.song.id !== peeked.song_id) {
+          // Defensive: the RPC picked something other than what we peeked and
+          // already began loading (should not happen with an explicit
+          // song_id). Load the real song instead.
           await loadSongIntoPlayer(result.song);
         }
       } else {
-        // Slow path (first round without a warmed buffer, preload missed, or
-        // pool was empty at peek time): random pick + cold load on the live
-        // player. On mobile this load lands after the await, so it can't reliably
-        // autoplay — but the waiting-screen prebuffer normally routes round 1
-        // through the fast path above, leaving this as a rare fallback.
+        // Slow path (the peek missed, failed, or the pool was empty at peek
+        // time): random pick, then the load. On mobile this load lands after
+        // the await, so it can't reliably autoplay — but the waiting-screen
+        // peek normally routes round 1 through the in-tap path above, leaving
+        // this as a rare fallback.
         const result = await selectNextSongDirect(gameCode, managerToken);
         roundCommitted = true;
         songStart.rpcDone({
@@ -539,7 +505,7 @@ export function useScoring(
         });
         // The RPC answers before the new round's Realtime event (measured
         // ~275 ms), so for a moment the card leads the round, just as on the
-        // fast path. Mark the lead or the song resolver reloads the previous
+        // in-tap path. Mark the lead or the song resolver reloads the previous
         // round's song over this one.
         optimisticSongIdRef.current = result.song.id;
         setCurrentSong(result.song);
@@ -549,25 +515,19 @@ export function useScoring(
       songStart.fail("select_next_song_failed");
       songStartRef.current = null;
       optimisticSongIdRef.current = null;
-      // The round failed to advance server-side, so the optimistic in-gesture
-      // start (which has to happen before the await for mobile autoplay) must
-      // not stand. Roll all of it back: silence the player that started the
-      // new song, restore the pre-click active player + song card, and reload
-      // the still-current round's song so the room isn't left in silence
-      // (best-effort on strict mobile autoplay — this load lands outside the
-      // gesture). The peeked song goes back into the standby buffer: the round
-      // never advanced, so it is still exactly what select_next_song would
-      // record, and a retry click keeps the in-gesture path. After a dead
-      // standby no players were swapped, so restoring the key is a no-op and
-      // the stopped standby gets a fresh prebuffer of the song.
-      if (preloaded) {
-        activePlayer()?.stop();
-        activeKeyRef.current = prevKey;
-        setActiveKey(prevKey);
+      // The round failed to advance server-side, so the in-tap start (which
+      // has to happen before the await for mobile autoplay) must not stand.
+      // Roll it back: silence the new song, restore the pre-click song card,
+      // and reload the still-current round's song so the room isn't left in
+      // silence (best-effort on strict mobile autoplay — this load lands
+      // outside the gesture). The peeked song is kept: the round never
+      // advanced, so it is still exactly what select_next_song would record,
+      // and a retry click keeps the in-tap path.
+      if (peeked) {
+        livePlayer()?.stop();
         setCurrentSong(prevSong);
-        if (prevSong) activePlayer()?.loadVideoById(prevSong.youtube_id, prevSong.start_time);
-        preloadRef.current = preloaded;
-        prebufferInto(preloaded);
+        if (prevSong) livePlayer()?.loadVideoById(prevSong.youtube_id, prevSong.start_time);
+        peekedRef.current = peeked;
       }
       reportError(err);
     } finally {
@@ -631,8 +591,7 @@ export function useScoring(
     setBusy(true);
     try {
       await endGame(gameCode, managerToken);
-      playerARef.current?.stop();
-      playerBRef.current?.stop();
+      livePlayer()?.stop();
       clearManagerToken(gameCode);
     } catch (err) {
       reportError(err);

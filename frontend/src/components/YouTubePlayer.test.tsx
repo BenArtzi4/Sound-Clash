@@ -323,22 +323,23 @@ describe("YouTubePlayer", () => {
     expect(queryByText("Ready — press Start game")).toBeNull();
   });
 
-  it("noCover lifts the idle panel once a video is prebuffered, so a promoted standby is never covered", async () => {
+  it("noCover leaves nothing but the iframe in the frame once a video loads", async () => {
+    // YouTube's rules: no overlays, frames or other visual elements in front
+    // of any part of the player. The idle panel covers only a player that has
+    // never been given a video.
     installFakeYT();
     const ref = createRef<YouTubePlayerHandle>();
-    const { container, queryByText } = render(
-      <YouTubePlayer ref={ref} noCover idleLabel="Ready — press Start game" />,
+    const { container } = render(
+      <YouTubePlayer ref={ref} noCover controls idleLabel="Ready — press Start game" />,
     );
     await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
+    const frame = screen.getByTestId("youtube-player");
+    expect(Array.from(frame.children).map((el) => el.tagName)).toEqual(["IFRAME", "DIV"]);
     act(() => {
-      ref.current?.prebuffer("nextVIDEO01", 5);
+      ref.current?.loadVideoById("liveVIDEO01", 5);
     });
-    expect(queryByText("Ready — press Start game")).toBeNull();
-    act(() => {
-      ref.current?.commitPrebuffered(5);
-    });
-    expect(queryByText("Ready — press Start game")).toBeNull();
+    expect(Array.from(frame.children).map((el) => el.tagName)).toEqual(["IFRAME"]);
   });
 
   it("noCover keeps the idle panel over an empty player that errors", async () => {
@@ -358,7 +359,7 @@ describe("YouTubePlayer", () => {
     expect(queryByText("Ready — press Start game")).not.toBeNull();
   });
 
-  it("reports the id of the video that failed (load, then prebuffer)", async () => {
+  it("reports the id of the video that failed (one load, then the next)", async () => {
     installFakeYT();
     const onError = vi.fn();
     const ref = createRef<YouTubePlayerHandle>();
@@ -373,7 +374,7 @@ describe("YouTubePlayer", () => {
     });
     expect(onError).toHaveBeenLastCalledWith(150, "liveVIDEO01");
     act(() => {
-      ref.current?.prebuffer("nextVIDEO01", 5);
+      ref.current?.loadVideoById("nextVIDEO01", 5);
     });
     act(() => {
       lastConfig?.events?.onError?.({ data: 101 });
@@ -381,16 +382,16 @@ describe("YouTubePlayer", () => {
     expect(onError).toHaveBeenLastCalledWith(101, "nextVIDEO01");
   });
 
-  it("uses a custom testId on the wrapper when provided", async () => {
+  it("uses a custom testId on the frame when provided", async () => {
     installFakeYT();
-    const { container } = render(<YouTubePlayer noCover testId="youtube-player-preload" />);
+    const { container } = render(<YouTubePlayer noCover testId="custom-player" />);
     await flushIframeLoad(container);
     await waitFor(() => expect(lastPlayer).not.toBeNull());
-    expect(container.querySelector('[data-testid="youtube-player-preload"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="custom-player"] > iframe')).not.toBeNull();
     expect(container.querySelector('[data-testid="youtube-player"]')).toBeNull();
   });
 
-  it("prebuffer mutes, loads, and freezes the video on PLAYING without firing onPlaying", async () => {
+  it("never mutes: loadVideoById loads the song audibly and arms onPlaying", async () => {
     installFakeYT();
     const onPlaying = vi.fn();
     const ref = createRef<YouTubePlayerHandle>();
@@ -398,77 +399,16 @@ describe("YouTubePlayer", () => {
     await flushIframeLoad(container);
     await waitFor(() => expect(lastConfig).not.toBeNull());
     act(() => {
-      lastConfig?.events?.onReady?.();
+      ref.current?.loadVideoById("b", 7);
     });
-
-    act(() => {
-      ref.current?.prebuffer("nextvideoid", 30);
-    });
-    expect(lastPlayer?.mute).toHaveBeenCalled();
-    expect(lastPlayer?.loadVideoById).toHaveBeenCalledWith({
-      videoId: "nextvideoid",
-      startSeconds: 30,
-    });
-
-    // The silently-buffering player reaches PLAYING: it must be paused (frozen,
-    // buffered) and must NOT resolve the song-start span.
-    act(() => {
-      lastConfig?.events?.onStateChange?.({ data: 1 });
-    });
-    expect(lastPlayer?.pauseVideo).toHaveBeenCalled();
-    expect(onPlaying).not.toHaveBeenCalled();
-  });
-
-  it("commitPrebuffered seeks, unmutes, plays, and re-arms onPlaying for the resume", async () => {
-    installFakeYT();
-    const onPlaying = vi.fn();
-    const ref = createRef<YouTubePlayerHandle>();
-    const { container } = render(<YouTubePlayer ref={ref} noCover onPlaying={onPlaying} />);
-    await flushIframeLoad(container);
-    await waitFor(() => expect(lastConfig).not.toBeNull());
-    act(() => {
-      lastConfig?.events?.onReady?.();
-    });
-
-    // Prebuffer + freeze.
-    act(() => {
-      ref.current?.prebuffer("nextvideoid", 30);
-    });
-    act(() => {
-      lastConfig?.events?.onStateChange?.({ data: 1 });
-    });
-    expect(onPlaying).not.toHaveBeenCalled();
-
-    // Host clicks Next round -> promote the buffered video to live playback.
-    act(() => {
-      ref.current?.commitPrebuffered(30);
-    });
-    expect(lastPlayer?.seekTo).toHaveBeenCalledWith(30, true);
     expect(lastPlayer?.unMute).toHaveBeenCalled();
-    expect(lastPlayer?.playVideo).toHaveBeenCalled();
-
-    // The resume reaches PLAYING: now onPlaying fires exactly once.
+    expect(lastPlayer?.mute).not.toHaveBeenCalled();
+    expect(lastPlayer?.loadVideoById).toHaveBeenLastCalledWith({ videoId: "b", startSeconds: 7 });
     act(() => {
       lastConfig?.events?.onStateChange?.({ data: 1 });
     });
     expect(onPlaying).toHaveBeenCalledTimes(1);
     expect(onPlaying).toHaveBeenCalledWith("statechange");
-  });
-
-  it("loadVideoById unmutes (recovering a player previously used as a muted prebuffer)", async () => {
-    installFakeYT();
-    const ref = createRef<YouTubePlayerHandle>();
-    const { container } = render(<YouTubePlayer ref={ref} noCover />);
-    await flushIframeLoad(container);
-    await waitFor(() => expect(lastPlayer).not.toBeNull());
-    act(() => {
-      ref.current?.prebuffer("a", 0);
-    });
-    act(() => {
-      ref.current?.loadVideoById("b", 0);
-    });
-    expect(lastPlayer?.unMute).toHaveBeenCalled();
-    expect(lastPlayer?.loadVideoById).toHaveBeenLastCalledWith({ videoId: "b", startSeconds: 0 });
   });
 
   it("loads the iframe API script when YT is not yet on window", async () => {
@@ -490,11 +430,11 @@ describe("YouTubePlayer", () => {
   });
 });
 
-// Song-stall work (2026-10-15). When YouTube fails to load a video it often
-// sends no onError at all: the player just sits there, BUFFERING or UNSTARTED,
-// with nothing loaded. The console needs to see that on the hidden standby
-// (prebufferStatus) and to log it on the live player (onStartStall,
-// onEarlyPause). All timing below runs on fake timers, which fake Date too.
+// Song-stall work (2026-10-15, single player 2026-10-31). When YouTube fails to
+// load a video it often sends no onError at all: the player just sits there,
+// BUFFERING or UNSTARTED, with nothing loaded. The player issues such a load
+// once more (onStartStall, judged by bytes, never by state) and reports early
+// pauses (onEarlyPause). All timing below runs on fake timers, which fake Date too.
 describe("YouTubePlayer load health", () => {
   let visibility: "visible" | "hidden" = "visible";
   function setVisibility(v: "visible" | "hidden") {
@@ -541,119 +481,8 @@ describe("YouTubePlayer load health", () => {
       await vi.advanceTimersByTimeAsync(ms);
     });
 
-  describe("prebufferStatus", () => {
-    it("is null unless the player is holding a prebuffer", async () => {
-      const { ref } = await mount();
-      expect(ref.current?.prebufferStatus()).toBeNull();
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      expect(ref.current?.prebufferStatus()).not.toBeNull();
-      act(() => ref.current?.commitPrebuffered(30));
-      expect(ref.current?.prebufferStatus()).toBeNull();
-
-      act(() => ref.current?.prebuffer("nextVIDEO02", 0));
-      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
-      expect(ref.current?.prebufferStatus()).toBeNull();
-
-      act(() => ref.current?.prebuffer("nextVIDEO03", 0));
-      act(() => ref.current?.stop());
-      expect(ref.current?.prebufferStatus()).toBeNull();
-    });
-
-    it("reports the load's age, loaded fraction and player state, then the freeze", async () => {
-      const { ref, player } = await mount();
-      player.getPlayerState.mockReturnValue(3);
-      player.getVideoLoadedFraction.mockReturnValue(0);
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      await advance(4000);
-      expect(ref.current?.prebufferStatus()).toEqual({
-        frozen: false,
-        loadedFraction: 0,
-        state: 3,
-        ageMs: 4000,
-      });
-
-      player.getVideoLoadedFraction.mockReturnValue(0.12);
-      state(1); // first PLAYING: the prebuffer freezes it
-      expect(ref.current?.prebufferStatus()).toMatchObject({ frozen: true, loadedFraction: 0.12 });
-    });
-
-    it("restarts the age for a fresh prebuffer", async () => {
-      const { ref } = await mount();
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      await advance(10_000);
-      act(() => ref.current?.prebuffer("nextVIDEO02", 12));
-      await advance(2500);
-      expect(ref.current?.prebufferStatus()?.ageMs).toBe(2500);
-    });
-
-    it("retryPrebuffer re-issues the same load and keeps its age", async () => {
-      // The age at Next round counts from the song's FIRST prebuffer, so a
-      // retry that is still young can't make a dead standby look fresh.
-      const { ref, player } = await mount();
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      await advance(10_000);
-      act(() => ref.current?.retryPrebuffer());
-      expect(player.loadVideoById).toHaveBeenCalledTimes(2);
-      expect(player.loadVideoById).toHaveBeenLastCalledWith({
-        videoId: "nextVIDEO01",
-        startSeconds: 30,
-      });
-      expect(player.mute).toHaveBeenCalledTimes(2);
-      await advance(2500);
-      expect(ref.current?.prebufferStatus()).toMatchObject({ frozen: false, ageMs: 12_500 });
-    });
-
-    it("retryPrebuffer does nothing without a prebuffer to retry, or once it froze", async () => {
-      const { ref, player } = await mount();
-      act(() => ref.current?.retryPrebuffer());
-      expect(player.loadVideoById).not.toHaveBeenCalled();
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      state(1); // frozen: ready, nothing to retry
-      act(() => ref.current?.retryPrebuffer());
-      act(() => ref.current?.commitPrebuffered(30));
-      act(() => ref.current?.retryPrebuffer());
-      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
-    });
-
-    it("adds up the visible time since the prebuffer, across hidden spells", async () => {
-      const { ref } = await mount();
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      await advance(9000);
-      setVisibility("hidden");
-      await advance(2000);
-      expect(ref.current?.prebufferStatus()?.ageMs).toBe(9000);
-      setVisibility("visible");
-      await advance(5000);
-      expect(ref.current?.prebufferStatus()?.ageMs).toBe(14_000);
-    });
-
-    it("keeps the visible time a retry inherits across a hidden spell", async () => {
-      const { ref } = await mount();
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      await advance(6000);
-      setVisibility("hidden");
-      await advance(30_000);
-      setVisibility("visible");
-      await advance(4000);
-      act(() => ref.current?.retryPrebuffer());
-      await advance(1000);
-      expect(ref.current?.prebufferStatus()?.ageMs).toBe(11_000);
-    });
-
-    it("ages a prebuffer issued while hidden only from when the page shows", async () => {
-      const { ref } = await mount();
-      setVisibility("hidden");
-      act(() => ref.current?.prebuffer("nextVIDEO01", 30));
-      await advance(5000);
-      expect(ref.current?.prebufferStatus()?.ageMs).toBe(0);
-      setVisibility("visible");
-      await advance(1500);
-      expect(ref.current?.prebufferStatus()?.ageMs).toBe(1500);
-    });
-  });
-
   describe("onStartStall", () => {
-    it("fires once when a loaded song has not started 10 s later", async () => {
+    it("issues a load that has loaded nothing after 10 s once more, then only reports", async () => {
       const onStartStall = vi.fn();
       const { ref, player } = await mount({ onStartStall });
       player.getPlayerState.mockReturnValue(-1);
@@ -661,33 +490,88 @@ describe("YouTubePlayer load health", () => {
       act(() => ref.current?.loadVideoById("liveVIDEO01", 90));
       await advance(9999);
       expect(onStartStall).not.toHaveBeenCalled();
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
       await advance(1);
       expect(onStartStall).toHaveBeenCalledTimes(1);
-      expect(onStartStall).toHaveBeenCalledWith({ state: -1, loadedFraction: 0 });
+      expect(onStartStall).toHaveBeenCalledWith({ state: -1, loadedFraction: 0, retried: true });
+      // The same song again, from the round's start point, audibly.
+      expect(player.loadVideoById).toHaveBeenCalledTimes(2);
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "liveVIDEO01",
+        startSeconds: 90,
+      });
+      expect(player.unMute).toHaveBeenCalledTimes(2);
+      expect(player.mute).not.toHaveBeenCalled();
+      // The retry stalls too: reported once, never issued a third time.
+      await advance(10_000);
+      expect(onStartStall).toHaveBeenCalledTimes(2);
+      expect(onStartStall).toHaveBeenLastCalledWith({
+        state: -1,
+        loadedFraction: 0,
+        retried: false,
+      });
+      await advance(30_000);
+      expect(onStartStall).toHaveBeenCalledTimes(2);
+      expect(player.loadVideoById).toHaveBeenCalledTimes(2);
+    });
+
+    it("never reloads a load that has bytes, however slow: it only reports it", async () => {
+      const onStartStall = vi.fn();
+      const { ref, player } = await mount({ onStartStall });
+      player.getPlayerState.mockReturnValue(3);
+      player.getVideoLoadedFraction.mockReturnValue(0.3);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(10_000);
+      expect(onStartStall).toHaveBeenCalledWith({ state: 3, loadedFraction: 0.3, retried: false });
+      await advance(30_000);
+      expect(onStartStall).toHaveBeenCalledTimes(1);
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
+    });
+
+    it("a retried load that starts counts as the song's one start", async () => {
+      const onStartStall = vi.fn();
+      const onPlaying = vi.fn();
+      const { ref, player } = await mount({ onStartStall, onPlaying });
+      player.getPlayerState.mockReturnValue(-1);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      await advance(10_000);
+      expect(player.loadVideoById).toHaveBeenCalledTimes(2);
+      await advance(2000);
+      state(1);
+      expect(onPlaying).toHaveBeenCalledTimes(1);
       await advance(30_000);
       expect(onStartStall).toHaveBeenCalledTimes(1);
     });
 
-    it("reports a committed standby that never starts, with what it had loaded", async () => {
+    it("gives each new song its own retry", async () => {
       const onStartStall = vi.fn();
       const { ref, player } = await mount({ onStartStall });
-      act(() => ref.current?.prebuffer("nextVIDEO01", 0));
-      state(1); // frozen
-      player.getPlayerState.mockReturnValue(2);
-      player.getVideoLoadedFraction.mockReturnValue(0.3);
-      act(() => ref.current?.commitPrebuffered(0));
+      player.getPlayerState.mockReturnValue(-1);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
       await advance(10_000);
-      expect(onStartStall).toHaveBeenCalledWith({ state: 2, loadedFraction: 0.3 });
+      act(() => ref.current?.loadVideoById("liveVIDEO02", 4));
+      await advance(10_000);
+      expect(onStartStall).toHaveBeenLastCalledWith({
+        state: -1,
+        loadedFraction: 0,
+        retried: true,
+      });
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "liveVIDEO02",
+        startSeconds: 4,
+      });
+      expect(player.loadVideoById).toHaveBeenCalledTimes(4);
     });
 
     it("stays quiet once the song reaches PLAYING", async () => {
       const onStartStall = vi.fn();
-      const { ref } = await mount({ onStartStall });
+      const { ref, player } = await mount({ onStartStall });
       act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
       await advance(8600); // the slowest real start seen in prod Tempo
       state(1);
       await advance(10_000);
       expect(onStartStall).not.toHaveBeenCalled();
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
     });
 
     it("measures from the latest load only", async () => {
@@ -703,18 +587,15 @@ describe("YouTubePlayer load health", () => {
       expect(onStartStall).toHaveBeenCalledTimes(1);
     });
 
-    it("never fires after the player is stopped or turned into the standby", async () => {
+    it("never fires after the player is stopped", async () => {
       const onStartStall = vi.fn();
-      const { ref } = await mount({ onStartStall });
+      const { ref, player } = await mount({ onStartStall });
       act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
       await advance(3000);
       act(() => ref.current?.stop());
-      await advance(10_000);
-      act(() => ref.current?.loadVideoById("liveVIDEO02", 0));
-      await advance(3000);
-      act(() => ref.current?.prebuffer("nextVIDEO01", 0));
-      await advance(10_000);
+      await advance(30_000);
       expect(onStartStall).not.toHaveBeenCalled();
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
     });
 
     it("stays quiet when the app paused the song before it started (a buzz)", async () => {
@@ -726,6 +607,7 @@ describe("YouTubePlayer load health", () => {
       act(() => ref.current?.pause());
       await advance(30_000);
       expect(onStartStall).not.toHaveBeenCalled();
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
     });
 
     it("never fires after unmount", async () => {
@@ -737,9 +619,9 @@ describe("YouTubePlayer load health", () => {
       expect(onStartStall).not.toHaveBeenCalled();
     });
 
-    it("stays quiet when the page was hidden at any point of the wait", async () => {
+    it("stays quiet, and reloads nothing, when the page was hidden at any point of the wait", async () => {
       const onStartStall = vi.fn();
-      const { ref } = await mount({ onStartStall });
+      const { ref, player } = await mount({ onStartStall });
       act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
       await advance(2000);
       setVisibility("hidden");
@@ -747,6 +629,7 @@ describe("YouTubePlayer load health", () => {
       setVisibility("visible");
       await advance(7000);
       expect(onStartStall).not.toHaveBeenCalled();
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -779,31 +662,15 @@ describe("YouTubePlayer load health", () => {
       expect(onEarlyPause).toHaveBeenCalledWith(300);
     });
 
-    // A player is stopped each time Next round demotes it. Its next song must
-    // still be watched, even when only the PLAYING poll sees that song start.
-    it.each([
-      [
-        "a load",
-        (h: YouTubePlayerHandle) => {
-          h.loadVideoById("liveVIDEO01", 0);
-        },
-      ],
-      [
-        "a committed standby",
-        (h: YouTubePlayerHandle) => {
-          h.prebuffer("nextVIDEO01", 0);
-          lastConfig?.events?.onStateChange?.({ data: 1 }); // the freeze
-          h.commitPrebuffered(0);
-        },
-      ],
-    ])("fires for %s after the app's last stop, started by the poll", async (_label, start) => {
+    // A stop() before a song (the end of a game, a rolled-back Next round)
+    // must not hide that song's early pause, even when only the PLAYING poll
+    // sees it start.
+    it("fires for a load after the app's last stop, started by the poll", async () => {
       const onEarlyPause = vi.fn();
       const { ref, player } = await mount({ onEarlyPause });
       act(() => ref.current?.stop());
       player.getPlayerState.mockReturnValue(-1);
-      act(() => {
-        if (ref.current) start(ref.current);
-      });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
       player.getPlayerState.mockReturnValue(1);
       await advance(250); // the poll sees PLAYING here
       await advance(300);
@@ -828,14 +695,11 @@ describe("YouTubePlayer load health", () => {
       expect(onEarlyPause).toHaveBeenCalledWith(400);
     });
 
-    it("fires for a committed standby that pauses after starting, not for pauses before it starts", async () => {
+    it("ignores pauses before the song starts", async () => {
       const onEarlyPause = vi.fn();
       const { ref } = await mount({ onEarlyPause });
-      act(() => ref.current?.prebuffer("nextVIDEO01", 0));
-      state(1); // the freeze: pauseVideo while prebuffering
-      state(2);
-      act(() => ref.current?.commitPrebuffered(0));
-      state(2); // still paused, before the resume reaches PLAYING
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
+      state(2); // still paused, before the load reaches PLAYING
       expect(onEarlyPause).not.toHaveBeenCalled();
       state(1);
       await advance(300);
@@ -854,7 +718,7 @@ describe("YouTubePlayer load health", () => {
       act(() => ref.current?.play()); // Wrong / Continue
       state(1);
       await advance(200);
-      act(() => ref.current?.stop()); // Next round demotes it
+      act(() => ref.current?.stop()); // the game ends
       state(2);
       expect(onEarlyPause).not.toHaveBeenCalled();
     });
@@ -888,8 +752,9 @@ describe("YouTubePlayer load health", () => {
   });
 });
 
-// Host transport (2026-10-27): back 10 s, pause / play and forward 10 s over
-// the live player's picture on the host console.
+// Host transport (2026-10-27): back 10 s, pause / play and forward 10 s on the
+// host console, in a bar beside the picture since 2026-10-31 (YouTube's rules
+// allow nothing of ours in front of the player).
 describe("YouTubePlayer host transport", () => {
   async function mount(props: Partial<ComponentProps<typeof YouTubePlayer>> = {}) {
     installFakeYT();
@@ -922,12 +787,30 @@ describe("YouTubePlayer host transport", () => {
     vi.useRealTimers();
   });
 
-  it("renders no buttons before a song is loaded", async () => {
+  it("renders the buttons, disabled, before a song is loaded, so nothing moves when it loads", async () => {
     await mount();
-    expect(screen.queryByTestId("youtube-player-back")).toBeNull();
+    expect(btn("back").disabled).toBe(true);
+    expect(btn("toggle").disabled).toBe(true);
+    expect(btn("forward").disabled).toBe(true);
   });
 
-  it("renders no buttons without `controls` (the hidden standby)", async () => {
+  it("keeps the buttons and the −10s label out of the frame, in their own bar", async () => {
+    const { player } = await playing();
+    const frame = screen.getByTestId("youtube-player");
+    const bar = screen.getByTestId("youtube-player-controls");
+    player.getCurrentTime.mockReturnValue(42);
+    fireEvent.click(btn("back"));
+    const flash = screen.getByText("−10s");
+    for (const el of [btn("back"), btn("toggle"), btn("forward"), flash]) {
+      expect(frame.contains(el)).toBe(false);
+      expect(bar.contains(el)).toBe(true);
+    }
+    expect(bar.contains(frame)).toBe(false);
+    expect(frame.parentElement).toBe(bar.parentElement);
+    expect(bar.getAttribute("role")).toBe("group");
+  });
+
+  it("renders no buttons without `controls`", async () => {
     const { ref } = await mount({ controls: false });
     act(() => ref.current?.loadVideoById("liveVIDEO01", 30));
     state(1);
@@ -994,7 +877,7 @@ describe("YouTubePlayer host transport", () => {
     expect(player.seekTo).not.toHaveBeenCalled();
   });
 
-  it("shows −10s / +10s on the picture for 900 ms", async () => {
+  it("shows −10s / +10s in the bar for 900 ms", async () => {
     const { player } = await playing();
     vi.useFakeTimers();
     player.getCurrentTime.mockReturnValue(42);
@@ -1195,11 +1078,9 @@ describe("YouTubePlayer host transport", () => {
       expect(player.seekTo).not.toHaveBeenCalled();
     });
 
-    it("replays a committed prebuffer from that song's own start point", async () => {
-      const { ref, player } = await mount();
-      act(() => ref.current?.prebuffer("nextVIDEO01", 45));
-      state(1); // the freeze
-      act(() => ref.current?.commitPrebuffered(45));
+    it("replays the latest song from its own start point", async () => {
+      const { ref, player } = await playing(); // liveVIDEO01 from 30
+      act(() => ref.current?.loadVideoById("nextVIDEO01", 45));
       state(1);
       player.getDuration.mockReturnValue(200);
       state(0);

@@ -36,9 +36,8 @@ Faro tags every signal `service_name="sound-clash-web"`,
 |---|---|---|
 | `stale_buzz_lock_resynced` (warn) | log | `context_game_code`, `context_stale_team`, `context_fresh_team`, `session_id`, `page_id` |
 | `realtime_disconnect` (warn) | log | `context_game_code`, `context_sub_status` |
-| `yt_preload_retry` (warn) | log | The host's hidden standby had loaded nothing 10 s after its prebuffer, so it was issued once more. `context_game_code`, `context_player`, `context_state`, `context_youtube_id`, `context_song_id`, `context_title`, `context_artist` |
-| `yt_preload_not_ready` (warn) | log | At Next round the standby still held nothing, so its song was loaded on the live player inside the tap instead of starting a silent player. Same fields plus `context_age_ms` |
-| `yt_live_stall` (warn) | log | Telemetry only, playback untouched. `context_kind=no_start`: the live song had not reached PLAYING 10 s after its load and was not paused by the app meanwhile (`context_state`, `context_loaded_fraction`). `context_kind=early_pause`: it paused by itself within 5 s of starting (`context_ms_after_start`). Both carry `context_game_code`, `context_player` and the song fields |
+| `yt_preload_retry`, `yt_preload_not_ready`, `yt_preload_error` (warn) | log | Retired 2026-10-31 with the host's hidden standby player (YouTube's embed rules allow no hidden player that plays). Older lines are the standby's: a retried prebuffer, a dead standby skipped at Next round, an error on the standby |
+| `yt_live_stall` (warn) | log | `context_kind=no_start`: the song had not reached PLAYING 10 s after its load and was not paused by the app meanwhile (`context_state`, `context_loaded_fraction`). `context_retried=true`: it had loaded nothing, so the player issued the load once more (since 2026-10-31); `false`: it had bytes and was left alone, or it was the retry. `context_kind=early_pause`: it paused by itself within 5 s of starting (`context_ms_after_start`), telemetry only. Both carry `context_game_code` and the song fields (`context_player` until 2026-10-31) |
 | `realtime_fanout` | event | `event_data_event_type` (game/team/round), `event_data_fanout_ms` |
 | `landing` | event | `event_data_view`, `event_data_ref_host`, `event_data_ref`, `event_data_src`, `event_data_utm_*`. One per page load: where the visit came from |
 | `view` | event | `event_data_view` (route template). One per route reached |
@@ -46,7 +45,7 @@ Faro tags every signal `service_name="sound-clash-web"`,
 | `team_joined` | event | `event_data_source` (`qr` / `link` / `typed`) |
 | `game_created` | event | `event_data_genres_count`, `event_data_decades_count`, `event_data_returning` |
 | web-vitals | measurement | `type="web-vitals"`, `lcp` / `inp` / `fcp` / `ttfb`, `context_rating` |
-| Tempo spans | — | `game.buzz.e2e` (`outcome`, `realtime.fanout_ms`), `game.score.e2e`, `game.song_start` (`preloaded`), `db.rpc` (`rpc.name`), `game.player_init` |
+| Tempo spans | — | `game.buzz.e2e` (`outcome`, `realtime.fanout_ms`), `game.score.e2e`, `game.song_start` (`preloaded`, always false since the standby went on 2026-10-31), `db.rpc` (`rpc.name`), `game.player_init` |
 
 ## 1. Dashboard — `Sound Clash - Vitals`
 

@@ -368,7 +368,7 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | `award_attempt(p_game_code, p_round_id, p_correct_title, p_correct_artist, p_wrong, p_manager_token)` | Score one buzz (DB derives the +10/+5/−3 magnitudes); round stays open | Browser via PostgREST (`manager_token`) |
 | `release_buzz_lock(p_game_code, p_manager_token)` | "Continue round" — clear the buzzer lock so play resumes | Browser via PostgREST (`manager_token`) |
 | `select_next_song(p_game_code, p_manager_token, p_song_id DEFAULT NULL)` | Close the prior round and open the next on an unplayed song | Browser via PostgREST (`manager_token`) |
-| `peek_next_song(p_game_code, p_manager_token)` | Read-only next-song candidate for prebuffering (no round advance) | Browser via PostgREST (`manager_token`) |
+| `peek_next_song(p_game_code, p_manager_token)` | Read-only next-song candidate, so the Next-round tap can load it on the host's player in the gesture (no round advance) | Browser via PostgREST (`manager_token`) |
 | `extend_game(p_game_code, p_manager_token)` | Push `expires_at` out by 1h ("Keep playing +1h") | Browser via PostgREST (`manager_token`) |
 | `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | Internal (called by `select_next_song`) |
 | `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal (called by `select_next_song`) |

@@ -127,35 +127,11 @@
   gap: 1.5rem;
 }
 
-/* Double-buffer player stack: two players overlaid in one 16:9 box. The active
-   one is opaque and on top; the standby sits behind at opacity 0 but is still
-   laid out and in-viewport (NOT display:none) so its media pipeline keeps
-   running and muted-autoplay isn't throttled. Swapping which layer is active
-   crossfades instantly with no iframe rebuild. */
+/* The host's one player and its button bar (YouTubePlayer draws the frame).
+   One player, always on screen: YouTube's embed rules allow no hidden player
+   that plays, and nothing of ours over the picture. */
 .playerStack {
-  position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.playerLayer {
-  position: absolute;
-  inset: 0;
-  transition: opacity 200ms var(--ease-move);
-}
-
-.playerActive {
-  opacity: 1;
-  z-index: 2;
-}
-
-.playerStandby {
-  opacity: 0;
-  z-index: 1;
-  pointer-events: none;
 }
 
 .card {
@@ -598,8 +574,8 @@
    buzz status and ALL action buttons (Correct Song / Correct Artist / Wrong /
    Bonus / Continue / Next round) sit on one portrait screen — no scrolling.
 
-   Purely spacing/sizing: the DOM, the double-buffer players (both layers stay
-   laid out and in-viewport, only smaller) and every scoring RPC are untouched.
+   Purely spacing/sizing: the DOM, the player and every scoring RPC are
+   untouched.
    Nothing here is `overflow: hidden`, so a device shorter than the target
    still degrades to a normal scroll rather than clipping a button.
 
@@ -630,15 +606,17 @@
     gap: 0.6rem;
   }
   /* The player is as wide as the console when the screen is tall enough, and
-     shrinks (centred) only as far as the round buttons need to stay on screen.
-     Measured 2026-10-27: everything but the player takes 471px down to the
-     lowest round button; the budget adds 25px for a song title that wraps to
-     two lines and a 12px margin. The floor is the old strip's 116px height.
-     The width drives the height through the base aspect-ratio, so the picture
-     stays 16:9. Both player layers still render (the standby's media pipeline
-     needs it). */
+     shrinks (centred) only as far as the round buttons need to stay on screen,
+     but never under YouTube's 200px minimum: the frame is at least 202px tall
+     (YouTubePlayer.module.css), so below 359px wide a narrower frame would only
+     letterbox, and 359px is the floor. Measured 2026-10-27: everything but the
+     player takes 471px down to the lowest round button; the budget adds 25px
+     for a song title that wraps to two lines, a 12px margin, and 64px for the
+     button bar under the frame (56px Pause button + 8px gap). The width drives
+     the height through the frame's aspect-ratio, so the picture stays 16:9.
+     Short phones put the buttons beside the frame instead (end of file). */
   .playerStack {
-    width: min(100%, max(206px, calc((100dvh - 508px) * 16 / 9)));
+    width: min(100%, max(359px, calc((100dvh - 572px) * 16 / 9)));
     margin: 0 auto;
   }
   .card {
@@ -711,10 +689,6 @@
   .column {
     gap: 0.45rem;
   }
-  /* Same rule on the squeezed layout: 447px + 25px + 12px; floor 96px tall. */
-  .playerStack {
-    width: min(100%, max(171px, calc((100dvh - 484px) * 16 / 9)));
-  }
   .card {
     padding: 0.7rem;
   }
@@ -742,5 +716,17 @@
   .endGameFooter {
     margin-top: 0.4rem;
     padding-top: 0.3rem;
+  }
+}
+
+/* Short phones, up to 760px tall (most iPhones in Safari): the player's
+   buttons stand in a rail beside the frame (YouTubePlayer.module.css, same
+   breakpoint), so they cost no height and the round buttons stay on screen.
+   The rail is 60px (52px Pause button + 8px gap) and the frame at least 202px
+   tall, so on every phone up to 430px wide this is the full console width;
+   the floor is 359px of frame plus the rail. */
+@media (max-width: 600px) and (max-height: 760px) {
+  .playerStack {
+    width: min(100%, max(419px, calc((100dvh - 508px) * 16 / 9 + 60px)));
   }
 }

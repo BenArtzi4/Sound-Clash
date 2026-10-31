@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { failedVideoContext } from "./useSongPrebuffer";
+import { failedVideoContext } from "./useHostPlayer";
 
 const live = { id: "song-1", title: "First", artist: "A", youtube_id: "vid1aaaaaaa" };
 const next = { id: "song-2", title: "Second", artist: "B", youtube_id: "vid2bbbbbbb" };
