@@ -2,11 +2,11 @@
 
 The thirteen PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f).
 
 ## 0. Conventions
 
-- All functions use `SECURITY DEFINER` so they run with the table-owner's privileges (allowing them to bypass RLS for their own writes). Anon callers can only invoke functions that have been explicitly `GRANT EXECUTE ... TO anon`'d.
+- All functions use `SECURITY DEFINER` so they run with the table-owner's privileges (allowing them to bypass RLS for their own writes), except the read-only `song_pool_counts` (§3f), which runs as its caller. Anon callers can only invoke functions that have been explicitly `GRANT EXECUTE ... TO anon`'d.
 - Functions are idempotent where the data model allows (see per-function notes).
 - Error returns use Postgres exception codes: `P0001` for application errors, `P0002` for "no_data_found".
 - Functions are named with `snake_case`. Parameter names prefixed with `p_`.
@@ -476,6 +476,36 @@ Not idempotent — each call adds another hour. The manager UI disables the bann
 
 - Manager browser → Supabase PostgREST RPC (`frontend/src/hooks/useManagerActions.ts::extendGameDirect`). Single caller in the deployed system.
 
+## 3f. `song_pool_counts`: how many songs a genre + decade mix holds
+
+Added in migration 052 (issue #375). Called **direct from the create-game page**, once per session, so the page can show "N songs in this mix" as the host picks and disable **Create game** when the mix is empty (six genre + decade pairs held no song in October 2026, and such a game's first Start failed with `no_more_songs`).
+
+```sql
+CREATE OR REPLACE FUNCTION song_pool_counts()
+RETURNS TABLE(
+  decade     integer,  -- release_year / 10 * 10; NULL when the year is unknown
+  genre_ids  uuid[],   -- every genre the songs are in, sorted
+  song_count integer
+) LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public;
+```
+
+Behavior:
+- One row per (decade, full sorted set of the song's genres), counting the songs that share it. Only songs with `unavailable_at IS NULL` and at least one genre are counted. Every song is in exactly one row, so any mix is counted exactly by a sum: rows whose `decade` is a picked decade (any row when no decade is picked; a `NULL` decade matches no picked decade) and whose `genre_ids` share an id with the picked genres. A song in two picked genres counts once.
+- That sum is `pick_next_song`'s `eligible` set (§3cc) for a game with nothing played: genre membership, the decade filter (migration 032) and the dead-video skip (migration 045). Soundtrack rounds are a property of a genre, not a filter, so they change nothing. `tests/db/test_song_pool_counts.py` plays each of a dozen mixes through `select_next_song` until `no_more_songs` and asserts the served count equals the sum. **If the picker's eligibility changes, change this function with it.**
+- Size: 102 rows (about 8 KB) for the 1,715 songs on 2026-10-31, well under PostgREST's 1,000-row cap; it grows with genre × decade combinations, not with songs.
+- No arguments, no token, no writes. `SECURITY INVOKER`: anon already reads `songs`, `song_genres` and `genres` in full (migration 006), so the function needs no privilege of its own and exposes nothing anon couldn't already count (no song ids or titles).
+
+### Idempotency
+
+Read-only. The migration is `CREATE OR REPLACE` plus re-runnable `REVOKE`/`GRANT`.
+
+### Callers
+
+- Create-game page → Supabase PostgREST RPC (`frontend/src/lib/api.ts::loadSongPool`; the sum is `frontend/src/lib/songPool.ts::countSongsInMix`). On any error (`PGRST202` before migration 052 is applied, a network blip) it resolves `null`, and the page shows no count and blocks nothing.
+
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
 Added in migration 014. Independent of round state and the buzz lock; the host picks any team in the game and grants a positive number of points (default 4). Does not touch `game_rounds`. Called by FastAPI (`POST /games/{code}/bonus`). Not exposed to anon.
@@ -838,6 +868,7 @@ migration's one-time backfill of existing teams never double-inserts.
 | `select_next_song` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `peek_next_song` | ✅ (token-gated, read-only) | ✅ | Browser (manager page) |
 | `extend_game` | ✅ (token-gated) | ✅ | Browser (manager page) |
+| `song_pool_counts` | ✅ (no token; read-only aggregate, SECURITY INVOKER) | ✅ | Browser (create-game page) |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
@@ -847,9 +878,11 @@ migration's one-time backfill of existing teams never double-inserts.
 | `set_song_availability` | ❌ | ✅ | FastAPI POST /admin/songs/check-availability with `commit=true` |
 | `create_team_secret` | ❌ | ✅ | Trigger only (`AFTER INSERT` on `game_teams`). No HTTP caller. Team rejoin is a FastAPI endpoint, not an anon RPC. |
 
-The six anon-callable functions all validate authentication inside the
+Six of the seven anon-callable functions validate authentication inside the
 function body (`buzz_in` checks the game-code; the other five check the
-per-game `manager_token`). This is what makes anon EXECUTE safe.
+per-game `manager_token`). This is what makes anon EXECUTE safe. The seventh,
+`song_pool_counts`, needs no check: it writes nothing and runs as the caller,
+counting catalog rows anon can already read.
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
 

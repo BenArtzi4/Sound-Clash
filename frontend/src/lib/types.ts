@@ -66,6 +66,14 @@ export interface Genre {
   slug: string;
 }
 
+// One row of song_pool_counts() (migration 052): how many playable songs share
+// a decade and a set of genres. The create page sums these for its song count.
+export interface SongPoolCell {
+  decade: number | null; // release_year / 10 * 10; null when the year is unknown
+  genre_ids: string[]; // every genre the songs are in
+  song_count: number;
+}
+
 // The `buzz_in` RPC return row.
 export interface BuzzResult {
   locked: boolean;

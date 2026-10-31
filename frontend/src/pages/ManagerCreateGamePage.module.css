@@ -266,6 +266,17 @@
   color: var(--accent-ink);
 }
 
+/* "Any year" (no decade picked, the default): its own row on a phone, the
+   first pill on wider screens, sized to its label rather than squeezed to a
+   decade's share of the line. */
+@media (min-width: 601px) {
+  .decadeAny {
+    flex: 0 0 auto;
+    padding: 0 var(--space-4);
+    white-space: nowrap;
+  }
+}
+
 /* Sticky action bar on a phone: Create game is full-width at the bottom of the
    screen, Cancel a ghost link beside it; on wider screens the bar sits under
    the sections as before. */
@@ -273,9 +284,10 @@
   position: sticky;
   bottom: 0;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2) var(--space-4);
   padding: var(--space-3) 0;
   background: var(--bg);
   border-top: 1px solid var(--border);
@@ -285,6 +297,32 @@
   flex: 1;
 }
 
+/* The mix's song count (issue #375): on a phone a full-width line above the
+   buttons, so it stays in view in the sticky bar while the host taps; on wider
+   screens it sits between Cancel and Create, next to the button it gates.
+   Empty until there is a count; out of the flow then, so the bar keeps its old
+   height, but still mounted as a live region. */
+.mixCount {
+  order: -1;
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.mixCount:empty {
+  position: absolute;
+}
+
+.mixSmall {
+  color: var(--warning);
+}
+
+.mixEmpty {
+  color: var(--negative-text);
+}
+
 @media (min-width: 601px) {
   .actions {
     position: static;
@@ -292,6 +330,11 @@
   }
   .actions :global(.btn-primary) {
     flex: 0 0 auto;
+  }
+  .mixCount {
+    order: 0;
+    flex: 1 1 0;
+    text-align: right;
   }
 }
 
