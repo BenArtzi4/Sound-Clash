@@ -18,6 +18,9 @@ import { JoinTeamPage } from "./pages/JoinTeamPage";
 const HowToPlayPage = lazy(() =>
   import("./pages/HowToPlayPage").then((m) => ({ default: m.HowToPlayPage })),
 );
+const PrivacyPage = lazy(() =>
+  import("./pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })),
+);
 const TeamGameplayPage = lazy(() =>
   import("./pages/TeamGameplayPage").then((m) => ({ default: m.TeamGameplayPage })),
 );
@@ -57,6 +60,7 @@ export function AppRoutes() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/how-to-play" element={<HowToPlayPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             {LANDING_PATHS.map((path) => (
               <Route key={path} path={path} element={<LandingPage path={path} />} />
             ))}

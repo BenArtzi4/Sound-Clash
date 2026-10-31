@@ -100,6 +100,8 @@ Researched 2026-10-29 (SERP checks, competitor pages). The bare query "guess the
 | `/kahoot-music-quiz-alternative` | Kahoot music quiz alternative | Kahoot-style music game, music quiz with a room code |
 | `/hitster-alternative` | Hitster alternative | free Hitster alternative online, music party game without cards |
 
+`/privacy` is a content page too (prerendered, in the footer as "Privacy") but not written for search and left out of the sitemap. Its text must stay true to what the code stores: update it with any change to `docs/data-model.md`, the product events in `docs/tech-stack.md`, or the services the site uses.
+
 The two comparison pages describe the other product only by facts its maker publishes, say when it is the better choice, and say Sound Clash is not affiliated with it (`landingContent.test.ts` checks the last part).
 
 Not built, on purpose for now: a Hebrew page. The Hebrew searches (נחש את השיר, משחק נחש את השיר) were the least contested in the research, and the maintainer decided against a Hebrew page on 2026-09-25; revisit if that changes.
