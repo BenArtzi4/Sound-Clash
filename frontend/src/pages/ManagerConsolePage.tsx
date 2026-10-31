@@ -25,8 +25,8 @@ import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { useManagerToken } from "../hooks/useManagerToken";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { useResumeOnVisible } from "../hooks/useResumeOnVisible";
+import { useHostPlayer } from "../hooks/useHostPlayer";
 import { useScoring } from "../hooks/useScoring";
-import { useSongPrebuffer } from "../hooks/useSongPrebuffer";
 import { parseRecoveryHash } from "../lib/managerToken";
 import {
   ARTIST_POINTS,
@@ -65,25 +65,22 @@ export function ManagerConsolePage() {
   // hit a mid-game cold start. See useKeepBackendWarm for the why.
   useKeepBackendWarm(state?.game?.status === "playing" || state?.game?.status === "waiting");
 
-  // The double-buffer player machinery (peek + prebuffer + swap + song-start
-  // telemetry) and the scoring/round actions (award_attempt / release_buzz_lock
-  // / select_next_song / bonus / end / extend) live in two hooks; the page is
-  // layout + wiring. handleNextRound composes the prebuffer surface, so scoring
-  // takes prebuffer as an argument.
-  const prebuffer = useSongPrebuffer(gameCode, managerToken, state, player);
+  // The player machinery (next-song peek + song-start telemetry + error and
+  // stall reports) and the scoring/round actions (award_attempt /
+  // release_buzz_lock / select_next_song / bonus / end / extend) live in two
+  // hooks; the page is layout + wiring. handleNextRound drives the player, so
+  // scoring takes it as an argument.
+  const hostPlayer = useHostPlayer(gameCode, managerToken, state, player);
   const {
-    playerARef,
-    playerBRef,
-    activeKey,
+    playerRef,
     onPlayerReady,
-    onPlayerBReady,
     handlePlayerPlaying,
     handlePlayerError,
     handleStartStall,
     handleEarlyPause,
-    activePlayer,
-  } = prebuffer;
-  const scoring = useScoring(gameCode, managerToken, state, player, prebuffer);
+    livePlayer,
+  } = hostPlayer;
+  const scoring = useScoring(gameCode, managerToken, state, player, hostPlayer);
   const {
     currentSong,
     busy,
@@ -119,7 +116,7 @@ export function ManagerConsolePage() {
   // finished clip is never replayed. Best-effort on strict mobile autoplay.
   useResumeOnVisible(
     () => state?.game.status === "playing" && state?.game.buzzed_team_id == null,
-    () => activePlayer()?.resumeIfPaused(),
+    () => livePlayer()?.resumeIfPaused(),
   );
 
   if (!managerToken) {
@@ -301,7 +298,7 @@ export function ManagerConsolePage() {
         onExtend={() => void handleExtendGame()}
       />
 
-      {/* The host tools, the invite card, the players, the round card and End
+      {/* The host tools, the invite card, the player, the round card and End
           game are all children of .column: one stack on phones (in this
           order), and on a laptop two columns with the round card on the right
           and the rest under the video on the left (issue #370). */}
@@ -323,50 +320,22 @@ export function ManagerConsolePage() {
 
         {game.status === "waiting" ? <InviteCard gameCode={gameCode} teams={teams} /> : null}
 
-        {/* Two overlaid players: the active one (audible, on top) and the
-            standby that silently prebuffers the next song. testId follows the
-            active player so E2E's strict youtube-player locators stay valid.
-            So do the host's back / pause / forward buttons: only the active
-            player renders them. */}
+        {/* One player, always on screen (YouTube's embed rules), with the
+            host's back / pause / forward buttons in a bar beside the picture,
+            never over it. */}
         <div className={styles.playerStack}>
-          <div
-            className={`${styles.playerLayer} ${
-              activeKey === "A" ? styles.playerActive : styles.playerStandby
-            }`}
-          >
-            <YouTubePlayer
-              ref={playerARef}
-              noCover
-              testId={activeKey === "A" ? "youtube-player" : "youtube-player-preload"}
-              onReady={onPlayerReady}
-              onPlaying={handlePlayerPlaying}
-              onError={(code, videoId) => handlePlayerError("A", code, videoId, currentSong)}
-              onStartStall={(info) => handleStartStall("A", info, currentSong)}
-              onEarlyPause={(ms) => handleEarlyPause("A", ms, currentSong)}
-              idleLabel={idleLabel}
-              controls={activeKey === "A"}
-              holdPlayback={game.buzzed_team_id != null}
-            />
-          </div>
-          <div
-            className={`${styles.playerLayer} ${
-              activeKey === "B" ? styles.playerActive : styles.playerStandby
-            }`}
-          >
-            <YouTubePlayer
-              ref={playerBRef}
-              noCover
-              testId={activeKey === "B" ? "youtube-player" : "youtube-player-preload"}
-              onReady={onPlayerBReady}
-              onPlaying={handlePlayerPlaying}
-              onError={(code, videoId) => handlePlayerError("B", code, videoId, currentSong)}
-              onStartStall={(info) => handleStartStall("B", info, currentSong)}
-              onEarlyPause={(ms) => handleEarlyPause("B", ms, currentSong)}
-              idleLabel={idleLabel}
-              controls={activeKey === "B"}
-              holdPlayback={game.buzzed_team_id != null}
-            />
-          </div>
+          <YouTubePlayer
+            ref={playerRef}
+            noCover
+            onReady={onPlayerReady}
+            onPlaying={handlePlayerPlaying}
+            onError={(code, videoId) => handlePlayerError(code, videoId, currentSong)}
+            onStartStall={(info) => handleStartStall(info, currentSong)}
+            onEarlyPause={(ms) => handleEarlyPause(ms, currentSong)}
+            idleLabel={idleLabel}
+            controls
+            holdPlayback={game.buzzed_team_id != null}
+          />
         </div>
 
         <section className={styles.card}>

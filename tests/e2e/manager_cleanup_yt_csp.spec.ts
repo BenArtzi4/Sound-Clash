@@ -198,27 +198,22 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     await genre.check();
     await page.getByRole("button", { name: /create game/i }).click();
     await page.waitForURL(/\/manager\/game\/[A-Z2-9]{6}$/, { timeout: 15_000 });
-    // Two players mount on the manager console: the active one AND a standby
-    // that muted-buffers (then freezes) the FIRST song during the "waiting"
-    // lobby, so the host's Start tap can begin unmuted playback in-gesture
-    // (mobile blocks audio that starts after the await). That is a deliberate
-    // ONE-TIME video load, not the per-render YT.Player rebuild this test
-    // guards against. Wait for both players to be ready and give the prebuffer
-    // time to load + pause, THEN snapshot the baseline, so the idle window
-    // measures steady state (which must stay bounded).
-    // 40s ceiling on both players: onReady hinges on the third-party YouTube
-    // IFrame API loading from www.youtube.com, whose latency varies on the
-    // runner and occasionally exceeded 20s in a slow-network window (issue #222).
+    // One player mounts on the manager console (YouTube's embed rules allow no
+    // hidden second player, so nothing is buffered on the "waiting" lobby;
+    // the first song is only peeked). Wait for it to be ready and let the
+    // embed settle, THEN snapshot the baseline, so the idle window measures
+    // steady state (which must stay bounded).
+    // 40s ceiling: onReady hinges on the third-party YouTube IFrame API
+    // loading from www.youtube.com, whose latency varies on the runner and
+    // occasionally exceeded 20s in a slow-network window (issue #222).
     await expect(page.getByTestId("youtube-player")).toHaveAttribute("data-ready", "true", {
       timeout: 40_000,
     });
-    await expect(page.getByTestId("youtube-player-preload")).toHaveAttribute("data-ready", "true", {
-      timeout: 40_000,
-    });
-    await page.waitForTimeout(8_000); // let the one-time first-song prebuffer load + freeze
+    await expect(page.locator('[data-testid^="youtube-player"] > iframe')).toHaveCount(1);
+    await page.waitForTimeout(8_000); // let the embed's own start-up requests finish
 
-    // Snapshot counts after the players + first-song prebuffer have loaded;
-    // from this point we expect very little new traffic for ~20s.
+    // Snapshot counts after the player has loaded; from this point we expect
+    // very little new traffic for ~20s.
     const baselineTotal = total;
     const baselineYt = youtubeReqs;
     await page.waitForTimeout(20_000);

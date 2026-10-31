@@ -704,7 +704,7 @@
       "id": 13,
       "type": "timeseries",
       "title": "Song-start latency by preloaded (game.song_start)",
-      "description": "Next-song click -> audio playing, grouped by whether the next YouTube video was prebuffered (span.preloaded true/false). This quantifies the prebuffer win.",
+      "description": "Next-song click -> audio playing, grouped by whether the next YouTube video was prebuffered (span.preloaded true/false). The hidden prebuffer player was removed on 2026-10-31 (YouTube's embed rules), so every start since is preloaded=false; true is the old warm start.",
       "datasource": {
         "type": "tempo",
         "uid": "grafanacloud-traces"
