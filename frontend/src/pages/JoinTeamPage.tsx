@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { GameCodeField } from "../components/GameCodeField";
+import { AgreeNote } from "../components/LegalLinks";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import { ApiError, joinTeam, rejoinTeam } from "../lib/api";
 import { trackTeamJoined } from "../lib/funnel";
@@ -179,6 +180,10 @@ export function JoinTeamPage() {
           <Link to="/" className="btn btn-ghost">
             Cancel
           </Link>
+          {/* Between Cancel and Join in the DOM: the phone's column-reverse
+              shows it right under Join game; on wider screens it wraps to its
+              own line under the two buttons. */}
+          <AgreeNote action="joining" className={styles.agree} />
           <button type="submit" className="btn btn-primary" disabled={!submittable}>
             {busy ? (
               <>

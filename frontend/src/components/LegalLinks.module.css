@@ -1,0 +1,15 @@
+/* Small and muted: these lines must never compete with the buttons beside
+   them. The links keep an underline, since the muted colour alone would not
+   tell them apart from the text around them. */
+.links {
+  margin: 0;
+  font-size: var(--text-caption);
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.links a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

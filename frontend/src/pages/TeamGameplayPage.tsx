@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
 import { HostYourOwnCard } from "../components/HostYourOwn";
+import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import { PointChange } from "../components/PointChange";
 import { Setlist } from "../components/Setlist";
@@ -46,6 +47,7 @@ function FinalBoard({
       <div className={styles.finalSetlist}>
         <Setlist game={board.game} rounds={board.rounds} teams={teams} />
       </div>
+      <LegalLinks className={styles.legal} />
     </main>
   );
 }
@@ -279,6 +281,10 @@ export function TeamGameplayPage() {
       </div>
 
       {buzzer.error ? <p className="error">{buzzer.error.message}</p> : null}
+
+      {/* Under everything, in its own strip: never over the buzz button,
+          where a mashing thumb would open it mid-round. */}
+      <LegalLinks className={styles.legal} />
     </main>
   );
 }

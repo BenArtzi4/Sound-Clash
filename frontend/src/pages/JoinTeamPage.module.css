@@ -82,12 +82,23 @@
 .actions :global(.btn-primary) {
   width: 100%;
 }
+/* The agreement line (YouTube API policy III.A.2): under Join game on a phone,
+   on its own line under both buttons on wider screens. */
+.agree {
+  text-align: center;
+}
 @media (min-width: 601px) {
   .actions {
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: flex-end;
   }
   .actions :global(.btn-primary) {
     width: auto;
+  }
+  .agree {
+    order: 1;
+    flex: 1 0 100%;
+    text-align: right;
   }
 }

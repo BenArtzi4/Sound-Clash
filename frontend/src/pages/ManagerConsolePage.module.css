@@ -121,12 +121,25 @@
   }
 }
 
+/* End game stays centred; the Privacy and Terms links (YouTube API policy
+   III.A.2) sit at the right end of the same row, so the footer is no taller. */
 .endGameFooter {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   margin-top: 1rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
+}
+
+.endGameFooter > button {
+  grid-column: 2;
+}
+
+.footerLegal {
+  grid-column: 3;
+  justify-self: end;
+  text-align: right;
 }
 
 .column {
