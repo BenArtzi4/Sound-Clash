@@ -51,7 +51,8 @@ Create a new game. **No auth.** Anyone can host. Rate-limited 10/min/IP.
 
 Validation:
 - `selected_genres`: at least 1 genre UUID
-- `selected_decades` (optional): array of decade start-years (the 80s = `1980`), each in `[1900, 2100]`. Omitted or empty means no year limit. The song picker (`select_next_song`) serves only songs whose `release_year` falls in one of these decades; see `rpc-functions.md §3c`.
+- `selected_decades` (optional): array of decade start-years (the 80s = `1980`), each in `[1900, 2100]`. Omitted or empty means no year limit (the create page's default **Any year** choice). The song picker (`select_next_song`) serves only songs whose `release_year` falls in one of these decades; see `rpc-functions.md §3c`.
+- The pool is not checked here: a mix with no songs is accepted, and its first `select_next_song` fails with `no_more_songs`. The create page prevents that from the song counts (§3.2).
 
 Games run for as many rounds as the host wants and end only when the host calls `POST /games/{code}/end`. There is no per-game round limit.
 
@@ -511,7 +512,7 @@ The weekly `.github/workflows/dead-video-scan.yml` pages the catalog with `commi
 
 ## 3. Postgres RPC (PostgREST)
 
-Called by the **browser** with the anon key. Six functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below) plus the five token-gated host RPCs `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`). Every other RPC is revoked from anon (mig 020).
+Called by the **browser** with the anon key. Seven functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the five token-gated host RPCs `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and the read-only `song_pool_counts` (§3.2). Every other RPC is revoked from anon (mig 020).
 
 ### 3.1 `POST /rest/v1/rpc/buzz_in`
 
@@ -538,6 +539,21 @@ Called by the **browser** with the anon key. Six functions are exposed to anon: 
 This call must complete in <100ms (RTT to Supabase). Fan-out to other clients via Realtime takes another ~50–100ms.
 
 **Errors**: PostgREST returns 4xx with `code`, `message`, `hint`. Treat anything non-200 as "buzz failed; refresh state from Realtime."
+
+### 3.2 `POST /rest/v1/rpc/song_pool_counts`
+
+The create page's song count (migration 052, issue #375). No arguments, no token: `supabase.rpc("song_pool_counts")`, called once per session from `frontend/src/lib/api.ts::loadSongPool`.
+
+**Response 200**: the playable catalog grouped by decade and genre set, about a hundred rows:
+```json
+[
+  { "decade": 1980, "genre_ids": ["<rock_uuid>"], "song_count": 141 },
+  { "decade": 1980, "genre_ids": ["<pop_uuid>", "<rock_uuid>"], "song_count": 3 },
+  { "decade": null, "genre_ids": ["<pop_uuid>"], "song_count": 2 }
+]
+```
+
+The page sums `song_count` over the rows whose `decade` is one of the picked decades (any, when none is picked; `null` matches none) and whose `genre_ids` include a picked genre (`frontend/src/lib/songPool.ts`). It shows the sum as "N songs in this mix" and disables **Create game** at 0. On any error (for example `PGRST202` before migration 052 is applied) the page shows no count and blocks nothing. `POST /games` itself does not check the pool.
 
 ---
 

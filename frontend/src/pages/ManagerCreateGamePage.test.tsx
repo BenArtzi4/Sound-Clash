@@ -18,9 +18,12 @@ vi.mock("../lib/api", () => ({
   getCachedGenres: vi.fn(() => null),
   createGame: vi.fn(),
   getHealth: vi.fn(() => Promise.resolve({ status: "ok", version: "test", supabase: "ok" })),
+  // song_pool_counts() (mig 052). Default: not available, as on a database
+  // without the migration; the count tests below give it cells.
+  loadSongPool: vi.fn(() => Promise.resolve(null)),
 }));
 
-import { createGame, getCachedGenres, getHealth, listGenres } from "../lib/api";
+import { createGame, getCachedGenres, getHealth, listGenres, loadSongPool } from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
 import { getManagerToken } from "../lib/managerToken";
 import { ManagerCreateGamePage } from "./ManagerCreateGamePage";
@@ -30,6 +33,8 @@ beforeEach(() => {
   vi.mocked(listGenres).mockReset();
   vi.mocked(createGame).mockReset();
   vi.mocked(getHealth).mockClear();
+  vi.mocked(loadSongPool).mockReset();
+  vi.mocked(loadSongPool).mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -274,6 +279,161 @@ describe("ManagerCreateGamePage", () => {
       // Editing the chips breaks the exact match, so the preset de-highlights.
       fireEvent.click(screen.getByLabelText(/rock/i));
       expect(everything).toHaveAttribute("aria-pressed", "false");
+    });
+  });
+
+  describe("Any year (the default decade choice)", () => {
+    it("starts on Any year with no decade picked, and creates with no decade", async () => {
+      vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
+      vi.mocked(createGame).mockReturnValueOnce(new Promise(() => {}));
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+
+      expect(screen.getByLabelText(/^any year$/i)).toBeChecked();
+      for (const d of ["60s", "70s", "80s", "90s", "2000s", "2010s", "2020s"]) {
+        expect(screen.getByLabelText(new RegExp(`^${d}$`))).not.toBeChecked();
+      }
+      fireEvent.click(screen.getByLabelText(/rock/i));
+      fireEvent.click(screen.getByRole("button", { name: /create game/i }));
+      await waitFor(() => expect(createGame).toHaveBeenCalled());
+      expect(createGame).toHaveBeenCalledWith({ selected_genres: ["g1"], selected_decades: [] });
+    });
+
+    it("turns off when a decade is picked, clears the decades when ticked, and comes back with the last decade off", async () => {
+      vi.mocked(listGenres).mockResolvedValueOnce([{ id: "g1", name: "Rock", slug: "rock" }]);
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+      const anyYear = screen.getByLabelText(/^any year$/i);
+      const eighties = screen.getByLabelText(/^80s$/i);
+      const nineties = screen.getByLabelText(/^90s$/i);
+
+      fireEvent.click(eighties);
+      fireEvent.click(nineties);
+      expect(anyYear).not.toBeChecked();
+
+      // Ticking Any year drops every decade.
+      fireEvent.click(anyYear);
+      expect(anyYear).toBeChecked();
+      expect(eighties).not.toBeChecked();
+      expect(nineties).not.toBeChecked();
+
+      // Ticking it again keeps it on: there is always a year choice.
+      fireEvent.click(anyYear);
+      expect(anyYear).toBeChecked();
+
+      // Turning the only decade off again means any year.
+      fireEvent.click(eighties);
+      expect(anyYear).not.toBeChecked();
+      fireEvent.click(eighties);
+      expect(anyYear).toBeChecked();
+    });
+
+    it("follows the presets: off for Hot Now's decades, on for Everything", async () => {
+      vi.mocked(listGenres).mockResolvedValueOnce([
+        { id: "g-pop", name: "Pop", slug: "pop" },
+        { id: "g-rock", name: "Rock", slug: "rock" },
+      ]);
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+      const anyYear = screen.getByLabelText(/^any year$/i);
+
+      fireEvent.click(screen.getByRole("button", { name: /hot now/i }));
+      expect(anyYear).not.toBeChecked();
+      fireEvent.click(screen.getByRole("button", { name: /^everything$/i }));
+      expect(anyYear).toBeChecked();
+    });
+  });
+
+  describe("song count for the mix (issue #375)", () => {
+    const CATALOG = [
+      { id: "g-hh", name: "Hip-Hop", slug: "hip-hop" },
+      { id: "g-pop", name: "Pop", slug: "pop" },
+      { id: "g-rock", name: "Rock", slug: "rock" },
+    ];
+    // Rock: 300 songs in the 80s, 2 in the 90s. Pop: 40 in the 90s, 1 with an
+    // unknown year. One Rock + Pop duet from the 80s. Hip-Hop: 3 in the 2000s
+    // and nothing before.
+    const POOL = [
+      { decade: 1980, genre_ids: ["g-rock"], song_count: 300 },
+      { decade: 1990, genre_ids: ["g-rock"], song_count: 2 },
+      { decade: 1990, genre_ids: ["g-pop"], song_count: 40 },
+      { decade: null, genre_ids: ["g-pop"], song_count: 1 },
+      { decade: 1980, genre_ids: ["g-pop", "g-rock"], song_count: 1 },
+      { decade: 2000, genre_ids: ["g-hh"], song_count: 3 },
+    ];
+
+    async function renderWithPool() {
+      vi.mocked(listGenres).mockResolvedValueOnce(CATALOG);
+      vi.mocked(loadSongPool).mockResolvedValue(POOL);
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+      return screen.getByTestId("mix-count");
+    }
+
+    it("says nothing until a genre is picked", async () => {
+      const line = await renderWithPool();
+      await waitFor(() => expect(loadSongPool).toHaveBeenCalled());
+      expect(line).toHaveTextContent("");
+      expect(line).toHaveAttribute("role", "status");
+    });
+
+    it("counts the mix live as genres and decades change", async () => {
+      const line = await renderWithPool();
+
+      fireEvent.click(screen.getByLabelText(/^rock$/i));
+      await waitFor(() => expect(line).toHaveTextContent("303 songs in this mix"));
+
+      // A song in two picked genres counts once; the unknown-year song counts
+      // only while no decade is picked.
+      fireEvent.click(screen.getByLabelText(/^pop$/i));
+      expect(line).toHaveTextContent("344 songs in this mix");
+
+      fireEvent.click(screen.getByLabelText(/^90s$/i));
+      expect(line).toHaveTextContent("42 songs in this mix");
+
+      fireEvent.click(screen.getByLabelText(/^80s$/i));
+      expect(line).toHaveTextContent("343 songs in this mix");
+
+      fireEvent.click(screen.getByLabelText(/^any year$/i));
+      expect(line).toHaveTextContent("344 songs in this mix");
+      expect(screen.getByRole("button", { name: /create game/i })).toBeEnabled();
+    });
+
+    it("blocks Create on an empty mix and says why, until the mix has songs", async () => {
+      const line = await renderWithPool();
+
+      fireEvent.click(screen.getByLabelText(/^hip-hop$/i));
+      fireEvent.click(screen.getByLabelText(/^80s$/i));
+      await waitFor(() => expect(line).toHaveTextContent(/no songs in this mix/i));
+      const submit = screen.getByRole("button", { name: /create game/i });
+      expect(submit).toBeDisabled();
+      fireEvent.click(submit);
+      expect(createGame).not.toHaveBeenCalled();
+
+      // Adding a genre with 80s songs fixes it.
+      fireEvent.click(screen.getByLabelText(/^rock$/i));
+      expect(line).toHaveTextContent("301 songs in this mix");
+      expect(submit).toBeEnabled();
+    });
+
+    it("warns when a mix is too small for a whole game", async () => {
+      const line = await renderWithPool();
+      fireEvent.click(screen.getByLabelText(/^hip-hop$/i));
+      await waitFor(() =>
+        expect(line).toHaveTextContent("Only 3 songs in this mix, enough for 3 rounds."),
+      );
+      expect(screen.getByRole("button", { name: /create game/i })).toBeEnabled();
+    });
+
+    it("shows no count and blocks nothing when the counts can't load", async () => {
+      vi.mocked(listGenres).mockResolvedValueOnce(CATALOG);
+      renderPage();
+      await waitFor(() => screen.getByText("Rock"));
+      await waitFor(() => expect(loadSongPool).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText(/^hip-hop$/i));
+      fireEvent.click(screen.getByLabelText(/^80s$/i));
+      expect(screen.getByTestId("mix-count")).toHaveTextContent("");
+      expect(screen.getByRole("button", { name: /create game/i })).toBeEnabled();
     });
   });
 

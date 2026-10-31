@@ -11,6 +11,7 @@ import type {
   Genre,
   Song,
   SongListResponse,
+  SongPoolCell,
   SongWritePayload,
   Team,
   TeamRejoinToken,
@@ -168,10 +169,44 @@ export function getCachedGenres(): Genre[] | null {
   return cachedGenres;
 }
 
-// Test-only: reset the genre memoization so each test gets a clean cache.
+// The create page's song count (issue #375): song_pool_counts() (migration 052)
+// returns the playable catalog grouped by decade and genre set, about a hundred
+// rows, so the page counts any genre + decade mix itself as the host taps
+// (lib/songPool.ts) instead of asking the server on every tap. Read direct from
+// Supabase like the genres, and memoized for the session the same way.
+//
+// Resolves null instead of throwing on any failure (the function not yet on
+// the database, a network blip): the page then shows no count and blocks
+// nothing, exactly as before the count existed. A failure is not cached, so the
+// next visit tries again.
+let cachedSongPool: SongPoolCell[] | null = null;
+let inflightSongPool: Promise<SongPoolCell[] | null> | null = null;
+
+export function loadSongPool(): Promise<SongPoolCell[] | null> {
+  if (cachedSongPool) return Promise.resolve(cachedSongPool);
+  if (inflightSongPool) return inflightSongPool;
+  inflightSongPool = (async () => {
+    try {
+      const { data, error } = await supabase.rpc("song_pool_counts");
+      if (error || !Array.isArray(data)) return null;
+      cachedSongPool = data as SongPoolCell[];
+      return cachedSongPool;
+    } catch {
+      return null;
+    } finally {
+      inflightSongPool = null;
+    }
+  })();
+  return inflightSongPool;
+}
+
+// Test-only: reset the genre and song-pool memoization so each test gets a
+// clean cache.
 export function __resetListGenresCacheForTests(): void {
   cachedGenres = null;
   inflightGenres = null;
+  cachedSongPool = null;
+  inflightSongPool = null;
 }
 
 export function joinTeam(gameCode: string, name: string): Promise<Team> {
