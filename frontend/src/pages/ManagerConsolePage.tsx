@@ -4,6 +4,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { ExpiryCountdown } from "../components/ExpiryCountdown";
 import { HostRecoveryLink } from "../components/HostRecoveryLink";
+import { InviteButton, InviteCard } from "../components/InviteTeams";
 import { Skeleton } from "../components/Skeleton";
 import { Setlist } from "../components/Setlist";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
@@ -22,6 +23,7 @@ import {
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useKeepBackendWarm } from "../hooks/useKeepBackendWarm";
 import { useManagerToken } from "../hooks/useManagerToken";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePlayerReady } from "../hooks/usePlayerReady";
 import { useResumeOnVisible } from "../hooks/useResumeOnVisible";
 import { useHostPlayer } from "../hooks/useHostPlayer";
@@ -35,6 +37,10 @@ import {
   WRONG_BUZZ_PENALTY,
 } from "../lib/scoring";
 import styles from "./ManagerConsolePage.module.css";
+
+// The two-column laptop layout (issue #370). Keep it equal to the breakpoint
+// of the "Laptop fit" block in ManagerConsolePage.module.css.
+const LAPTOP_LAYOUT = "(min-width: 1024px)";
 
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
@@ -58,6 +64,11 @@ export function ManagerConsolePage() {
   const player = usePlayerReady();
   // Host-only "reconnect a team" rescue modal (issue #183).
   const [rescueOpen, setRescueOpen] = useState(false);
+  // One column (phones, tablets): before the game, Start game sits right
+  // under the invite card instead of at the bottom of the round card. Where
+  // matchMedia is missing (jsdom) this reads as the laptop layout, which keeps
+  // Start in the round card.
+  const laptopLayout = useMediaQuery(LAPTOP_LAYOUT, true);
 
   // Keep the Render-hosted API warm while a game is running so the host's
   // occasional REST calls (Bonus / End game / Kick) and late team joins don't
@@ -272,13 +283,33 @@ export function ManagerConsolePage() {
       : player.ready
         ? "Ready — press Start game"
         : "Loading player…";
+  // Before the game on a phone, Start game is the one action that matters, so
+  // it moves up under the invite card (in the flow: nothing may sit over the
+  // video), and the round card drops its Continue / Start row until Start.
+  // One element either way, so `start-round` stays a single button.
+  const startUnderInvite = game.status === "waiting" && !laptopLayout;
+  const startButton = (
+    <button
+      className={`btn btn-primary ${styles.awardBtn}`}
+      onClick={() => void handleNextRound()}
+      disabled={nextRoundDisabled}
+      data-testid="start-round"
+    >
+      {nextRoundLabel}
+    </button>
+  );
 
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <div className={styles.codeBlock}>
-          <span className={styles.codeLabel}>Game code</span>
-          <span className={styles.code}>{gameCode}</span>
+        <div className={styles.codeGroup}>
+          <div className={styles.codeBlock}>
+            <span className={styles.codeLabel}>Game code</span>
+            <span className={styles.code}>{gameCode}</span>
+          </div>
+          {/* Before the game the invite is a card below; during it, this
+              button opens the same QR + share sheet for late teams. */}
+          {game.status === "playing" ? <InviteButton gameCode={gameCode} /> : null}
         </div>
         <span className={`${styles.statusPill} ${statusClass}`}>{game.status}</span>
         <div className={styles.headerMeta}>
@@ -292,22 +323,30 @@ export function ManagerConsolePage() {
         onExtend={() => void handleExtendGame()}
       />
 
-      <div className={styles.hostTools}>
-        <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
-        {teams.length > 0 ? (
-          <button
-            type="button"
-            className={styles.rescueTrigger}
-            onClick={() => setRescueOpen(true)}
-            data-testid="rescue-open"
-          >
-            <RefreshIcon />
-            Reconnect a team
-          </button>
-        ) : null}
-      </div>
-
+      {/* The host tools, the invite card, the player, the round card and End
+          game are all children of .column: one stack on phones (in this
+          order), and on a laptop two columns with the round card on the right
+          and the rest under the video on the left (issue #370). */}
       <div className={styles.column}>
+        <div className={styles.hostTools}>
+          <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
+          {teams.length > 0 ? (
+            <button
+              type="button"
+              className={styles.rescueTrigger}
+              onClick={() => setRescueOpen(true)}
+              data-testid="rescue-open"
+            >
+              <RefreshIcon />
+              Reconnect a team
+            </button>
+          ) : null}
+        </div>
+
+        {game.status === "waiting" ? <InviteCard gameCode={gameCode} teams={teams} /> : null}
+
+        {startUnderInvite ? startButton : null}
+
         {/* One player, always on screen (YouTube's embed rules), with the
             host's back / pause / forward buttons in a bar beside the picture,
             never over it. */}
@@ -501,37 +540,32 @@ export function ManagerConsolePage() {
             ) : null}
           </div>
 
-          <div className={styles.actionsInline}>
-            <button
-              className={`btn ${styles.continueBtn}`}
-              onClick={() => void handleContinueRound()}
-              disabled={continueDisabled}
-              data-testid="continue-round"
-            >
-              Continue round
-            </button>
-            <button
-              className={`btn btn-primary ${styles.awardBtn}`}
-              onClick={() => void handleNextRound()}
-              disabled={nextRoundDisabled}
-              data-testid="start-round"
-            >
-              {nextRoundLabel}
-            </button>
-          </div>
+          {startUnderInvite ? null : (
+            <div className={styles.actionsInline}>
+              <button
+                className={`btn ${styles.continueBtn}`}
+                onClick={() => void handleContinueRound()}
+                disabled={continueDisabled}
+                data-testid="continue-round"
+              >
+                Continue round
+              </button>
+              {startButton}
+            </div>
+          )}
         </section>
-      </div>
 
-      <footer className={styles.endGameFooter}>
-        <button
-          className="btn btn-danger"
-          onClick={() => setEndConfirmOpen(true)}
-          disabled={busy}
-          data-testid="end-game"
-        >
-          End game
-        </button>
-      </footer>
+        <footer className={styles.endGameFooter}>
+          <button
+            className="btn btn-danger"
+            onClick={() => setEndConfirmOpen(true)}
+            disabled={busy}
+            data-testid="end-game"
+          >
+            End game
+          </button>
+        </footer>
+      </div>
 
       <ConfirmDialog
         open={endConfirmOpen}

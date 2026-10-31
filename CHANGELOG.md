@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-10-31: **The host can invite teams from their own screen.** Before the game starts, the host console shows the join QR (tap it to make it big for the room), the game code, which teams have joined, and **Share invite** (**Copy link** on a laptop) plus a **WhatsApp** link; on a phone, **Start game** sits right under it. During the game an **Invite** button next to the code brings the same QR and links back for a late team. A host without a TV, or before the TV is set up, no longer has to read the code out. (#403)
 - 2026-10-31: **The Host a game page shows how many songs the mix holds.** As the host picks genres and decades, a line next to Create game says "312 songs in this mix", and below 20 songs it says how many rounds the mix covers. (#402)
 - 2026-10-30: **A privacy page** (`/privacy`, linked from every page's footer): what the game stores while you play and for how long, what stays on your device, the anonymous usage and error data, every service that handles it, and an address for questions. (#399)
 - 2026-10-30: **"Host your own game" at the end of a game.** Every team's phone shows a Host your own game button under the final results, and a few seconds after the podium the big screen adds a QR code to soundclash.org (left out on an upright phone used as the display, which has no room for it). A shared or copied setlist now ends with a link back to Sound Clash. (#398)
@@ -56,6 +57,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-10-31: **The host console fits a laptop screen.** From 1024px wide the round controls sit beside the video instead of under it, so Start game, the buzz status, the score buttons and Continue / Next round are all on the first screen at 1280×720 and up; before, the video filled the screen and the host had to scroll down to start. Phones are unchanged. (#370, #403)
 - 2026-10-31: **The host's video now follows YouTube's rules for embedded players.** The back / pause / forward buttons moved off the picture into a bar under the video (a column beside it on a short phone), the video is never smaller than 200 × 200 pixels (on a narrow phone it gets black bars instead of shrinking), and the console no longer loads the next song in a hidden second player, so a new song starts loading when the host taps Next round. A song YouTube fails to load is now retried once on its own. (#401)
 - 2026-10-31: The decade choice on the Host a game page now starts on **Any year**, so a new host can see they don't have to pick decades. Picking a decade turns it off; tapping Any year clears the decades. Games with no decade picked already played every year, songs from before the 60s included. (#402)
 - 2026-10-29: The site now says **"Sound Clash shows no ads"** instead of a flat "no ads" in the footer, Home's questions and the guide pages, because YouTube can show its own ads in the song player when a song's owner turns them on. (#394)

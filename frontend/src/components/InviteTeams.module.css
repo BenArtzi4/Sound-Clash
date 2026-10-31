@@ -1,0 +1,363 @@
+/* The host's invite (InviteTeams.tsx). No transitions or entrance animations:
+   the console's screen changes are instant on purpose (PR #344). */
+
+/* ---- Lobby card: QR on the left, the code and who has joined beside it, the
+   share actions under the text. ---- */
+.card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "qr body"
+    "qr actions";
+  align-items: center;
+  column-gap: 1.25rem;
+  row-gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* The QR is a button: tapping it opens the big one for the room to scan. */
+.qrButton {
+  grid-area: qr;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: zoom-in;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.qrButton .qrFrame {
+  width: 148px;
+  height: 148px;
+}
+
+@media (hover: hover) {
+  .qrButton:hover {
+    color: var(--bone);
+  }
+}
+
+.qrHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.qrHint svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.body {
+  grid-area: body;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.cardActions {
+  grid-area: actions;
+  min-width: 0;
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.code {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0.12em;
+  color: var(--bone);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.hintUrl {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* One line: a long list of names ends in an ellipsis rather than growing the
+   card. */
+.teams {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- The QR image (card and sheet). Scanners want dark-on-light: the QR
+   sits on a bone inset, like the Display's (design system 01 §5). ---- */
+.qrFrame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bone);
+}
+
+.qrSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.qrSvg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fallback {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--bg);
+}
+
+/* ---- Share invite / Copy link + WhatsApp ---- */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.action {
+  flex: 1 1 0;
+  min-width: max-content;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.action svg {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+@media (hover: hover) {
+  .action:hover {
+    text-decoration: none;
+  }
+}
+
+.fail {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--negative-text);
+}
+
+.failUrl {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ---- In-game header button ---- */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--bone);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trigger svg {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* ---- The sheet: the big QR for the room, the code, the address and the
+   share actions. ---- */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.sheet {
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sheetTitle {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .close:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+}
+
+.sheetQr {
+  display: flex;
+  justify-content: center;
+}
+
+/* As big as the sheet allows, but short of the screen's height so the code
+   and the buttons stay in view on a laptop. */
+.sheetQr .qrFrame {
+  width: min(100%, 400px, max(200px, 100dvh - 320px));
+  aspect-ratio: 1;
+  padding: 12px;
+}
+
+.sheetCode {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  color: var(--bone);
+}
+
+.sheetUrl {
+  margin: -0.25rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+/* ---- Phones ---- */
+@media (max-width: 600px) {
+  .card {
+    grid-template-areas:
+      "qr body"
+      "actions actions";
+    column-gap: 0.85rem;
+    row-gap: 0.6rem;
+    padding: 0.75rem;
+  }
+  .qrButton .qrFrame {
+    width: 104px;
+    height: 104px;
+    padding: 5px;
+  }
+  .code {
+    font-size: 1.75rem;
+  }
+  .hint,
+  .teams {
+    font-size: 0.8rem;
+  }
+  .action {
+    padding: 0 12px;
+  }
+}
+
+/* The in-game button keeps the header on one line on the narrowest phones by
+   dropping its word (the accessible name stays "Invite teams"). */
+@media (max-width: 400px) {
+  .trigger {
+    width: 40px;
+    padding: 0;
+  }
+  .triggerLabel {
+    display: none;
+  }
+}
