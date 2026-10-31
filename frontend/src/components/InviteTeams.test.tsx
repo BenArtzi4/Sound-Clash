@@ -10,11 +10,12 @@ vi.mock("../hooks/useQrSvg", () => qr);
 const tele = vi.hoisted(() => ({ trackEvent: vi.fn(), trackView: vi.fn() }));
 vi.mock("../lib/telemetry", () => tele);
 
-import { InviteButton, InviteCard, inviteText, whatsAppUrl } from "./InviteTeams";
+import { InviteButton, InviteCard } from "./InviteTeams";
 
 const ORIGIN = window.location.origin;
 const QR_URL = `${ORIGIN}/join/ABCDEF?src=host-qr`;
 const SHARE_URL = `${ORIGIN}/join/ABCDEF?src=host-share`;
+const MESSAGE = "Join my Sound Clash game! Game code: ABCDEF";
 
 function team(id: string, name: string): Team {
   return { id, game_code: "ABCDEF", name, score: 0, joined_at: "2026-10-31T18:00:00Z" };
@@ -25,7 +26,7 @@ function defineGlobal(target: object, key: string, value: unknown) {
 }
 
 // A phone: a coarse pointer and a share sheet.
-function asPhone(share: (data: ShareData) => Promise<void>) {
+function asPhone(share: (data: unknown) => Promise<void>) {
   defineGlobal(
     window,
     "matchMedia",
@@ -115,10 +116,10 @@ describe("InviteCard", () => {
     render(<InviteCard gameCode="ABCDEF" teams={[]} />);
 
     const link = screen.getByRole("link", { name: /whatsapp/i });
-    expect(link).toHaveAttribute("href", whatsAppUrl("ABCDEF", SHARE_URL));
     expect(link).toHaveAttribute("target", "_blank");
-    const text = new URL(link.getAttribute("href")!).searchParams.get("text");
-    expect(text).toBe(`${inviteText("ABCDEF")}\n${SHARE_URL}`);
+    const href = new URL(link.getAttribute("href")!);
+    expect(href.origin + href.pathname).toBe("https://wa.me/");
+    expect(href.searchParams.get("text")).toBe(`${MESSAGE}\n${SHARE_URL}`);
 
     fireEvent.click(link);
     expect(ctas()).toEqual(["invite_whatsapp"]);
@@ -153,18 +154,14 @@ describe("InviteCard", () => {
 
   describe("on a phone", () => {
     it("opens the share sheet with the message and the host-share link", async () => {
-      const share = vi.fn(async (_data: ShareData) => {});
+      const share = vi.fn(async (_data: unknown) => {});
       asPhone(share);
       render(<InviteCard gameCode="ABCDEF" teams={[]} />);
 
       fireEvent.click(screen.getByRole("button", { name: /share invite/i }));
 
       await waitFor(() =>
-        expect(share).toHaveBeenCalledWith({
-          title: "Sound Clash",
-          text: "Join my Sound Clash game! Game code: ABCDEF",
-          url: SHARE_URL,
-        }),
+        expect(share).toHaveBeenCalledWith({ title: "Sound Clash", text: MESSAGE, url: SHARE_URL }),
       );
       expect(ctas()).toEqual(["invite_share"]);
     });

@@ -28,13 +28,13 @@ function prefersNativeShare(): boolean {
   );
 }
 
-/** The message that goes out with the link. */
-export function inviteText(gameCode: string): string {
+// The message that goes out with the link.
+function inviteText(gameCode: string): string {
   return `Join my Sound Clash game! Game code: ${gameCode}`;
 }
 
-/** A WhatsApp "send to..." link with the message and the invite link. */
-export function whatsAppUrl(gameCode: string, shareUrl: string): string {
+// A WhatsApp "send to..." link with the message and the invite link.
+function whatsAppUrl(gameCode: string, shareUrl: string): string {
   return `https://wa.me/?text=${encodeURIComponent(`${inviteText(gameCode)}\n${shareUrl}`)}`;
 }
 
