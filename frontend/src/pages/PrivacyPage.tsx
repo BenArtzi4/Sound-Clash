@@ -88,8 +88,13 @@ export function PrivacyPage() {
               song.
             </li>
             <li>
-              When a song loads or plays, YouTube may collect data and set or read cookies or
-              similar data on that device, as described in the{" "}
+              The how-to-play video on the home page is a YouTube video too. Its poster image comes
+              from YouTube's image server when that part of the page loads, and YouTube's player
+              loads only when you tap play.
+            </li>
+            <li>
+              When a song or that video loads or plays, YouTube may collect data and set or read
+              cookies or similar data on the device it plays on, as described in the{" "}
               <a href={GOOGLE_PRIVACY_URL}>Google Privacy Policy</a>.
             </li>
             <li>

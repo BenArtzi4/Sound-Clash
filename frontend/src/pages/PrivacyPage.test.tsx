@@ -56,6 +56,10 @@ describe("PrivacyPage", () => {
     expect(section).toHaveTextContent("Sound Clash uses YouTube API Services");
     expect(section).toHaveTextContent("cookies");
     expect(section).toHaveTextContent("no YouTube or Google sign-in");
+    // Home's click-to-play video (PR #405): poster from YouTube's image
+    // server, the player only on tap.
+    expect(section).toHaveTextContent("poster image comes from YouTube's image server");
+    expect(section).toHaveTextContent("player loads only when you tap play");
   });
 
   it("gives a way to reach the maintainer", () => {

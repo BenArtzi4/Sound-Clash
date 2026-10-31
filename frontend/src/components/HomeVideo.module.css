@@ -1,0 +1,101 @@
+/* Home's click-to-play video (HomeVideo.tsx). A vertical 9:16 frame: 320 px
+   wide beside the steps on a wide screen, 280 px on a phone, so it never takes
+   a whole screen. YouTube's Required Minimum Functionality wants an embedded
+   player of at least 200 x 200 px with nothing drawn over it: the frame never
+   gets narrower than 200 px (and 9:16 is taller than wide), the iframe fills
+   it, the edge is an outline drawn outside it (as on the host's player), and
+   the caption sits below it. */
+
+.video {
+  margin: 0;
+  width: min(100%, 320px);
+  min-width: 200px;
+  justify-self: center;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  background: #000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  outline: 1px solid var(--border);
+}
+
+.facade {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  touch-action: manipulation;
+}
+/* The frame clips its corners, so the global focus ring (2 px outside the
+   control) would be cut off: draw it inside instead. */
+.facade:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.poster {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The play button: an orange disc with a black triangle, centred on the
+   poster. The icon set draws outlines; this one is filled. */
+.play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 32px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+}
+.play svg {
+  fill: currentColor;
+  /* The triangle's weight sits left of its box; nudge it to look centred. */
+  margin-left: 4px;
+}
+@media (hover: hover) {
+  .facade:hover .play {
+    background: var(--bone);
+  }
+}
+
+.player {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.caption {
+  text-align: center;
+  font-weight: 600;
+  color: var(--bone);
+}
+
+@media (max-width: 900px) {
+  .video {
+    width: min(100%, 280px);
+  }
+}

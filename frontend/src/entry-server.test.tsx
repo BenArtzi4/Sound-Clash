@@ -92,6 +92,22 @@ describe("render (build-time prerender)", () => {
     expect(html).toContain('href="/guess-the-song-with-friends"');
   });
 
+  // Crawlers and link previews see the video's poster and play button; the
+  // YouTube player itself only loads on a tap in the browser.
+  it("writes Home's video as a poster, never as a player", async () => {
+    const html = await serverHtml("/");
+    const doc = document.createElement("div");
+    doc.innerHTML = html;
+    const button = doc.querySelector("figure button");
+    expect(button?.getAttribute("aria-label")).toMatch(/^Play the video: how to play Sound Clash/);
+    const poster = button?.querySelector("img");
+    expect(poster?.getAttribute("src")).toBe("https://i.ytimg.com/vi/8jxJqUKC09o/oardefault.jpg");
+    expect(poster?.getAttribute("loading")).toBe("lazy");
+    expect(doc.querySelector("figcaption")?.textContent).toBe("How to play, in under a minute");
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("youtube-nocookie");
+  });
+
   it("re-exports the head and text builders the build script calls", () => {
     expect(structuredDataFor("/").length).toBeGreaterThan(0);
     expect(llmsTxt().startsWith("# Sound Clash")).toBe(true);
