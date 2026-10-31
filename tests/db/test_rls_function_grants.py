@@ -8,7 +8,9 @@ legacy un-tokenised overloads retired by migration 023), ``select_next_song``
 (as of migration 022), ``peek_next_song`` (the read-only prebuffer probe, as of
 migration 029), and ``extend_game`` (the "keep playing" TTL bump, as of
 migration 039). Each does its own in-function manager-token check before
-performing any work, so the function-level EXECUTE grant is safe. The remaining
+performing any work, so the function-level EXECUTE grant is safe. A seventh,
+``song_pool_counts`` (migration 052), takes no token: it is a read-only
+SECURITY INVOKER aggregate over catalog tables anon can already read. The remaining
 backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
 ``end_game``, ``cleanup_expired_games``, ``archive_game``,
 ``set_song_availability``, ``pick_next_song``, ``song_artist_keys`` -- must
@@ -405,6 +407,10 @@ async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) ->
             "extend_game",
             "p_game_code text, p_manager_token uuid",
         ),
+        # song_pool_counts: the create page's song count (migration 052). No
+        # arguments and no token: it only aggregates catalog rows anon can
+        # already read (SECURITY INVOKER).
+        ("song_pool_counts", ""),
     ],
 )
 async def test_anon_executable_rpc_grant_matrix(

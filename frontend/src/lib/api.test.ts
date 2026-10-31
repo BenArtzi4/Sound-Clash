@@ -16,6 +16,7 @@ import {
   getCachedGenres,
   listGenres,
   listSongs,
+  loadSongPool,
   rejoinTeam,
   updateSong,
 } from "./api";
@@ -28,10 +29,11 @@ const supabaseMocks = vi.hoisted(() => {
   const order = vi.fn();
   const select = vi.fn(() => ({ order }));
   const from = vi.fn(() => ({ select }));
-  return { order, select, from };
+  const rpc = vi.fn();
+  return { order, select, from, rpc };
 });
 vi.mock("./supabase", () => ({
-  supabase: { from: supabaseMocks.from },
+  supabase: { from: supabaseMocks.from, rpc: supabaseMocks.rpc },
 }));
 
 const fetchMock = vi.fn();
@@ -42,6 +44,7 @@ beforeEach(() => {
   supabaseMocks.from.mockClear();
   supabaseMocks.select.mockClear();
   supabaseMocks.order.mockReset();
+  supabaseMocks.rpc.mockReset();
   __resetListGenresCacheForTests();
 });
 
@@ -127,6 +130,32 @@ describe("api - public routes", () => {
     const res = await listGenres();
     expect(res).toHaveLength(1);
     expect(supabaseMocks.order).toHaveBeenCalledTimes(2);
+  });
+
+  it("loadSongPool reads song_pool_counts() from Supabase once per session", async () => {
+    const cells = [{ decade: 1980, genre_ids: ["g1"], song_count: 3 }];
+    supabaseMocks.rpc.mockResolvedValueOnce({ data: cells, error: null });
+    const [a, b] = await Promise.all([loadSongPool(), loadSongPool()]);
+    expect(a).toEqual(cells);
+    expect(b).toBe(a);
+    expect(await loadSongPool()).toBe(a);
+    expect(supabaseMocks.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseMocks.rpc).toHaveBeenCalledWith("song_pool_counts");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("loadSongPool resolves null on an error or a throw, and tries again next time", async () => {
+    // e.g. PGRST202 before migration 052 is on the database.
+    supabaseMocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "Could not find the function", code: "PGRST202" },
+    });
+    expect(await loadSongPool()).toBeNull();
+    supabaseMocks.rpc.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    expect(await loadSongPool()).toBeNull();
+    supabaseMocks.rpc.mockResolvedValueOnce({ data: [], error: null });
+    expect(await loadSongPool()).toEqual([]);
+    expect(supabaseMocks.rpc).toHaveBeenCalledTimes(3);
   });
 
   it("joinTeam POSTs name to the right URL", async () => {

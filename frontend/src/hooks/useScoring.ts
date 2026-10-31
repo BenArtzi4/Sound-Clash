@@ -207,6 +207,17 @@ export function useScoring(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoundSongId, currentSong?.id, playerReady]);
 
+  // no_more_songs before round 1 means the game's mix never had a song (the
+  // create page now blocks that, issue #375, but a game made before it, or
+  // while the counts were unavailable, can still get here). "All played" is
+  // only true once a round has been played.
+  function noMoreSongsMessage(): string {
+    if ((state?.game.round_number ?? 0) === 0) {
+      return "No songs match this game's genres and decades. Start a new game with more genres or Any year.";
+    }
+    return "All songs in your selected genres have been played. End the game or start a new one with more genres.";
+  }
+
   function reportError(err: unknown) {
     if (err instanceof ApiError) {
       const reason =
@@ -214,10 +225,7 @@ export function useScoring(
           ? (err.details as { reason?: unknown }).reason
           : undefined;
       if (err.status === 409 && reason === "no_more_songs") {
-        toast(
-          "All songs in your selected genres have been played. End the game or start a new one with more genres.",
-          { variant: "error" },
-        );
+        toast(noMoreSongsMessage(), { variant: "error" });
         return;
       }
     }
@@ -238,10 +246,7 @@ export function useScoring(
       // above so the manager sees the same wording regardless of which path
       // surfaced it.
       if (err.message === "no_more_songs") {
-        toast(
-          "All songs in your selected genres have been played. End the game or start a new one with more genres.",
-          { variant: "error" },
-        );
+        toast(noMoreSongsMessage(), { variant: "error" });
         return;
       }
       log("error", "manager_rpc_failed", { message: err.message });

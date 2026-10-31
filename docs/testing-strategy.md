@@ -48,7 +48,7 @@ The full Playwright suite (`e2e.yml`) runs unconditionally on every **push to `m
 - `main` is still continuously exercised end-to-end: the push-to-`main` run means a frontend/buzz-path regression that slipped through an unlabeled PR is caught at the merge run, not in production.
 
 **When to apply the `run-e2e` label (and `run-stress` where relevant):**
-- Any PR touching `frontend/**`, the buzzer hot path, the browser-direct RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`), or the Realtime wire format.
+- Any PR touching `frontend/**`, the buzzer hot path, the browser-direct RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`, `song_pool_counts`), or the Realtime wire format.
 - Any PR touching `db/migrations/**` (also add `run-stress`, so CI replays the whole migration set twice — `backend.yml` does not fire on migrations-only changes).
 - Any change to the manager/team/display page flows or the YouTube player.
 - Pre-release / cutover verification.
@@ -95,7 +95,8 @@ The RLS tests (`test_rls_anon.py`, `test_rls_function_grants.py`) authenticate t
 | `test_cleanup_expired_games.py` | manually set `expires_at` to past; invoke `cleanup_expired_games()`; verify cascade to teams + rounds | P0 |
 | `test_extend_game.py` | +1h bump semantics (incl. the GREATEST branch for overdue games); repeat calls stack; lobby extendable; token validation (wrong/null); game_not_found / game_ended | P1 |
 | `test_rls_anon.py` | as `anon` role: SELECT works, INSERT/UPDATE/DELETE rejected on every table | P0 |
-| `test_rls_function_grants.py` | as `anon`: EXECUTE on the six browser-callable RPCs works (buzz_in + the five token-gated ones); EXECUTE on backend-only RPCs rejected | P0 |
+| `test_rls_function_grants.py` | as `anon`: EXECUTE on the seven browser-callable RPCs works (buzz_in, the five token-gated ones, song_pool_counts); EXECUTE on backend-only RPCs rejected | P0 |
+| `test_song_pool_counts.py` | rows grouped by (decade, genre set), dead videos and genre-less songs left out; the create page's sum equals the songs `select_next_song` serves before `no_more_songs` for a dozen mixes (multi-genre, unknown year, pre-1960, empty); anon can call it; SECURITY INVOKER + STABLE | P1 |
 | `test_migrations_idempotent.py` | run all migrations twice; second run is no-op | P1 |
 | `test_schema_constraints.py` | duplicate game_code rejected; duplicate (game_code,name) rejected; FK cascades | P1 |
 | `test_pg_cron_registered.py` | `SELECT * FROM cron.job WHERE jobname = 'cleanup-expired-games'` returns 1 row | P1 |
