@@ -1,12 +1,15 @@
 import { Link } from "react-router-dom";
 import { HOME_ABOUT, HOME_FAQ } from "../seo/homeContent";
+import { HomeVideo } from "./HomeVideo";
 import { ArrowRightIcon } from "./icons";
 import styles from "./HomeAbout.module.css";
 
 // The part of Home below its first screen: what the game is, in words a search
 // engine can match ("guess the song", "music quiz"), and the questions people
 // ask before they host. HomePage renders it after its full-height page, so the
-// first screen (wordmark, headline, role cards) is unchanged.
+// first screen (wordmark, headline, role cards) is unchanged. On a wide screen
+// the how-to-play video stands beside the steps and the questions run below
+// both; on a phone it is one column in this order.
 export function HomeAbout() {
   return (
     <section className={styles.about} aria-labelledby="home-about">
@@ -28,7 +31,9 @@ export function HomeAbout() {
         </p>
       </div>
 
-      <div className={styles.block}>
+      <HomeVideo />
+
+      <div className={`${styles.block} ${styles.questions}`}>
         <h2 className={styles.heading}>Questions</h2>
         <div className={styles.faq}>
           {HOME_FAQ.map(({ question, answer }) => (
