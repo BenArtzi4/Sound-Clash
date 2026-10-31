@@ -8,7 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
-- 2026-11-01: **A how-to-play video on the home page.** Scroll past the home screen and a 52-second video beside the three steps shows one whole game, from creating it to crowning the winner. It loads from YouTube only when you tap play; the home screen itself is unchanged. (#TBD)
+- 2026-11-01: **A how-to-play video on the home page.** Scroll past the home screen and a 52-second video beside the three steps shows one whole game, from creating it to crowning the winner. It loads from YouTube only when you tap play; the home screen itself is unchanged. (#405)
 - 2026-10-31: **The host can invite teams from their own screen.** Before the game starts, the host console shows the join QR (tap it to make it big for the room), the game code, which teams have joined, and **Share invite** (**Copy link** on a laptop) plus a **WhatsApp** link; on a phone, **Start game** sits right under it. During the game an **Invite** button next to the code brings the same QR and links back for a late team. A host without a TV, or before the TV is set up, no longer has to read the code out. (#403)
 - 2026-10-31: **The Host a game page shows how many songs the mix holds.** As the host picks genres and decades, a line next to Create game says "312 songs in this mix", and below 20 songs it says how many rounds the mix covers. (#402)
 - 2026-10-30: **A privacy page** (`/privacy`, linked from every page's footer): what the game stores while you play and for how long, what stays on your device, the anonymous usage and error data, every service that handles it, and an address for questions. (#399)
