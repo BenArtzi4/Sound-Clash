@@ -266,7 +266,7 @@ panels.append(timeseries(
     "Song-start latency by preloaded (game.song_start)",
     [tempo_target('{ name = "game.song_start" } | quantile_over_time(duration, .5, .95) by (span.preloaded)')],
     gridpos(0, y, 12, 8), TEMPO, unit="s",
-    desc="Next-song click -> audio playing, grouped by whether the next YouTube video was prebuffered (span.preloaded true/false). This quantifies the prebuffer win.",
+    desc="Next-song click -> audio playing, grouped by whether the next YouTube video was prebuffered (span.preloaded true/false). The hidden prebuffer player was removed on 2026-10-31 (YouTube's embed rules), so every start since is preloaded=false; true is the old warm start.",
     legend_table=True))
 panels.append(timeseries(
     "Song-start stage breakdown (p95)",

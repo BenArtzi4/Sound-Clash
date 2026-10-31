@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { failedVideoContext } from "./useSongPrebuffer";
+import { failedVideoContext } from "./useHostPlayer";
 
 const live = { id: "song-1", title: "First", artist: "A", youtube_id: "vid1aaaaaaa" };
 const next = { id: "song-2", title: "Second", artist: "B", youtube_id: "vid2bbbbbbb" };
@@ -14,6 +14,14 @@ describe("failedVideoContext", () => {
       song_id: "song-2",
       title: "Second",
       artist: "B",
+    });
+  });
+
+  it("takes a text code for a load YouTube failed without an error code", () => {
+    expect(failedVideoContext("ABCDEF", "no_bytes", "vid1aaaaaaa", [live])).toMatchObject({
+      code: "no_bytes",
+      youtube_id: "vid1aaaaaaa",
+      song_id: "song-1",
     });
   });
 

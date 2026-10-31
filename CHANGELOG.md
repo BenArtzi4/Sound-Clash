@@ -56,6 +56,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-10-31: **The host's video now follows YouTube's rules for embedded players.** The back / pause / forward buttons moved off the picture into a bar under the video (a column beside it on a short phone), the video is never smaller than 200 × 200 pixels (on a narrow phone it gets black bars instead of shrinking), and the console no longer loads the next song in a hidden second player, so a new song starts loading when the host taps Next round. A song YouTube fails to load is now retried once on its own. (#401)
 - 2026-10-31: The decade choice on the Host a game page now starts on **Any year**, so a new host can see they don't have to pick decades. Picking a decade turns it off; tapping Any year clears the decades. Games with no decade picked already played every year, songs from before the 60s included. (#402)
 - 2026-10-29: The site now says **"Sound Clash shows no ads"** instead of a flat "no ads" in the footer, Home's questions and the guide pages, because YouTube can show its own ads in the song player when a song's owner turns them on. (#394)
 - 2026-10-29: **The final results fit the big screen.** The podium and the leaderboard now fit on one screen at every size, with the leaderboard beside the podium on a landscape TV. Before, a 1366×768 or 1280×720 laptop showed no leaderboard rows at all, a 1080p TV cut off the bottom, and a phone showed only the heading. The players' phones keep their own final screen. (#392)

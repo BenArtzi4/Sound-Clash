@@ -203,9 +203,10 @@ export async function tracedFetch<T extends Response>(
 export interface SongStartHandle {
   /**
    * Call when select_next_song resolves; supplies the round/song identity.
-   * `preloaded` records whether this round's video was prebuffered into the
-   * standby player (the double-buffer preload) — it segments the
-   * load_to_playing p50/p95 into cold vs warm starts in Tempo.
+   * `preloaded` records whether this round's video was prebuffered into a
+   * hidden standby player. That double buffer was removed on 2026-10-31
+   * (YouTube's embed rules), so the console always sends false now; older
+   * spans with true are the warm starts it used to give.
    */
   rpcDone(info: {
     roundNumber?: number;
