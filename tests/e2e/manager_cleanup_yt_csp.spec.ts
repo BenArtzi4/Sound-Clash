@@ -1,5 +1,8 @@
 // Verifies the fixes shipped on branch fix/manager-cleanup-yt-csp:
-//   #1 Manager screen has no "Invite Players" section.
+//   #1 (reversed 2026-10-31) The old "Invite Players" panel was removed here
+//      as clutter; the host's invite came back on purpose as the lobby card
+//      + in-game Invite button (InviteTeams.tsx), so this now checks it is
+//      there before Start.
 //   #2 Manager screen has no per-team Kick button.
 //   #3 Post-buzz countdown bar replaces the old pre-buzz round timer.
 //   #4 Manager screen has no countdown bar (timer lives on the display only;
@@ -20,7 +23,9 @@ import { joinAsTeam } from "./fixtures/team-context";
 import { openManagerAndCreateGame } from "./fixtures/manager-context";
 
 test.describe("manager-cleanup-yt-csp branch", () => {
-  test("manager screen has no Invite Players panel and no Kick button", async ({ browser }) => {
+  test("manager screen shows the invite before Start and has no Kick button", async ({
+    browser,
+  }) => {
     const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
     const team = await joinAsTeam(browser, manager.gameCode, "Solo");
 
@@ -31,14 +36,14 @@ test.describe("manager-cleanup-yt-csp branch", () => {
     // the team name to appear.
     await expect(manager.page.getByTestId("start-round")).toBeVisible({ timeout: 10_000 });
 
-    // #1: no "Invite Players" heading anywhere.
-    await expect(
-      manager.page.getByRole("heading", { name: /invite players/i }),
-    ).toHaveCount(0);
-
-    // The manager page also no longer renders a QR code (DisplayPage still
-    // does, hence the page-scoped check rather than a global one).
-    await expect(manager.page.locator("svg[role='img'][aria-label*='QR']")).toHaveCount(0);
+    // #1: the host's invite card (QR + code + share) is on the console before
+    // Start, and it already lists the team that joined.
+    const invite = manager.page.getByTestId("invite-teams");
+    await expect(invite).toBeVisible();
+    await expect(invite.getByText(manager.gameCode)).toBeVisible();
+    await expect(invite.getByTestId("invite-teams-line")).toHaveText("1 team in: Solo", {
+      timeout: 10_000,
+    });
 
     // #2: no Kick button on the team row.
     await expect(manager.page.getByTestId("kick-team")).toHaveCount(0);

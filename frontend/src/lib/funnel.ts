@@ -13,8 +13,22 @@ import { trackEvent, trackView } from "./telemetry";
 
 // `qr` is a bare flag (`/join/ABCDEF?qr`) because the Display's QR encodes it:
 // three characters keep the URL inside the same QR version, so the code on the
-// TV does not get denser. Anything else on the URL (`?cb=`, `#rt=`) is kept.
+// TV does not get denser. The host console's invite uses `?src=` instead (see
+// hostInviteUrl). Anything else on the URL (`?cb=`, `#rt=`) is kept.
 const TAG_PARAMS = ["ref", "src", "qr", "utm_source", "utm_medium", "utm_campaign", "utm_content"];
+
+/**
+ * Where a host's invite link came from: the QR on the host's console
+ * (`host-qr`) or a link the host shared or copied (`host-share`).
+ */
+export type HostInviteSource = "host-qr" | "host-share";
+
+export type JoinSource = "qr" | HostInviteSource | "link" | "typed";
+
+// The landing `src` values that name how a team reached /join/<CODE>.
+function isJoinTag(src: string): src is "qr" | HostInviteSource {
+  return src === "qr" || src === "host-qr" || src === "host-share";
+}
 
 const HOSTED_KEY = "sound-clash:hosted-before";
 
@@ -137,11 +151,21 @@ export function trackCta(id: string): void {
 }
 
 /**
- * How a team reached the join form: `qr` (the Display's QR code), `link`
- * (any other /join/<CODE> link) or `typed` (the code typed on /join).
+ * The join link the host console hands out: the QR on the console encodes
+ * `?src=host-qr`, Share / Copy / WhatsApp send `?src=host-share`.
+ * captureLanding reads the tag and takes it off the address bar.
  */
-export function joinSource(codeInUrl: boolean): "qr" | "link" | "typed" {
-  if (landing?.src === "qr" && landing.view === "/join/*") return "qr";
+export function hostInviteUrl(origin: string, gameCode: string, via: HostInviteSource): string {
+  return `${origin}/join/${gameCode}?src=${via}`;
+}
+
+/**
+ * How a team reached the join form: `qr` (the Display's QR code), `host-qr`
+ * (the QR on the host's console), `host-share` (a link the host shared),
+ * `link` (any other /join/<CODE> link) or `typed` (the code typed on /join).
+ */
+export function joinSource(codeInUrl: boolean): JoinSource {
+  if (landing?.view === "/join/*" && isJoinTag(landing.src)) return landing.src;
   return codeInUrl ? "link" : "typed";
 }
 

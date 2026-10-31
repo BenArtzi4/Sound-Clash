@@ -7,6 +7,7 @@ import {
   _resetFunnel,
   captureLanding,
   getLanding,
+  hostInviteUrl,
   joinSource,
   trackCta,
   trackGameCreated,
@@ -113,6 +114,41 @@ describe("joinSource", () => {
     visit("/join/ABCDEF?qr");
     captureLanding();
     expect(joinSource(true)).toBe("qr");
+  });
+
+  it("tells the host console's QR and shared links from the Display's QR", () => {
+    visit(hostInviteUrl("", "ABCDEF", "host-qr"));
+    captureLanding();
+    expect(joinSource(true)).toBe("host-qr");
+    // The tag comes off the address bar like the others.
+    expect(window.location.search).toBe("");
+
+    _resetFunnel();
+    visit(hostInviteUrl("", "ABCDEF", "host-share"));
+    captureLanding();
+    expect(joinSource(true)).toBe("host-share");
+    trackTeamJoined(true);
+    expect(tele.trackEvent).toHaveBeenLastCalledWith("team_joined", { source: "host-share" });
+  });
+
+  it("counts a host tag only on a join page, and any other src as a plain link", () => {
+    visit("/?src=host-qr");
+    captureLanding();
+    expect(joinSource(false)).toBe("typed");
+
+    _resetFunnel();
+    visit("/join/ABCDEF?src=newsletter");
+    captureLanding();
+    expect(joinSource(true)).toBe("link");
+  });
+
+  it("builds the host's invite links", () => {
+    expect(hostInviteUrl("https://www.soundclash.org", "ABCDEF", "host-qr")).toBe(
+      "https://www.soundclash.org/join/ABCDEF?src=host-qr",
+    );
+    expect(hostInviteUrl("https://www.soundclash.org", "ABCDEF", "host-share")).toBe(
+      "https://www.soundclash.org/join/ABCDEF?src=host-share",
+    );
   });
 
   it("tells a shared link from a typed code", () => {

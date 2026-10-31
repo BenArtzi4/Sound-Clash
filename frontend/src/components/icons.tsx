@@ -147,6 +147,12 @@ export const ShareIcon = (p: IconProps) => (
     <path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7" />
   </Icon>
 );
+// A speech bubble: the host's "send the invite on WhatsApp" link.
+export const ChatIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-9l-5 4v-4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+  </Icon>
+);
 export const CopyIcon = (p: IconProps) => (
   <Icon {...p}>
     <rect x="8" y="8" width="12" height="12" rx="2" />
