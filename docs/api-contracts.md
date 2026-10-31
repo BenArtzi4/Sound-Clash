@@ -55,6 +55,8 @@ Validation:
 
 Games run for as many rounds as the host wants and end only when the host calls `POST /games/{code}/end`. There is no per-game round limit.
 
+**Test games (mig 051).** The game is flagged as a test (`game_secrets.is_test`, copied to `game_history.is_test`) when the request's `User-Agent` contains `Headless` or doesn't start with `Mozilla/`, or when it sends the optional header `X-Sound-Clash-Test: 1` (allowed by CORS; the create page sends it when opened as `/manager/create?test=1`). The response is the same either way; the flag only keeps test runs out of anything counted from game history.
+
 **Response 201**:
 ```json
 {
