@@ -10,6 +10,7 @@ Spec: docs/rpc-functions.md, docs/data-model.md.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import asyncpg
 import pytest
@@ -217,3 +218,66 @@ async def test_archive_null_song_round_placeholder(db: asyncpg.Connection) -> No
     assert songs[1]["song_id"] is None
     assert songs[1]["song_title"] == "(deleted song)"  # placeholder for NOT NULL column
     assert songs[1]["youtube_id"] == ""
+
+
+# --- Test-game flag (migration 051) -----------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_archive_copies_the_test_flag(db: asyncpg.Connection) -> None:
+    real = await create_test_game(db, status="playing")
+    test = await create_test_game(db, status="playing")
+    await db.execute("UPDATE game_secrets SET is_test = true WHERE game_code = $1", test)
+    song = await create_test_song(db, title="Flag Song", artist="Flag Artist", youtube_id="fffffffffff")
+    await _insert_round(db, real, 1, song)
+    await _insert_round(db, test, 1, song)
+
+    real_id = await db.fetchval("SELECT archive_game($1)", real)
+    test_id = await db.fetchval("SELECT archive_game($1)", test)
+
+    assert await db.fetchval("SELECT is_test FROM game_history WHERE id = $1", real_id) is False
+    assert await db.fetchval("SELECT is_test FROM game_history WHERE id = $1", test_id) is True
+
+
+@pytest.mark.asyncio
+async def test_mark_game_test_flags_live_and_archived_rows(db: asyncpg.Connection) -> None:
+    code = await create_test_game(db, status="playing")
+    song = await create_test_song(db, title="Mark Song", artist="Mark Artist", youtube_id="mmmmmmmmmmm")
+    await _insert_round(db, code, 1, song)
+    history_id = await db.fetchval("SELECT archive_game($1)", code)
+
+    flagged = await db.fetchval("SELECT mark_game_test($1)", code)
+
+    assert flagged == 2  # the live secret and the archived row
+    assert await db.fetchval("SELECT is_test FROM game_secrets WHERE game_code = $1", code) is True
+    assert await db.fetchval("SELECT is_test FROM game_history WHERE id = $1", history_id) is True
+
+
+@pytest.mark.asyncio
+async def test_mark_game_test_can_target_one_start_instant(db: asyncpg.Connection) -> None:
+    code = await create_test_game(db, status="playing")
+    song = await create_test_song(db, title="Pin Song", artist="Pin Artist", youtube_id="ppppppppppp")
+    await _insert_round(db, code, 1, song)
+    history_id = await db.fetchval("SELECT archive_game($1)", code)
+    other = datetime(2001, 1, 1, tzinfo=UTC)
+
+    assert await db.fetchval("SELECT mark_game_test($1, $2::timestamptz)", code, other) == 0
+    assert await db.fetchval("SELECT is_test FROM game_history WHERE id = $1", history_id) is False
+
+
+@pytest.mark.asyncio
+async def test_test_flag_functions_are_not_anon_callable(db: asyncpg.Connection) -> None:
+    for fn in ("archive_game(text)", "mark_game_test(text, timestamp with time zone)"):
+        assert await db.fetchval("SELECT has_function_privilege('anon', $1, 'EXECUTE')", fn) is False
+    assert (
+        await db.fetchval(
+            "SELECT has_column_privilege('service_role', 'game_secrets', 'is_test', 'UPDATE')"
+        )
+        is True
+    )
+    assert (
+        await db.fetchval(
+            "SELECT has_column_privilege('service_role', 'game_secrets', 'manager_token', 'UPDATE')"
+        )
+        is False
+    )

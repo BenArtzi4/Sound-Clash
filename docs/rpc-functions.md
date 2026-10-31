@@ -686,6 +686,8 @@ async def test_cleanup_deletes_expired(db):
 
 ## 5a. `archive_game`: snapshot a finished game into durable history
 
+> **Migration 051** redefines it with one addition: it reads `game_secrets.is_test` (false when the row predates 051) and writes it to `game_history.is_test`. The body below is otherwise current. See §5b for `mark_game_test`.
+
 Added in migration 033. Internal-only (no HTTP caller, not exposed to anon): invoked by `end_game` (§4) and `cleanup_expired_games` (§5). Copies a game's metadata, teams + final scores, and the ordered, **denormalized** song list into the durable `game_history*` tables so a finished game survives the 4h sweep. The denormalized `song_title`/`song_artist`/`youtube_id` are the canonical record — they don't change if the catalog song is later edited or deleted (the soft `song_id` FK then goes NULL via `ON DELETE SET NULL`).
 
 ```sql
@@ -759,6 +761,10 @@ Idempotent on `(game_code, started_at)` — the existence check short-circuits a
 - `end_game` (§4) — before flipping status to `ended`.
 - `cleanup_expired_games` (§5) — for every expiring game, before the delete.
 
+
+## 5b. `mark_game_test`: flag a test game after the fact (service-role only)
+
+Migration 051. `mark_game_test(p_game_code text, p_started_at timestamptz DEFAULT NULL) RETURNS integer`. Sets `is_test = true` on the live `game_secrets` row (so the later archive copies it) and on any `game_history` row with that code, narrowed to one start instant when `p_started_at` is given (codes recycle after the TTL). Returns how many rows it flagged. `SECURITY DEFINER`, EXECUTE revoked from `anon`/`authenticated`, granted to `service_role`. No HTTP caller: run it from the Supabase SQL editor or `supabase db query --linked` for a test game that `POST /games` didn't catch.
 ## 5b. `set_song_availability`: persist dead-video scan verdicts
 
 Added in migration 045 (I-Liveness Phase 2, issue #248). Service-role only — called by

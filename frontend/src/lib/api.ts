@@ -41,6 +41,9 @@ interface RequestOptions {
   // button forever. 45s sits above the ~30s cold-start ceiling so it never
   // aborts a legitimate wake. All other calls stay untimed.
   timeoutMs?: number;
+  // Marks the request as a test run (X-Sound-Clash-Test: 1), so a game created
+  // from a real browser during a check never counts as a real game (mig 051).
+  testRun?: boolean;
 }
 
 // Collapse per-request identifiers (game codes, team/song ids, query strings)
@@ -66,6 +69,9 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
   }
   if (opts.adminPassword) {
     headers["X-Admin-Password"] = opts.adminPassword;
+  }
+  if (opts.testRun) {
+    headers["X-Sound-Clash-Test"] = "1";
   }
 
   let body: BodyInit | undefined;
@@ -232,11 +238,14 @@ export function getTeamRejoinToken(
   });
 }
 
-export function createGame(body: {
-  selected_genres: string[];
-  selected_decades: number[];
-}): Promise<CreateGameResponse> {
-  return request("POST", "/games", { body, timeoutMs: 45000 });
+export function createGame(
+  body: {
+    selected_genres: string[];
+    selected_decades: number[];
+  },
+  opts: { testRun?: boolean } = {},
+): Promise<CreateGameResponse> {
+  return request("POST", "/games", { body, timeoutMs: 45000, testRun: opts.testRun });
 }
 
 export function awardBonus(

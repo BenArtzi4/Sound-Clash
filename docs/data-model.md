@@ -90,7 +90,8 @@ CREATE TABLE active_games (
 -- DEFINER RPCs (as owner) and the service-role backend read it.
 CREATE TABLE game_secrets (
   game_code     text PRIMARY KEY REFERENCES active_games(game_code) ON DELETE CASCADE,
-  manager_token uuid NOT NULL DEFAULT gen_random_uuid()
+  manager_token uuid NOT NULL DEFAULT gen_random_uuid(),
+  is_test       boolean NOT NULL DEFAULT false  -- mig 051: created by a harness or a marked check
 );
 
 CREATE TABLE game_teams (
@@ -154,6 +155,7 @@ CREATE TABLE game_history (
   selected_decades  integer[] NOT NULL DEFAULT '{}',
   team_count        integer NOT NULL DEFAULT 0,
   archived_at       timestamptz NOT NULL DEFAULT now(),
+  is_test           boolean NOT NULL DEFAULT false,    -- mig 051: copied from game_secrets.is_test
   UNIQUE (game_code, started_at)                       -- idempotency key (game_code recycles over time)
 );
 
@@ -324,6 +326,10 @@ These two columns implement the buzzer lock. Both are NULL when no team holds th
 
 Migration 011 had `buzz_in` mirror the winning team onto `game_rounds.buzzed_team_id` so the since-retired `award_points` could credit the score by reading it back. `award_points` was replaced by `award_attempt` (mig 016), which reads the lock off `active_games` instead, so nothing has read this column since. Migration 035 dropped the mirror-write from `buzz_in` — it was pure Realtime waste (`game_rounds` is published with REPLICA IDENTITY FULL, so the write fanned a no-op `ROUND_CHANGE` out to every client on **every buzz**). The column is retained as a nullable field (no destructive schema change) but is now always NULL in the running system; the only remaining reference is the frontend `roundEqual()` comparison, which is inert against a perpetually-NULL value.
 
+### `game_secrets.is_test` / `game_history.is_test`
+
+Migration 051. True for a game created by one of our own test runs, so durable history (and anything counted from it) holds real play only. `POST /games` sets it when the request's `User-Agent` contains `Headless` or doesn't start with `Mozilla/` (harnesses: headless Chromium, Node `fetch`, curl, httpx), or when it carries `X-Sound-Clash-Test: 1` (the create page sends it when opened with `?test=1`, for a check in a real browser). The service role holds a **column-level** `UPDATE (is_test)` grant on `game_secrets`, nothing else, so it still cannot rewrite `manager_token`. `archive_game` copies the flag into `game_history.is_test`; `mark_game_test(code[, started_at])` (service role) flags one that slipped through. Rows archived before 051 default to `false` and are not backfilled: a **real game** for any count is `NOT is_test AND team_count >= 2 AND round_count >= 5`, counted from the day 051 shipped.
+
 ### `game_secrets.manager_token`
 
 Per-game uuid, the host's credential. **Lives in `game_secrets`, not `active_games`** (migration 034): `active_games` is anon-readable and in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate — any player who knew the 6-char code could hijack the game. `game_secrets` has no anon read policy, no base grant, and is **not** in the publication, so anon can never see it.
@@ -374,7 +380,7 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | `extend_game(p_game_code, p_manager_token)` | Push `expires_at` out by 1h ("Keep playing +1h") | Browser via PostgREST (`manager_token`) |
 | `song_pool_counts()` | Read-only: playable songs per (decade, genre set), for the create page's "N songs in this mix" | Browser via PostgREST (anon, no token) |
 | `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | Internal (called by `select_next_song`) |
-| `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal (called by `select_next_song`) |
+| `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal; nothing calls it today (`start_round` closes the prior round itself) |
 | `award_bonus(p_game_code, p_team_id, p_points DEFAULT 4)` | Host-discretion bonus to a team | FastAPI |
 | `end_game(p_game_code)` | Archive, then mark game ended | FastAPI |
 | `cleanup_expired_games()` | Archive expiring games, then TTL-sweep | pg_cron |
@@ -422,7 +428,8 @@ db/migrations/
 ├── 046_team_secrets.sql        -- per-team rejoin_token in an anon-invisible team_secrets table (host-only team reconnect, issue #183); mirrors game_secrets' isolation
 │   … 047: uniform-per-song pick; 048: balanced genre turns via the internal pick_next_song helper
 ├── 049_song_spacing.sql        -- songs.artist_keys generated column + pick_next_song: no genre twice in a row, no artist again within 8 rounds, artists heard less preferred
-│   … 050: select/peek_next_song also return release_year
+│   … 050: release_year in select_next_song / peek_next_song rows
+├── 051_test_game_flag.sql      -- game_secrets.is_test + game_history.is_test, archive_game copies it, mark_game_test fix-up
 └── 052_song_pool_counts.sql    -- read-only song_pool_counts(): playable songs per (decade, genre set), so the create page counts any mix and blocks an empty one (#375)
 ```
 
