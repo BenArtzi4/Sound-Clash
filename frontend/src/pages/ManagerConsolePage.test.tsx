@@ -75,6 +75,9 @@ vi.mock("../lib/telemetry", () => ({
   recordFanout: vi.fn(),
   resolveBuzzE2E: vi.fn(),
   resolveScoreE2E: vi.fn(),
+  // The invite's clicks go through lib/funnel's trackCta.
+  trackEvent: vi.fn(),
+  trackView: vi.fn(),
 }));
 
 interface MockHandle {
@@ -287,6 +290,36 @@ describe("ManagerConsolePage", () => {
     });
     expect(screen.getAllByText("ABCDEF").length).toBeGreaterThan(0);
     expect(screen.getByText(/round 0$/i)).toBeInTheDocument();
+  });
+
+  it("shows the invite card before the game and an Invite button during it", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [makeTeam({ id: "t1", name: "Team 1" })],
+      rounds: [],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    const card = screen.getByTestId("invite-teams");
+    expect(within(card).getByText("ABCDEF")).toBeInTheDocument();
+    expect(within(card).getByTestId("invite-teams-line")).toHaveTextContent("1 team in: Team 1");
+    expect(screen.queryByTestId("invite-open")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireGame(
+        makePayload<ActiveGame>("active_games", "UPDATE", {
+          new: makeActiveGame({ status: "playing", round_number: 1 }),
+        }),
+      );
+    });
+
+    expect(screen.queryByTestId("invite-teams")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Invite teams" }));
+    const sheet = await screen.findByRole("dialog", { name: "Scan to join" });
+    expect(within(sheet).getByText("ABCDEF")).toBeInTheDocument();
   });
 
   function setVisibility(vis: "visible" | "hidden"): void {

@@ -21,6 +21,14 @@
   box-shadow: none;
 }
 
+/* The code plus, during the game, the Invite button beside it. */
+.codeGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
 .codeBlock {
   display: flex;
   flex-direction: column;
@@ -618,6 +626,9 @@
   .code {
     font-size: 1.3rem;
   }
+  .codeGroup {
+    gap: 0.6rem;
+  }
   /* Backup-host link + "Reconnect a team" collapse onto one quiet row instead
      of stacking, reclaiming a line above the player. */
   .hostTools {
@@ -742,5 +753,56 @@
   .endGameFooter {
     margin-top: 0.4rem;
     padding-top: 0.3rem;
+  }
+}
+
+/* ============================================================================
+   Laptop fit (issue #370)
+
+   One column put a full-width 16:9 player over the whole first screen of a
+   laptop (y 226-873 at 1280x800), so Start game, the buzz status and the
+   score buttons all sat below the fold. From 1024px wide the console is two
+   columns: the round card (status, score buttons, Continue / Next round) on
+   the right, starting right under the header; the video on the left with the
+   invite card above it before the game, and the host tools and End game
+   under it.
+
+   .column's children stay in their phone order in the DOM; `order` moves the
+   host tools and End game under the video here. The card spans every row, so
+   the last (1fr) row takes up whatever height the card has over the left
+   side. Both player layers keep rendering (the standby's media pipeline needs
+   it); the stack is just narrower.
+
+   The card gets the wider column: measured 2026-10-31, "Correct Artist" needs
+   a 129px button to stay on one line, and 1 : 1.25 gives the buttons 137px at
+   the full 1200px console width (every laptop from 1200px wide) while the
+   video stays at least 423x238 down to 1024px wide.
+   ============================================================================ */
+@media (min-width: 1024px) {
+  .column {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: 1.5rem;
+    row-gap: 1rem;
+    align-items: start;
+  }
+  .column > * {
+    grid-column: 1;
+  }
+  .column > .card {
+    grid-column: 2;
+    grid-row: 1 / -1;
+  }
+  .hostTools {
+    order: 1;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .endGameFooter {
+    order: 2;
+    margin-top: 0;
   }
 }

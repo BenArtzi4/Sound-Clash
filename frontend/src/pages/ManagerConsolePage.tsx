@@ -4,6 +4,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EndScreen } from "../components/EndScreen";
 import { ExpiryCountdown } from "../components/ExpiryCountdown";
 import { HostRecoveryLink } from "../components/HostRecoveryLink";
+import { InviteButton, InviteCard } from "../components/InviteTeams";
 import { Skeleton } from "../components/Skeleton";
 import { Setlist } from "../components/Setlist";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
@@ -279,9 +280,14 @@ export function ManagerConsolePage() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <div className={styles.codeBlock}>
-          <span className={styles.codeLabel}>Game code</span>
-          <span className={styles.code}>{gameCode}</span>
+        <div className={styles.codeGroup}>
+          <div className={styles.codeBlock}>
+            <span className={styles.codeLabel}>Game code</span>
+            <span className={styles.code}>{gameCode}</span>
+          </div>
+          {/* Before the game the invite is a card below; during it, this
+              button opens the same QR + share sheet for late teams. */}
+          {game.status === "playing" ? <InviteButton gameCode={gameCode} /> : null}
         </div>
         <span className={`${styles.statusPill} ${statusClass}`}>{game.status}</span>
         <div className={styles.headerMeta}>
@@ -295,22 +301,28 @@ export function ManagerConsolePage() {
         onExtend={() => void handleExtendGame()}
       />
 
-      <div className={styles.hostTools}>
-        <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
-        {teams.length > 0 ? (
-          <button
-            type="button"
-            className={styles.rescueTrigger}
-            onClick={() => setRescueOpen(true)}
-            data-testid="rescue-open"
-          >
-            <RefreshIcon />
-            Reconnect a team
-          </button>
-        ) : null}
-      </div>
-
+      {/* The host tools, the invite card, the players, the round card and End
+          game are all children of .column: one stack on phones (in this
+          order), and on a laptop two columns with the round card on the right
+          and the rest under the video on the left (issue #370). */}
       <div className={styles.column}>
+        <div className={styles.hostTools}>
+          <HostRecoveryLink gameCode={gameCode} managerToken={managerToken} />
+          {teams.length > 0 ? (
+            <button
+              type="button"
+              className={styles.rescueTrigger}
+              onClick={() => setRescueOpen(true)}
+              data-testid="rescue-open"
+            >
+              <RefreshIcon />
+              Reconnect a team
+            </button>
+          ) : null}
+        </div>
+
+        {game.status === "waiting" ? <InviteCard gameCode={gameCode} teams={teams} /> : null}
+
         {/* Two overlaid players: the active one (audible, on top) and the
             standby that silently prebuffers the next song. testId follows the
             active player so E2E's strict youtube-player locators stay valid.
@@ -551,18 +563,18 @@ export function ManagerConsolePage() {
             </button>
           </div>
         </section>
-      </div>
 
-      <footer className={styles.endGameFooter}>
-        <button
-          className="btn btn-danger"
-          onClick={() => setEndConfirmOpen(true)}
-          disabled={busy}
-          data-testid="end-game"
-        >
-          End game
-        </button>
-      </footer>
+        <footer className={styles.endGameFooter}>
+          <button
+            className="btn btn-danger"
+            onClick={() => setEndConfirmOpen(true)}
+            disabled={busy}
+            data-testid="end-game"
+          >
+            End game
+          </button>
+        </footer>
+      </div>
 
       <ConfirmDialog
         open={endConfirmOpen}
