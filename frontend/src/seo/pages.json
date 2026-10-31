@@ -31,10 +31,21 @@
       "inSitemap": false,
       "title": "Privacy – Sound Clash",
       "description": "What Sound Clash stores while you play, for how long, and which services see it. No accounts, no cookies of its own, and Sound Clash shows no ads.",
-      "updated": "2026-10-30",
+      "updated": "2026-11-01",
       "prerender": true,
       "module": "src/pages/PrivacyPage.tsx",
       "nav": "Privacy"
+    },
+    {
+      "path": "/terms",
+      "file": "terms.html",
+      "inSitemap": false,
+      "title": "Terms of Use – Sound Clash",
+      "description": "The rules for using Sound Clash: a free game with no accounts, songs that play through YouTube under YouTube's Terms of Service, fair play and no warranty.",
+      "updated": "2026-11-01",
+      "prerender": true,
+      "module": "src/pages/TermsPage.tsx",
+      "nav": "Terms"
     },
     {
       "path": "/guess-the-song-with-friends",

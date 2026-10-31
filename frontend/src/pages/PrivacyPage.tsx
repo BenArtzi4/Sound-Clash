@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { SiteFooter } from "../components/SiteFooter";
 import { ArrowLeftIcon } from "../components/icons";
+import { CONTACT_EMAIL } from "../lib/contact";
 import styles from "./PrivacyPage.module.css";
 
 // The privacy note. Israel's Privacy Protection Law (Amendment 13, 2025) makes
@@ -9,7 +10,14 @@ import styles from "./PrivacyPage.module.css";
 // every service that sees visitor data is named. Keep it in step with what the
 // code actually stores: docs/data-model.md, docs/tech-stack.md (product events)
 // and lib/funnel.ts.
-export const CONTACT_EMAIL = "hello@soundclash.org";
+//
+// The "Songs from YouTube" section is what the YouTube API Services Developer
+// Policies (III.A.2) ask of the privacy policy of a site that embeds YouTube's
+// player: say it uses YouTube API Services, link the Google Privacy Policy, and
+// disclose the cookies YouTube may set and the ads YouTube may show. The items
+// for Authorized Data (revoking access in Google's security settings) do not
+// apply: there is no Google sign-in.
+export const GOOGLE_PRIVACY_URL = "https://www.google.com/policies/privacy";
 
 const SECTIONS: ReadonlyArray<{ title: string; items: ReadonlyArray<string> }> = [
   {
@@ -23,7 +31,7 @@ const SECTIONS: ReadonlyArray<{ title: string; items: ReadonlyArray<string> }> =
   {
     title: "On your device",
     items: [
-      "Your browser keeps the host key or your team's key for each game, so a refresh keeps you in it, and a note that this browser has hosted before.",
+      "Your browser keeps the host key or your team's key for each game, so a refresh keeps you in it, a note that this browser has hosted before, and a random visit id for the usage events that is cleared when the tab closes.",
       "Sound Clash sets no cookies of its own and has no accounts.",
     ],
   },
@@ -38,7 +46,7 @@ const SECTIONS: ReadonlyArray<{ title: string; items: ReadonlyArray<string> }> =
     title: "Services that handle this data",
     items: [
       "Supabase (the game database, in the EU), Render (the game server), Cloudflare (hosting, plus visitor totals by country and referring site), Grafana Cloud (the usage events), Sentry (error reports).",
-      "YouTube: every song plays in YouTube's player, under YouTube's own privacy policy. Sound Clash shows no ads, but YouTube may show its own before a song.",
+      "YouTube, which plays the songs (see the next section).",
       "No data is sold or shared for advertising.",
     ],
   },
@@ -72,12 +80,32 @@ export function PrivacyPage() {
         ))}
 
         <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Songs from YouTube</h2>
+          <ul className={styles.list}>
+            <li>
+              Sound Clash uses YouTube API Services: every song plays in YouTube's embedded player
+              on the host's device. Sound Clash shows no ads, but YouTube may show its own before a
+              song.
+            </li>
+            <li>
+              When a song loads or plays, YouTube may collect data and set or read cookies or
+              similar data on that device, as described in the{" "}
+              <a href={GOOGLE_PRIVACY_URL}>Google Privacy Policy</a>.
+            </li>
+            <li>
+              There is no YouTube or Google sign-in: Sound Clash cannot see your YouTube account,
+              and it stores nothing about you that comes from YouTube.
+            </li>
+          </ul>
+        </section>
+
+        <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Questions</h2>
           <p className={styles.text}>
             Write to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with any question, or
             to have a game's data removed sooner.
           </p>
-          <p className={styles.updated}>Updated 30 October 2026.</p>
+          <p className={styles.updated}>Updated 1 November 2026.</p>
         </section>
 
         <div className={styles.backRow}>

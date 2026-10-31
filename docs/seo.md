@@ -102,6 +102,8 @@ Researched 2026-10-29 (SERP checks, competitor pages). The bare query "guess the
 
 `/privacy` is a content page too (prerendered, in the footer as "Privacy") but not written for search and left out of the sitemap. Its text must stay true to what the code stores: update it with any change to `docs/data-model.md`, the product events in `docs/tech-stack.md`, or the services the site uses.
 
+`/terms` is the same kind of page (prerendered, in the footer as "Terms", out of the sitemap). Both carry text the [YouTube API Services Developer Policies](https://developers.google.com/youtube/terms/developer-policies) section III.A requires of a site that embeds YouTube's player: the terms link the [YouTube Terms of Service](https://www.youtube.com/t/terms) and say users agree to be bound by them (III.A.1); the privacy page says the site uses YouTube API Services, links the Google Privacy Policy and discloses YouTube's cookies and ads (III.A.2). `TermsPage.test.tsx` and `PrivacyPage.test.tsx` check those lines; keep them if either page is rewritten. The operator's name appears only on the privacy page.
+
 The two comparison pages describe the other product only by facts its maker publishes, say when it is the better choice, and say Sound Clash is not affiliated with it (`landingContent.test.ts` checks the last part).
 
 Not built, on purpose for now: a Hebrew page. The Hebrew searches (נחש את השיר, משחק נחש את השיר) were the least contested in the research, and the maintainer decided against a Hebrew page on 2026-09-25; revisit if that changes.
