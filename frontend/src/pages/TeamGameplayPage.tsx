@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BuzzButton, type BuzzTone } from "../components/BuzzButton";
 import { EndScreen } from "../components/EndScreen";
+import { HostYourOwnCard } from "../components/HostYourOwn";
 import { Logo } from "../components/Logo";
 import { PointChange } from "../components/PointChange";
 import { Setlist } from "../components/Setlist";
@@ -41,6 +42,7 @@ function FinalBoard({
     <main className={`${styles.shell} ${styles.finalShell}`}>
       {expired ? <div className={styles.statusEnded}>This game has ended or expired.</div> : null}
       <EndScreen teams={teams} gameCode={gameCode} />
+      <HostYourOwnCard />
       <div className={styles.finalSetlist}>
         <Setlist game={board.game} rounds={board.rounds} teams={teams} />
       </div>
