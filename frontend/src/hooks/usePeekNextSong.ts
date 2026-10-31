@@ -2,19 +2,19 @@
 // via Supabase PostgREST RPC, same pattern as useSelectNextSong. Migration 029
 // added a read-only twin of select_next_song's random picker that returns a
 // candidate unplayed song WITHOUT advancing the round, so the manager console
-// can PREBUFFER the next YouTube video into a hidden second player during the
-// current round.
+// knows the next song during the current round.
 //
-// Why: production Faro traces show ~89% of "click Next round -> audio playing"
-// latency is YouTube's own load->playing buffering (game.song_start
-// .load_to_playing, ~1191ms). Because select_next_song picks randomly at click
-// time there's nothing to preload in advance; peeking first tells us exactly
-// which video to warm up. On the click, the console commits that exact song via
-// selectNextSongDirect(..., songId) and resumes the already-buffered player.
+// Why: mobile browsers only allow unmuted playback that starts inside the tap,
+// and a load issued after `await select_next_song` is blocked autoplay on iOS.
+// Knowing the song first lets the Next-round tap load it on the visible player
+// synchronously, with no RPC in front of the load, then commit that exact song
+// via selectNextSongDirect(..., songId). (Until 2026-10-31 it also fed a hidden
+// second player that prebuffered the song; YouTube's embed rules forbid that,
+// see useHostPlayer.ts.)
 //
 // Pool exhaustion is not an error here: the RPC returns zero rows, which we map
-// to null. The caller simply skips preloading; the real no_more_songs error
-// still surfaces from the eventual select_next_song commit.
+// to null. The caller then falls back to a random pick at the click; the real
+// no_more_songs error still surfaces from that select_next_song commit.
 
 import { supabase } from "../lib/supabase";
 import { tracedRpc } from "../lib/telemetry";
@@ -58,7 +58,7 @@ export async function peekNextSongDirect(
   throwOnRpcError(error);
   const row = (Array.isArray(data) ? data[0] : data) as PeekNextSongRow | null | undefined;
   // Zero rows = pool exhausted (or nothing eligible). Not an error; the caller
-  // treats null as "nothing to prebuffer".
+  // treats null as "no song known in advance".
   if (!row) return null;
   return {
     song_id: row.song_id,
