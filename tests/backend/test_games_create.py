@@ -115,3 +115,55 @@ async def test_collision_retry(client, db, monkeypatch) -> None:
     assert resp.status_code == 201, resp.text
     assert resp.json()["game_code"] != forced
     assert seen_first["count"] >= 3
+
+
+# --- Test-game flag (migration 051, issue #393) -----------------------------
+
+PHONE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+)
+HEADLESS_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "HeadlessChrome/131.0.0.0 Safari/537.36"
+)
+
+
+async def _create_and_read_flag(client, db, headers: dict[str, str]) -> bool:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await client.post("/games", json={"selected_genres": [str(genres[0])]}, headers=headers)
+    assert resp.status_code == 201, resp.text
+    return bool(
+        await db.fetchval(
+            "SELECT is_test FROM game_secrets WHERE game_code = $1", resp.json()["game_code"]
+        )
+    )
+
+
+async def test_real_browser_game_is_not_a_test(client, db) -> None:
+    assert await _create_and_read_flag(client, db, {"User-Agent": PHONE_UA}) is False
+
+
+async def test_headless_browser_game_is_a_test(client, db) -> None:
+    assert await _create_and_read_flag(client, db, {"User-Agent": HEADLESS_UA}) is True
+
+
+async def test_non_browser_client_game_is_a_test(client, db) -> None:
+    # Node fetch, curl and httpx never send a Mozilla/ user agent.
+    assert await _create_and_read_flag(client, db, {"User-Agent": "node"}) is True
+
+
+async def test_test_header_marks_a_real_browser_game(client, db) -> None:
+    headers = {"User-Agent": PHONE_UA, "X-Sound-Clash-Test": "1"}
+    assert await _create_and_read_flag(client, db, headers) is True
+
+
+async def test_flag_does_not_change_the_response(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    resp = await client.post(
+        "/games",
+        json={"selected_genres": [str(genres[0])]},
+        headers={"X-Sound-Clash-Test": "1"},
+    )
+    assert resp.status_code == 201
+    assert "is_test" not in resp.json()
