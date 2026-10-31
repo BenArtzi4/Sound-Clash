@@ -233,7 +233,9 @@ later cover. `NULL` means the year is unknown / not yet backfilled.
 The decade filter (migration 032) derives a song's decade as `release_year / 10 * 10`
 (integer division: `1985 → 1980`). A `NULL`-year song therefore matches **no** specific
 decade, so it is excluded from a decade-filtered game and included only when the host picks
-no decade. The catalog is backfilled by `tools/song-curation/`; the admin song form and CSV
+no decade (the create page's default **Any year** choice). So is a song from before 1960, as
+the decade choices start at the 60s; the create page's song count (`song_pool_counts`,
+migration 052) shows the difference. The catalog is backfilled by `tools/song-curation/`; the admin song form and CSV
 importer both accept an optional `release_year` so new songs can carry it from creation.
 
 ### `songs.artist_keys`
@@ -376,6 +378,7 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | `select_next_song(p_game_code, p_manager_token, p_song_id DEFAULT NULL)` | Close the prior round and open the next on an unplayed song | Browser via PostgREST (`manager_token`) |
 | `peek_next_song(p_game_code, p_manager_token)` | Read-only next-song candidate, so the Next-round tap can load it on the host's player in the gesture (no round advance) | Browser via PostgREST (`manager_token`) |
 | `extend_game(p_game_code, p_manager_token)` | Push `expires_at` out by 1h ("Keep playing +1h") | Browser via PostgREST (`manager_token`) |
+| `song_pool_counts()` | Read-only: playable songs per (decade, genre set), for the create page's "N songs in this mix" | Browser via PostgREST (anon, no token) |
 | `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | Internal (called by `select_next_song`) |
 | `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal; nothing calls it today (`start_round` closes the prior round itself) |
 | `award_bonus(p_game_code, p_team_id, p_points DEFAULT 4)` | Host-discretion bonus to a team | FastAPI |
@@ -426,7 +429,8 @@ db/migrations/
 │   … 047: uniform-per-song pick; 048: balanced genre turns via the internal pick_next_song helper
 ├── 049_song_spacing.sql        -- songs.artist_keys generated column + pick_next_song: no genre twice in a row, no artist again within 8 rounds, artists heard less preferred
 │   … 050: release_year in select_next_song / peek_next_song rows
-└── 051_test_game_flag.sql      -- game_secrets.is_test + game_history.is_test, archive_game copies it, mark_game_test fix-up
+├── 051_test_game_flag.sql      -- game_secrets.is_test + game_history.is_test, archive_game copies it, mark_game_test fix-up
+└── 052_song_pool_counts.sql    -- read-only song_pool_counts(): playable songs per (decade, genre set), so the create page counts any mix and blocks an empty one (#375)
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.

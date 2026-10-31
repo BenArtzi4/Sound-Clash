@@ -8,6 +8,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Added
 
+- 2026-10-31: **The Host a game page shows how many songs the mix holds.** As the host picks genres and decades, a line next to Create game says "312 songs in this mix", and below 20 songs it says how many rounds the mix covers. (#402)
 - 2026-10-30: **A privacy page** (`/privacy`, linked from every page's footer): what the game stores while you play and for how long, what stays on your device, the anonymous usage and error data, every service that handles it, and an address for questions. (#399)
 - 2026-10-30: **"Host your own game" at the end of a game.** Every team's phone shows a Host your own game button under the final results, and a few seconds after the podium the big screen adds a QR code to soundclash.org (left out on an upright phone used as the display, which has no room for it). A shared or copied setlist now ends with a link back to Sound Clash. (#398)
 - 2026-10-29: **Two small additions to the guide pages.** Home's questions now answer "Do we need Spotify or a music subscription?" (no: the songs play as YouTube clips from the host's device), and How to play ends with a **Start a game** button next to Back. (#394)
@@ -56,6 +57,7 @@ This project does not currently cut versioned releases; every change lands direc
 ### Changed
 
 - 2026-10-31: **The host's video now follows YouTube's rules for embedded players.** The back / pause / forward buttons moved off the picture into a bar under the video (a column beside it on a short phone), the video is never smaller than 200 × 200 pixels (on a narrow phone it gets black bars instead of shrinking), and the console no longer loads the next song in a hidden second player, so a new song starts loading when the host taps Next round. A song YouTube fails to load is now retried once on its own. (#401)
+- 2026-10-31: The decade choice on the Host a game page now starts on **Any year**, so a new host can see they don't have to pick decades. Picking a decade turns it off; tapping Any year clears the decades. Games with no decade picked already played every year, songs from before the 60s included. (#402)
 - 2026-10-29: The site now says **"Sound Clash shows no ads"** instead of a flat "no ads" in the footer, Home's questions and the guide pages, because YouTube can show its own ads in the song player when a song's owner turns them on. (#394)
 - 2026-10-29: **The final results fit the big screen.** The podium and the leaderboard now fit on one screen at every size, with the leaderboard beside the podium on a landscape TV. Before, a 1366×768 or 1280×720 laptop showed no leaderboard rows at all, a 1080p TV cut off the bottom, and a phone showed only the heading. The players' phones keep their own final screen. (#392)
 - 2026-10-27: **The join QR on the big screen is much bigger before the game starts.** On the waiting screen the QR, the game code and the join link now take the right half of the TV: the QR is 611 px wide on a 1080p screen instead of 160, so phones can scan it from across the room. Teams that join still line up on the left. Once the host starts the game, the small QR goes back to the sidebar for late joiners. (#390)
@@ -153,6 +155,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-10-31: A genre and decade mix with no songs (such as Hip-Hop + 80s) could be created, and its first Start game then said "All songs in your selected genres have been played". The Host a game page now says "No songs in this mix" and keeps Create game off until the mix has songs, and a game that still starts empty is told that no songs match its genres and decades. (#402)
 - 2026-10-29: How to play's **Display** card said the big screen plays the YouTube clip; it shows the join QR code and the live scoreboard, and the music plays from the host's device. (#394)
 - 2026-10-29: **The display works on a phone mirrored to the TV.** On a phone the scoreboard used to scroll: held sideways it showed one team of five, and held upright the last teams and the join QR were below the bottom of the screen. Now the whole board fits one screen on any phone, upright or sideways, like it does on a TV: sideways it takes the TV layout (the top 5 on the left; the song, the timer and the join QR on the right), and upright the five teams, the code and a smaller QR stack. TVs and laptops look exactly as before. (#392)
 - 2026-10-27: **Wrong or Continue round after a song had already ended no longer restarts it from 0:00.** It used to play the song from its very beginning, intro included; it now plays from where the round started. (#389)
