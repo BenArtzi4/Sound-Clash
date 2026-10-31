@@ -2033,6 +2033,31 @@ describe("ManagerConsolePage", () => {
     );
   });
 
+  it("says the mix has no songs, not 'all played', when Start game finds none (issue #375)", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [],
+      rounds: [],
+    });
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("no_more_songs", "22023"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start game/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/no songs match this game's genres and decades/i),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/have been played/i)).not.toBeInTheDocument();
+  });
+
   // ---- double-buffer preload (peek_next_song + standby player) ----
 
   async function setupPlayingRoundWithBothPlayersReady() {

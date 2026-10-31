@@ -4,17 +4,19 @@ import { CheckIcon } from "../components/icons";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
-import { createGame, getCachedGenres, listGenres } from "../lib/api";
+import { createGame, getCachedGenres, listGenres, loadSongPool } from "../lib/api";
 import { trackGameCreated } from "../lib/funnel";
 import { setManagerToken } from "../lib/managerToken";
-import type { Genre } from "../lib/types";
+import { countSongsInMix, describeMix } from "../lib/songPool";
+import type { Genre, SongPoolCell } from "../lib/types";
 import { Logo } from "../components/Logo";
 import styles from "./ManagerCreateGamePage.module.css";
 
 // Decades are stored as their start year (the 80s = 1980); the picker floors a
 // song's release_year to its decade and matches by membership (migration 032).
 // Split into two fixed rows so the chips never wrap to a lonely orphan: the
-// 20th-century decades on top, 2000s-onward below. On desktop the rows collapse
+// 20th-century decades on top, 2000s-onward below, under an "Any year" row
+// that stands for no decade picked (the default). On desktop the rows collapse
 // back into a single line (see .decadeRow display:contents in the CSS).
 const DECADE_ROWS = [
   [1960, 1970, 1980, 1990],
@@ -108,6 +110,10 @@ export function ManagerCreateGamePage() {
   const [selectedDecades, setSelectedDecades] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [genresLoading, setGenresLoading] = useState(() => genres.length === 0);
+  // The catalog grouped by decade and genre set (migration 052), for the live
+  // "N songs in this mix" line. null while loading or if it could not load:
+  // then the page shows no count and blocks nothing, as before the count.
+  const [songPool, setSongPool] = useState<SongPoolCell[] | null>(null);
 
   // Wake the Render backend so the create-game POST is warm. HomePage already
   // pre-warms on landing; this covers a direct deep-link to /manager/create.
@@ -146,6 +152,26 @@ export function ManagerCreateGamePage() {
     };
   }, [toast]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void loadSongPool().then((cells) => {
+      if (!cancelled) setSongPool(cells);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // No decade picked means any year, so "Any year" is on by default and comes
+  // back on when the last decade is turned off.
+  const anyYear = selectedDecades.size === 0;
+  // null = nothing to say yet (no genre picked, or the counts are not loaded).
+  const songCount =
+    songPool && selected.size > 0 ? countSongsInMix(songPool, selected, selectedDecades) : null;
+  const mix = songCount === null ? null : describeMix(songCount);
+  // An empty mix would create a game whose first Start fails (issue #375).
+  const mixEmpty = songCount === 0;
+
   function toggleGenre(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -183,7 +209,7 @@ export function ManagerCreateGamePage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (selected.size === 0 || busy) return;
+    if (selected.size === 0 || mixEmpty || busy) return;
     setBusy(true);
     try {
       const game = await createGame(
@@ -274,10 +300,22 @@ export function ManagerCreateGamePage() {
         </div>
 
         <div className={styles.field}>
-          <span className={styles.label}>
-            Release decade <span className="muted">(optional — any year if none picked)</span>
-          </span>
+          <span className={styles.label}>Release decade</span>
           <div className={styles.decades}>
+            <div className={styles.decadeRow}>
+              {/* Checked exactly when no decade is picked; ticking it clears
+                  the decades, and ticking it again leaves it on. */}
+              <label
+                className={`${styles.decade} ${styles.decadeAny} ${anyYear ? styles.decadeSelected : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={anyYear}
+                  onChange={() => setSelectedDecades(new Set())}
+                />
+                Any year
+              </label>
+            </div>
             {DECADE_ROWS.map((row, i) => (
               <div key={i} className={styles.decadeRow}>
                 {row.map((d) => {
@@ -301,7 +339,24 @@ export function ManagerCreateGamePage() {
           <Link to="/" className="btn btn-ghost">
             Cancel
           </Link>
-          <button type="submit" className="btn btn-primary" disabled={selected.size === 0 || busy}>
+          {/* Live song count for the mix, in the bar that stays on screen while
+              the host taps, so an empty mix is flagged the moment it is picked.
+              Always mounted (empty until there is a count) so screen readers
+              announce each change. */}
+          <p
+            className={`${styles.mixCount} ${
+              mix?.tone === "empty" ? styles.mixEmpty : mix?.tone === "small" ? styles.mixSmall : ""
+            }`}
+            role="status"
+            data-testid="mix-count"
+          >
+            {mix?.text}
+          </p>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={selected.size === 0 || mixEmpty || busy}
+          >
             {busy ? (
               <>
                 <span className={styles.spinner} data-testid="submit-spinner" aria-hidden="true" />
