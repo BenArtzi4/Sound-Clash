@@ -143,6 +143,27 @@ async def test_preview_preflight_allows_manager_token(_clean_settings: None) -> 
 
 
 @pytest.mark.asyncio
+async def test_preflight_allows_the_test_header(_clean_settings: None) -> None:
+    """The create page sends X-Sound-Clash-Test on ?test=1 (migration 051)."""
+    os.environ["CORS_ORIGIN_REGEX"] = PREVIEW_REGEX
+    config_module.get_settings.cache_clear()
+
+    transport = ASGITransport(app=_build_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        resp = await c.options(
+            "/probe",
+            headers={
+                "Origin": PREVIEW_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type, X-Sound-Clash-Test",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert "x-sound-clash-test" in resp.headers["access-control-allow-headers"].lower()
+
+
+@pytest.mark.asyncio
 async def test_listed_origin_still_allowed_with_regex_set(
     _clean_settings: None,
 ) -> None:

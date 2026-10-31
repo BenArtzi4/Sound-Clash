@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CheckIcon } from "../components/icons";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
@@ -97,6 +97,9 @@ function sameMembers<T>(a: Set<T>, b: Iterable<T>): boolean {
 export function ManagerCreateGamePage() {
   const { toast } = useToast();
   const navigate = useNavigate();
+  // `?test=1` marks this game as a test run (a check on the live site), so it
+  // never counts as a real game. Harnesses are caught by their user agent.
+  const testRun = new URLSearchParams(useLocation().search).get("test") === "1";
 
   // Arriving from Home, the genres are usually cached already: draw them on
   // the first frame rather than behind a frame of placeholder tiles.
@@ -183,10 +186,13 @@ export function ManagerCreateGamePage() {
     if (selected.size === 0 || busy) return;
     setBusy(true);
     try {
-      const game = await createGame({
-        selected_genres: Array.from(selected),
-        selected_decades: Array.from(selectedDecades),
-      });
+      const game = await createGame(
+        {
+          selected_genres: Array.from(selected),
+          selected_decades: Array.from(selectedDecades),
+        },
+        { testRun },
+      );
       setManagerToken(game.game_code, game.manager_token);
       trackGameCreated(selected.size, selectedDecades.size);
       toast(`Game ${game.game_code} created`, { variant: "success" });
