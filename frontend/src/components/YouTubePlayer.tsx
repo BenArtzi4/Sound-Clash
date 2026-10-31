@@ -75,8 +75,14 @@ interface Props {
   // touched. A retry that stalls too is reported once more (`retried: false`)
   // and left alone: Next round is the host's way out. Not fired when the page
   // was hidden during the wait (a hidden page may legitimately not play),
-  // after a newer load, or after pause() or stop().
-  onStartStall?: (info: { state: number; loadedFraction: number; retried: boolean }) => void;
+  // after a newer load, or after pause() or stop(). `videoId` is the stalled
+  // load's video, so the parent can name the song.
+  onStartStall?: (info: {
+    state: number;
+    loadedFraction: number;
+    retried: boolean;
+    videoId: string | null;
+  }) => void;
   // Telemetry: the song paused by itself within 5 s of starting (no pause()
   // or stop() from the app, page visible). At most once per load.
   onEarlyPause?: (msAfterStart: number) => void;
@@ -363,6 +369,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
           state: player.getPlayerState(),
           loadedFraction,
           retried: retry,
+          videoId,
         });
         if (!retry) return;
         retriedRef.current = true;

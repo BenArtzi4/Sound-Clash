@@ -493,7 +493,12 @@ describe("YouTubePlayer load health", () => {
       expect(player.loadVideoById).toHaveBeenCalledTimes(1);
       await advance(1);
       expect(onStartStall).toHaveBeenCalledTimes(1);
-      expect(onStartStall).toHaveBeenCalledWith({ state: -1, loadedFraction: 0, retried: true });
+      expect(onStartStall).toHaveBeenCalledWith({
+        state: -1,
+        loadedFraction: 0,
+        retried: true,
+        videoId: "liveVIDEO01",
+      });
       // The same song again, from the round's start point, audibly.
       expect(player.loadVideoById).toHaveBeenCalledTimes(2);
       expect(player.loadVideoById).toHaveBeenLastCalledWith({
@@ -509,6 +514,7 @@ describe("YouTubePlayer load health", () => {
         state: -1,
         loadedFraction: 0,
         retried: false,
+        videoId: "liveVIDEO01",
       });
       await advance(30_000);
       expect(onStartStall).toHaveBeenCalledTimes(2);
@@ -522,7 +528,12 @@ describe("YouTubePlayer load health", () => {
       player.getVideoLoadedFraction.mockReturnValue(0.3);
       act(() => ref.current?.loadVideoById("liveVIDEO01", 0));
       await advance(10_000);
-      expect(onStartStall).toHaveBeenCalledWith({ state: 3, loadedFraction: 0.3, retried: false });
+      expect(onStartStall).toHaveBeenCalledWith({
+        state: 3,
+        loadedFraction: 0.3,
+        retried: false,
+        videoId: "liveVIDEO01",
+      });
       await advance(30_000);
       expect(onStartStall).toHaveBeenCalledTimes(1);
       expect(player.loadVideoById).toHaveBeenCalledTimes(1);
@@ -555,6 +566,7 @@ describe("YouTubePlayer load health", () => {
         state: -1,
         loadedFraction: 0,
         retried: true,
+        videoId: "liveVIDEO02",
       });
       expect(player.loadVideoById).toHaveBeenLastCalledWith({
         videoId: "liveVIDEO02",

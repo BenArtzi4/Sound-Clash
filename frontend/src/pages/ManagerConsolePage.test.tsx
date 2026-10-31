@@ -105,7 +105,12 @@ let playerHandles: MockHandle[] = [];
 let onReadyHandlers: Array<(() => void) | undefined> = [];
 let onPlayingHandlers: Array<((d: "statechange" | "poll") => void) | undefined> = [];
 let onErrorHandlers: Array<((code: number, videoId: string | null) => void) | undefined> = [];
-type StartStall = (info: { state: number; loadedFraction: number; retried: boolean }) => void;
+type StartStall = (info: {
+  state: number;
+  loadedFraction: number;
+  retried: boolean;
+  videoId: string | null;
+}) => void;
 let onStartStallHandlers: Array<StartStall | undefined> = [];
 let onEarlyPauseHandlers: Array<((msAfterStart: number) => void) | undefined> = [];
 // The idleLabel each player was last rendered with (shown over an empty player).
@@ -2112,7 +2117,14 @@ describe("ManagerConsolePage", () => {
 
   it("logs a start stall with its song and whether the player issued the load again", async () => {
     await setupPlayingRound();
-    act(() => onStartStallHandlers[0]?.({ state: -1, loadedFraction: 0, retried: true }));
+    act(() =>
+      onStartStallHandlers[0]?.({
+        state: -1,
+        loadedFraction: 0,
+        retried: true,
+        videoId: "vid1aaaaaaa",
+      }),
+    );
     expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_live_stall", {
       kind: "no_start",
       game_code: "ABCDEF",
@@ -2124,6 +2136,64 @@ describe("ManagerConsolePage", () => {
       title: "First",
       artist: "A",
     });
+  });
+
+  // The weekly dead-video scan (.github/workflows/dead-video-scan.yml) reads
+  // `message=yt_(player|preload)_error` from Loki and prints context_code,
+  // context_youtube_id, context_title, context_artist and context_game_code.
+  // A song YouTube silently refuses (nothing loaded, so the player retried it)
+  // must keep reaching it as yt_preload_error, as from the old standby.
+  it("logs a load that loaded nothing as yt_preload_error, the event the dead-video scan reads", async () => {
+    await setupPlayingRound();
+    act(() =>
+      onStartStallHandlers[0]?.({
+        state: 3,
+        loadedFraction: 0,
+        retried: true,
+        videoId: "vid1aaaaaaa",
+      }),
+    );
+    const scanned = telemetry.log.mock.calls.filter((c) =>
+      /^yt_(player|preload)_error$/.test(String(c[1])),
+    );
+    expect(scanned).toEqual([
+      [
+        "warn",
+        "yt_preload_error",
+        {
+          code: "no_bytes",
+          game_code: "ABCDEF",
+          youtube_id: "vid1aaaaaaa",
+          url: "https://www.youtube.com/watch?v=vid1aaaaaaa",
+          song_id: "song-1",
+          title: "First",
+          artist: "A",
+          stall: "no_bytes",
+        },
+      ],
+    ]);
+  });
+
+  it("does not report a slow load that has bytes, or a stalled retry, to the dead-video scan", async () => {
+    await setupPlayingRound();
+    act(() =>
+      onStartStallHandlers[0]?.({
+        state: 3,
+        loadedFraction: 0.2,
+        retried: false,
+        videoId: "vid1aaaaaaa",
+      }),
+    );
+    act(() =>
+      onStartStallHandlers[0]?.({
+        state: -1,
+        loadedFraction: 0,
+        retried: false,
+        videoId: "vid1aaaaaaa",
+      }),
+    );
+    expect(telemetry.log).toHaveBeenCalledWith("warn", "yt_live_stall", expect.anything());
+    expect(telemetry.log).not.toHaveBeenCalledWith("warn", "yt_preload_error", expect.anything());
   });
 
   it("logs an early pause with its song", async () => {

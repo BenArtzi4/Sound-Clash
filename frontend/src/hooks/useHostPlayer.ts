@@ -26,10 +26,7 @@ export interface HostPlayer {
   onPlayerReady: () => void;
   handlePlayerPlaying: (detection: "statechange" | "poll") => void;
   handlePlayerError: (code: number, videoId: string | null, liveSong: Song | null) => void;
-  handleStartStall: (
-    info: { state: number; loadedFraction: number; retried: boolean },
-    liveSong: Song | null,
-  ) => void;
+  handleStartStall: (info: StartStallInfo, liveSong: Song | null) => void;
   handleEarlyPause: (msAfterStart: number, liveSong: Song | null) => void;
 
   // Imperative surface for handleNextRound + the mid-round song resolver.
@@ -45,6 +42,18 @@ export interface HostPlayer {
   beginRoundCommit: () => void;
   endRoundCommit: (committed: boolean) => void;
 }
+
+interface StartStallInfo {
+  state: number;
+  loadedFraction: number;
+  retried: boolean;
+  videoId: string | null;
+}
+
+// The `code` a silent load failure is logged with in yt_preload_error. YouTube
+// gives such a load no error code; the dead-video scan prints the code with
+// its meaning ("no_bytes (unknown)").
+export const NO_BYTES_CODE = "no_bytes";
 
 interface PlayerReadyHandle {
   ready: boolean;
@@ -74,14 +83,15 @@ function songFields(
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== ""));
 }
 
-// Telemetry context for a video the player refused (yt_player_error): the
-// catalog song and a watch URL, so the weekly dead-video scan can list real
-// in-game failures by name. `candidates` are the songs the player could have
-// been playing; only the one whose youtube_id is the failed video is named,
-// never a guess. Empty fields are omitted.
+// Telemetry context for a video the player refused (yt_player_error, and
+// yt_preload_error for a load that loaded nothing): the catalog song and a
+// watch URL, so the weekly dead-video scan can list real in-game failures by
+// name. `candidates` are the songs the player could have been playing; only
+// the one whose youtube_id is the failed video is named, never a guess. Empty
+// fields are omitted.
 export function failedVideoContext(
   gameCode: string,
-  code: number,
+  code: number | string,
   videoId: string,
   candidates: Array<SongRef | null>,
 ): Record<string, string> {
@@ -191,10 +201,15 @@ export function useHostPlayer(
   // The live song has not started 10 s after its load (the player's own start
   // watch), or paused by itself right after starting. `retried`: the player
   // had loaded nothing, so it issued the load once more.
-  function handleStartStall(
-    info: { state: number; loadedFraction: number; retried: boolean },
-    liveSong: Song | null,
-  ) {
+  //
+  // A load that loaded nothing is also logged as yt_preload_error, the event
+  // the hidden standby logged until 2026-10-31 and the one the weekly
+  // dead-video scan (.github/workflows/dead-video-scan.yml) reads, with the
+  // same fields (code, game_code, youtube_id, url, song_id, title, artist) plus
+  // `stall`. So a song YouTube silently refuses still lands on the scan's list
+  // ("no_bytes (unknown) · next-song preload"). Errors YouTube does report go
+  // to yt_player_error, which the scan reads too.
+  function handleStartStall(info: StartStallInfo, liveSong: Song | null) {
     log("warn", "yt_live_stall", {
       kind: "no_start",
       game_code: gameCode,
@@ -203,6 +218,12 @@ export function useHostPlayer(
       retried: String(info.retried),
       ...songFields(liveSong),
     });
+    if (info.retried && info.videoId !== null) {
+      log("warn", "yt_preload_error", {
+        ...failedVideoContext(gameCode, NO_BYTES_CODE, info.videoId, [liveSong]),
+        stall: "no_bytes",
+      });
+    }
   }
 
   function handleEarlyPause(msAfterStart: number, liveSong: Song | null) {

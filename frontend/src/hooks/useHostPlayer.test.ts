@@ -17,6 +17,14 @@ describe("failedVideoContext", () => {
     });
   });
 
+  it("takes a text code for a load YouTube failed without an error code", () => {
+    expect(failedVideoContext("ABCDEF", "no_bytes", "vid1aaaaaaa", [live])).toMatchObject({
+      code: "no_bytes",
+      youtube_id: "vid1aaaaaaa",
+      song_id: "song-1",
+    });
+  });
+
   it("keeps the id and URL but omits song fields for an unknown video", () => {
     expect(failedVideoContext("ABCDEF", 100, "otherVIDEO1", [live, next])).toEqual({
       code: "100",

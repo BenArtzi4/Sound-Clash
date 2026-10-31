@@ -1,18 +1,19 @@
 /* YouTube's Required Minimum Functionality: "Embedded players must have a
-   viewport that is at least 200px by 200px." The iframe fills the frame inside
-   its 1px border, so the frame is at least 202px each way. Where 16:9 would be
-   shorter than that (phones), the frame stays 202px tall and YouTube
-   letterboxes the video in it. */
+   viewport that is at least 200px by 200px." The iframe fills the frame, so
+   the frame is at least 200px each way. Where 16:9 would be shorter than that
+   (phones), the frame stays 200px tall and YouTube letterboxes the video in
+   it. The edge is an outline, not a border: it is drawn outside the frame
+   (never over the iframe) and takes no height, which short phones need. */
 .wrapper {
   position: relative;
   width: 100%;
-  min-width: 202px;
-  min-height: 202px;
+  min-width: 200px;
+  min-height: 200px;
   background: #000;
   border-radius: var(--radius-md);
   overflow: hidden;
   aspect-ratio: 16 / 9;
-  border: 1px solid var(--border);
+  outline: 1px solid var(--border);
 }
 
 .player {
@@ -190,7 +191,7 @@
 /* Short phones (most iPhones in Safari, whose toolbars leave 550-750px): a
    bar under the 202px frame would push the round buttons off the screen, so
    the buttons stack in a rail at the frame's right instead, inside its height
-   (44 + 52 + 44 + 2 x 6 = 152px). The host console sizes the pair from the
+   (44 + 52 + 44 + 2 x 6 = 152px of the frame's 200px). The host console sizes the pair from the
    same breakpoint (ManagerConsolePage.module.css). */
 @media (max-width: 600px) and (max-height: 760px) {
   .withControls {
