@@ -316,6 +316,83 @@ describe("ManagerConsolePage", () => {
     expect(within(sheet).getByText("ABCDEF")).toBeInTheDocument();
   });
 
+  describe("where Start game sits before the game", () => {
+    // `laptop` answers the console's two-column query; every other query
+    // (the invite's pointer check) reads false.
+    function stubLayout(laptop: boolean) {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: vi.fn((query: string) => ({
+          matches: query === "(min-width: 1024px)" ? laptop : false,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        })),
+      });
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, "matchMedia");
+    });
+
+    async function renderLobby() {
+      setHydrate({
+        game: makeActiveGame({ status: "waiting", round_number: 0 }),
+        teams: [makeTeam({ id: "t1", name: "Team 1" })],
+        rounds: [],
+      });
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+    }
+
+    function follows(a: HTMLElement, b: HTMLElement): boolean {
+      return Boolean(a.compareDocumentPosition(b) & a.DOCUMENT_POSITION_FOLLOWING);
+    }
+
+    it("on a phone, sits right under the invite card, above the player and the round card", async () => {
+      stubLayout(false);
+      await renderLobby();
+
+      const invite = screen.getByTestId("invite-teams");
+      const start = screen.getByTestId("start-round");
+      expect(start).toHaveTextContent(/loading player|start game/i);
+      expect(invite.nextElementSibling).toBe(start);
+      expect(follows(start, screen.getByTestId("yt-player"))).toBe(true);
+      expect(follows(start, screen.getByTestId("score-title"))).toBe(true);
+      expect(start.closest("section")).toBeNull();
+      // Continue means nothing before the first round; it comes back with it.
+      expect(screen.queryByTestId("continue-round")).not.toBeInTheDocument();
+
+      await act(async () => {
+        fireGame(
+          makePayload<ActiveGame>("active_games", "UPDATE", {
+            new: makeActiveGame({ status: "playing", round_number: 1 }),
+          }),
+        );
+      });
+
+      const next = screen.getByTestId("start-round");
+      const card = screen.getByTestId("score-title").closest("section");
+      expect(card).not.toBeNull();
+      expect(card).toContainElement(next);
+      expect(card).toContainElement(screen.getByTestId("continue-round"));
+    });
+
+    it("on a laptop, stays in the round card next to Continue", async () => {
+      stubLayout(true);
+      await renderLobby();
+
+      const card = screen.getByTestId("score-title").closest("section");
+      expect(card).toContainElement(screen.getByTestId("start-round"));
+      expect(card).toContainElement(screen.getByTestId("continue-round"));
+      expect(screen.getByTestId("invite-teams").nextElementSibling).not.toBe(
+        screen.getByTestId("start-round"),
+      );
+    });
+  });
+
   function setVisibility(vis: "visible" | "hidden"): void {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => vis });
   }
