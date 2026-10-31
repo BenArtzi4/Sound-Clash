@@ -241,7 +241,7 @@ Symptoms: `SELECT count(*) FROM songs` is 0 or much smaller than expected.
 
 Triage:
 1. Check Supabase backup tab. Restore from latest snapshot.
-2. If no usable backup, restore from the committed catalog dump: `db/backups/restore.sql` (§6 — `catalog-backup.yml` keeps it current weekly).
+2. If no usable backup, restore from the encrypted weekly catalog backup: decrypt it into `db/backups/` and run `db/backups/restore.sql` (§6 has the commands; `catalog-backup.yml` keeps 90 days of weekly copies).
 3. Investigate: did someone accidentally drop the table? Check `pg_audit` if enabled.
 
 Songs are durable; they should never be deleted en masse. Loss is an incident.
@@ -275,7 +275,7 @@ Songs are durable; they should never be deleted en masse. Loss is an incident.
 
 | Data | Backup mechanism | Retention |
 |---|---|---|
-| Songs catalog (`songs`, `genres`, `song_genres`) | (1) weekly deterministic CSV dump committed to `db/backups/` by `.github/workflows/catalog-backup.yml`; (2) Supabase daily backup (free tier) | (1) indefinite (git history); (2) 1 day |
+| Songs catalog (`songs`, `genres`, `song_genres`) | (1) weekly deterministic CSV dump, encrypted with `CATALOG_BACKUP_PASSPHRASE` and stored as a workflow artifact by `.github/workflows/catalog-backup.yml`; (2) Supabase daily backup (free tier) | (1) 90 days (about 13 weekly copies); (2) 1 day |
 | Active game data | Not backed up (ephemeral) | n/a |
 | Source code | GitHub | indefinite |
 | Configuration (env vars, secrets) | Manually documented in 1Password / Bitwarden / wherever | indefinite |
@@ -285,13 +285,24 @@ Songs are durable; they should never be deleted en masse. Loss is an incident.
 | Scenario | Recovery |
 |---|---|
 | Bad migration drops a column | Restore from Supabase backup (lose <1 day of data). |
-| Bad code deletes all songs | `psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/backups/restore.sql` (run from repo root; idempotent, refills from the committed dump). Or restore from the Supabase daily backup. |
+| Bad code deletes all songs | Decrypt the newest catalog backup into `db/backups/` (below), then `psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/backups/restore.sql` (run from repo root; idempotent, refills deletions). Or restore from the Supabase daily backup. |
 | Render service deleted | Re-create from Dockerfile + env vars. ~10 min. |
 | Cloudflare Pages project deleted | Re-create, link to GitHub repo. Auto-deploys latest main. ~10 min. |
-| Supabase project deleted | Re-create. Apply all migrations from `db/migrations/`, then `db/backups/restore.sql` to reload the catalog. ~1 hour. |
+| Supabase project deleted | Re-create. Apply all migrations from `db/migrations/`, decrypt the newest catalog backup (below), then `db/backups/restore.sql` to reload the catalog. ~1 hour. |
 | Domain expires | Re-register; update DNS. |
 
-The system is designed to be **rebuildable from source**: if everything except the GitHub repo is gone, you can reconstruct in under an hour. The songs catalog is the only critical persistent state, and it lives in the repo itself — `.github/workflows/catalog-backup.yml` commits a weekly deterministic CSV dump of `songs`/`genres`/`song_genres` to `db/backups/`, and `db/backups/restore.sql` reloads it idempotently (run from the repo root: `psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/backups/restore.sql`). The same workflow warns (never fails) when prod drifts from the committed dump and opens a refresh PR. (A legacy `s3://soundclash-songs-data/songs.csv` fallback was referenced here previously; that bucket was deleted in the 2026-05-07 AWS teardown and is gone — the committed dump replaces it.)
+The system is designed to be **rebuildable from source**: if everything except the GitHub repo is gone, you can reconstruct in under an hour. The songs catalog is the only critical persistent state. It is **not** in the repo (the repo is public and the curated catalog is the product's core asset; the committed dump was removed on 2026-10-31). Instead `.github/workflows/catalog-backup.yml` dumps `songs`/`genres`/`song_genres` weekly, encrypts the CSVs (gpg, AES-256, passphrase in the prod environment secret `CATALOG_BACKUP_PASSPHRASE`, also kept by the maintainer outside GitHub) and stores them as a workflow artifact for 90 days. The run's summary shows each table's row count and checksum, so drift is visible week to week.
+
+**Restore the catalog** (Git Bash has `gpg`; run from the repo root):
+
+```bash
+gh run list --workflow=catalog-backup.yml --status success --limit 3      # pick the newest run id
+gh run download <run-id> --dir db/backups/                                 # creates db/backups/catalog-backup-<date>/
+gpg --decrypt db/backups/catalog-backup-*/catalog-*.tar.gz.gpg | tar -xz -C db/backups/   # asks for the passphrase
+psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/backups/restore.sql
+```
+
+Keep an occasional decrypted-or-encrypted copy outside GitHub (for example with the secrets DR backup), because artifacts expire after 90 days and live in the same GitHub account. (A legacy `s3://soundclash-songs-data/songs.csv` fallback was referenced here previously; that bucket was deleted in the 2026-05-07 AWS teardown and is gone.)
 
 ## 7. Routine Maintenance
 
@@ -299,12 +310,12 @@ The system is designed to be **rebuildable from source**: if everything except t
 |---|---|
 | Weekly | Glance at Sentry dashboard for new error trends |
 | Weekly | Glance at Supabase Realtime peers/msgs charts |
-| Weekly | If `catalog-backup.yml` opened a PR (prod catalog drifted from the committed dump), review & merge it |
+| Weekly | Glance that `catalog-backup.yml` ran green (a red run means no fresh catalog backup that week) |
 | Monthly | Review free-tier utilization (`free-tier-budget.md` thresholds) |
 | Monthly | Review Render bandwidth + service hours |
 | Monthly | Update dependencies (Dependabot PRs): merge if green |
 | Quarterly | Test rollback procedure (§2) on staging; actually do it |
-| Quarterly | Test backup restore (§6): run `db/backups/restore.sql` against a scratch/preview DB and confirm catalog row counts |
+| Quarterly | Test backup restore (§6): download and decrypt the newest catalog artifact, run `db/backups/restore.sql` against a scratch/preview DB and confirm catalog row counts |
 | Annually | Rotate `ADMIN_PASSWORD` (§3.1) |
 | Annually | Rotate Supabase service-role key (§3.2) |
 

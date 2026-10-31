@@ -1,9 +1,7 @@
-# Ad-hoc / dated local dumps (e.g. songs-20260531.csv) stay local-only.
-# The canonical disaster-recovery dump IS tracked: it is refreshed weekly by
-# .github/workflows/catalog-backup.yml and restored via restore.sql.
+# Catalog dumps are never committed: the repo is public and the curated catalog
+# is the product's core asset. .github/workflows/catalog-backup.yml keeps an
+# encrypted weekly dump as a workflow artifact; decrypt it here and run
+# restore.sql (docs/runbook.md §6). Everything else in this folder stays local.
 *
 !.gitignore
-!genres.csv
-!songs.csv
-!song_genres.csv
 !restore.sql
