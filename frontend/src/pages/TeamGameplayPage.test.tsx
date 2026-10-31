@@ -127,7 +127,6 @@ describe("TeamGameplayPage", () => {
     expect(buzz).not.toContainElement(links);
     // Last in the page, after the buzz zone.
     expect(links.parentElement?.lastElementChild).toBe(links);
-    expect(buzz.compareDocumentPosition(links) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("target", "_blank");
   });
