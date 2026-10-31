@@ -18,6 +18,32 @@ export const HOME_ABOUT = {
     "About 1,700 songs: pop, rock, hip-hop, electronic, movie and TV soundtracks, Disney, and Israeli hits across the decades.",
 };
 
+// The how-to-play video beside the steps (components/HomeVideo.tsx), also
+// Home's VideoObject structured data. The facts are YouTube's own for this
+// upload (unlisted, embedding allowed): its title, its length (51.6 s, which
+// YouTube rounds to 52) and its upload time. `oardefault` is the thumbnail in
+// the video's own 9:16 shape (720 x 1280); `hqdefault` is a 4:3 letterbox.
+const VIDEO_ID = "8jxJqUKC09o";
+
+export const HOME_VIDEO = {
+  id: VIDEO_ID,
+  title: "How to play Sound Clash",
+  caption: "How to play, in under a minute",
+  label: "Play the video: how to play Sound Clash, 52 seconds",
+  description:
+    "One whole Sound Clash game in 52 seconds: the host creates a game, teams join from the QR code on the TV, a song plays, the fastest team buzzes in, the host scores the answer and the winner is crowned.",
+  duration: "PT52S",
+  uploadDate: "2026-10-31T12:37:41-07:00",
+  thumbnail: `https://i.ytimg.com/vi/${VIDEO_ID}/oardefault.jpg`,
+  thumbnailWidth: 720,
+  thumbnailHeight: 1280,
+  // youtube-nocookie: the host's player uses it too, and the CSP's frame-src
+  // allows it. autoplay starts the video on the tap that loaded it;
+  // playsinline keeps an iPhone from going full screen; rel=0 keeps the
+  // suggestions at the end to this channel.
+  embed: `https://www.youtube-nocookie.com/embed/${VIDEO_ID}?autoplay=1&playsinline=1&rel=0`,
+};
+
 export const HOME_FAQ: Faq[] = [
   {
     question: "Is Sound Clash free?",
