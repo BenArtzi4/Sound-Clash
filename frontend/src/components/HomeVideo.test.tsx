@@ -7,7 +7,7 @@ vi.mock("../lib/funnel", () => funnel);
 
 import { HomeVideo } from "./HomeVideo";
 
-const EMBED = "https://www.youtube-nocookie.com/embed/idcNGYYuGas?autoplay=1&playsinline=1&rel=0";
+const EMBED = "https://www.youtube-nocookie.com/embed/_vFY865K6Qc?autoplay=1&playsinline=1&rel=0";
 
 describe("HomeVideo", () => {
   beforeEach(() => {
@@ -22,13 +22,13 @@ describe("HomeVideo", () => {
     const button = screen.getByRole("button", { name: /play the video: how to play sound clash/i });
     expect(button).toHaveAttribute("type", "button");
     const poster = button.querySelector("img");
-    expect(poster).toHaveAttribute("src", "https://i.ytimg.com/vi/idcNGYYuGas/oardefault.jpg");
+    expect(poster).toHaveAttribute("src", "https://i.ytimg.com/vi/_vFY865K6Qc/oardefault.jpg");
     expect(poster).toHaveAttribute("loading", "lazy");
     expect(poster).toHaveAttribute("width", "720");
     expect(poster).toHaveAttribute("height", "1280");
     // Decorative: the button carries the name.
     expect(poster).toHaveAttribute("alt", "");
-    expect(screen.getByText("How to play, in under a minute").tagName).toBe("FIGCAPTION");
+    expect(screen.getByText("How to play, in 20 seconds").tagName).toBe("FIGCAPTION");
     expect(funnel.trackCta).not.toHaveBeenCalled();
   });
 

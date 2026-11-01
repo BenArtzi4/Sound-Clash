@@ -59,6 +59,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-11-01: **A shorter how-to-play video on the home page.** The 52-second video is replaced by a 20-second one: a living room seen from above, four numbered steps with the real game screens, and original music. (#411)
 - 2026-11-01: **How to play and Home now say where the buzzer is.** Every team buzzes on its own phone from its seat; nobody gets up to press a buzzer. (#410)
 - 2026-11-01: **The home page's how-to-play video has its own music.** The same 52-second video now plays an original soundtrack made for it instead of a commercial song, so YouTube can't block or mute it. (#409)
 - 2026-10-31: **The host console fits a laptop screen.** From 1024px wide the round controls sit beside the video instead of under it, so Start game, the buzz status, the score buttons and Continue / Next round are all on the first screen at 1280×720 and up; before, the video filled the screen and the host had to scroll down to start. Phones are unchanged. (#370, #403)

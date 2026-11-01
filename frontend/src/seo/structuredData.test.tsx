@@ -75,7 +75,7 @@ describe("structuredDataFor", () => {
     );
     expect(VIDEO_JSON_LD.name).toBe("How to play Sound Clash");
     expect(VIDEO_JSON_LD.uploadDate).toMatch(/^2026-11-01T\d\d:\d\d:\d\d[+-]\d\d:\d\d$/);
-    expect(VIDEO_JSON_LD.duration).toBe("PT52S");
+    expect(VIDEO_JSON_LD.duration).toBe("PT20S");
     expect(VIDEO_JSON_LD.embedUrl).toBe(`https://www.youtube.com/embed/${HOME_VIDEO.id}`);
     const poster = container.querySelector("figure img");
     expect(VIDEO_JSON_LD.thumbnailUrl[0]).toBe(poster?.getAttribute("src"));

@@ -101,9 +101,9 @@ describe("render (build-time prerender)", () => {
     const button = doc.querySelector("figure button");
     expect(button?.getAttribute("aria-label")).toMatch(/^Play the video: how to play Sound Clash/);
     const poster = button?.querySelector("img");
-    expect(poster?.getAttribute("src")).toBe("https://i.ytimg.com/vi/idcNGYYuGas/oardefault.jpg");
+    expect(poster?.getAttribute("src")).toBe("https://i.ytimg.com/vi/_vFY865K6Qc/oardefault.jpg");
     expect(poster?.getAttribute("loading")).toBe("lazy");
-    expect(doc.querySelector("figcaption")?.textContent).toBe("How to play, in under a minute");
+    expect(doc.querySelector("figcaption")?.textContent).toBe("How to play, in 20 seconds");
     expect(html).not.toContain("<iframe");
     expect(html).not.toContain("youtube-nocookie");
   });
