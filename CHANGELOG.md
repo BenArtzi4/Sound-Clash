@@ -59,6 +59,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-11-01: **How to play and Home now say where the buzzer is.** Every team buzzes on its own phone from its seat; nobody gets up to press a buzzer. (#TBD)
 - 2026-11-01: **The home page's how-to-play video has its own music.** The same 52-second video now plays an original soundtrack made for it instead of a commercial song, so YouTube can't block or mute it. (#409)
 - 2026-10-31: **The host console fits a laptop screen.** From 1024px wide the round controls sit beside the video instead of under it, so Start game, the buzz status, the score buttons and Continue / Next round are all on the first screen at 1280×720 and up; before, the video filled the screen and the host had to scroll down to start. Phones are unchanged. (#370, #403)
 - 2026-10-31: **The host's video now follows YouTube's rules for embedded players.** The back / pause / forward buttons moved off the picture into a bar under the video (a column beside it on a short phone), the video is never smaller than 200 × 200 pixels (on a narrow phone it gets black bars instead of shrinking), and the console no longer loads the next song in a hidden second player, so a new song starts loading when the host taps Next round. A song YouTube fails to load is now retried once on its own. (#401)

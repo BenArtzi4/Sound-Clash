@@ -33,7 +33,7 @@ const SETUP_STEPS: ReadonlyArray<Step> = [
   },
   {
     title: "Teams join",
-    body: "each team scans the QR on one phone",
+    body: "each team scans the QR on one phone, which becomes its buzzer",
   },
 ];
 
@@ -48,7 +48,7 @@ const PLAY_STEPS: ReadonlyArray<Step> = [
   },
   {
     title: "Buzz & judge",
-    body: "first team to buzz answers out loud, then the host scores it",
+    body: "every team taps the buzzer on its own phone, nobody gets up; the first to buzz answers out loud, then the host scores it",
   },
   {
     title: "Bonus",
