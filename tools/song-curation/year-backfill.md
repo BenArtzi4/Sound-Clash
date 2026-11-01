@@ -182,6 +182,7 @@ local apply: *Back in Black* → 1980; a known cover → the original's year. Ad
 ## What's committed vs local
 
 `year_backfill.py` and this runbook are committed. `db/backfill/release_years.sql`
-is committed (reproducible record). Everything under `batches/` — the catalog
-dump, the `year_in` / `year_out` CSVs, and `flagged.csv` — is gitignored working
-data.
+is gitignored (`db/backfill/.gitignore`): it maps youtube ids to years, which is
+catalog data, and the repo is public. Keep it local and delete it once applied.
+Everything under `batches/` — the catalog dump, the `year_in` / `year_out` CSVs,
+and `flagged.csv` — is gitignored working data too.
