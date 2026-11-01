@@ -216,8 +216,9 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
     if (currentSong && currentSong.id === currentRoundSongId) return;
     let cancelled = false;
     // fetchSongById retries transient failures with bounded backoff (F-P1-7)
-    // so one blip doesn't blank the reveal for the whole round.
-    void fetchSongById(currentRoundSongId, () => cancelled).then((song) => {
+    // so one blip doesn't blank the reveal for the whole round. It asks the
+    // game-scoped round_song RPC (mig 053), so it needs the code.
+    void fetchSongById(gameCode, currentRoundSongId, () => cancelled).then((song) => {
       if (cancelled || !song) return;
       setCurrentSong(song);
     });

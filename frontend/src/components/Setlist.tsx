@@ -93,7 +93,7 @@ function SetlistRow({ song, index }: { song: ExportSong; index: number }) {
  * stored.
  */
 export function Setlist({ game, rounds, teams }: Props) {
-  const { status, songs, retry } = useSetlist(rounds, teams);
+  const { status, songs, retry } = useSetlist(game.game_code, rounds, teams);
   const [expanded, setExpanded] = useState(false);
   const [fonts, setFonts] = useState<ExportFonts>({});
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");

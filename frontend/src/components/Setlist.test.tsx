@@ -19,6 +19,7 @@ import {
   resetSupabaseMock,
   setSongBatchFailures,
   setSongFetch,
+  supabaseMock,
 } from "../test/supabaseMock";
 
 // Started 5 Sep 2026 at noon local time, so the file date is the same in any zone.
@@ -85,6 +86,9 @@ describe("Setlist", () => {
     );
     expect(screen.getByTestId("export-download")).toBeEnabled();
     expect(screen.getByTestId("export-share")).toBeEnabled();
+    // One game-scoped read (mig 053) for this game's code.
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.rpc).toHaveBeenCalledWith("game_setlist", { p_game_code: "ABCDEF" });
   });
 
   it("marks soundtrack rounds, hides a repeated artist, and says when nobody got it", async () => {
