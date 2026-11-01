@@ -2,9 +2,10 @@
 --
 -- Idempotent disaster-recovery restore of the durable song catalog
 -- (genres, songs, song_genres) from the deterministic CSV dumps in this
--- directory. Those CSVs are refreshed weekly by
--- .github/workflows/catalog-backup.yml (Mon 04:17 UTC) and committed via PR,
--- so the repo itself is a recoverable backup of the catalog.
+-- directory. The CSVs are NOT in the repo (it is public): the weekly
+-- .github/workflows/catalog-backup.yml run (Mon 04:17 UTC) keeps them as an
+-- encrypted workflow artifact for 90 days. Download the newest one and decrypt
+-- it into this folder first (docs/runbook.md §6 has the exact commands).
 --
 -- USAGE -- run from the REPO ROOT so the relative CSV paths resolve:
 --
