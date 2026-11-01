@@ -59,6 +59,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-11-01: **The home page's how-to-play video has its own music.** The same 52-second video now plays an original soundtrack made for it instead of a commercial song, so YouTube can't block or mute it. (#TBD)
 - 2026-10-31: **The host console fits a laptop screen.** From 1024px wide the round controls sit beside the video instead of under it, so Start game, the buzz status, the score buttons and Continue / Next round are all on the first screen at 1280×720 and up; before, the video filled the screen and the host had to scroll down to start. Phones are unchanged. (#370, #403)
 - 2026-10-31: **The host's video now follows YouTube's rules for embedded players.** The back / pause / forward buttons moved off the picture into a bar under the video (a column beside it on a short phone), the video is never smaller than 200 × 200 pixels (on a narrow phone it gets black bars instead of shrinking), and the console no longer loads the next song in a hidden second player, so a new song starts loading when the host taps Next round. A song YouTube fails to load is now retried once on its own. (#401)
 - 2026-10-31: The decade choice on the Host a game page now starts on **Any year**, so a new host can see they don't have to pick decades. Picking a decade turns it off; tapping Any year clears the decades. Games with no decade picked already played every year, songs from before the 60s included. (#402)

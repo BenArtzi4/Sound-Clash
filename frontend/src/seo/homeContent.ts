@@ -19,11 +19,12 @@ export const HOME_ABOUT = {
 };
 
 // The how-to-play video beside the steps (components/HomeVideo.tsx), also
-// Home's VideoObject structured data. The facts are YouTube's own for this
-// upload (unlisted, embedding allowed): its title, its length (51.6 s, which
-// YouTube rounds to 52) and its upload time. `oardefault` is the thumbnail in
+// Home's VideoObject structured data. Its music is original (no commercial
+// song), so YouTube can't claim, mute or block it in the embed. The facts are
+// YouTube's own for this upload (unlisted, embedding allowed): its title, its
+// length (51.6 s, which YouTube rounds to 52) and its upload time. `oardefault` is the thumbnail in
 // the video's own 9:16 shape (720 x 1280); `hqdefault` is a 4:3 letterbox.
-const VIDEO_ID = "8jxJqUKC09o";
+const VIDEO_ID = "idcNGYYuGas";
 
 export const HOME_VIDEO = {
   id: VIDEO_ID,
@@ -33,7 +34,7 @@ export const HOME_VIDEO = {
   description:
     "One whole Sound Clash game in 52 seconds: the host creates a game, teams join from the QR code on the TV, a song plays, the fastest team buzzes in, the host scores the answer and the winner is crowned.",
   duration: "PT52S",
-  uploadDate: "2026-10-31T12:37:41-07:00",
+  uploadDate: "2026-11-01T01:04:00-07:00",
   thumbnail: `https://i.ytimg.com/vi/${VIDEO_ID}/oardefault.jpg`,
   thumbnailWidth: 720,
   thumbnailHeight: 1280,
