@@ -58,6 +58,16 @@ describe("JoinTeamPage", () => {
     expect(screen.getByRole("heading", { level: 1, name: /join a team/i })).toBeInTheDocument();
   });
 
+  // YouTube API Services Developer Policies III.A.2: users agree to the
+  // privacy policy before they use the game.
+  it("says joining means agreeing to the Terms and the Privacy policy", () => {
+    renderAt("/join");
+    const note = screen.getByTestId("agree-note");
+    expect(note).toHaveTextContent("By joining you agree to the Terms and the Privacy policy.");
+    // Sits with the buttons (under Join game on a phone).
+    expect(note.parentElement).toContainElement(screen.getByRole("button", { name: /join game/i }));
+  });
+
   it("disables submit when fields are empty", () => {
     renderAt("/join");
     const submit = screen.getByRole("button", { name: /join game/i });

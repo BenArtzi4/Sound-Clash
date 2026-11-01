@@ -173,6 +173,14 @@
   display: flex;
 }
 
+/* Privacy and Terms (YouTube API policy III.A.2): a thin strip under the buzz
+   button, part of the 100dvh column, so the page never scrolls. */
+.legal {
+  flex: none;
+  padding: 0.3rem var(--space-4);
+  text-align: center;
+}
+
 /* The BuzzButton's default rounding would expose viewport corners when it
    fills the screen, and its `height: 100%` needs a parent whose height is
    fully resolved — the flex stretch from .buzzZone delivers that. */

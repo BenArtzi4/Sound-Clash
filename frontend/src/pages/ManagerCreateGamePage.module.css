@@ -323,6 +323,15 @@
   color: var(--negative-text);
 }
 
+/* The agreement line (YouTube API policy III.A.2): its own full-width line
+   under Cancel and Create game, inside the sticky bar so it is on screen
+   whenever the button is. */
+.agree {
+  order: 1;
+  flex: 1 0 100%;
+  text-align: center;
+}
+
 @media (min-width: 601px) {
   .actions {
     position: static;
@@ -334,6 +343,9 @@
   .mixCount {
     order: 0;
     flex: 1 1 0;
+    text-align: right;
+  }
+  .agree {
     text-align: right;
   }
 }

@@ -9,6 +9,7 @@ import { trackGameCreated } from "../lib/funnel";
 import { setManagerToken } from "../lib/managerToken";
 import { countSongsInMix, describeMix } from "../lib/songPool";
 import type { Genre, SongPoolCell } from "../lib/types";
+import { AgreeNote } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import styles from "./ManagerCreateGamePage.module.css";
 
@@ -366,6 +367,7 @@ export function ManagerCreateGamePage() {
               "Create game"
             )}
           </button>
+          <AgreeNote action="creating a game" className={styles.agree} />
         </div>
 
         {stillLoading && (
