@@ -1,0 +1,3 @@
+# Generated catalogue data (youtube_id -> release year): the catalogue is the
+# product's core asset and the repo is public, so generated backfills stay local.
+*.sql
