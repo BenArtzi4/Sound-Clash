@@ -12,10 +12,12 @@ export const DEPARTED_TEAM = "A team that left";
  * The songs a finished game played, in round order, each with the team names
  * that claimed its title and artist. The round history and claims already sit
  * in the game snapshot every client holds (useGameChannel); this resolves the
- * played song_ids against the durable, anon-readable `songs` catalog in one
- * batch read, so it still works after the ephemeral game rows are swept.
+ * played song_ids through the game-scoped `game_setlist` RPC (mig 053) in one
+ * read. That RPC falls back to the durable game archive, so it still works
+ * after the ephemeral game rows are swept.
  */
 export function useSetlist(
+  gameCode: string,
   rounds: GameRound[],
   teams: Team[],
 ): { status: SetlistStatus; songs: ExportSong[]; retry: () => void } {
@@ -43,7 +45,7 @@ export function useSetlist(
     }
     let cancelled = false;
     setFailed(false);
-    void fetchSongsByIds(ids, () => cancelled).then((map) => {
+    void fetchSongsByIds(gameCode, ids, () => cancelled).then((map) => {
       if (cancelled) return;
       if (map) setCatalog(map);
       else setFailed(true);
@@ -51,7 +53,7 @@ export function useSetlist(
     return () => {
       cancelled = true;
     };
-  }, [songIdsKey, attempt]);
+  }, [gameCode, songIdsKey, attempt]);
 
   const teamNames = useMemo(() => new Map(teams.map((t) => [t.id, t.name])), [teams]);
 

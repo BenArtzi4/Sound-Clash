@@ -39,9 +39,9 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 | Table | anon SELECT | anon INSERT | anon UPDATE | anon DELETE |
 |---|---|---|---|---|
-| `songs`         | ✅ (all rows) | ❌ | ❌ | ❌ |
+| `songs`         | ✅ (all rows; **to be revoked by mig 054**, the browser no longer reads it since mig 053) | ❌ | ❌ | ❌ |
 | `genres`        | ✅ (all rows) | ❌ | ❌ | ❌ |
-| `song_genres`   | ✅ (all rows) | ❌ | ❌ | ❌ |
+| `song_genres`   | ✅ (all rows; **to be revoked by mig 054**, as `songs`) | ❌ | ❌ | ❌ |
 | `active_games`  | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_teams`    | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
 | `game_rounds`   | ✅ (any row by `game_code`) | ❌ | ❌ | ❌ |
@@ -52,7 +52,9 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `game_history_teams` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 | `game_history_songs` *(mig 033)*  | ❌ (operator-only) | ❌ | ❌ | ❌ |
 
-`service_role` bypasses all RLS. The tables `anon` cannot read are `game_secrets` (mig 034), `team_secrets` (mig 046), the durable `game_history*` tables (mig 033), and `game_round_attempts` (mig 037 — the per-buzz analytics log; the app never reads it and it's not in the Realtime publication, so it's locked to operators/service-role): each has RLS enabled with no read policy and no anon `GRANT` (`service_role` keeps `SELECT`/`INSERT` on the two secret tables, plus a column-level `UPDATE (is_test)` on `game_secrets` since mig 051 so `POST /games` can flag a test game; it still cannot rewrite `manager_token`). **`game_secrets` holds the per-game `manager_token`** — it was moved off `active_games` (mig 034) precisely because `active_games` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate. **`team_secrets` holds the per-team `rejoin_token`** (mig 046, issue #183) and is split off `game_teams` for the identical reason — `game_teams` is anon-readable and in the publication, so a rejoin token stored there would leak the same way. Both secret tables are also deliberately **not** in the Realtime publication. The end-of-game setlist (host console and team phones) reads the round history and claims from each client's own game snapshot plus the anon-readable `songs` catalog, not these.
+`service_role` bypasses all RLS. The tables `anon` cannot read are `game_secrets` (mig 034), `team_secrets` (mig 046), the durable `game_history*` tables (mig 033), and `game_round_attempts` (mig 037 — the per-buzz analytics log; the app never reads it and it's not in the Realtime publication, so it's locked to operators/service-role): each has RLS enabled with no read policy and no anon `GRANT` (`service_role` keeps `SELECT`/`INSERT` on the two secret tables, plus a column-level `UPDATE (is_test)` on `game_secrets` since mig 051 so `POST /games` can flag a test game; it still cannot rewrite `manager_token`). **`game_secrets` holds the per-game `manager_token`** — it was moved off `active_games` (mig 034) precisely because `active_games` is anon-readable **and** in the `supabase_realtime` publication, so a token stored there was fanned out to every subscribed player over the WebSocket and returned by the anon `select *` hydrate. **`team_secrets` holds the per-team `rejoin_token`** (mig 046, issue #183) and is split off `game_teams` for the identical reason — `game_teams` is anon-readable and in the publication, so a rejoin token stored there would leak the same way. Both secret tables are also deliberately **not** in the Realtime publication. The end-of-game setlist (host console and team phones) reads the round history and claims from each client's own game snapshot, and the songs through the `game_setlist` RPC (mig 053), not these tables directly.
+
+**Song catalog reads (`songs`, `song_genres`).** The browser only ever needs the songs of the game it is in. Since migration 053 it reads them only through two game-scoped `SECURITY DEFINER` functions: `game_setlist(p_game_code)` returns the songs a game's rounds played (from the archive once the game is swept) and `round_song(p_game_code, p_song_id)` returns one of them (see `rpc-functions.md` §3g-§3h). A caller gets a song only by naming a game that played it. Migration 053 only adds these functions; **anon can still `SELECT` both tables in full until migration 054** drops the `anon_read_songs` / `anon_read_song_genres` policies and revokes the grant, which is applied once telemetry shows no browser still reads them directly. `genres` (names and slugs only) stays readable for the create page. What stays possible by design: a script that hosts many games can collect songs slowly through `select_next_song`, as a real host does.
 
 | RPC function | anon EXECUTE | service_role EXECUTE |
 |---|---|---|
@@ -62,7 +64,9 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `select_next_song`      | ✅ (token-gated: same as above; added in migration 022) | ✅ |
 | `peek_next_song`        | ✅ (token-gated, read-only next-song probe; added in migration 029) | ✅ |
 | `extend_game`           | ✅ (token-gated "keep playing" TTL bump; added in migration 039) | ✅ |
-| `song_pool_counts`      | ✅ (no token: read-only `SECURITY INVOKER` aggregate of the catalog for the create page's song count; added in migration 052) | ✅ |
+| `song_pool_counts`      | ✅ (no token: read-only aggregate of the catalog for the create page's song count, counts only; added in migration 052, `SECURITY DEFINER` since 053) | ✅ |
+| `game_setlist`          | ✅ (no token: read-only, the songs one game played, live or archived; the game code is the auth; added in migration 053) | ✅ |
+| `round_song`            | ✅ (no token: read-only, one song only if that game played it; added in migration 053) | ✅ |
 | `start_round`           | ❌ | ✅ |
 | `end_round`             | ❌ | ✅ |
 | `award_bonus`           | ❌ | ✅ |
@@ -73,7 +77,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `pick_next_song`        | ❌ | ✅ (internal song picker behind `select_next_song` / `peek_next_song`, which call it as their owner; added in migration 048, rewritten in 049) |
 | `song_artist_keys`      | ❌ | ✅ (pure text helper behind the `songs.artist_keys` generated column; service_role keeps EXECUTE because the admin API and CSV import write songs as it; added in migration 049) |
 
-Seven RPCs are reachable from the browser. Six of them: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), `peek_next_song` (the read-only next-song probe, since migration 029), and `extend_game` (the host's "keep playing" TTL bump, since migration 039 — writes only `active_games.expires_at`, always by a fixed +1h server-side). All six perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. A seventh, `song_pool_counts` (the create page's song count, since migration 052), has no auth check because it needs none: it is `SECURITY INVOKER` (it runs with anon's own privileges), writes nothing, and returns only per-decade, per-genre-set song counts of the `songs` / `song_genres` rows anon can already `SELECT` in full (§2), so it discloses nothing new. The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
+Nine RPCs are reachable from the browser. Six of them: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), `peek_next_song` (the read-only next-song probe, since migration 029), and `extend_game` (the host's "keep playing" TTL bump, since migration 039 — writes only `active_games.expires_at`, always by a fixed +1h server-side). All six perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. Three more are read-only and take no token. `song_pool_counts` (the create page's song count, since migration 052) returns only per-decade, per-genre-set song counts, never a song id or title; migration 052 made it `SECURITY INVOKER` over the tables anon could read, and migration 053 made it `SECURITY DEFINER` (`SET search_path = public`) so it keeps working after migration 054. `game_setlist` and `round_song` (since migration 053) are `SECURITY DEFINER` lookups scoped by the game code: they return a song only for a game that played it (see the catalog note above). The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
 
 ### Why anon can SELECT any game
 
@@ -108,13 +112,15 @@ ALTER TABLE game_history_songs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_round_attempts ENABLE ROW LEVEL SECURITY;
 ```
 
-No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all writes are denied by default. No policy at all is created for the `game_history*` tables → anon reads are denied too.
+No `INSERT`, `UPDATE`, or `DELETE` policies are created for `anon` → all writes are denied by default. No policy at all is created for the `game_history*` tables → anon reads are denied too. `anon_read_songs` and `anon_read_song_genres` are still in place after migration 053; migration 054 will drop them (the browser reads songs through `game_setlist` / `round_song` since 053).
 
 ### Table grants
 
 ```sql
 -- anon needs the base-table privilege before RLS even gates anything (it only
--- ever SELECTs; the read policies above scope it). Migration 006.
+-- ever SELECTs; the read policies above scope it). Migration 006. The songs /
+-- song_genres part is unused by the browser since migration 053 and will be
+-- revoked by migration 054.
 GRANT SELECT ON songs, genres, song_genres, active_games, game_teams, game_rounds TO anon;
 
 -- service_role bypasses RLS but STILL needs base-table privileges (Postgres
@@ -177,6 +183,13 @@ GRANT EXECUTE ON FUNCTION award_attempt(text, uuid, boolean, boolean, boolean, u
 GRANT EXECUTE ON FUNCTION release_buzz_lock(text, uuid)
   TO anon, authenticated, service_role;
 
+-- Read-only, no token (migrations 052 / 053): the create page's song count and
+-- the game-scoped song lookups. Each migration REVOKEs EXECUTE FROM PUBLIC
+-- first, then grants it explicitly.
+GRANT EXECUTE ON FUNCTION song_pool_counts()          TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION game_setlist(text)          TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION round_song(text, uuid)      TO anon, authenticated, service_role;
+
 -- Backend-only RPCs: the creating migrations REVOKE FROM PUBLIC; migration 020
 -- additionally revokes the direct anon/authenticated grants that hosted
 -- Supabase adds, and re-asserts the grant for service_role.
@@ -233,7 +246,7 @@ Several design tradeoffs were surfaced by the security review and **consciously 
 
 **Host-only rejoin token is the cross-device rescue (issue #183).** The per-team `rejoin_token` in `team_secrets` (mig 046, §1–§2) is how a team on a new device gets back in: the host reveals the token to exactly one team via the manager-token-gated `GET /games/{code}/teams/{id}/rejoin-token`, holds up a `…/join/<code>#rt=<token>` QR, and the player's device rejoins via `POST /games/{code}/rejoin`. Because the token is a 128-bit uuid disclosed only to the host (never to players, never over Realtime), it is not guessable the way a team *name* is. It shipped alongside the name-based reclaim; since that was removed (above), it is the only cross-device path, and the D-4 posture is unchanged (the host remains the integrity check). There is deliberately **no** rejoin QR on the player screen and **no** per-team SECURITY DEFINER RPC — the whole flow is host-driven and served by cold-start-tolerant FastAPI endpoints off the buzzer hot path.
 
-**Pre-reveal "answer" is readable before the host reveals it (D-2).** A `game_rounds` row references the currently-playing song, and `songs` metadata (title, artist) is anon-readable (§2), so a determined player could open devtools mid-round, read the round's song id, and look up the title/artist a few seconds before the host reveals it. Accepted, not redesigned, because:
+**Pre-reveal "answer" is readable before the host reveals it (D-2).** A `game_rounds` row references the currently-playing song, and its metadata (title, artist) is readable for that game's code (through `round_song` / `game_setlist` since migration 053; from the anon-readable `songs` table before migration 054), so a determined player could open devtools mid-round, read the round's song id, and look up the title/artist a few seconds before the host reveals it. Accepted, not redesigned, because:
 - **The clip is audibly playing to the entire room.** The "answer" to *name that tune* is literally being broadcast — it is not a secret the DB is leaking, it's the game. Reading it in devtools beats listening by seconds, if at all.
 - **The cheat is narrow and self-defeating.** It requires devtools open mid-round at a party where you're supposed to be listening; it wins a casual trivia point at the cost of playing the game.
 - **Hiding it would tax the hot path.** The clients that render the player and the reveal legitimately need the round's song reference; withholding it would force a per-round server-gated reveal round-trip (latency + complexity) for negligible benefit. Documented per D-2.

@@ -2,11 +2,11 @@
 
 The thirteen PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`.
 
 ## 0. Conventions
 
-- All functions use `SECURITY DEFINER` so they run with the table-owner's privileges (allowing them to bypass RLS for their own writes), except the read-only `song_pool_counts` (§3f), which runs as its caller. Anon callers can only invoke functions that have been explicitly `GRANT EXECUTE ... TO anon`'d.
+- All functions use `SECURITY DEFINER` so they run with the table-owner's privileges (allowing them to bypass RLS for their own writes and for the reads anon can't make itself). `song_pool_counts` (§3f) ran as its caller until migration 053 made it `SECURITY DEFINER` too. Anon callers can only invoke functions that have been explicitly `GRANT EXECUTE ... TO anon`'d.
 - Functions are idempotent where the data model allows (see per-function notes).
 - Error returns use Postgres exception codes: `P0001` for application errors, `P0002` for "no_data_found".
 - Functions are named with `snake_case`. Parameter names prefixed with `p_`.
@@ -490,7 +490,7 @@ RETURNS TABLE(
   song_count integer
 ) LANGUAGE sql
 STABLE
-SECURITY INVOKER
+SECURITY DEFINER  -- SECURITY INVOKER in 052; DEFINER since 053
 SET search_path = public;
 ```
 
@@ -498,15 +498,87 @@ Behavior:
 - One row per (decade, full sorted set of the song's genres), counting the songs that share it. Only songs with `unavailable_at IS NULL` and at least one genre are counted. Every song is in exactly one row, so any mix is counted exactly by a sum: rows whose `decade` is a picked decade (any row when no decade is picked; a `NULL` decade matches no picked decade) and whose `genre_ids` share an id with the picked genres. A song in two picked genres counts once.
 - That sum is `pick_next_song`'s `eligible` set (§3cc) for a game with nothing played: genre membership, the decade filter (migration 032) and the dead-video skip (migration 045). Soundtrack rounds are a property of a genre, not a filter, so they change nothing. `tests/db/test_song_pool_counts.py` plays each of a dozen mixes through `select_next_song` until `no_more_songs` and asserts the served count equals the sum. **If the picker's eligibility changes, change this function with it.**
 - Size: 102 rows (about 8 KB) for the 1,715 songs on 2026-10-31, well under PostgREST's 1,000-row cap; it grows with genre × decade combinations, not with songs.
-- No arguments, no token, no writes. `SECURITY INVOKER`: anon already reads `songs`, `song_genres` and `genres` in full (migration 006), so the function needs no privilege of its own and exposes nothing anon couldn't already count (no song ids or titles).
+- No arguments, no token, no writes. It returns counts only (no song ids or titles). Migration 052 made it `SECURITY INVOKER`, relying on anon's own `SELECT` on `songs` / `song_genres` (migration 006). Migration 053 recreated it as `SECURITY DEFINER` with `SET search_path = public`, same body, output and grants, so the count keeps working once migration 054 revokes those reads.
 
 ### Idempotency
 
-Read-only. The migration is `CREATE OR REPLACE` plus re-runnable `REVOKE`/`GRANT`.
+Read-only. Migrations 052 and 053 are both `CREATE OR REPLACE` (same signature, so the grants survive) plus re-runnable `REVOKE`/`GRANT`. Replaying every migration ends on 053's `SECURITY DEFINER`.
 
 ### Callers
 
 - Create-game page → Supabase PostgREST RPC (`frontend/src/lib/api.ts::loadSongPool`; the sum is `frontend/src/lib/songPool.ts::countSongsInMix`). On any error (`PGRST202` before migration 052 is applied, a network blip) it resolves `null`, and the page shows no count and blocks nothing.
+
+## 3g. `game_setlist`: the songs one game played
+
+Added in migration 053. Called **direct from the browser** for the end-of-game setlist on the host console and every team phone, and used by `round_song` (§3h). It replaces the browser's direct read of the `songs` / `song_genres` tables, so a later migration (054) can revoke anon's `SELECT` on them: the browser gets a song only for a game that played it.
+
+```sql
+CREATE FUNCTION game_setlist(p_game_code text)
+RETURNS TABLE(
+  round_number integer,
+  id           uuid,     -- songs.id
+  title        text,
+  artist       text,
+  youtube_id   text,
+  start_time   integer,
+  release_year integer,  -- NULL when unknown
+  genre_slugs  text[]    -- the song's genre slugs, sorted; '{}' for none
+) LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- **Which game a code means.** The live game while `active_games` has the code (an ended game counts: `end_game` keeps the rows until the sweep). Otherwise the most recent `game_history` archive with that code (`ORDER BY started_at DESC LIMIT 1`; codes are recycled after the TTL, so the archive can hold one code several times). The archive is never consulted while the code is live, so a recycled code never mixes two games. This is what keeps the setlist working on a host or phone tab left open past the 4-hour sweep (§5).
+- One row per played round, in `round_number` order. The archive (migration 033) only says **which** songs played; each row's columns come from the durable `songs` catalog, on both paths, so the archived game still gets `release_year` and genres (the archive keeps neither).
+- A round whose song was deleted from the catalog since (`song_id` set to `NULL` by the foreign key) has no row. The setlist already left such a song out.
+- `genre_slugs` lets the browser derive `is_soundtrack` the same way as before (`frontend/src/lib/soundtrack.ts::deriveIsSoundtrack`, slugs `soundtracks` / `israeli-soundtracks`).
+- A `NULL`, unknown or wrong code returns zero rows; it never raises. No token, no writes: knowing the game code is the auth, as for `buzz_in` and the anon-readable live tables. The current round's song is in the list before the host reveals it, the accepted D-2 trade-off in `security-rls.md` §4.
+- Cost: an index lookup on `game_rounds (game_code, round_number)` (or `game_history (game_code)` + `game_history_songs (game_history_id)`), a primary-key join to `songs`, and one `song_genres` lookup per row. A game plays 20-60 rounds.
+
+### Idempotency
+
+Read-only. The migration drops the function (`IF EXISTS`) and creates it, then re-runs `REVOKE EXECUTE ... FROM PUBLIC` and `GRANT EXECUTE ... TO anon, authenticated, service_role`, all in one transaction (the defensive drop mirrors migration 039, so a later return-shape change can't make a replay fail with 42P13).
+
+### Callers
+
+- Host console and team phones, end of game → Supabase PostgREST RPC (`frontend/src/lib/songMetadata.ts::fetchSongsByIds`, from `hooks/useSetlist.ts`). It maps the rows by song id and joins them with the round history and claims from the client's own game snapshot. Retries twice (300 ms, 900 ms), then the setlist shows Retry.
+
+## 3h. `round_song`: one round's song, for its own game
+
+Added in migration 053. Called **direct from the browser** by the host console's score panel (re-resolving the current round's song after a refresh) and the TV's reveal.
+
+```sql
+CREATE FUNCTION round_song(p_game_code text, p_song_id uuid)
+RETURNS TABLE(
+  id uuid, title text, artist text, youtube_id text,
+  start_time integer, release_year integer, genre_slugs text[]
+) LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT gs.id, gs.title, gs.artist, gs.youtube_id, gs.start_time,
+         gs.release_year, gs.genre_slugs
+    FROM game_setlist(p_game_code) gs
+   WHERE gs.id = p_song_id
+   ORDER BY gs.round_number
+   LIMIT 1;
+$$;
+```
+
+Behavior:
+- `game_setlist` (§3g) filtered to one song, so it returns the song exactly when that game's setlist lists it, live or archived. Zero rows for a song the game didn't play, a wrong or unknown code, or a `NULL` argument; it never raises.
+- **The round's own song is always found.** The browser only asks for the `song_id` of a round row it has already received (Realtime INSERT or the hydrate read), so the round is committed and `game_rounds` has it. That is why the browser treats "no row" as final (the song was deleted since) and retries only on errors. `tests/db/test_catalogue_rpcs.py` opens rounds through `select_next_song` and checks each one's song is returned at once, including the open round and after `end_game`.
+
+### Idempotency
+
+As §3g (same migration, same pattern).
+
+### Callers
+
+- Host console score panel and TV reveal → Supabase PostgREST RPC (`frontend/src/lib/songMetadata.ts::fetchSongById`, from `hooks/useScoring.ts` and `pages/DisplayPage.tsx`). Retries errors with 500 ms / 1 s / 2 s / 4 s backoff.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -870,7 +942,9 @@ migration's one-time backfill of existing teams never double-inserts.
 | `select_next_song` | ✅ (token-gated) | ✅ | Browser (manager page) |
 | `peek_next_song` | ✅ (token-gated, read-only) | ✅ | Browser (manager page) |
 | `extend_game` | ✅ (token-gated) | ✅ | Browser (manager page) |
-| `song_pool_counts` | ✅ (no token; read-only aggregate, SECURITY INVOKER) | ✅ | Browser (create-game page) |
+| `song_pool_counts` | ✅ (no token; read-only aggregate, SECURITY DEFINER since 053) | ✅ | Browser (create-game page) |
+| `game_setlist` | ✅ (no token; read-only, songs of that game only) | ✅ | Browser (end-of-game setlist on host console and team phones) |
+| `round_song` | ✅ (no token; read-only, one song of that game) | ✅ | Browser (host score panel, TV reveal) |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |

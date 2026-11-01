@@ -212,7 +212,9 @@ from the genre tag. The value is still surfaced everywhere as a field named
 SQL via `EXISTS` over `song_genres → genres` (see `rpc-functions.md §3c`), the admin list
 (`backend/app/routers/admin_songs.py`) computes it in Python and the in-game React pages
 (`frontend/src/lib/soundtrack.ts`) compute it in TS, both from the genre slugs
-(`SOUNDTRACK_GENRE_SLUGS` in `backend/app/constants.py`).
+(`SOUNDTRACK_GENRE_SLUGS` in `backend/app/constants.py`). The React pages get those slugs
+from the `genre_slugs` column of the `round_song` / `game_setlist` RPCs (migration 053,
+`rpc-functions.md §3g-§3h`), not from the `song_genres` table.
 
 Convention for a soundtrack row: **`artist` holds the film/show name** (film / TV / game /
 musical) — it is the answer players must give and the only text revealed on the display
@@ -362,7 +364,7 @@ The 014 migration dropped `source_points` and `timeout_penalty` columns. The 016
 
 ## 5. Row-Level Security (summary)
 
-Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the six anon-EXECUTE RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The exceptions are the durable history tables (`game_history*`, mig 033), the secret tables (`game_secrets`, mig 034; `team_secrets`, mig 046), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
+Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the six anon-EXECUTE RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The browser reads song metadata only through the read-only, game-scoped `game_setlist` / `round_song` RPCs (mig 053; a song only for a game that played it, from the archive once the game is swept), and the create page's counts through `song_pool_counts`; anon's direct `SELECT` on `songs` / `song_genres` is still granted until migration 054 revokes it. `genres` stays readable. The exceptions are the durable history tables (`game_history*`, mig 033), the secret tables (`game_secrets`, mig 034; `team_secrets`, mig 046), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
 
 Full policy DDL and threat model: see **`security-rls.md`**.
 
@@ -379,6 +381,8 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | `peek_next_song(p_game_code, p_manager_token)` | Read-only next-song candidate, so the Next-round tap can load it on the host's player in the gesture (no round advance) | Browser via PostgREST (`manager_token`) |
 | `extend_game(p_game_code, p_manager_token)` | Push `expires_at` out by 1h ("Keep playing +1h") | Browser via PostgREST (`manager_token`) |
 | `song_pool_counts()` | Read-only: playable songs per (decade, genre set), for the create page's "N songs in this mix" | Browser via PostgREST (anon, no token) |
+| `game_setlist(p_game_code)` | Read-only: the songs a game's rounds played, in round order (live rows, else the most recent archive with that code), for the end-of-game setlist | Browser via PostgREST (anon, no token) |
+| `round_song(p_game_code, p_song_id)` | Read-only: one song, only if that game played it, for the host score panel and the TV reveal | Browser via PostgREST (anon, no token) |
 | `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | Internal (called by `select_next_song`) |
 | `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal; nothing calls it today (`start_round` closes the prior round itself) |
 | `award_bonus(p_game_code, p_team_id, p_points DEFAULT 4)` | Host-discretion bonus to a team | FastAPI |
@@ -430,7 +434,8 @@ db/migrations/
 ├── 049_song_spacing.sql        -- songs.artist_keys generated column + pick_next_song: no genre twice in a row, no artist again within 8 rounds, artists heard less preferred
 │   … 050: release_year in select_next_song / peek_next_song rows
 ├── 051_test_game_flag.sql      -- game_secrets.is_test + game_history.is_test, archive_game copies it, mark_game_test fix-up
-└── 052_song_pool_counts.sql    -- read-only song_pool_counts(): playable songs per (decade, genre set), so the create page counts any mix and blocks an empty one (#375)
+├── 052_song_pool_counts.sql    -- read-only song_pool_counts(): playable songs per (decade, genre set), so the create page counts any mix and blocks an empty one (#375)
+└── 053_catalogue_rpcs.sql      -- game-scoped game_setlist() / round_song() so the browser stops reading songs directly; song_pool_counts() becomes SECURITY DEFINER (expand step; the revoke is 054)
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.

@@ -514,7 +514,9 @@ The weekly `.github/workflows/dead-video-scan.yml` pages the catalog with `commi
 
 ## 3. Postgres RPC (PostgREST)
 
-Called by the **browser** with the anon key. Seven functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the five token-gated host RPCs `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and the read-only `song_pool_counts` (§3.2). Every other RPC is revoked from anon (mig 020).
+Called by the **browser** with the anon key. Nine functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the five token-gated host RPCs `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and three read-only ones: `song_pool_counts` (§3.2), `game_setlist` (§3.3) and `round_song` (§3.4). Every other RPC is revoked from anon (mig 020).
+
+The browser gets song metadata only through `game_setlist` and `round_song` (migration 053); it does not read the `songs` or `song_genres` tables. Genre names come from the `genres` table, which stays anon-readable.
 
 ### 3.1 `POST /rest/v1/rpc/buzz_in`
 
@@ -556,6 +558,44 @@ The create page's song count (migration 052, issue #375). No arguments, no token
 ```
 
 The page sums `song_count` over the rows whose `decade` is one of the picked decades (any, when none is picked; `null` matches none) and whose `genre_ids` include a picked genre (`frontend/src/lib/songPool.ts`). It shows the sum as "N songs in this mix" and disables **Create game** at 0. On any error (for example `PGRST202` before migration 052 is applied) the page shows no count and blocks nothing. `POST /games` itself does not check the pool.
+
+### 3.3 `POST /rest/v1/rpc/game_setlist`
+
+The end-of-game setlist on the host console and team phones (migration 053). No token: `supabase.rpc("game_setlist", { p_game_code })`, called from `frontend/src/lib/songMetadata.ts::fetchSongsByIds` (`hooks/useSetlist.ts`).
+
+**Body**:
+```json
+{ "p_game_code": "ABCDEF" }
+```
+
+**Response 200**: one row per played round, in round order. The live game's rounds while its rows exist; after the 4-hour sweep, the most recent archived game with that code. An unknown code gives `[]`, never an error.
+```json
+[
+  {
+    "round_number": 1,
+    "id": "<song_uuid>",
+    "title": "Song Title",
+    "artist": "Artist Name",
+    "youtube_id": "dQw4w9WgXcQ",
+    "start_time": 30,
+    "release_year": 1987,
+    "genre_slugs": ["pop", "rock"]
+  }
+]
+```
+
+`release_year` is `null` when unknown; `genre_slugs` is sorted and `[]` for a song in no genre. The browser derives `is_soundtrack` from it (`soundtracks` / `israeli-soundtracks`). A song deleted from the catalog since it played has no row. The setlist joins the rows by `id` with the round history and claims from its own game snapshot.
+
+### 3.4 `POST /rest/v1/rpc/round_song`
+
+One round's song, for the host console's score panel (after a refresh) and the TV reveal (migration 053). No token: `supabase.rpc("round_song", { p_game_code, p_song_id })`, called from `frontend/src/lib/songMetadata.ts::fetchSongById` (`hooks/useScoring.ts`, `pages/DisplayPage.tsx`).
+
+**Body**:
+```json
+{ "p_game_code": "ABCDEF", "p_song_id": "<song_uuid>" }
+```
+
+**Response 200**: `[]` or one row with the §3.3 columns minus `round_number`. A song comes back only if that game played it (live or archived), so `[]` means "not this game's song" or "deleted since". The browser asks only for the `song_id` of a round it has already received, so the round's song is always found; it retries errors (500 ms, 1 s, 2 s, 4 s), never an empty result.
 
 ---
 

@@ -1,7 +1,7 @@
 """song_pool_counts(): the create page's song count for a genre + decade mix.
 
 Spec: docs/rpc-functions.md §3f and db/migrations/052_song_pool_counts.sql
-(issue #375).
+(issue #375); SECURITY DEFINER since db/migrations/053_catalogue_rpcs.sql.
 
 The function returns the playable catalog grouped by (decade, sorted genre
 ids). The create page sums song_count over the rows whose decade is selected
@@ -182,14 +182,16 @@ async def test_anon_can_call_it(db: asyncpg.Connection, anon_conn: asyncpg.Conne
 
 
 @pytest.mark.asyncio
-async def test_is_read_only_security_invoker(db: asyncpg.Connection) -> None:
-    """No privilege of its own: it runs as the caller (anon reads the catalog
-    tables already) and is STABLE, so PostgREST runs it in a read-only
-    transaction."""
+async def test_is_read_only_security_definer(db: asyncpg.Connection) -> None:
+    """Migration 053: SECURITY DEFINER with a pinned search_path (it was
+    SECURITY INVOKER in 052), so it keeps counting once anon can no longer read
+    songs / song_genres. STABLE, so PostgREST runs it in a read-only
+    transaction. The anon-after-revoke check is in test_catalogue_rpcs.py."""
     row = await db.fetchrow(
-        "SELECT prosecdef, provolatile::text AS provolatile FROM pg_proc "
+        "SELECT prosecdef, provolatile::text AS provolatile, proconfig FROM pg_proc "
         "WHERE proname = 'song_pool_counts'"
     )
     assert row is not None
-    assert row["prosecdef"] is False
+    assert row["prosecdef"] is True
     assert row["provolatile"] == "s"
+    assert "search_path=public" in (row["proconfig"] or [])
