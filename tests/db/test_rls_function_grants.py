@@ -8,9 +8,11 @@ legacy un-tokenised overloads retired by migration 023), ``select_next_song``
 (as of migration 022), ``peek_next_song`` (the read-only prebuffer probe, as of
 migration 029), and ``extend_game`` (the "keep playing" TTL bump, as of
 migration 039). Each does its own in-function manager-token check before
-performing any work, so the function-level EXECUTE grant is safe. A seventh,
-``song_pool_counts`` (migration 052), takes no token: it is a read-only
-SECURITY INVOKER aggregate over catalog tables anon can already read. The remaining
+performing any work, so the function-level EXECUTE grant is safe. Three more
+take no token and write nothing: ``song_pool_counts`` (migration 052; SECURITY
+DEFINER since 053), a read-only aggregate of song counts, and ``game_setlist``
+/ ``round_song`` (migration 053), which return song metadata only for songs the
+given game played. The remaining
 backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
 ``end_game``, ``cleanup_expired_games``, ``archive_game``,
 ``set_song_availability``, ``pick_next_song``, ``song_artist_keys`` -- must
@@ -144,6 +146,17 @@ async def test_anon_can_execute_extend_game_but_token_check_runs(
         )
     assert not isinstance(exc.value, asyncpg.InsufficientPrivilegeError)
     assert exc.value.sqlstate in ("P0002", "28000")
+
+
+@pytest.mark.asyncio
+async def test_anon_can_execute_the_catalogue_rpcs(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 053: anon CAN call game_setlist and round_song. An unknown
+    game code is not an error, just zero rows (behaviour is pinned in
+    test_catalogue_rpcs.py)."""
+    assert await anon_conn.fetch("SELECT * FROM game_setlist($1)", "ABCDEF") == []
+    assert await anon_conn.fetch("SELECT * FROM round_song($1, $2)", "ABCDEF", uuid.uuid4()) == []
 
 
 @pytest.mark.asyncio
@@ -408,9 +421,15 @@ async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) ->
             "p_game_code text, p_manager_token uuid",
         ),
         # song_pool_counts: the create page's song count (migration 052). No
-        # arguments and no token: it only aggregates catalog rows anon can
-        # already read (SECURITY INVOKER).
+        # arguments and no token: it returns counts only. SECURITY DEFINER
+        # since migration 053, so it keeps working once anon loses SELECT on
+        # songs / song_genres.
         ("song_pool_counts", ""),
+        # game_setlist / round_song (migration 053): the end-of-game setlist
+        # and one round's song (host score panel, TV reveal). No token: the
+        # game code scopes them to the songs that game played.
+        ("game_setlist", "p_game_code text"),
+        ("round_song", "p_game_code text, p_song_id uuid"),
     ],
 )
 async def test_anon_executable_rpc_grant_matrix(
