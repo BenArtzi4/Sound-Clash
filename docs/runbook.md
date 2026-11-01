@@ -246,6 +246,15 @@ Triage:
 
 Songs are durable; they should never be deleted en masse. Loss is an incident.
 
+### 4.7 "Possible song-catalogue harvesting" issue
+
+`catalogue-harvest-scan.yml` runs daily (and on dispatch, with a `dry_run` input) and reads `game_history` for the last 26 hours. It opens one `catalogue-harvest` issue, or comments on the open one, when a non-test game had at most one team and 80+ rounds, any game had 350+ rounds, or games with at most one team added up to 300+ rounds. Real rooms don't do this: no-team games stop by about 50 rounds and one-team games by about 20. A script that walks `select_next_song` to copy the songs does.
+
+Triage:
+1. Look the games up (`/recent-games`, or `game_history` by `game_code`): team count, round count, host browser in Tempo (`Headless` means a script).
+2. Our own harness games are `is_test` and never appear. An untagged one of ours: tag it with `mark_game_test` and close the issue.
+3. A stranger's script: nothing was changed automatically. Tell the maintainer; options are a per-game round pace limit or blocking the source.
+
 ## 5. Incident Response
 
 ### Severity classes
