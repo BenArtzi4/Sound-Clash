@@ -12,7 +12,7 @@ export const HOME_ABOUT = {
   steps: [
     "The host picks genres and decades and gets a 6-letter game code.",
     "Each team scans the QR code on the TV, or types the code, and one phone becomes its buzzer.",
-    "Songs play, teams buzz, the host scores every answer and the TV keeps the scoreboard.",
+    "Songs play from the host's phone or laptop, every team buzzes on its own phone without leaving its seat, the host scores every answer and the TV keeps the scoreboard.",
   ],
   catalog:
     "About 1,700 songs: pop, rock, hip-hop, electronic, movie and TV soundtracks, Disney, and Israeli hits across the decades.",
