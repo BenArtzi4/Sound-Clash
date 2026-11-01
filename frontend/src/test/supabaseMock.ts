@@ -12,10 +12,13 @@ interface State {
   // shape PostgREST returns on failure) so tests can exercise a failed
   // snapshot. Cleared by setHydrateError(null) / resetSupabaseMock().
   hydrateError: { message: string; code?: string } | null;
-  rpcResponse: { data: unknown; error: { message: string; code?: string } | null };
-  // Map of song id -> row used by from("songs").maybeSingle() lookups so the
-  // manager-refresh code path (re-resolves currentRound.song_id back to a
-  // song record) can be exercised in unit tests.
+  rpcResponse: RpcResult;
+  // Map of song id -> row served by the game-scoped song RPCs (migration 053):
+  // rpc("round_song") resolves one id (the manager-refresh and TV-reveal code
+  // paths re-resolve currentRound.song_id back to a song record) and
+  // rpc("game_setlist") returns every stored song (the end-of-game setlist).
+  // The mock does not scope songs to a game; tests assert the game code the
+  // caller passed instead.
   songsById: Record<
     string,
     {
@@ -28,17 +31,24 @@ interface State {
       release_year: number | null;
     }
   >;
-  // When > 0, the next N from("songs")...maybeSingle() lookups resolve with
-  // songFetchError instead of a row so tests can exercise the bounded backoff
-  // retry in lib/songMetadata.ts. songFetchAttempts counts every lookup.
+  // When > 0, the next N rpc("round_song") lookups resolve with songFetchError
+  // instead of a row so tests can exercise the bounded backoff retry in
+  // lib/songMetadata.ts. songFetchAttempts counts every lookup.
   songFetchFailuresRemaining: number;
   songFetchError: { message: string; code?: string };
   songFetchAttempts: number;
-  // Same idea for the setlist's batch lookup (from("songs").select().in("id",
-  // ids)): the next N batch reads fail, and songBatchAttempts counts them all.
+  // Same idea for the setlist's batch lookup (rpc("game_setlist")): the next N
+  // batch reads fail, and songBatchAttempts counts them all.
   songBatchFailuresRemaining: number;
   songBatchAttempts: number;
 }
+
+type RpcResult = { data: unknown; error: { message: string; code?: string } | null };
+
+// The catalog tables the browser must not read directly since migration 053
+// (it goes through round_song / game_setlist). The mock refuses them so a
+// regression to a direct read fails the tests instead of passing silently.
+const CATALOG_TABLES: ReadonlySet<string> = new Set(["songs", "song_genres"]);
 
 const state: State = {
   listeners: { active_games: [], game_teams: [], game_rounds: [] },
@@ -72,75 +82,26 @@ channelMock.subscribe.mockImplementation((cb: (status: string) => void) => {
   return channelMock;
 });
 
-function buildSelect(table: TableName | "songs") {
-  let pendingId: string | null = null;
-  let pendingInIds: string[] | null = null;
+function buildSelect(table: TableName) {
+  if (CATALOG_TABLES.has(table)) {
+    throw new Error(
+      `supabaseMock: the browser must not read "${table}" directly; use the round_song / game_setlist RPCs (migration 053)`,
+    );
+  }
   const builder = {
     select: vi.fn(() => builder),
-    eq: vi.fn((column: string, value: unknown) => {
-      if (table === "songs" && column === "id" && typeof value === "string") {
-        pendingId = value;
-      }
-      return builder;
-    }),
-    // Batch lookup used by the setlist: from("songs").select(...).in("id", ids).
-    in: vi.fn((column: string, values: readonly unknown[]) => {
-      if (table === "songs" && column === "id") {
-        pendingInIds = (values as string[]).slice();
-      }
-      return builder;
-    }),
+    eq: vi.fn(() => builder),
+    in: vi.fn(() => builder),
     order: vi.fn(() => builder),
     maybeSingle: vi.fn(async () => {
       if (table === "active_games") {
         if (state.hydrateError) return { data: null, error: state.hydrateError };
         return { data: state.hydrate.game, error: null };
       }
-      if (table === "songs" && pendingId !== null) {
-        state.songFetchAttempts += 1;
-        if (state.songFetchFailuresRemaining > 0) {
-          state.songFetchFailuresRemaining -= 1;
-          return { data: null, error: state.songFetchError };
-        }
-        const row = state.songsById[pendingId];
-        if (!row) return { data: null, error: null };
-        // The in-game pages no longer select the dropped is_soundtrack column;
-        // they embed genre slugs (`song_genres(genres(slug))`) and derive it.
-        // Reproduce that shape from the stored flag so tests keep setting
-        // is_soundtrack directly.
-        const song_genres = row.is_soundtrack
-          ? [{ genres: { slug: "soundtracks" } }]
-          : [{ genres: { slug: "rock" } }];
-        return { data: { ...row, song_genres }, error: null };
-      }
       return { data: null, error: null };
     }),
     single: vi.fn(async () => ({ data: null, error: null })),
     then<T>(onfulfilled?: (value: { data: unknown; error: unknown }) => T): Promise<T> {
-      if (table === "songs" && pendingInIds !== null) {
-        state.songBatchAttempts += 1;
-        if (state.songBatchFailuresRemaining > 0) {
-          state.songBatchFailuresRemaining -= 1;
-          return Promise.resolve({ data: null, error: { message: "song batch failed" } }).then(
-            onfulfilled,
-          );
-        }
-        const rows = [];
-        for (const id of pendingInIds) {
-          const row = state.songsById[id];
-          if (row) {
-            rows.push({
-              id: row.id,
-              title: row.title,
-              artist: row.artist,
-              youtube_id: row.youtube_id,
-              release_year: row.release_year,
-              song_genres: [{ genres: { slug: row.is_soundtrack ? "soundtracks" : "rock" } }],
-            });
-          }
-        }
-        return Promise.resolve({ data: rows, error: null }).then(onfulfilled);
-      }
       const data =
         table === "game_teams"
           ? state.hydrate.teams
@@ -153,11 +114,58 @@ function buildSelect(table: TableName | "songs") {
   return builder;
 }
 
+// A round_song / game_setlist row (migration 053), built from a stored song.
+// The RPCs return the song's genre slugs and the page derives is_soundtrack
+// from them, so reproduce a slug from the stored flag: tests keep setting
+// is_soundtrack directly.
+function catalogRow(row: State["songsById"][string]) {
+  return {
+    id: row.id,
+    title: row.title,
+    artist: row.artist,
+    youtube_id: row.youtube_id,
+    start_time: row.start_time,
+    release_year: row.release_year,
+    genre_slugs: [row.is_soundtrack ? "soundtracks" : "rock"],
+  };
+}
+
+function roundSong(args: Record<string, unknown> | undefined): RpcResult {
+  state.songFetchAttempts += 1;
+  if (state.songFetchFailuresRemaining > 0) {
+    state.songFetchFailuresRemaining -= 1;
+    return { data: null, error: state.songFetchError };
+  }
+  const songId = typeof args?.p_song_id === "string" ? args.p_song_id : "";
+  const row = state.songsById[songId];
+  // Zero rows (not an error) for a song that game didn't play.
+  return { data: row ? [catalogRow(row)] : [], error: null };
+}
+
+function gameSetlist(): RpcResult {
+  state.songBatchAttempts += 1;
+  if (state.songBatchFailuresRemaining > 0) {
+    state.songBatchFailuresRemaining -= 1;
+    return { data: null, error: { message: "song batch failed" } };
+  }
+  const rows = Object.values(state.songsById).map((row, i) => ({
+    round_number: i + 1,
+    ...catalogRow(row),
+  }));
+  return { data: rows, error: null };
+}
+
+async function rpcImpl(fn: string, args?: Record<string, unknown>): Promise<RpcResult> {
+  if (fn === "round_song") return roundSong(args);
+  if (fn === "game_setlist") return gameSetlist();
+  return state.rpcResponse;
+}
+
 export const supabaseMock = {
   channel: vi.fn(() => channelMock),
   removeChannel: vi.fn(),
-  from: vi.fn((table: TableName | "songs") => buildSelect(table)),
-  rpc: vi.fn(async () => state.rpcResponse),
+  from: vi.fn((table: TableName) => buildSelect(table)),
+  rpc: vi.fn(rpcImpl),
 };
 
 export function resetSupabaseMock(): void {
@@ -176,6 +184,9 @@ export function resetSupabaseMock(): void {
   supabaseMock.removeChannel.mockClear();
   supabaseMock.from.mockClear();
   supabaseMock.rpc.mockClear();
+  // Re-assert the routing implementations (a test may have replaced them).
+  supabaseMock.from.mockImplementation((table: TableName) => buildSelect(table));
+  supabaseMock.rpc.mockImplementation(rpcImpl);
   channelMock.on.mockClear();
   channelMock.subscribe.mockClear();
   channelMock.unsubscribe.mockClear();

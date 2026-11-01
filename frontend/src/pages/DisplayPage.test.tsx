@@ -21,6 +21,7 @@ import {
   setHydrate,
   setSongFetch,
   setSongFetchFailures,
+  supabaseMock,
 } from "../test/supabaseMock";
 import { DisplayPage } from "./DisplayPage";
 
@@ -508,6 +509,11 @@ describe("DisplayPage board", () => {
     );
     expect(screen.getByTestId("display-reveal-title")).toHaveAttribute("data-revealed", "true");
     expect(screen.getByTestId("display-reveal-artist")).toHaveAttribute("data-revealed", "false");
+    // The song comes from the game-scoped RPC (mig 053), for this game's code.
+    expect(supabaseMock.rpc).toHaveBeenCalledWith("round_song", {
+      p_game_code: "ABCDEF",
+      p_song_id: "song-1",
+    });
   });
 
   it("retries a failed song-metadata fetch so the reveal recovers within the round", async () => {

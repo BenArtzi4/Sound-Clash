@@ -178,7 +178,8 @@ export function useScoring(
     let cancelled = false;
     // fetchSongById retries transient failures with bounded backoff (F-P1-7)
     // so one blip doesn't leave the post-refresh player empty for the round.
-    void fetchSongById(currentRoundSongId, () => cancelled).then((song) => {
+    // It asks the game-scoped round_song RPC (mig 053), so it needs the code.
+    void fetchSongById(gameCode, currentRoundSongId, () => cancelled).then((song) => {
       if (cancelled || !song) return;
       setCurrentSong(song);
       if (playerReady) {

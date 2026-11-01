@@ -4,13 +4,15 @@
 // the SQL in select_next_song and SOUNDTRACK_GENRE_SLUGS in
 // backend/app/constants.py -- keep the three in sync.
 //
-// In-game pages (Display, Manager) fetch the current song directly and can no
-// longer select the dropped column, so they embed the song's genre slugs
-// (`song_genres(genres(slug))`) and compute the flag client-side.
+// In-game pages (Display, Manager) and the end-of-game setlist get their songs
+// from the game-scoped round_song / game_setlist RPCs (migration 053), which
+// return each song's genre slugs; lib/songMetadata.ts computes the flag from
+// them here.
 
 export const SOUNDTRACK_GENRE_SLUGS = ["soundtracks", "israeli-soundtracks"] as const;
 
-// Shape of a `song_genres(genres(slug))` PostgREST embed row.
+// One genre of a song, in the shape of a `song_genres(genres(slug))` PostgREST
+// embed row (lib/songMetadata.ts maps the RPCs' slug arrays into it).
 export interface SongGenreSlugEmbed {
   genres: { slug: string | null } | null;
 }
