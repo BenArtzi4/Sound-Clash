@@ -106,6 +106,31 @@ describe("TeamGameplayPage", () => {
     await waitFor(() => expect(screen.getByTestId("buzz")).toBeEnabled());
   });
 
+  // YouTube API Services Developer Policies III.A.2.a: Privacy and Terms stay
+  // reachable during a game, under the buzz button and never inside it.
+  it("keeps Privacy and Terms links under the buzz button", async () => {
+    window.localStorage.setItem(
+      "game:ABCDEF:team",
+      JSON.stringify({ id: "team-1", name: "Alice" }),
+    );
+    setHydrate({
+      game: makeActiveGame({ status: "playing" }),
+      teams: [makeTeam({ id: "team-1" })],
+      rounds: [],
+    });
+    renderAt("/team/ABCDEF");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const links = screen.getByTestId("legal-links");
+    const buzz = screen.getByTestId("buzz");
+    expect(buzz).not.toContainElement(links);
+    // Last in the page, after the buzz zone.
+    expect(links.parentElement?.lastElementChild).toBe(links);
+    expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("target", "_blank");
+  });
+
   it("flips the buzz button to the winner tone when own team holds the lock", async () => {
     window.localStorage.setItem(
       "game:ABCDEF:team",
@@ -195,6 +220,7 @@ describe("TeamGameplayPage", () => {
     });
     expect(screen.getByText(/^final results$/i)).toBeInTheDocument();
     expect(screen.queryByTestId("buzz")).not.toBeInTheDocument();
+    expect(screen.getByTestId("legal-links")).toBeInTheDocument();
   });
 
   it("gives players the setlist under the podium, and keeps it after the rows are swept", async () => {

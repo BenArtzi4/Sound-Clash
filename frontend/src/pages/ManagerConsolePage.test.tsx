@@ -402,6 +402,27 @@ describe("ManagerConsolePage", () => {
     });
   }
 
+  // YouTube API Services Developer Policies III.A.2.a: the privacy policy
+  // stays reachable during a game, from the End game row.
+  it("keeps Privacy and Terms links beside End game during play", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      teams: [makeTeam({ id: "t1", name: "Team 1" })],
+      rounds: [makeRound({ round_number: 1 })],
+    });
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    const links = screen.getByTestId("legal-links");
+    expect(links.parentElement).toContainElement(screen.getByTestId("end-game"));
+    expect(within(links).getByRole("link", { name: "Privacy" })).toHaveAttribute(
+      "target",
+      "_blank",
+    );
+    expect(within(links).getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
+  });
+
   it("resumes the live player when the tab becomes visible during play with no buzz", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing", round_number: 1 }),
@@ -1954,6 +1975,7 @@ describe("ManagerConsolePage", () => {
     expect(screen.queryByTestId("continue-round")).not.toBeInTheDocument();
     // The post-game song export lives alongside the scoreboard (host-only).
     expect(screen.getByTestId("export-download")).toBeInTheDocument();
+    expect(screen.getByTestId("legal-links")).toBeInTheDocument();
   });
 
   // T4.11 / I-FinalBoard: when the game rows are deleted (End game, or the

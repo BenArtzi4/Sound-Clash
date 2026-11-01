@@ -5,6 +5,16 @@
   justify-content: center;
   padding: var(--space-7) var(--space-4);
 }
+/* Short phones: the agreement line under Join game made the form 19px taller
+   than a 360x640 screen with the 48px padding. The form is centred, so the
+   padding only shows when the screen is nearly full; 32px keeps it on one
+   screen (measured 2026-11-01: no scroll at 360x640, Join game ends at 513). */
+@media (max-width: 600px) and (max-height: 700px) {
+  .shell {
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+}
 .card {
   width: 100%;
   max-width: 420px;
@@ -82,12 +92,23 @@
 .actions :global(.btn-primary) {
   width: 100%;
 }
+/* The agreement line (YouTube API policy III.A.2): under Join game on a phone,
+   on its own line under both buttons on wider screens. */
+.agree {
+  text-align: center;
+}
 @media (min-width: 601px) {
   .actions {
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: flex-end;
   }
   .actions :global(.btn-primary) {
     width: auto;
+  }
+  .agree {
+    order: 1;
+    flex: 1 0 100%;
+    text-align: right;
   }
 }

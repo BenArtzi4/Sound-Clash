@@ -21,6 +21,7 @@ const HowToPlayPage = lazy(() =>
 const PrivacyPage = lazy(() =>
   import("./pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })),
 );
+const TermsPage = lazy(() => import("./pages/TermsPage").then((m) => ({ default: m.TermsPage })));
 const TeamGameplayPage = lazy(() =>
   import("./pages/TeamGameplayPage").then((m) => ({ default: m.TeamGameplayPage })),
 );
@@ -61,6 +62,7 @@ export function AppRoutes() {
             <Route path="/" element={<HomePage />} />
             <Route path="/how-to-play" element={<HowToPlayPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
             {LANDING_PATHS.map((path) => (
               <Route key={path} path={path} element={<LandingPage path={path} />} />
             ))}

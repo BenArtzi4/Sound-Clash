@@ -63,6 +63,21 @@ describe("ManagerCreateGamePage", () => {
     expect(screen.getByText("Sound Clash")).toBeInTheDocument();
   });
 
+  // YouTube API Services Developer Policies III.A.2: the host agrees to the
+  // privacy policy before creating a game.
+  it("says creating a game means agreeing to the Terms and the Privacy policy", async () => {
+    vi.mocked(listGenres).mockResolvedValueOnce([]);
+    renderPage();
+    const note = await screen.findByTestId("agree-note");
+    expect(note).toHaveTextContent(
+      "By creating a game you agree to the Terms and the Privacy policy.",
+    );
+    // In the (sticky) action bar with Create game, so it is on screen with it.
+    expect(note.parentElement).toContainElement(
+      screen.getByRole("button", { name: /create game/i }),
+    );
+  });
+
   it("loads genres and disables submit until at least one is selected", async () => {
     vi.mocked(listGenres).mockResolvedValueOnce([
       { id: "g1", name: "Rock", slug: "rock" },

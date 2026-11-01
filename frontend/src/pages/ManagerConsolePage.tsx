@@ -5,6 +5,7 @@ import { EndScreen } from "../components/EndScreen";
 import { ExpiryCountdown } from "../components/ExpiryCountdown";
 import { HostRecoveryLink } from "../components/HostRecoveryLink";
 import { InviteButton, InviteCard } from "../components/InviteTeams";
+import { LegalLinks } from "../components/LegalLinks";
 import { Skeleton } from "../components/Skeleton";
 import { Setlist } from "../components/Setlist";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
@@ -167,6 +168,7 @@ export function ManagerConsolePage() {
             <Link to="/" className="btn btn-primary">
               Back to home
             </Link>
+            <LegalLinks />
           </div>
         </main>
       );
@@ -208,6 +210,7 @@ export function ManagerConsolePage() {
           <Link to="/" className="btn btn-primary">
             Back to home
           </Link>
+          <LegalLinks />
         </div>
       </main>
     );
@@ -564,6 +567,9 @@ export function ManagerConsolePage() {
           >
             End game
           </button>
+          {/* Beside End game, in the row it already takes: no extra height,
+              and nowhere near the video. */}
+          <LegalLinks className={styles.footerLegal} />
         </footer>
       </div>
 
