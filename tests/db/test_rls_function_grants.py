@@ -422,8 +422,8 @@ async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) ->
         ),
         # song_pool_counts: the create page's song count (migration 052). No
         # arguments and no token: it returns counts only. SECURITY DEFINER
-        # since migration 053, so it keeps working once anon loses SELECT on
-        # songs / song_genres.
+        # since migration 053, so it keeps working now that migration 054 has
+        # revoked anon's SELECT on songs / song_genres.
         ("song_pool_counts", ""),
         # game_setlist / round_song (migration 053): the end-of-game setlist
         # and one round's song (host score panel, TV reveal). No token: the
