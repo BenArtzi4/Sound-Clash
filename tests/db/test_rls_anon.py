@@ -1,4 +1,5 @@
-"""RLS; the anon role can SELECT but never mutate any table.
+"""RLS; the anon role can SELECT the live game tables and genres, never the
+song catalog, and never mutates any table.
 
 Spec: docs/security-rls.md §2.
 """
@@ -20,6 +21,12 @@ ALL_TABLES = (
     "game_teams",
     "game_rounds",
 )
+
+# Migration 054: the song catalog is not anon-readable. The browser reads a
+# game's songs through game_setlist / round_song and the create page's counts
+# through song_pool_counts (SECURITY DEFINER, migration 053).
+CATALOG_TABLES = ("songs", "song_genres")
+ANON_READABLE_TABLES = tuple(t for t in ALL_TABLES if t not in CATALOG_TABLES)
 
 # Durable game history (migration 033) is operator-only: unlike the tables above,
 # anon gets NO read policy and NO base SELECT grant.
@@ -111,10 +118,50 @@ async def test_anon_cannot_read_history(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("table", CATALOG_TABLES)
+async def test_anon_cannot_read_the_catalog(
+    table: str, db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 054: anon is refused outright ("permission denied", not an
+    empty list), even with rows in the table."""
+    song_id = await create_test_song(db)
+    await db.execute(
+        "INSERT INTO song_genres (song_id, genre_id) VALUES ($1, (SELECT id FROM genres LIMIT 1))",
+        song_id,
+    )
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.fetch(f"SELECT * FROM {table}")  # noqa: S608 - constant table list
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("table", CATALOG_TABLES)
+async def test_catalog_has_no_anon_policy_or_select_grant(
+    table: str, db: asyncpg.Connection
+) -> None:
+    """Migration 054 dropped anon_read_songs / anon_read_song_genres and revoked
+    SELECT from anon and authenticated. (service_role's grants come from the
+    hosted-Supabase bootstrap, which this bare test Postgres doesn't have; 054
+    doesn't touch them.)"""
+    policies = await db.fetch(
+        "SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = $1",
+        table,
+    )
+    assert [r["policyname"] for r in policies] == []
+    for role in ("anon", "authenticated"):
+        has = await db.fetchval(
+            "SELECT has_table_privilege($1, $2, 'SELECT')", role, f"public.{table}"
+        )
+        assert has is False, f"{role} must not have SELECT on {table}"
+
+
+@pytest.mark.asyncio
 async def test_anon_can_select_every_table(
     db: asyncpg.Connection, anon_conn: asyncpg.Connection
 ) -> None:
-    """Populate via service-role conn, then SELECT via anon. Each must succeed."""
+    """Populate via service-role conn, then SELECT via anon. Each readable
+    table (all but the catalog) must succeed, genres included."""
     game_code = await create_test_game(db)
     team_id = await create_test_team(db, game_code)
     song_id = await create_test_song(db)
@@ -130,7 +177,7 @@ async def test_anon_can_select_every_table(
         team_id,
     )
 
-    for table in ALL_TABLES:
+    for table in ANON_READABLE_TABLES:
         rows = await anon_conn.fetch(f"SELECT * FROM {table}")  # noqa: S608 - constant table list
         assert len(rows) >= 1, f"anon read of {table} returned no rows"
 

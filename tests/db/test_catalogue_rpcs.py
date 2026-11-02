@@ -4,19 +4,17 @@ Spec: docs/rpc-functions.md §3g-§3h and db/migrations/053_catalogue_rpcs.sql.
 
 The browser resolves a round's song (host score panel, TV reveal) and the
 end-of-game setlist through these two SECURITY DEFINER functions instead of
-reading the songs table, so a later migration can revoke anon's SELECT on the
-catalog. They return a song only for a game that played it: the live game's
-rounds while its rows exist, else the most recent archived game with that code.
+reading the songs table, which anon can't read since migration 054. They
+return a song only for a game that played it: the live game's rounds while
+its rows exist, else the most recent archived game with that code.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 
 import asyncpg
 import pytest
-import pytest_asyncio
 
 from ._helpers import (
     create_test_game,
@@ -343,21 +341,12 @@ async def test_functions_are_read_only_security_definer(
     assert "search_path=public" in (row["proconfig"] or [])
 
 
-@pytest_asyncio.fixture
-async def catalog_revoked(db: asyncpg.Connection) -> AsyncIterator[None]:
-    """Simulate migration 054: anon loses SELECT on songs and song_genres.
-    Restores migration 006's grant afterwards, whatever the test does."""
-    await db.execute("REVOKE SELECT ON songs, song_genres FROM anon")
-    try:
-        yield
-    finally:
-        await db.execute("GRANT SELECT ON songs, song_genres TO anon")
-
-
 @pytest.mark.asyncio
 async def test_anon_gets_its_game_songs_with_the_catalog_revoked(
-    db: asyncpg.Connection, anon_conn: asyncpg.Connection, catalog_revoked: None
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
 ) -> None:
+    """Migration 054 revoked anon's SELECT on songs / song_genres; the
+    game-scoped functions still return that game's songs, and only those."""
     code = await create_test_game(db)
     a = await _song(db, title="Visible", slugs=("rock", "pop"))
     b = await _song(db)
@@ -380,8 +369,10 @@ async def test_anon_gets_its_game_songs_with_the_catalog_revoked(
 
 @pytest.mark.asyncio
 async def test_song_pool_counts_same_for_anon_with_the_catalog_revoked(
-    db: asyncpg.Connection, anon_conn: asyncpg.Connection, catalog_revoked: None
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
 ) -> None:
+    """The create page's counts (SECURITY DEFINER since 053) are the same for
+    anon as for the owner, although anon can't read the tables since 054."""
     await _song(db, year=1985, slugs=("rock",))
     await _song(db, year=1987, slugs=("rock",))
     await _song(db, year=None, slugs=("pop", "rock"))

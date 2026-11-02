@@ -498,7 +498,7 @@ Behavior:
 - One row per (decade, full sorted set of the song's genres), counting the songs that share it. Only songs with `unavailable_at IS NULL` and at least one genre are counted. Every song is in exactly one row, so any mix is counted exactly by a sum: rows whose `decade` is a picked decade (any row when no decade is picked; a `NULL` decade matches no picked decade) and whose `genre_ids` share an id with the picked genres. A song in two picked genres counts once.
 - That sum is `pick_next_song`'s `eligible` set (§3cc) for a game with nothing played: genre membership, the decade filter (migration 032) and the dead-video skip (migration 045). Soundtrack rounds are a property of a genre, not a filter, so they change nothing. `tests/db/test_song_pool_counts.py` plays each of a dozen mixes through `select_next_song` until `no_more_songs` and asserts the served count equals the sum. **If the picker's eligibility changes, change this function with it.**
 - Size: 102 rows (about 8 KB) for the 1,715 songs on 2026-10-31, well under PostgREST's 1,000-row cap; it grows with genre × decade combinations, not with songs.
-- No arguments, no token, no writes. It returns counts only (no song ids or titles). Migration 052 made it `SECURITY INVOKER`, relying on anon's own `SELECT` on `songs` / `song_genres` (migration 006). Migration 053 recreated it as `SECURITY DEFINER` with `SET search_path = public`, same body, output and grants, so the count keeps working once migration 054 revokes those reads.
+- No arguments, no token, no writes. It returns counts only (no song ids or titles). Migration 052 made it `SECURITY INVOKER`, relying on anon's own `SELECT` on `songs` / `song_genres` (migration 006). Migration 053 recreated it as `SECURITY DEFINER` with `SET search_path = public`, same body, output and grants, so the count keeps working now that migration 054 has revoked those reads.
 
 ### Idempotency
 
@@ -510,7 +510,7 @@ Read-only. Migrations 052 and 053 are both `CREATE OR REPLACE` (same signature, 
 
 ## 3g. `game_setlist`: the songs one game played
 
-Added in migration 053. Called **direct from the browser** for the end-of-game setlist on the host console and every team phone, and used by `round_song` (§3h). It replaces the browser's direct read of the `songs` / `song_genres` tables, so a later migration (054) can revoke anon's `SELECT` on them: the browser gets a song only for a game that played it.
+Added in migration 053. Called **direct from the browser** for the end-of-game setlist on the host console and every team phone, and used by `round_song` (§3h). It replaces the browser's direct read of the `songs` / `song_genres` tables, which migration 054 then closed to anon (`SELECT` revoked): the browser gets a song only for a game that played it.
 
 ```sql
 CREATE FUNCTION game_setlist(p_game_code text)
@@ -957,8 +957,9 @@ migration's one-time backfill of existing teams never double-inserts.
 Six of the seven anon-callable functions validate authentication inside the
 function body (`buzz_in` checks the game-code; the other five check the
 per-game `manager_token`). This is what makes anon EXECUTE safe. The seventh,
-`song_pool_counts`, needs no check: it writes nothing and runs as the caller,
-counting catalog rows anon can already read.
+`song_pool_counts`, needs no check: it writes nothing and returns counts only
+(SECURITY DEFINER since migration 053, because anon can't read the catalog
+tables since migration 054).
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
 

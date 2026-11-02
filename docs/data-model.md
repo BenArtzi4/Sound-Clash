@@ -22,7 +22,7 @@ active_games (PK: game_code) ◄────────────────
    └── game_rounds (FK: game_code) ───────────┘
 ```
 
-**Durable** (never auto-deleted): `songs`, `genres`, `song_genres`.
+**Durable** (never auto-deleted): `songs`, `genres`, `song_genres`. Only `genres` is anon-readable; the browser gets songs through game-scoped RPCs (mig 053, 054).
 **Ephemeral** (deleted 4h after `started_at`): `active_games`, `game_teams`, `game_rounds`. Pruned by pg_cron.
 **Durable game history** (never pruned; mig 033): `game_history`, `game_history_teams`, `game_history_songs` — an end-of-game snapshot written by `archive_game()` so a finished game survives the 4h sweep. Operator-only (no `anon` read). Indefinite retention (incl. team names) is a **consciously accepted** tradeoff — the strings are pseudonyms and the archive is operator-only; see `security-rls.md` §4 (T5.4).
 
@@ -364,7 +364,7 @@ The 014 migration dropped `source_points` and `timeout_penalty` columns. The 016
 
 ## 5. Row-Level Security (summary)
 
-Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on the catalog and live-game tables; mutations are exclusively via service_role or via the six anon-EXECUTE RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The browser reads song metadata only through the read-only, game-scoped `game_setlist` / `round_song` RPCs (mig 053; a song only for a game that played it, from the archive once the game is swept), and the create page's counts through `song_pool_counts`; anon's direct `SELECT` on `songs` / `song_genres` is still granted until migration 054 revokes it. `genres` stays readable. The exceptions are the durable history tables (`game_history*`, mig 033), the secret tables (`game_secrets`, mig 034; `team_secrets`, mig 046), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
+Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on `genres` and the live-game tables; mutations are exclusively via service_role or via the six anon-EXECUTE RPCs (`buzz_in`, `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The browser reads song metadata only through the read-only, game-scoped `game_setlist` / `round_song` RPCs (mig 053; a song only for a game that played it, from the archive once the game is swept), and the create page's counts through `song_pool_counts`; migration 054 dropped anon's policies on `songs` / `song_genres` and revoked its `SELECT` (and `authenticated`'s), so a direct read is "permission denied". `genres` stays readable. The exceptions are the song catalog (`songs`, `song_genres`, mig 054), the durable history tables (`game_history*`, mig 033), the secret tables (`game_secrets`, mig 034; `team_secrets`, mig 046), and the per-buzz analytics log (`game_round_attempts`, mig 037): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
 
 Full policy DDL and threat model: see **`security-rls.md`**.
 
@@ -435,7 +435,8 @@ db/migrations/
 │   … 050: release_year in select_next_song / peek_next_song rows
 ├── 051_test_game_flag.sql      -- game_secrets.is_test + game_history.is_test, archive_game copies it, mark_game_test fix-up
 ├── 052_song_pool_counts.sql    -- read-only song_pool_counts(): playable songs per (decade, genre set), so the create page counts any mix and blocks an empty one (#375)
-└── 053_catalogue_rpcs.sql      -- game-scoped game_setlist() / round_song() so the browser stops reading songs directly; song_pool_counts() becomes SECURITY DEFINER (expand step; the revoke is 054)
+├── 053_catalogue_rpcs.sql      -- game-scoped game_setlist() / round_song() so the browser stops reading songs directly; song_pool_counts() becomes SECURITY DEFINER (expand step; the revoke is 054)
+└── 054_revoke_anon_catalogue_reads.sql -- drop anon_read_songs / anon_read_song_genres and REVOKE SELECT on songs, song_genres from anon + authenticated (contract step after 053); genres stays readable
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
