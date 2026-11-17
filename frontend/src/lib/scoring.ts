@@ -17,6 +17,5 @@ export const ARTIST_POINTS = 5;
 export const SOUNDTRACK_POINTS = 15;
 // Wrong buzz: −3 (waived once per round by the free-guess flag; game-rules §4).
 export const WRONG_BUZZ_PENALTY = 3;
-// Manager discretionary bonus: +4, applied via a SEPARATE function (award_bonus,
-// service-role, mig 014 p_points DEFAULT 4). Held here for the toast/label only.
+// The manager bonus RPC fixes this amount server-side (migration 055).
 export const BONUS_POINTS = 4;

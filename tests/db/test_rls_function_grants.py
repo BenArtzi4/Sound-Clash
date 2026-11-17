@@ -388,6 +388,7 @@ async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) ->
         # spelling ("character" for char(N), "integer" for int, etc.).
         # buzz_in: single signature; entire function is anon-callable.
         ("buzz_in", "p_game_code character, p_team_id uuid"),
+        ("award_manager_bonus", "p_game_code text, p_manager_token uuid, p_team_id uuid"),
         # award_attempt: the boolean overload (mig 043, T7.1) is now the only
         # signature -- migration 044 dropped the integer overload (mig 036) that
         # took the point magnitudes as client integers, so the DB is the sole

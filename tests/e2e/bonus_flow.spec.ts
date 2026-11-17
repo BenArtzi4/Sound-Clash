@@ -9,37 +9,63 @@ import {
   markWrong,
   openManagerAndCreateGame,
 } from "./fixtures/manager-context";
-import { buzzAndExpectWinner, expectBuzzGreen, joinAsTeam } from "./fixtures/team-context";
+import {
+  buzzAndExpectWinner,
+  expectBuzzGreen,
+  joinAsTeam,
+} from "./fixtures/team-context";
 
 async function expectScore(
   display: import("@playwright/test").Page,
   team: string,
   score: number,
 ) {
-  await expect(
-    display.locator(`[data-team-id]:has-text("${team}"):has-text("${score}")`).first(),
-  ).toBeVisible({ timeout: 10_000 });
+  const row = display
+    .locator("[data-team-id]")
+    .filter({ has: display.getByText(team, { exact: true }) });
+  await expect(row.locator("span").last()).toHaveText(String(score), {
+    timeout: 10_000,
+  });
 }
 
-test("scenario 11: bonus mid-round goes to a non-buzzed team", async ({ browser }) => {
-  const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
+test("scenario 11: bonus mid-round goes to a non-buzzed team", async ({
+  browser,
+}) => {
+  const manager = await openManagerAndCreateGame(browser, {
+    genreName: "Rock",
+  });
   const t1 = await joinAsTeam(browser, manager.gameCode, "Alpha");
   const t2 = await joinAsTeam(browser, manager.gameCode, "Bravo");
 
   await manager.page.getByTestId("start-round").click();
+  const display = await browser.newPage();
+  await display.goto(`/display/${manager.gameCode}`);
+  await expectScore(display, "Alpha", 0);
+  await expectScore(display, "Bravo", 0);
   await buzzAndExpectWinner(t1);
   await awardAndContinue(manager.page, { title: true });
 
-  // Manager rewards Bravo +4 mid-round.
+  await expect(t1.page.getByTestId("standing-score")).toHaveText("10 pts");
+  await expectScore(display, "Alpha", 10);
+
+  // The already-open team and display must receive the direct RPC's award.
+  const bonusResponse = manager.page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith("/rpc/award_manager_bonus"),
+  );
   await awardBonusToTeam(manager.page, "Bravo");
+  expect((await bonusResponse).ok()).toBe(true);
+  await expect(manager.page.getByTestId("host-score")).toHaveText(
+    /Bravo.*4 pts$/,
+  );
+  await expect(t2.page.getByTestId("standing-score")).toHaveText("4 pts");
+  await expectScore(display, "Bravo", 4);
 
   await expectBuzzGreen(t2);
   await buzzAndExpectWinner(t2);
   await awardAndAdvance(manager.page, { artist: true });
 
   // Alpha: 10, Bravo: 4 + 5 = 9.
-  const display = await browser.newPage();
-  await display.goto(`/display/${manager.gameCode}`);
+  await expect(t2.page.getByTestId("standing-score")).toHaveText("9 pts");
   await expectScore(display, "Alpha", 10);
   await expectScore(display, "Bravo", 9);
 });
@@ -47,7 +73,9 @@ test("scenario 11: bonus mid-round goes to a non-buzzed team", async ({ browser 
 test("scenario 12: bonus before any round, while game is in 'waiting'", async ({
   browser,
 }) => {
-  const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
+  const manager = await openManagerAndCreateGame(browser, {
+    genreName: "Rock",
+  });
   await joinAsTeam(browser, manager.gameCode, "Solo");
 
   // Game is waiting; bonus button should still be enabled.
@@ -59,8 +87,12 @@ test("scenario 12: bonus before any round, while game is in 'waiting'", async ({
   await expectScore(display, "Solo", 4);
 });
 
-test("scenario 13: bonus picker only lists current teams", async ({ browser }) => {
-  const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
+test("scenario 13: bonus picker only lists current teams", async ({
+  browser,
+}) => {
+  const manager = await openManagerAndCreateGame(browser, {
+    genreName: "Rock",
+  });
   await joinAsTeam(browser, manager.gameCode, "Alpha");
   await joinAsTeam(browser, manager.gameCode, "Bravo");
 
@@ -68,21 +100,32 @@ test("scenario 13: bonus picker only lists current teams", async ({ browser }) =
   // accessible name is their aria-label ("Award +4 bonus to <name>").
   await manager.page.getByTestId("score-bonus").click();
   await expect(
-    manager.page.getByRole("button", { name: "Award +4 bonus to Alpha", exact: true }),
+    manager.page.getByRole("button", {
+      name: "Award +4 bonus to Alpha",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
-    manager.page.getByRole("button", { name: "Award +4 bonus to Bravo", exact: true }),
+    manager.page.getByRole("button", {
+      name: "Award +4 bonus to Bravo",
+      exact: true,
+    }),
   ).toBeVisible();
   // No third "Charlie" team listed.
   await expect(
-    manager.page.getByRole("button", { name: "Award +4 bonus to Charlie", exact: true }),
+    manager.page.getByRole("button", {
+      name: "Award +4 bonus to Charlie",
+      exact: true,
+    }),
   ).toHaveCount(0);
 });
 
 test("scenario 19: four teams, two wrongs + two splits + bonus to a wrong-guesser", async ({
   browser,
 }) => {
-  const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
+  const manager = await openManagerAndCreateGame(browser, {
+    genreName: "Rock",
+  });
   const t1 = await joinAsTeam(browser, manager.gameCode, "Alpha");
   const t2 = await joinAsTeam(browser, manager.gameCode, "Bravo");
   const t3 = await joinAsTeam(browser, manager.gameCode, "Charlie");

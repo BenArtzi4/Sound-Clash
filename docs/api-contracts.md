@@ -71,7 +71,7 @@ Games run for as many rounds as the host wants and end only when the host calls 
 }
 ```
 
-The `manager_token` is generated server-side (`gen_random_uuid()`, stored in `game_secrets`) and is the host's credential for every host-only call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on the remaining host-only REST endpoints (`bonus`, `end`, kick-team) and as the `p_manager_token` argument on the browser-direct RPCs (`award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`). The token stays on the host's device unless the host deliberately exports it via the console's **Backup host link** (`/manager/game/<code>#mt=<token>`, URL fragment — see `security-rls.md` §1), which is how a wiped or second browser recovers host access.
+The `manager_token` is generated server-side (`gen_random_uuid()`, stored in `game_secrets`) and is the host's credential for every host-only call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on the remaining host-only REST endpoints (`bonus`, `end`, kick-team) and as the `p_manager_token` argument on the browser-direct RPCs (`award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`). The token stays on the host's device unless the host deliberately exports it via the console's **Backup host link** (`/manager/game/<code>#mt=<token>`, URL fragment — see `security-rls.md` §1), which is how a wiped or second browser recovers host access.
 
 Game-code generation: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O, 1/I/L, no lowercase). On collision (UNIQUE violation), retry up to 5 times then 500.
 
@@ -340,7 +340,9 @@ every client via the Realtime `UPDATE` on `active_games`.
 
 ### 2.6 `POST /games/{game_code}/bonus`
 
-Manager: award a discretionary bonus to any team in the game. Independent of round state and the buzz lock; the host picks the team. **Manager-token auth required.**
+The console calls `POST /rest/v1/rpc/award_manager_bonus` with `p_game_code`, `p_manager_token`, and `p_team_id`. The RPC applies +4 and returns the team's new total as a JSON integer. If PostgREST reports the function is missing from its schema cache (`PGRST202`), the console uses this REST endpoint during rollout.
+
+REST clients may choose a positive bonus amount for any team in the game, independently of the round or buzz lock. **Manager-token auth required.**
 
 **Headers**: `X-Manager-Token: <token>`
 
@@ -514,7 +516,7 @@ The weekly `.github/workflows/dead-video-scan.yml` pages the catalog with `commi
 
 ## 3. Postgres RPC (PostgREST)
 
-Called by the **browser** with the anon key. Nine functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the five token-gated host RPCs `award_attempt`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and three read-only ones: `song_pool_counts` (§3.2), `game_setlist` (§3.3) and `round_song` (§3.4). Every other RPC is revoked from anon (mig 020).
+Called by the **browser** with the anon key. Ten functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the six token-gated host RPCs `award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and three read-only ones: `song_pool_counts` (§3.2), `game_setlist` (§3.3) and `round_song` (§3.4). Every other RPC is revoked from anon (mig 020).
 
 The browser gets song metadata only through `game_setlist` and `round_song` (migration 053); it does not read the `songs` or `song_genres` tables. Genre names come from the `genres` table, which stays anon-readable.
 

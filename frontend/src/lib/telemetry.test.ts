@@ -113,7 +113,10 @@ describe("telemetry (disabled — VITE_FARO_URL unset)", () => {
       tele.resolveBuzzE2E("team1", new Date().toISOString());
       tele.failBuzz("team1");
       tele.markScoreStart("ABC", "r1", "title");
-      tele.resolveScoreE2E("r1", new Date().toISOString());
+      tele.resolveScoreE2E(
+        { id: "r1", title_claimed_by: "team", artist_claimed_by: null, ended_at: null },
+        new Date().toISOString(),
+      );
       tele.failScore("r1", "title");
       tele.recordFanout("game", new Date().toISOString());
       const pi = tele.startPlayerInit();
@@ -249,10 +252,27 @@ describe("telemetry (enabled)", () => {
     await enable();
     const i = spanCount();
     tele.markScoreStart("ABC", "r1", "title");
+    tele.markScoreStart("ABC", "r1", "artist");
+    const [title, artist] = spansFrom(i);
+    const row = { id: "r1", title_claimed_by: "team", artist_claimed_by: null, ended_at: null };
+    tele.resolveScoreE2E(row, new Date().toISOString());
+    expect(title.end).toHaveBeenCalledOnce();
+    expect(artist.end).not.toHaveBeenCalled();
+    tele.resolveScoreE2E({ ...row, artist_claimed_by: "team" }, new Date().toISOString());
+    expect(artist.end).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a soundtrack span open until both claims reach the same team", async () => {
+    await enable();
+    const i = spanCount();
+    tele.markScoreStart("ABC", "r1", "soundtrack");
     const span = spansFrom(i)[0];
-    tele.resolveScoreE2E("r1", new Date().toISOString());
-    expect(span.end).toHaveBeenCalled();
-    expect(() => tele.resolveScoreE2E("other", new Date().toISOString())).not.toThrow();
+    const row = { id: "r1", title_claimed_by: "team", artist_claimed_by: null, ended_at: null };
+    const ts = new Date().toISOString();
+    tele.resolveScoreE2E(row, ts);
+    expect(span.end).not.toHaveBeenCalled();
+    tele.resolveScoreE2E({ ...row, artist_claimed_by: "team" }, ts);
+    expect(span.end).toHaveBeenCalledOnce();
   });
 
   it("score e2e: failScore closes an open span as errored", async () => {

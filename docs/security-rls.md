@@ -25,7 +25,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 | Credential | Header | Scope | Lifetime |
 |---|---|---|---|
-| **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `release_buzz_lock` / `select_next_song` / `peek_next_song` / `extend_game` via token-gated direct RPC; bonus / end / kick a team via REST) | Minted by an `AFTER INSERT` trigger into `game_secrets` (mig 034), read back by `POST /games`; lives 4h, cascade-deleted when `cleanup_expired_games` removes the game |
+| **manager token** | `X-Manager-Token` | One specific game's host actions (`award_attempt` / `award_manager_bonus` / `release_buzz_lock` / `select_next_song` / `peek_next_song` / `extend_game` via token-gated direct RPC; bonus / end / kick a team via REST) | Minted by an `AFTER INSERT` trigger into `game_secrets` (mig 034), read back by `POST /games`; lives 4h, cascade-deleted when `cleanup_expired_games` removes the game |
 | **team rejoin token** | request body of `POST /games/{code}/rejoin` (not a header) | Reconnect one specific team to its existing row (issue #183). Revealed to the host only via the manager-token-gated `GET /games/{code}/teams/{id}/rejoin-token`; never returned to players by join, never in Realtime | Minted by an `AFTER INSERT` trigger into `team_secrets` (mig 046); lives 4h, cascade-deleted with the team when the game is swept |
 | **admin password** | `X-Admin-Password` | Song catalog only (`/admin/songs/*` CRUD + bulk import) | Single env var on FastAPI; rotated by changing the env and restarting |
 
@@ -69,6 +69,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `round_song`            | ✅ (no token: read-only, one song only if that game played it; added in migration 053) | ✅ |
 | `start_round`           | ❌ | ✅ |
 | `end_round`             | ❌ | ✅ |
+| `award_manager_bonus`   | ✅ (token-gated, fixed +4 for a team in the same game) | ✅ |
 | `award_bonus`           | ❌ | ✅ |
 | `end_game`              | ❌ | ✅ |
 | `cleanup_expired_games` | ❌ | ✅ (called by `pg_cron`, not FastAPI) |
@@ -77,7 +78,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 | `pick_next_song`        | ❌ | ✅ (internal song picker behind `select_next_song` / `peek_next_song`, which call it as their owner; added in migration 048, rewritten in 049) |
 | `song_artist_keys`      | ❌ | ✅ (pure text helper behind the `songs.artist_keys` generated column; service_role keeps EXECUTE because the admin API and CSV import write songs as it; added in migration 049) |
 
-Nine RPCs are reachable from the browser. Six of them: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), `peek_next_song` (the read-only next-song probe, since migration 029), and `extend_game` (the host's "keep playing" TTL bump, since migration 039 — writes only `active_games.expires_at`, always by a fixed +1h server-side). All six perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. Three more are read-only and take no token. `song_pool_counts` (the create page's song count, since migration 052) returns only per-decade, per-genre-set song counts, never a song id or title; migration 052 made it `SECURITY INVOKER` over the tables anon could read, and migration 053 made it `SECURITY DEFINER` (`SET search_path = public`) so it keeps working after migration 054. `game_setlist` and `round_song` (since migration 053) are `SECURITY DEFINER` lookups scoped by the game code: they return a song only for a game that played it (see the catalog note above). The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
+Ten RPCs are reachable from the browser. Seven of them: `buzz_in` (the buzzer hot path), `award_attempt` / `release_buzz_lock` (the manager scoring hot path, since migration 021), `award_manager_bonus` (the fixed +4 bonus, since migration 055), `select_next_song` (the "Next round" / "Start game" hot path, since migration 022), `peek_next_song` (the read-only next-song probe, since migration 029), and `extend_game` (the host's "keep playing" TTL bump, since migration 039 — writes only `active_games.expires_at`, always by a fixed +1h server-side). All seven perform their auth check inside the SECURITY DEFINER function body; `peek_next_song` additionally performs no writes. Three more are read-only and take no token. `song_pool_counts` (the create page's song count, since migration 052) returns only per-decade, per-genre-set song counts, never a song id or title; migration 052 made it `SECURITY INVOKER` over the tables anon could read, and migration 053 made it `SECURITY DEFINER` (`SET search_path = public`) so it keeps working after migration 054. `game_setlist` and `round_song` (since migration 053) are `SECURITY DEFINER` lookups scoped by the game code: they return a song only for a game that played it (see the catalog note above). The `❌` rows are enforced by an explicit `REVOKE EXECUTE ... FROM anon, authenticated` (migration `020_lock_down_backend_rpcs.sql`) **in addition to** the `REVOKE ALL ... FROM PUBLIC` the creating migrations already do: on hosted Supabase the project bootstrap grants EXECUTE on every `public` function directly to `anon`/`authenticated`/`service_role`, so a `REVOKE FROM PUBLIC` alone leaves anon able to call them. Migration 020 also re-asserts `GRANT EXECUTE ... TO service_role` so FastAPI keeps working for the remaining backend-only RPCs.
 
 ### Why anon can SELECT any game
 
@@ -185,6 +186,8 @@ GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
 -- boolean-sending frontend had soaked, leaving the boolean overload as the sole
 -- (token-gated in-body) signature.
 GRANT EXECUTE ON FUNCTION award_attempt(text, uuid, boolean, boolean, boolean, uuid)
+  TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION award_manager_bonus(text, uuid, uuid)
   TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION release_buzz_lock(text, uuid)
   TO anon, authenticated, service_role;

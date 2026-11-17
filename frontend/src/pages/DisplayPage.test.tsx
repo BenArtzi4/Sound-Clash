@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function renderAt(path: string) {
@@ -411,7 +412,7 @@ describe("DisplayPage board", () => {
     expect(container.querySelector("main")?.className).toMatch(/_shellEnd_/);
   });
 
-  it("pops a +N pill when a team's score goes up", async () => {
+  it("shows the new total immediately alongside the +N pill when motion is enabled", async () => {
     const alice = makeTeam({ id: "t1", name: "Alice", score: 0 });
     setHydrate({
       game: makeActiveGame({ status: "playing", round_number: 1 }),
@@ -424,9 +425,12 @@ describe("DisplayPage board", () => {
     });
     expect(screen.queryByTestId("point-change")).not.toBeInTheDocument();
 
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    vi.stubGlobal("requestAnimationFrame", () => 1);
     act(() => {
       fireTeam(makePayload("game_teams", "UPDATE", { new: { ...alice, score: 10 } }));
     });
+    expect(within(screen.getByRole("listitem")).getByText("10")).toBeInTheDocument();
     const pill = await screen.findByTestId("point-change");
     expect(pill).toHaveTextContent("Alice");
     expect(pill).toHaveTextContent("+10");

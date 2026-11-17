@@ -57,7 +57,10 @@ describe("useGameChannel telemetry wiring", () => {
       fireRound(makePayload("game_rounds", "UPDATE", { new: makeRound({ id: "round-1" }) }, TS));
     });
     expect(telemetry.recordFanout).toHaveBeenCalledWith("round", TS);
-    expect(telemetry.resolveScoreE2E).toHaveBeenCalledWith("round-1", TS);
+    expect(telemetry.resolveScoreE2E).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "round-1" }),
+      TS,
+    );
 
     act(() => {
       fireTeam(makePayload("game_teams", "UPDATE", { new: makeTeam({ id: "team-9" }) }, TS));

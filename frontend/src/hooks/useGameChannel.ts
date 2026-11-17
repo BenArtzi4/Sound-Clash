@@ -39,8 +39,8 @@ export function isGameExpired(game: ActiveGame): boolean {
 // the test can advance fake timers by exactly one interval.
 export const RESYNC_INTERVAL_MS = 60_000;
 
-// While the local state holds a buzz lock the backstop tightens to this
-// cadence (#254). A stale lock is the one desync that silently kills gameplay:
+// While Realtime is disconnected or the local state holds a buzz lock the
+// backstop tightens to this cadence (#254). A stale lock is the one desync that silently kills gameplay:
 // the buzz button is dead and buzz_in's own guard refuses to fire, so nothing
 // the player does can self-correct it (a stale UNLOCKED view heals on the next
 // press — buzz_in returns the true winner). Two lock-clearing writes carry no
@@ -49,7 +49,7 @@ export const RESYNC_INTERVAL_MS = 60_000;
 // its heartbeat notices (status stays "subscribed", events silently lost) —
 // so time is the only recovery for them. Locked windows are a fraction of a
 // game and HYDRATE no-ops when nothing changed, so the extra cost is ~3 REST
-// queries per 15s per client only while a buzz is being judged. Must divide
+// queries per 15s per visible client in either case. Must divide
 // RESYNC_INTERVAL_MS evenly (the quiet cadence is every Nth tick).
 export const LOCKED_RESYNC_INTERVAL_MS = 15_000;
 
@@ -325,6 +325,7 @@ export function useGameChannel(gameCode: string): {
     if (!gameCode) return;
     let cancelled = false;
     let hydrated = false;
+    let realtimeDisconnected = false;
     // Set once the game is permanently gone (row deleted / missing). Stops the
     // backstop interval and tears the channel down so a display left open all
     // night on an ended game doesn't keep polling + holding a subscription
@@ -467,7 +468,7 @@ export function useGameChannel(gameCode: string): {
           // Resolve any open score span for this round (click → ROUND_CHANGE).
           if (typed.eventType !== "DELETE") {
             const row = typed.new as GameRound;
-            if (row.id) resolveScoreE2E(row.id, typed.commit_timestamp);
+            if (row.id) resolveScoreE2E(row, typed.commit_timestamp);
           }
           dispatchOrQueue({ type: "ROUND_CHANGE", payload: typed });
         },
@@ -479,12 +480,15 @@ export function useGameChannel(gameCode: string): {
         // banner with a stuck "Connecting…" state.
         if (cancelled || goneTornDown) return;
         if (subStatus === "SUBSCRIBED") {
+          realtimeDisconnected = false;
           setStatus("subscribed");
           void hydrate();
         } else if (subStatus === "CHANNEL_ERROR" || subStatus === "TIMED_OUT") {
           log("warn", "realtime_disconnect", { game_code: gameCode, sub_status: subStatus });
+          realtimeDisconnected = true;
           setStatus("reconnecting");
         } else if (subStatus === "CLOSED") {
+          realtimeDisconnected = true;
           setStatus("idle");
         }
       });
@@ -505,9 +509,8 @@ export function useGameChannel(gameCode: string): {
     // RESYNC_INTERVAL_MS / LOCKED_RESYNC_INTERVAL_MS). Idempotent — HYDRATE
     // returns the same state ref when nothing changed, so quiet ticks cost
     // ~3 REST queries with zero re-renders. One interval at the tight cadence;
-    // it hydrates every tick while a buzz lock is held locally (a stale lock
-    // is unrecoverable by any user action) and every Nth tick otherwise (the
-    // original 60s quiet cadence).
+    // it hydrates every tick while disconnected or holding a buzz lock and
+    // every Nth tick otherwise (the 60s quiet cadence).
     const quietEveryNthTick = RESYNC_INTERVAL_MS / LOCKED_RESYNC_INTERVAL_MS;
     let resyncId: number | null = null;
     function startResync(): void {
@@ -516,7 +519,7 @@ export function useGameChannel(gameCode: string): {
       resyncId = window.setInterval(() => {
         if (cancelled) return;
         tick += 1;
-        if (lockRef.current !== null || tick % quietEveryNthTick === 0) {
+        if (realtimeDisconnected || lockRef.current !== null || tick % quietEveryNthTick === 0) {
           void hydrate({ resync: true });
         }
       }, LOCKED_RESYNC_INTERVAL_MS);
@@ -574,6 +577,7 @@ export function useGameChannel(gameCode: string): {
       authoritative = true,
       resync = false,
     }: { authoritative?: boolean; resync?: boolean } = {}) {
+      const recoveryPoll = resync && realtimeDisconnected;
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
           supabase
@@ -584,6 +588,7 @@ export function useGameChannel(gameCode: string): {
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);
+        if (recoveryPoll && !realtimeDisconnected) return;
         if (!cancelled && (authoritative || !hydrated)) {
           if (gameRes.error) throw gameRes.error;
           if (teamsRes.error) throw teamsRes.error;
@@ -635,6 +640,7 @@ export function useGameChannel(gameCode: string): {
         // A pre-hydrate failure is silent (the SUBSCRIBED / backstop hydrate
         // retries); only an authoritative failure surfaces an error. Either
         // way the gate stays closed so live events keep queuing.
+        if (recoveryPoll && !realtimeDisconnected) return;
         if (!cancelled && authoritative) setError(e instanceof Error ? e : new Error(String(e)));
       }
     }

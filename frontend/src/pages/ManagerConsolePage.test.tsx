@@ -20,7 +20,6 @@ vi.mock("../lib/api", () => ({
       this.details = undefined;
     }
   },
-  awardBonus: vi.fn(),
   endGame: vi.fn(),
   // useKeepBackendWarm pings this immediately on mount (T3.5); mock it so the
   // console's keep-warm ping is a no-op in tests.
@@ -36,6 +35,7 @@ vi.mock("../hooks/useManagerActions", () => ({
     }
   },
   awardAttemptDirect: vi.fn(),
+  awardBonusDirect: vi.fn(),
   releaseBuzzLockDirect: vi.fn(),
   extendGameDirect: vi.fn(),
 }));
@@ -178,9 +178,10 @@ vi.mock("../components/YouTubePlayer", () => ({
   }),
 }));
 
-import { awardBonus, endGame } from "../lib/api";
+import { endGame } from "../lib/api";
 import {
   awardAttemptDirect,
+  awardBonusDirect,
   extendGameDirect,
   releaseBuzzLockDirect,
 } from "../hooks/useManagerActions";
@@ -228,7 +229,7 @@ beforeEach(() => {
   vi.mocked(awardAttemptDirect).mockReset();
   vi.mocked(releaseBuzzLockDirect).mockReset();
   vi.mocked(extendGameDirect).mockReset();
-  vi.mocked(awardBonus).mockReset();
+  vi.mocked(awardBonusDirect).mockReset();
   vi.mocked(endGame).mockReset();
   // Re-establish the telemetry handle impl (afterEach's clearAllMocks drops it).
   telemetry.startSongStart.mockReset();
@@ -1857,21 +1858,17 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByTestId("score-artist")).toBeDisabled();
   });
 
-  it("Bonus posts to awardBonus and confirms the +4 only after the call resolves (T4.6)", async () => {
+  it("shows a pending bonus on selection, sends it once, then shows the committed total before Realtime", async () => {
     setHydrate({
       game: makeActiveGame({ status: "playing" }),
-      teams: [makeTeam({ id: "t1", name: "Alice" }), makeTeam({ id: "t2", name: "Bob" })],
+      teams: [makeTeam({ id: "t1", name: "Alice" }), makeTeam({ id: "t2", name: "Bob", score: 8 })],
       rounds: [],
     });
-    // Defer the Render call so we can probe the in-flight state: the bonus is
-    // the one Render-routed scoring call, and on a cold start it can hang for
-    // many seconds — the old optimistic "+4" toast lied during that window
-    // (F-P1-5).
-    let resolveBonus!: (v: never) => void;
-    vi.mocked(awardBonus).mockReturnValueOnce(
-      new Promise((res) => {
-        resolveBonus = res as (v: never) => void;
-      }) as never,
+    let resolveBonus!: (value: number) => void;
+    vi.mocked(awardBonusDirect).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveBonus = resolve;
+      }),
     );
     renderConsole();
     await act(async () => {
@@ -1879,22 +1876,110 @@ describe("ManagerConsolePage", () => {
     });
     fireEvent.click(screen.getByTestId("score-bonus"));
     await waitFor(() => screen.getByTestId("bonus-team-t2"));
-    fireEvent.click(screen.getByTestId("bonus-team-t2"));
+    const recipient = screen.getByTestId("bonus-team-t2");
+    act(() => {
+      recipient.click();
+      recipient.click();
+    });
+    const receipt = screen.getByTestId("host-score");
+    expect(receipt).toHaveTextContent("Bob · 8 pts · +4 pending");
     // The click is acknowledged (neutral toast, busy gates Bonus + End game)
     // but success is NOT claimed while the call is in flight.
     expect(screen.getByText(/sending \+4 to Bob/i)).toBeInTheDocument();
     expect(screen.queryByText(/\+4 bonus to Bob/i)).not.toBeInTheDocument();
     expect(screen.getByTestId("score-bonus")).toBeDisabled();
     expect(screen.getByTestId("end-game")).toBeDisabled();
-    await waitFor(() =>
-      expect(awardBonus).toHaveBeenCalledWith("ABCDEF", TOKEN, { team_id: "t2" }),
-    );
+    await waitFor(() => expect(awardBonusDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "t2"));
     await act(async () => {
-      resolveBonus({ team_id: "t2", points_awarded: 4, team_total_score: 4 } as never);
+      resolveBonus(12);
     });
-    // Only now does the success toast confirm the +4.
+    expect(awardBonusDirect).toHaveBeenCalledTimes(1);
+    expect(receipt).toHaveTextContent(/^Bob · 12 pts$/);
     expect(screen.getByText(/\+4 bonus to Bob/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("score-bonus")).toBeEnabled());
+  });
+
+  it("follows team rows for overlapping approvals even when Artist responds before Song", async () => {
+    const team = makeTeam({ id: "t1", name: "Alice", score: -3 });
+    setHydrate({
+      game: makeActiveGame({ status: "playing", buzzed_team_id: team.id, current_round_id: "r1" }),
+      teams: [team],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    type Result = Awaited<ReturnType<typeof awardAttemptDirect>>;
+    let finishSong!: (value: Result) => void;
+    let finishArtist!: (value: Result) => void;
+    vi.mocked(awardAttemptDirect)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishSong = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishArtist = resolve;
+        }),
+      );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-title"));
+    const receipt = screen.getByTestId("host-score");
+    expect(receipt).toHaveTextContent("Alice · -3 pts · +10 pending");
+    fireEvent.click(screen.getByTestId("score-artist"));
+    expect(receipt).toHaveTextContent("Alice · -3 pts · +15 pending");
+    const song = {
+      round_id: "r1",
+      team_id: "t1",
+      points_awarded: 10,
+      team_total_score: 7,
+      title_claimed_by: "t1",
+      artist_claimed_by: null,
+    };
+    await act(async () => {
+      finishArtist({ ...song, points_awarded: 5, team_total_score: 12, artist_claimed_by: "t1" });
+    });
+    await act(async () => {
+      finishSong(song);
+    });
+    expect(receipt).toHaveTextContent(/^Alice · -3 pts$/);
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "UPDATE", { new: { ...team, score: 7 } }));
+    });
+    expect(receipt).toHaveTextContent(/^Alice · 7 pts$/);
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "UPDATE", { new: { ...team, score: 12 } }));
+    });
+    expect(receipt).toHaveTextContent(/^Alice · 12 pts$/);
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "UPDATE", { new: { ...team, score: 9 } }));
+    });
+    expect(receipt).toHaveTextContent(/^Alice · 9 pts$/);
+  });
+
+  it("keeps a newer Realtime total when an older bonus response arrives after it", async () => {
+    const team = makeTeam({ id: "t1", name: "Alice", score: 3 });
+    setHydrate({ game: makeActiveGame({ status: "playing" }), teams: [team], rounds: [] });
+    let finish!: (total: number) => void;
+    vi.mocked(awardBonusDirect).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    fireEvent.click(screen.getByTestId("score-bonus"));
+    fireEvent.click(screen.getByTestId("bonus-team-t1"));
+    act(() => {
+      fireTeam(makePayload<Team>("game_teams", "UPDATE", { new: { ...team, score: 4 } }));
+    });
+    await act(async () => {
+      finish(7);
+    });
+    expect(screen.getByTestId("host-score")).toHaveTextContent(/^Alice · 4 pts$/);
   });
 
   it("Bonus picker can be toggled closed without picking a team", async () => {
@@ -1911,7 +1996,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => screen.getByTestId("bonus-team-t1"));
     fireEvent.click(screen.getByTestId("score-bonus"));
     await waitFor(() => expect(screen.queryByTestId("bonus-team-t1")).not.toBeInTheDocument());
-    expect(awardBonus).not.toHaveBeenCalled();
+    expect(awardBonusDirect).not.toHaveBeenCalled();
   });
 
   it("Bonus surfaces an error toast and never claims success when the API call fails", async () => {
@@ -1920,7 +2005,7 @@ describe("ManagerConsolePage", () => {
       teams: [makeTeam({ id: "t1", name: "Alice" })],
       rounds: [],
     });
-    vi.mocked(awardBonus).mockRejectedValueOnce(new Error("boom"));
+    vi.mocked(awardBonusDirect).mockRejectedValueOnce(new Error("boom"));
     renderConsole();
     await act(async () => {
       await fireSubscribed();
@@ -1929,6 +2014,7 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => screen.getByTestId("bonus-team-t1"));
     fireEvent.click(screen.getByTestId("bonus-team-t1"));
     await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
+    expect(screen.getByTestId("host-score")).toHaveTextContent(/^Alice · 0 pts$/);
     // A failed bonus must not show the success toast (the old optimistic
     // toast fired it before the call, so the host saw success + error stacked).
     expect(screen.queryByText(/\+4 bonus to Alice/i)).not.toBeInTheDocument();
