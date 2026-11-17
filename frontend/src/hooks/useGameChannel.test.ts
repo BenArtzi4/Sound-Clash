@@ -922,6 +922,57 @@ describe("useGameChannel - subscription", () => {
     }
   });
 
+  it.each(["newer snapshot", "game deletion"])(
+    "does not restore a stale buzz lock after %s",
+    async (newerState) => {
+      vi.useFakeTimers();
+      try {
+        const locked = makeActiveGame({ status: "playing", buzzed_team_id: "team-1" });
+        setHydrate({ game: locked });
+        const { result } = renderHook(() => useGameChannel("ABCDEF"));
+        await act(async () => {
+          await fireSubscribed();
+        });
+        expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
+
+        // active_games answers with the old lock. game_rounds delays the
+        // combined snapshot until after the next poll or the game's deletion.
+        let finishRounds!: () => void;
+        const slowRounds = new Promise<{ data: GameRound[]; error: null }>((resolve) => {
+          finishRounds = () => resolve({ data: [], error: null });
+        });
+        const from = supabaseMock.from.getMockImplementation()!;
+        supabaseMock.from
+          .mockImplementationOnce(from)
+          .mockImplementationOnce(from)
+          .mockImplementationOnce((table) => {
+            const builder = from(table);
+            builder.then = (onfulfilled) => slowRounds.then(onfulfilled);
+            return builder;
+          });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS);
+        });
+
+        if (newerState === "game deletion") {
+          act(() => fireGame(makePayload("active_games", "DELETE", { old: locked })));
+          expect(result.current.status).toBe("gone");
+        } else {
+          setHydrate({ game: { ...locked, buzzed_team_id: null, locked_at: null } });
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS);
+          });
+          expect(result.current.state?.game.buzzed_team_id).toBeNull();
+        }
+        const freshState = result.current.state;
+        await act(async () => finishRounds());
+        expect(result.current.state).toBe(freshState);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("tightens the backstop to LOCKED_RESYNC_INTERVAL_MS while a buzz lock is held and repairs a stale lock (#254)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

@@ -326,6 +326,8 @@ export function useGameChannel(gameCode: string): {
     let cancelled = false;
     let hydrated = false;
     let realtimeDisconnected = false;
+    let hydrateRequestId = 0;
+    let lastAppliedHydrateId = 0;
     // Set once the game is permanently gone (row deleted / missing). Stops the
     // backstop interval and tears the channel down so a display left open all
     // night on an ended game doesn't keep polling + holding a subscription
@@ -577,7 +579,14 @@ export function useGameChannel(gameCode: string): {
       authoritative = true,
       resync = false,
     }: { authoritative?: boolean; resync?: boolean } = {}) {
+      const requestId = ++hydrateRequestId;
       const recoveryPoll = resync && realtimeDisconnected;
+      // One slow table read can hold an older snapshot past a newer poll.
+      const ignoreResult = () =>
+        cancelled ||
+        goneTornDown ||
+        requestId < lastAppliedHydrateId ||
+        (recoveryPoll && !realtimeDisconnected);
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
           supabase
@@ -588,8 +597,8 @@ export function useGameChannel(gameCode: string): {
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);
-        if (recoveryPoll && !realtimeDisconnected) return;
-        if (!cancelled && (authoritative || !hydrated)) {
+        if (ignoreResult()) return;
+        if (authoritative || !hydrated) {
           if (gameRes.error) throw gameRes.error;
           if (teamsRes.error) throw teamsRes.error;
           if (roundsRes.error) throw roundsRes.error;
@@ -610,6 +619,7 @@ export function useGameChannel(gameCode: string): {
             // Cast via unknown: a non-literal select() string makes
             // supabase-js infer GenericStringError rather than a row shape.
             const freshGame = gameRes.data as unknown as ActiveGame;
+            lastAppliedHydrateId = requestId;
             const snapshotSeq = observeLock(freshGame, false);
             // A backstop tick that finds a different lock than the one held
             // here may have caught a lost event. confirmStaleLock decides.
@@ -640,8 +650,8 @@ export function useGameChannel(gameCode: string): {
         // A pre-hydrate failure is silent (the SUBSCRIBED / backstop hydrate
         // retries); only an authoritative failure surfaces an error. Either
         // way the gate stays closed so live events keep queuing.
-        if (recoveryPoll && !realtimeDisconnected) return;
-        if (!cancelled && authoritative) setError(e instanceof Error ? e : new Error(String(e)));
+        if (authoritative && !ignoreResult())
+          setError(e instanceof Error ? e : new Error(String(e)));
       }
     }
 
