@@ -18,6 +18,7 @@
 
 import type { Faro, LogLevel } from "@grafana/faro-web-sdk";
 import { env } from "./env";
+import type { GameRound } from "./types";
 
 // Derive the OTel trace/span types straight from Faro's return type so we don't
 // take a direct dependency on @opentelemetry/api (it is only a transitive dep).
@@ -333,12 +334,25 @@ export function markScoreStart(gameCode: string, roundId: string, verdict: strin
   scoreSpans.set(key, span);
 }
 
-export function resolveScoreE2E(roundId: string, commitTimestamp: string): void {
+export function resolveScoreE2E(
+  round: Pick<GameRound, "id" | "title_claimed_by" | "artist_claimed_by" | "ended_at">,
+  commitTimestamp: string,
+): void {
   if (scoreSpans.size === 0) return;
-  const lag = fanoutMs(commitTimestamp);
-  for (const [key, span] of scoreSpans) {
-    if (!key.startsWith(`${roundId}:`)) continue;
-    setAttrs(span, { "realtime.fanout_ms": lag });
+  const claims = {
+    title: round.title_claimed_by,
+    artist: round.artist_claimed_by,
+    soundtrack: round.title_claimed_by && round.title_claimed_by === round.artist_claimed_by,
+  };
+  for (const [verdict, claimed] of Object.entries(claims)) {
+    const key = `${round.id}:${verdict}`;
+    const span = scoreSpans.get(key);
+    if (!span) continue;
+    if (!claimed) {
+      if (round.ended_at) failScore(round.id, verdict);
+      continue;
+    }
+    setAttrs(span, { "realtime.fanout_ms": fanoutMs(commitTimestamp) });
     span.end();
     scoreSpans.delete(key);
   }

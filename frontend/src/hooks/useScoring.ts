@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../context/useToast";
-import { ApiError, awardBonus, endGame } from "../lib/api";
+import { ApiError, endGame } from "../lib/api";
 import {
   awardAttemptDirect,
+  awardBonusDirect,
   extendGameDirect,
   releaseBuzzLockDirect,
   RpcError,
@@ -18,12 +19,12 @@ import {
 } from "../lib/scoring";
 import { failScore, log, markScoreStart } from "../lib/telemetry";
 import { fetchSongById } from "../lib/songMetadata";
-import type { GameState, Song } from "../lib/types";
+import type { GameState, Song, Team } from "../lib/types";
 import type { HostPlayer } from "./useHostPlayer";
 
 // Extracted from ManagerConsolePage (T7.2). Owns the manager scoring + round
 // actions: the direct-RPC calls (award_attempt / release_buzz_lock /
-// select_next_song / extend_game) and the FastAPI-routed ones (bonus / end),
+// select_next_song / extend_game / award_manager_bonus) and the FastAPI-routed end,
 // the optimistic-toast-then-await ordering, the per-action in-flight guards, and
 // the pending-flag handoffs that bridge the RPC → Realtime gap. handleNextRound
 // drives the host's player through the HostPlayer surface passed in.
@@ -33,8 +34,16 @@ interface PlayerReadyHandle {
   enqueueSong: (song: { youtube_id: string; start_time: number }) => void;
 }
 
+interface ScoreReceipt {
+  team: Team;
+  pending: { points: number }[];
+  confirmed: number | null;
+  overlapping: boolean;
+}
+
 export interface Scoring {
   currentSong: Song | null;
+  scoreFeedback: { name: string; total: number; pending: string | null } | null;
   busy: boolean;
   endConfirmOpen: boolean;
   setEndConfirmOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -81,6 +90,57 @@ export function useScoring(
   const [busy, setBusy] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
+  const bonusInFlight = useRef(false);
+  const [receipt, setReceipt] = useState<ScoreReceipt | null>(null);
+
+  const liveTeam = receipt && state?.teams.get(receipt.team.id);
+  const sameTeamRow = liveTeam === receipt?.team;
+  const pendingPoints = receipt?.pending.reduce((sum, award) => sum + award.points, 0) ?? 0;
+  const scoreFeedback =
+    receipt && liveTeam
+      ? {
+          name: liveTeam.name,
+          total: (sameTeamRow ? receipt.confirmed : null) ?? liveTeam.score,
+          pending: receipt.pending.length
+            ? sameTeamRow
+              ? `${pendingPoints > 0 ? "+" : ""}${pendingPoints} pending`
+              : "Confirming score"
+            : null,
+        }
+      : null;
+
+  function beginScore(teamId: string, points: number) {
+    const team = state?.teams.get(teamId);
+    const award = { points };
+    if (team) {
+      setReceipt((previous) => {
+        if (previous?.team.id !== teamId) {
+          return { team, pending: [award], confirmed: null, overlapping: false };
+        }
+        const sameRow = previous.team === team;
+        // Team rows and RPC replies have no shared version. During overlapping
+        // awards, let the live rows advance the total in order.
+        const overlapping =
+          previous.pending.length > 0 ||
+          (sameRow && (previous.overlapping || previous.confirmed !== null));
+        return {
+          team,
+          pending: [...previous.pending, award],
+          confirmed: sameRow ? previous.confirmed : null,
+          overlapping,
+        };
+      });
+    }
+    return (total: number | null) =>
+      setReceipt((current) => {
+        if (!current?.pending.includes(award)) return current;
+        return {
+          ...current,
+          pending: current.pending.filter((item) => item !== award),
+          confirmed: current.overlapping ? current.confirmed : total,
+        };
+      });
+  }
 
   // Optimistic "we just clicked this" markers for the per-round action buttons,
   // each holding the round id the click happened on. They bridge the ~50-
@@ -248,23 +308,23 @@ export function useScoring(
     toast(err instanceof Error ? err.message : "Request failed", { variant: "error" });
   }
 
-  // Apply an attempt via the direct browser -> Supabase RPC. Migration 021
-  // moved the manager-token gate into the PL/pgSQL function, so we bypass
-  // FastAPI/Render here and cut ~300ms of cross-continent hops off the
-  // critical path. The score commit and the Realtime fan-out happen in the
-  // same DB transaction; the UI then redraws when game_teams / game_rounds
-  // UPDATE events arrive.
   async function applyAttempt(
     roundId: string,
+    expected: number,
     flags: { title_correct: boolean; artist_correct: boolean; wrong_buzz: boolean },
   ): Promise<void> {
-    if (!managerToken) return;
-    await awardAttemptDirect(gameCode, managerToken, roundId, flags);
+    const teamId = state?.game.buzzed_team_id;
+    if (!managerToken || !teamId) return;
+    const finish = beginScore(teamId, expected);
+    try {
+      const result = await awardAttemptDirect(gameCode, managerToken, roundId, flags);
+      finish(result.team_id === teamId ? result.team_total_score : null);
+    } catch (err) {
+      finish(null);
+      throw err;
+    }
   }
 
-  // Helper for the optimistic toast on the three scoring buttons. Fired
-  // before the RPC so the click feels instant; the Realtime UPDATE on
-  // game_teams.score is still the source of truth for the displayed score.
   function buzzedTeamName(): string | null {
     if (!state) return null;
     const tid = state.game.buzzed_team_id;
@@ -287,7 +347,7 @@ export function useScoring(
     setPendingTitle(roundId);
     markScoreStart(gameCode, roundId, "title");
     try {
-      await applyAttempt(roundId, {
+      await applyAttempt(roundId, TITLE_POINTS, {
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
@@ -312,7 +372,7 @@ export function useScoring(
     setPendingArtist(roundId);
     markScoreStart(gameCode, roundId, "artist");
     try {
-      await applyAttempt(roundId, {
+      await applyAttempt(roundId, ARTIST_POINTS, {
         title_correct: false,
         artist_correct: true,
         wrong_buzz: false,
@@ -347,7 +407,7 @@ export function useScoring(
     setPendingArtist(roundId);
     markScoreStart(gameCode, roundId, "soundtrack");
     try {
-      await applyAttempt(roundId, {
+      await applyAttempt(roundId, SOUNDTRACK_POINTS, {
         title_correct: true,
         artist_correct: true,
         wrong_buzz: false,
@@ -406,7 +466,7 @@ export function useScoring(
     if (teamName && !freeGuess) toast(`-${WRONG_BUZZ_PENALTY} to ${teamName}`, { variant: "info" });
     setPendingWrong(roundId);
     try {
-      await applyAttempt(roundId, {
+      await applyAttempt(roundId, freeGuess ? 0 : -WRONG_BUZZ_PENALTY, {
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
@@ -567,23 +627,21 @@ export function useScoring(
   }
 
   async function handleBonus(teamId: string, teamName: string) {
-    if (busy || !managerToken) return;
-    // Close the picker and acknowledge the click immediately, but do NOT
-    // claim success yet: the bonus is the one Render-routed scoring call, so
-    // on a cold start it can hang for many seconds or fail outright, and an
-    // optimistic "+4" here let the host believe a bonus landed that the room
-    // never saw (F-P1-5). The success toast waits for the call to resolve;
-    // `busy` keeps Bonus + End game gated while it's in flight (the per-round
-    // scoring buttons stay deliberately independent of it).
+    if (busy || bonusInFlight.current || !managerToken) return;
+    bonusInFlight.current = true;
+    const finish = beginScore(teamId, BONUS_POINTS);
     setBonusOpen(false);
     toast(`Sending +${BONUS_POINTS} to ${teamName}...`, { variant: "info" });
     setBusy(true);
     try {
-      await awardBonus(gameCode, managerToken, { team_id: teamId });
+      const total = await awardBonusDirect(gameCode, managerToken, teamId);
+      finish(total);
       toast(`+${BONUS_POINTS} bonus to ${teamName}`, { variant: "success" });
     } catch (err) {
+      finish(null);
       reportError(err);
     } finally {
+      bonusInFlight.current = false;
       setBusy(false);
     }
   }
@@ -608,6 +666,7 @@ export function useScoring(
 
   return {
     currentSong,
+    scoreFeedback,
     busy,
     endConfirmOpen,
     setEndConfirmOpen,

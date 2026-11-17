@@ -610,7 +610,8 @@ Not idempotent. Each call adds `p_points` to the team's score. The host is expec
 
 ### Callers
 
-- FastAPI `POST /games/{code}/bonus`.
+- The manager console calls `award_manager_bonus(p_game_code text, p_manager_token uuid, p_team_id uuid)` directly (migration 055). This `SECURITY DEFINER` function checks the token against `game_secrets` for that code, then calls `award_bonus` with four points. It returns the team's new total as a JSON integer. An unknown game or missing or incorrect token yields `28000 manager_token_required` before any write. Valid callers receive the team and ended-game errors above.
+- FastAPI `POST /games/{code}/bonus` calls `award_bonus` for REST clients.
 
 ## 4. `end_game`: manager ends the game
 
@@ -947,19 +948,15 @@ migration's one-time backfill of existing teams never double-inserts.
 | `round_song` | ✅ (no token; read-only, one song of that game) | ✅ | Browser (host score panel, TV reveal) |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
-| `award_bonus` | ❌ | ✅ | FastAPI POST /games/.../bonus |
+| `award_manager_bonus` | ✅ (token-gated) | ✅ | Browser (manager bonus picker) |
+| `award_bonus` | ❌ | ✅ | `award_manager_bonus` and FastAPI POST /games/.../bonus |
 | `end_game` | ❌ | ✅ | FastAPI POST /games/.../end |
 | `cleanup_expired_games` | ❌ | ✅ | pg_cron (hourly), manual ops |
 | `archive_game` | ❌ | ✅ | Internal call from `end_game` + `cleanup_expired_games`. No HTTP caller. |
 | `set_song_availability` | ❌ | ✅ | FastAPI POST /admin/songs/check-availability with `commit=true` |
 | `create_team_secret` | ❌ | ✅ | Trigger only (`AFTER INSERT` on `game_teams`). No HTTP caller. Team rejoin is a FastAPI endpoint, not an anon RPC. |
 
-Six of the seven anon-callable functions validate authentication inside the
-function body (`buzz_in` checks the game-code; the other five check the
-per-game `manager_token`). This is what makes anon EXECUTE safe. The seventh,
-`song_pool_counts`, needs no check: it writes nothing and returns counts only
-(SECURITY DEFINER since migration 053, because anon can't read the catalog
-tables since migration 054).
+`buzz_in` checks the game code. Six manager RPCs check the per-game token. The three read-only RPCs return catalog counts or song metadata scoped to a game.
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
 

@@ -12,7 +12,7 @@ function canAnimate(): boolean {
 interface CountUpOptions {
   duration?: number;
   delay?: number;
-  // Starting point for the FIRST animation. Omitted (the Display board) the
+  // Starting point for the FIRST animation. When omitted, the
   // hook opens on the current value and only eases later changes; set to 0
   // (the final podium) it rolls up from zero on mount.
   from?: number;

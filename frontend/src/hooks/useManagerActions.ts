@@ -1,10 +1,6 @@
-// Manager hot-path actions: award_attempt + release_buzz_lock called direct
-// from the browser via Supabase PostgREST RPC, the same way useBuzzer calls
-// buzz_in. Migration 021 moved the manager-token check into the PL/pgSQL
-// functions so the FastAPI hop on these two actions is no longer needed.
-// Latency goes from ~400-600ms (browser -> Render US-West -> Supabase
-// Frankfurt -> back) to ~150ms (browser -> Supabase direct).
+// The console sends scoring and round actions directly to token-gated PostgREST RPCs.
 
+import { awardBonus } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { tracedRpc } from "../lib/telemetry";
 import { RpcError, throwOnRpcError } from "../lib/rpcError";
@@ -64,6 +60,30 @@ export async function awardAttemptDirect(
     title_claimed_by: row.title_claimed_by,
     artist_claimed_by: row.artist_claimed_by,
   };
+}
+
+export async function awardBonusDirect(
+  gameCode: string,
+  managerToken: string,
+  teamId: string,
+): Promise<number> {
+  const { data, error } = await tracedRpc("award_manager_bonus", { game_code: gameCode }, () =>
+    supabase.rpc("award_manager_bonus", {
+      p_game_code: gameCode,
+      p_manager_token: managerToken,
+      p_team_id: teamId,
+    }),
+  );
+  // PostgREST could not resolve the function, so no score was written.
+  if (error?.code === "PGRST202") {
+    const bonus = await awardBonus(gameCode, managerToken, { team_id: teamId });
+    return bonus.team_total_score;
+  }
+  throwOnRpcError(error);
+  if (typeof data !== "number") {
+    throw new RpcError("award_manager_bonus returned no score");
+  }
+  return data;
 }
 
 // The expiry banner's "Keep playing +1h" (T4.8 / migration 039). Not a hot

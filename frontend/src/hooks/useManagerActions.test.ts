@@ -5,8 +5,12 @@ vi.mock("../lib/supabase", async () => {
   return { supabase: mod.supabaseMock };
 });
 
+vi.mock("../lib/api", () => ({ awardBonus: vi.fn() }));
+
+import { awardBonus } from "../lib/api";
 import {
   awardAttemptDirect,
+  awardBonusDirect,
   extendGameDirect,
   releaseBuzzLockDirect,
   RpcError,
@@ -17,6 +21,7 @@ const TOKEN = "11111111-1111-1111-1111-111111111111";
 
 beforeEach(() => {
   resetSupabaseMock();
+  vi.mocked(awardBonus).mockReset();
 });
 
 describe("awardAttemptDirect", () => {
@@ -111,6 +116,45 @@ describe("awardAttemptDirect", () => {
         wrong_buzz: false,
       }),
     ).rejects.toBeInstanceOf(RpcError);
+  });
+});
+
+describe("awardBonusDirect", () => {
+  it("passes only the team and manager credentials and returns the committed score", async () => {
+    setRpcResponse({ data: 0, error: null });
+    await expect(awardBonusDirect("ABCDEF", TOKEN, "t1")).resolves.toBe(0);
+    expect(supabaseMock.rpc).toHaveBeenCalledWith("award_manager_bonus", {
+      p_game_code: "ABCDEF",
+      p_team_id: "t1",
+      p_manager_token: TOKEN,
+    });
+  });
+
+  it("preserves a rejected token and rejects a missing score", async () => {
+    setRpcResponse({ data: null, error: { code: "28000", message: "manager_token_required" } });
+    await expect(awardBonusDirect("ABCDEF", TOKEN, "t1")).rejects.toMatchObject({
+      sqlstate: "28000",
+    });
+    setRpcResponse({ data: null, error: null });
+    await expect(awardBonusDirect("ABCDEF", TOKEN, "t1")).rejects.toBeInstanceOf(RpcError);
+    expect(awardBonus).not.toHaveBeenCalled();
+  });
+
+  it("uses the existing bonus endpoint when PostgREST cannot resolve the new RPC", async () => {
+    setRpcResponse({ data: null, error: { code: "PGRST202", message: "function missing" } });
+    vi.mocked(awardBonus).mockResolvedValue({
+      team_id: "t1",
+      points_awarded: 4,
+      team_total_score: 14,
+    });
+    await expect(awardBonusDirect("ABCDEF", TOKEN, "t1")).resolves.toBe(14);
+    expect(awardBonus).toHaveBeenCalledWith("ABCDEF", TOKEN, { team_id: "t1" });
+  });
+
+  it("never repeats a bonus after an uncertain RPC outcome", async () => {
+    setRpcResponse({ data: null, error: { code: "", message: "Failed to fetch" } });
+    await expect(awardBonusDirect("ABCDEF", TOKEN, "t1")).rejects.toBeInstanceOf(RpcError);
+    expect(awardBonus).not.toHaveBeenCalled();
   });
 });
 

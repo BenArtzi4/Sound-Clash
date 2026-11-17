@@ -162,6 +162,8 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-11-17: Hosts see pending bonus and approval points immediately, and the live display shows the new total as soon as it arrives. A visible scoreboard also checks for missed changes sooner when its Realtime connection drops.
+
 - 2026-10-31: A genre and decade mix with no songs (such as Hip-Hop + 80s) could be created, and its first Start game then said "All songs in your selected genres have been played". The Host a game page now says "No songs in this mix" and keeps Create game off until the mix has songs, and a game that still starts empty is told that no songs match its genres and decades. (#402)
 - 2026-10-29: How to play's **Display** card said the big screen plays the YouTube clip; it shows the join QR code and the live scoreboard, and the music plays from the host's device. (#394)
 - 2026-10-29: **The display works on a phone mirrored to the TV.** On a phone the scoreboard used to scroll: held sideways it showed one team of five, and held upright the last teams and the join QR were below the bottom of the screen. Now the whole board fits one screen on any phone, upright or sideways, like it does on a TV: sideways it takes the TV layout (the top 5 on the left; the song, the timer and the join QR on the right), and upright the five teams, the code and a smaller QR stack. TVs and laptops look exactly as before. (#392)

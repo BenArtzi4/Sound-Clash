@@ -17,7 +17,6 @@ import { RoundCountdown } from "../components/RoundCountdown";
 import { Skeleton } from "../components/Skeleton";
 import { SoundtrackBadge } from "../components/SoundtrackBadge";
 import { CheckIcon, ExpandIcon, FilmIcon, MicIcon, NoteIcon } from "../components/icons";
-import { useCountUp } from "../hooks/useCountUp";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useGameChannel } from "../hooks/useGameChannel";
 import { useWakeLock } from "../hooks/useWakeLock";
@@ -102,8 +101,6 @@ function RevealRow({
   );
 }
 
-// One board row. Split out of the list so each score can own a count-up hook
-// (display-only easing between the previous and new total).
 function BoardRow({
   team,
   rank,
@@ -115,7 +112,6 @@ function BoardRow({
   medal: string;
   buzzed: boolean;
 }) {
-  const score = useCountUp(team.score);
   return (
     <li
       data-team-id={team.id}
@@ -124,7 +120,7 @@ function BoardRow({
     >
       <span className={styles.bigRank}>{rank}</span>
       <span className={styles.bigName}>{team.name}</span>
-      <span className={styles.bigScore}>{score}</span>
+      <span className={styles.bigScore}>{team.score}</span>
     </li>
   );
 }

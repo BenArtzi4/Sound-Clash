@@ -72,7 +72,7 @@ export function ManagerConsolePage() {
   const laptopLayout = useMediaQuery(LAPTOP_LAYOUT, true);
 
   // Keep the Render-hosted API warm while a game is running so the host's
-  // occasional REST calls (Bonus / End game / Kick) and late team joins don't
+  // occasional REST calls (End game / Kick) and late team joins don't
   // hit a mid-game cold start. See useKeepBackendWarm for the why.
   useKeepBackendWarm(state?.game?.status === "playing" || state?.game?.status === "waiting");
 
@@ -94,6 +94,7 @@ export function ManagerConsolePage() {
   const scoring = useScoring(gameCode, managerToken, state, player, hostPlayer);
   const {
     currentSong,
+    scoreFeedback,
     busy,
     endConfirmOpen,
     setEndConfirmOpen,
@@ -301,6 +302,14 @@ export function ManagerConsolePage() {
       {nextRoundLabel}
     </button>
   );
+
+  const scoreReadout =
+    scoreFeedback && !bonusOpen ? (
+      <p className={styles.scoreFeedback} data-testid="host-score" role="status">
+        <strong>{scoreFeedback.name}</strong> · {scoreFeedback.total} pts
+        {scoreFeedback.pending && ` · ${scoreFeedback.pending}`}
+      </p>
+    ) : null;
 
   return (
     <main className={styles.shell}>
@@ -541,6 +550,7 @@ export function ManagerConsolePage() {
                 </div>
               </div>
             ) : null}
+            {laptopLayout ? scoreReadout : null}
           </div>
 
           {startUnderInvite ? null : (
@@ -556,6 +566,7 @@ export function ManagerConsolePage() {
               {startButton}
             </div>
           )}
+          {laptopLayout ? null : scoreReadout}
         </section>
 
         <footer className={styles.endGameFooter}>

@@ -889,6 +889,39 @@ describe("useGameChannel - subscription", () => {
     }
   });
 
+  it("refreshes an unlocked scoreboard on the next tight tick after a channel error", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const game = makeActiveGame({ status: "playing" });
+      const team = makeTeam({ id: "t1", score: 0 });
+      setHydrate({ game, teams: [team], rounds: [] });
+      const { result } = renderHook(() => useGameChannel("ABCDEF"));
+      await act(async () => {
+        await fireSubscribed();
+      });
+
+      await act(async () => {
+        await fireStatus("CHANNEL_ERROR");
+      });
+      setHydrate({ game, teams: [{ ...team, score: 4 }], rounds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS + 500);
+      });
+      expect(result.current.state?.teams.get("t1")?.score).toBe(4);
+
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const callsAfterReconnect = supabaseMock.from.mock.calls.length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS);
+      });
+      expect(supabaseMock.from.mock.calls.length).toBe(callsAfterReconnect);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("tightens the backstop to LOCKED_RESYNC_INTERVAL_MS while a buzz lock is held and repairs a stale lock (#254)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

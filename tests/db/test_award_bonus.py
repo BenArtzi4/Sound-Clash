@@ -10,9 +10,42 @@ import uuid
 import asyncpg
 import pytest
 
-from ._helpers import create_test_game, create_test_team
+from ._helpers import create_test_game, create_test_team, fetch_manager_token
 
 pytestmark = pytest.mark.needs_docker
+
+
+@pytest.mark.asyncio
+async def test_manager_bonus_as_anon(db: asyncpg.Connection, anon_conn: asyncpg.Connection) -> None:
+    code = await create_test_game(db)
+    team = await create_test_team(db, code)
+    token = await fetch_manager_token(db, code)
+    award = "SELECT award_manager_bonus($1, $2, $3)"
+    assert await anon_conn.fetchval(award, code, token, team) == 4
+    assert await anon_conn.fetchval(award, code, token, team) == 8
+    assert await db.fetchval("SELECT score FROM game_teams WHERE id = $1", team) == 8
+
+
+@pytest.mark.asyncio
+async def test_manager_bonus_checks_token_and_team(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    code = await create_test_game(db)
+    other_code = await create_test_game(db)
+    team = await create_test_team(db, code)
+    token = await fetch_manager_token(db, code)
+    other_token = await fetch_manager_token(db, other_code)
+    award = "SELECT award_manager_bonus($1, $2, $3)"
+    for invalid_token in (other_token, None):
+        with pytest.raises(asyncpg.PostgresError, match="manager_token_required") as exc:
+            await anon_conn.fetchval(award, code, invalid_token, team)
+        assert exc.value.sqlstate == "28000"
+    with pytest.raises(asyncpg.PostgresError, match="team_not_in_game"):
+        await anon_conn.fetchval(award, other_code, other_token, team)
+    await db.execute("UPDATE active_games SET status = 'ended' WHERE game_code = $1", code)
+    with pytest.raises(asyncpg.PostgresError, match="game_already_ended"):
+        await anon_conn.fetchval(award, code, token, team)
+    assert await db.fetchval("SELECT score FROM game_teams WHERE id = $1", team) == 0
 
 
 @pytest.mark.asyncio

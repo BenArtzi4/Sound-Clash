@@ -29,11 +29,7 @@ describe("scoring constants", () => {
     expect(TITLE_POINTS + ARTIST_POINTS).toBe(SOUNDTRACK_POINTS);
   });
 
-  it("documents the manager bonus magnitude (award_bonus p_points DEFAULT 4)", () => {
-    // The bonus flows through a *different* function (award_bonus, service-role;
-    // mig 014 p_points DEFAULT 4, mirrored by AwardBonusRequest.points default 4
-    // in backend/app/models/games.py). This is a documented cross-check, not an
-    // import — keep it in sync with the backend default.
+  it("matches the fixed manager bonus (migration 055)", () => {
     expect(BONUS_POINTS).toBe(4);
   });
 });
