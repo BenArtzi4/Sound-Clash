@@ -7,7 +7,7 @@ test_select_next_song.py / test_peek_next_song.py. This file covers what 049
 added on the song side:
 
   * song_artist_keys splits a free-text artist credit into its artists
-  * a song that shares no genre with the song playing now beats one that does
+  * eligible songs can share a genre with the previous song
   * no artist is heard again within 8 rounds while another artist is left
   * a duet counts for both artists
   * a small pool spreads its repeats as far apart as it can
@@ -120,9 +120,8 @@ async def test_song_artist_keys(db: asyncpg.Connection, artist: str | None, keys
 
 
 @pytest.mark.asyncio
-async def test_song_sharing_the_genre_playing_now_loses(db: asyncpg.Connection) -> None:
-    """Rock is playing, so pop goes next. Of the two pop songs, the one also
-    tagged rock must lose to the pure pop one."""
+async def test_song_sharing_the_genre_playing_now_can_be_picked(db: asyncpg.Connection) -> None:
+    """Both pop songs preserve the balance, even when one is tagged rock."""
     g = await _genre_ids(db, "rock", "pop")
     playing = await _song(db, "Alpha", g["rock"])
     pop_and_rock = await _song(db, "Beta", g["pop"], g["rock"])
@@ -130,8 +129,7 @@ async def test_song_sharing_the_genre_playing_now_loses(db: asyncpg.Connection) 
     game_code, token = await _game(db, g["rock"], g["pop"])
     await _next(db, game_code, token, playing)
 
-    assert set(await _peeks(db, game_code, token, 30)) == {pure_pop}
-    assert pop_and_rock != pure_pop
+    assert set(await _peeks(db, game_code, token, 40)) == {pure_pop, pop_and_rock}
 
 
 # ---------------------------------------------------------------------------

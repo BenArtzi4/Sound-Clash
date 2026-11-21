@@ -291,20 +291,14 @@ Backwards transitions are NOT enforced at the database level; RPC functions reje
 
 Postgres `uuid[]` array, set once at `POST /games`. The song pickers
 (`select_next_song` / `peek_next_song`, direct-RPC — see `rpc-functions.md`)
-share the rounds between these genres in **balanced turns** (migration 048, via
-the internal `pick_next_song` helper): a genre first, then a song in it. A
-genre may go next unless it is more than one song ahead of the least-played
-selected genre that still has eligible songs, so genre counts stay within 2 of
-each other, and (migration 049) it is never the genre of the song playing now
-while another selected genre has songs. Inside the genre, artists heard in the
-last 8 rounds are skipped and artists heard less in the game are preferred
-(see `songs.artist_keys` and `rpc-functions.md §3cc`). A song is eligible when it belongs to the
-genre, has not been played in this game, and passes the optional
-`selected_decades` filter and the dead-video `unavailable_at IS NULL` skip.
-Turns are counted from `game_rounds` joined to `song_genres`, so a song tagged
-in several selected genres counts as a turn for each. (Migration 047 drew
-uniformly per song instead, which let large genres dominate; before 047 the
-genre was drawn uniformly at random.)
+use a weighted genre draw before choosing a song. Every selected tag on a
+played song counts toward the corresponding genre. Israeli Covers counts
+twice toward its genre, giving it about half the share of other genres in a
+mix. The picker compares projected counts for genres that would still have
+eligible songs after the pick and uses a two-unit spread when possible. The
+previous round's genres have half weight. Songs must be unplayed in that
+game, pass the decade filter and have `unavailable_at IS NULL`. See
+[rpc-functions.md](rpc-functions.md#3cc-pick_next_song-the-song-picker-internal-only).
 
 ### `active_games.selected_decades`
 

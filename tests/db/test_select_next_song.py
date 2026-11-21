@@ -22,7 +22,6 @@ Coverage:
 from __future__ import annotations
 
 import uuid
-from itertools import pairwise
 
 import asyncpg
 import pytest
@@ -559,16 +558,8 @@ async def test_null_unavailable_at_stays_eligible(db: asyncpg.Connection) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Balanced genre turns (migration 048) and genre rotation (migration 049)
-#
-# The random path picks a genre first, then a song inside it. A genre may go
-# next unless it is already more than one song ahead of the least-played genre
-# that still has songs left, so genre counts never drift more than 2 apart, and
-# (049) it is never the genre of the song playing now while another genre has
-# songs. These tests assert both rules round by round, so they are
-# deterministic rather than statistical. Artist spacing (049) has its own tests
-# in test_song_spacing.py; every song here shares one artist, so it never
-# affects which genre goes next.
+# Weighted genre balance (migration 056). Check that active genres maintain
+# their share and exhausted genres stop influencing the remaining draws.
 # ---------------------------------------------------------------------------
 
 
@@ -613,15 +604,11 @@ async def test_balanced_turns_keep_genre_counts_within_two(db: asyncpg.Connectio
     for _ in range(3):
         game_code, token = await _new_game(db, genres)
         counts = dict.fromkeys(genres, 0)
-        previous = None
         for rnd in range(1, 25):
             sid = (await _call(db, game_code, token))[0]["song_id"]
             counts[owner[sid]] += 1
             gap = max(counts.values()) - min(counts.values())
             assert gap <= 2, f"round {rnd}: genre counts drifted to {counts}"
-            # Migration 049: never the genre that played the round before.
-            assert owner[sid] != previous, f"round {rnd}: {owner[sid]} twice in a row"
-            previous = owner[sid]
         assert all(7 <= n <= 9 for n in counts.values()), counts
 
 
@@ -645,16 +632,36 @@ async def test_exhausted_genre_drops_out_and_the_rest_continue(db: asyncpg.Conne
 
 
 @pytest.mark.asyncio
-async def test_two_genres_alternate_strictly(db: asyncpg.Connection) -> None:
-    """Migration 049 reversed 048's "not a fixed rotation": a genre never plays
-    twice in a row while another genre has songs, so two equal genres alternate
-    for all 16 rounds of each of 4 games."""
-    genres = await _genre_map(db, "rock", "pop")
-    owner = await _seed_genre_songs(db, genres, {"rock": 16, "pop": 16})
-    for _ in range(4):
-        game_code, token = await _new_game(db, genres)
-        played = [owner[(await _call(db, game_code, token))[0]["song_id"]] for _ in range(16)]
-        assert all(a != b for a, b in pairwise(played)), played
+async def test_covers_get_fewer_turns_in_a_mix(db: asyncpg.Connection) -> None:
+    await db.execute(
+        "INSERT INTO genres (slug, name) VALUES ('israeli-cover', 'Israeli Cover') "
+        "ON CONFLICT (slug) DO NOTHING"
+    )
+    genres = await _genre_map(db, "rock", "israeli-cover")
+    owner = await _seed_genre_songs(db, genres, {"rock": 30, "israeli-cover": 30})
+    game_code, token = await _new_game(db, genres)
+
+    covers = 0
+    for round_number in range(1, 25):
+        sid = (await _call(db, game_code, token))[0]["song_id"]
+        covers += int(owner[sid] == "israeli-cover")
+        assert abs(2 * covers - (round_number - covers)) <= 2
+
+    assert covers == 8
+
+
+@pytest.mark.asyncio
+async def test_cover_only_game_plays_to_exhaustion(db: asyncpg.Connection) -> None:
+    cover = await db.fetchval(
+        "INSERT INTO genres (slug, name) VALUES ('israeli-cover', 'Israeli Cover') "
+        "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id"
+    )
+    genres = {"israeli-cover": cover}
+    songs = await _seed_genre_songs(db, genres, {"israeli-cover": 4})
+    game_code, token = await _new_game(db, genres)
+    assert {(await _call(db, game_code, token))[0]["song_id"] for _ in songs} == set(songs)
+    with pytest.raises(asyncpg.PostgresError, match="no_more_songs"):
+        await _call(db, game_code, token)
 
 
 @pytest.mark.asyncio

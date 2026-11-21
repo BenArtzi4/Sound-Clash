@@ -201,6 +201,8 @@ export async function tracedFetch<T extends Response>(
 // (PLAYING) is detected by YouTubePlayer; see resolveSongStart via the handle.
 // ---------------------------------------------------------------------------
 
+export type SongPickPath = "peek" | "fallback";
+
 export interface SongStartHandle {
   /**
    * Call when select_next_song resolves; supplies the round/song identity.
@@ -217,8 +219,8 @@ export interface SongStartHandle {
   }): void;
   /** Call right after loadVideoById is issued to the player. */
   loadIssued(): void;
-  /** Call when the player reaches PLAYING (or the load times out). Ends all. */
-  playing(detection: "statechange" | "poll" | "timeout"): void;
+  /** Call when the player reaches PLAYING or the load times out. */
+  playing(detection: "statechange" | "poll" | "timeout" | "error"): void;
   /** Call on any error (RPC failure, player error). Ends all, errored. */
   fail(reason: string): void;
 }
@@ -230,50 +232,72 @@ const INERT_SONG_START: SongStartHandle = {
   fail: () => {},
 };
 
-export function startSongStart(attrs: { game_code: string }): SongStartHandle {
+export function startSongStart(attrs: {
+  game_code: string;
+  pick_path?: SongPickPath;
+}): SongStartHandle {
   if (!tracer) return INERT_SONG_START;
+  const started = performance.now();
   const parent = tracer.startSpan(SPAN_OPS.songStart);
   setAttrs(parent, attrs);
-  let child = startChild(SPAN_OPS.songClickToRpc, parent);
+  const clickToRpc = startChild(SPAN_OPS.songClickToRpc, parent);
+  let rpcToLoad: Span | undefined;
+  let loadToPlaying: Span | undefined;
+  let rpcPending = true;
+  let playerPending = true;
+  let loadStarted = false;
   let done = false;
 
-  const closeChild = (): void => {
-    child?.end();
-    child = undefined;
+  const finish = (): void => {
+    done = true;
+    parent.end();
   };
 
   return {
     rpcDone(info) {
-      if (done) return;
+      if (done || !rpcPending) return;
+      rpcPending = false;
+      clickToRpc?.end();
       setAttrs(parent, {
         round_number: info.roundNumber,
         song_id: info.songId,
         youtube_id: info.youtubeId,
         preloaded: info.preloaded,
       });
-      closeChild();
-      child = startChild(SPAN_OPS.songRpcToLoad, parent);
+      if (!playerPending) finish();
+      else if (!loadStarted) rpcToLoad = startChild(SPAN_OPS.songRpcToLoad, parent);
     },
     loadIssued() {
-      if (done) return;
-      closeChild();
-      child = startChild(SPAN_OPS.songLoadToPlaying, parent);
+      if (done || loadStarted) return;
+      loadStarted = true;
+      rpcToLoad?.end();
+      rpcToLoad = undefined;
+      loadToPlaying = startChild(SPAN_OPS.songLoadToPlaying, parent);
     },
     playing(detection) {
-      if (done) return;
-      done = true;
-      closeChild();
-      setAttrs(parent, { playing_detection: detection });
-      if (detection === "timeout") parent.setStatus({ code: STATUS_ERROR });
-      parent.end();
+      if (done || !playerPending || !loadStarted) return;
+      playerPending = false;
+      loadToPlaying?.end();
+      setAttrs(parent, {
+        playing_detection: detection,
+        click_to_playing_ms:
+          detection === "timeout" || detection === "error"
+            ? undefined
+            : performance.now() - started,
+        error_reason: detection === "error" ? "player_error" : undefined,
+      });
+      if (detection === "timeout" || detection === "error")
+        parent.setStatus({ code: STATUS_ERROR });
+      if (!rpcPending) finish();
     },
     fail(reason) {
       if (done) return;
-      done = true;
-      closeChild();
+      if (rpcPending) clickToRpc?.end();
+      if (playerPending) loadToPlaying?.end();
+      rpcToLoad?.end();
       setAttrs(parent, { error_reason: reason });
       parent.setStatus({ code: STATUS_ERROR });
-      parent.end();
+      finish();
     },
   };
 }

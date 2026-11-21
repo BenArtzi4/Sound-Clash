@@ -211,7 +211,7 @@ by the maintainer in Grafana Explore and by Claude via the Grafana MCP.
 
 | Span (`op`) | Window |
 |---|---|
-| `game.song_start` (+ children) | "Next round" click → audio actually PLAYING |
+| `game.song_start` (+ children) | `click_to_playing_ms` measures the Next round tap to audio. Child spans measure round RPC and YouTube startup independently. |
 | `game.buzz.e2e` | pointerdown → buzz lock observed in Realtime (won/lost_race) |
 | `game.score.e2e` | scoring click → `game_rounds` UPDATE observed in Realtime |
 | `db.rpc` | each Supabase PostgREST RPC round-trip (`rpc.name` attribute) |
