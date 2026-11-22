@@ -42,6 +42,81 @@ afterEach(() => {
 });
 
 describe("gameReducer", () => {
+  it("orders Broadcast, Postgres Changes, and snapshots by the database revision", () => {
+    const game = makeActiveGame({
+      status: "playing",
+      round_number: 1,
+      current_round_id: "r1",
+      buzz_revision: 1,
+    });
+    const round = makeRound({ id: "r1" });
+    const hydrate = (row: ActiveGame) => ({
+      type: "HYDRATE" as const,
+      game: row,
+      teams: [],
+      rounds: [round],
+    });
+    const first = gameReducer(null, hydrate(game));
+    const firstLock = {
+      type: "BUZZ_LOCK" as const,
+      lock: {
+        ...game,
+        status: "playing" as const,
+        current_round_id: "r1",
+        buzzed_team_id: "team-a",
+        locked_at: "2026-05-05T12:01:00Z",
+        buzz_revision: 2,
+      },
+    };
+    const locked = gameReducer(first, firstLock);
+    expect(locked?.game.buzzed_team_id).toBe("team-a");
+    expect(gameReducer(locked, firstLock)).toBe(locked);
+    expect(gameReducer(locked, hydrate(game))).toBe(locked);
+
+    const clear = { ...game, buzz_revision: 3 };
+    const cleared = gameReducer(locked, hydrate(clear));
+    expect(cleared?.game.buzzed_team_id).toBeNull();
+    expect(gameReducer(cleared, firstLock)).toBe(cleared);
+    expect(
+      gameReducer(cleared, {
+        type: "GAME_CHANGE",
+        payload: makePayload("active_games", "UPDATE", { new: { ...game, ...firstLock.lock } }),
+      }),
+    ).toBe(cleared);
+
+    const nextRound = makeRound({ id: "r2", round_number: 2 });
+    const advanced = gameReducer(locked, {
+      type: "ROUND_CHANGE",
+      payload: makePayload("game_rounds", "INSERT", { new: nextRound }),
+    });
+    expect(advanced?.game.buzzed_team_id).toBeNull();
+    expect(gameReducer(advanced, firstLock)).toBe(advanced);
+    expect(gameReducer(advanced, hydrate(game))?.game.current_round_id).toBe("r2");
+
+    const earlyLock = gameReducer(first, {
+      ...firstLock,
+      lock: { ...firstLock.lock, current_round_id: "r2", round_number: 2, buzz_revision: 4 },
+    });
+    const roundCaughtUp = gameReducer(earlyLock, {
+      type: "ROUND_CHANGE",
+      payload: makePayload("game_rounds", "INSERT", { new: nextRound }),
+    });
+    expect(roundCaughtUp?.game.buzzed_team_id).toBe("team-a");
+    expect(roundCaughtUp?.currentRound).toBe(nextRound);
+
+    const secondLock = {
+      ...firstLock,
+      lock: { ...firstLock.lock, buzz_revision: 4, buzzed_team_id: "team-b" },
+    };
+    const relocked = gameReducer(cleared, secondLock);
+    expect(relocked?.game.buzzed_team_id).toBe("team-b");
+    expect(gameReducer(relocked, firstLock)).toBe(relocked);
+    expect(
+      gameReducer(relocked, hydrate({ ...clear, status: "ended", buzz_revision: 5 }))?.game
+        .buzzed_team_id,
+    ).toBeNull();
+  });
+
   it("HYDRATE builds initial state with sorted rounds and current round", () => {
     const game = makeActiveGame({ current_round_id: "r1" });
     const next = gameReducer(null, {

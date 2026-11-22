@@ -62,6 +62,10 @@ The browser calls Postgres directly via PostgREST; Python is never in the buzz p
                                              └─────────┘    └─────────┘    └─────────┘
 ```
 
+The pressing team can render the result as soon as `buzz_in` returns. Migration 058 also lets the committed winning write reach the room on the private `buzz:{game_code}` Broadcast channel. The message carries the public game row and its monotone `buzz_revision`. Postgres Changes still fans out all game, team, and round writes. The reducer compares revisions and round numbers before applying game rows from either transport or a snapshot. A late copy of a winning row cannot replace an observed clear, newer winner, or round advance. The reconnect and polling snapshots repair events missed by both transports.
+
+The existing commit-timestamp fan-out telemetry still measures Postgres Changes. The paired Chromium harness measures the receipt and render estimates for both paths on the same write.
+
 ### Latency budget (typical, EU user → eu-central-1 Supabase)
 
 | Hop | Time | Notes |

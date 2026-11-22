@@ -5,7 +5,7 @@
 // Spec ref: docs/testing-strategy.md §4.4 + docs/realtime-design.md §3.
 
 import { test, expect, type Browser } from "@playwright/test";
-import { joinAsTeam } from "./fixtures/team-context";
+import { joinAsTeam, raceTeamBuzzers } from "./fixtures/team-context";
 import { openManagerAndCreateGame } from "./fixtures/manager-context";
 
 async function openDisplay(browser: Browser, code: string) {
@@ -23,12 +23,12 @@ test("two teams race the buzzer; exactly one wins; all contexts agree", async ({
   });
   const code = manager.gameCode;
 
-  // 2. Game now exists; open the other three contexts in parallel.
-  const [team1, team2, display] = await Promise.all([
+  // 2. Join both teams so the display starts from a complete roster snapshot.
+  const [team1, team2] = await Promise.all([
     joinAsTeam(browser, code, "Alpha"),
     joinAsTeam(browser, code, "Bravo"),
-    openDisplay(browser, code),
   ]);
+  const display = await openDisplay(browser, code);
 
   // 3. Both teams visible on display before we start.
   await expect(display.page.getByText("Alpha")).toBeVisible();
@@ -49,10 +49,8 @@ test("two teams race the buzzer; exactly one wins; all contexts agree", async ({
     }),
   ]);
 
-  // 6. Race. Promise.all schedules both clicks back-to-back; the actual
-  //    winner is decided server-side by the buzz_in PL/pgSQL function's
-  //    conditional UPDATE.
-  await Promise.all([team1.page.getByTestId("buzz").click(), team2.page.getByTestId("buzz").click()]);
+  // 6. Race both browser calls against the same unlocked database row.
+  await raceTeamBuzzers(team1.page, team2.page);
 
   // 7. Wait for the locked state to actually propagate (one of the two
   //    tones must be "winner", the other "locked-other").

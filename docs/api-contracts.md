@@ -660,7 +660,7 @@ When a team buzzes:
 2. Realtime fires `postgres_changes` on `active_games` with `eventType: 'UPDATE'` and the new row.
 3. All subscribed clients see `new.buzzed_team_id` go non-null and update their UI.
 
-There is no separate "buzzer_locked" event type. The data model IS the event stream.
+The same write can also produce `buzz_locked` on the private `buzz:{game_code}` Broadcast topic. Its payload is the public game row used by the live game snapshot, including the current round, winner, lock timestamp, and `buzz_revision`. Both transports carry the same revision. The client applies whichever arrives first and uses the revision to reject older game rows. Unlocks and score updates continue over Postgres Changes, with snapshots as the recovery path.
 
 The lock *clears* the same way — an `active_games` UPDATE with `buzzed_team_id: null` (from `release_buzz_lock`, `award_attempt`'s wrong branch, or `select_next_song`). Two resilience paths cover a lost clear event: the round-advance clear is re-derived from the same-transaction `game_rounds` INSERT, and the mid-round clears are caught by the lock-aware backstop re-fetch (15s while a lock is held locally, 60s otherwise) (#254).
 

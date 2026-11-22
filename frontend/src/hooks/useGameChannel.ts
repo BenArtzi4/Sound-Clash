@@ -1,7 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, type RealtimeChannel } from "../lib/supabase";
 import type {
   ActiveGame,
+  BuzzLock,
   GameAction,
   GameRound,
   GameState,
@@ -88,6 +89,43 @@ const ACTIVE_GAME_COLUMNS =
   "game_code,status,selected_genres,selected_decades,round_number," +
   "current_song_id,current_round_id,buzzed_team_id,locked_at,started_at,ended_at,expires_at";
 
+// Round INSERT can advance the UI even when its active_games UPDATE is lost.
+function gameIsOlder(game: ActiveGame, current: ActiveGame): boolean {
+  if (
+    game.game_code !== current.game_code ||
+    game.buzz_revision === undefined ||
+    current.buzz_revision === undefined
+  )
+    return false;
+  const age = Date.parse(game.started_at) - Date.parse(current.started_at);
+  return (
+    age < 0 ||
+    (age === 0 &&
+      (game.buzz_revision < current.buzz_revision || game.round_number < current.round_number))
+  );
+}
+
+function isBuzzLock(payload: unknown): payload is BuzzLock {
+  if (!payload || typeof payload !== "object") return false;
+  const lock = payload as Partial<BuzzLock>;
+  return (
+    typeof lock.game_code === "string" &&
+    lock.status === "playing" &&
+    Array.isArray(lock.selected_genres) &&
+    Array.isArray(lock.selected_decades) &&
+    Number.isSafeInteger(lock.round_number) &&
+    typeof lock.started_at === "string" &&
+    Number.isFinite(Date.parse(lock.started_at)) &&
+    typeof lock.expires_at === "string" &&
+    typeof lock.current_round_id === "string" &&
+    typeof lock.buzzed_team_id === "string" &&
+    typeof lock.locked_at === "string" &&
+    Number.isFinite(Date.parse(lock.locked_at)) &&
+    typeof lock.buzz_revision === "number" &&
+    Number.isSafeInteger(lock.buzz_revision)
+  );
+}
+
 function activeGameEqual(a: ActiveGame, b: ActiveGame): boolean {
   if (
     a.game_code !== b.game_code ||
@@ -97,12 +135,16 @@ function activeGameEqual(a: ActiveGame, b: ActiveGame): boolean {
     a.current_round_id !== b.current_round_id ||
     a.buzzed_team_id !== b.buzzed_team_id ||
     a.locked_at !== b.locked_at ||
+    a.buzz_revision !== b.buzz_revision ||
     a.started_at !== b.started_at ||
     a.ended_at !== b.ended_at ||
     a.expires_at !== b.expires_at
   ) {
     return false;
   }
+  if (a.selected_decades.length !== b.selected_decades.length) return false;
+  if (a.selected_decades.some((decade, index) => decade !== b.selected_decades[index]))
+    return false;
   if (a.selected_genres.length !== b.selected_genres.length) return false;
   for (let i = 0; i < a.selected_genres.length; i++) {
     if (a.selected_genres[i] !== b.selected_genres[i]) return false;
@@ -206,19 +248,36 @@ function hydrateUnchanged(
 export function gameReducer(state: GameState | null, action: GameAction): GameState | null {
   switch (action.type) {
     case "HYDRATE": {
-      if (state !== null && hydrateUnchanged(state, action.game, action.teams, action.rounds)) {
+      const game = state && gameIsOlder(action.game, state.game) ? state.game : action.game;
+      if (state !== null && hydrateUnchanged(state, game, action.teams, action.rounds)) {
         return state;
       }
       const teams = new Map(action.teams.map((t) => [t.id, t]));
       const rounds = [...action.rounds].sort((a, b) => a.round_number - b.round_number);
-      const currentRound = rounds.find((r) => r.id === action.game.current_round_id) ?? null;
-      return { game: action.game, teams, rounds, currentRound };
+      const currentRound = rounds.find((r) => r.id === game.current_round_id) ?? null;
+      return { game, teams, rounds, currentRound };
+    }
+    case "BUZZ_LOCK": {
+      const { lock } = action;
+      if (
+        !state ||
+        state.game.status === "ended" ||
+        lock.game_code !== state.game.game_code ||
+        Date.parse(lock.started_at) !== Date.parse(state.game.started_at) ||
+        state.game.buzz_revision === undefined ||
+        lock.buzz_revision <= state.game.buzz_revision ||
+        gameIsOlder(lock, state.game)
+      )
+        return state;
+      const currentRound = state.rounds.find((round) => round.id === lock.current_round_id) ?? null;
+      return { ...state, game: lock, currentRound };
     }
     case "GAME_CHANGE": {
       if (state === null) return null;
       const { eventType, new: row } = action.payload;
       if (eventType === "DELETE") return null;
       const game = row as ActiveGame;
+      if (gameIsOlder(game, state.game) || activeGameEqual(state.game, game)) return state;
       const currentRound = state.rounds.find((r) => r.id === game.current_round_id) ?? null;
       return { ...state, game, currentRound };
     }
@@ -292,13 +351,13 @@ export function useGameChannel(gameCode: string): {
   const [error, setError] = useState<Error | null>(null);
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Latest lock holder, mirrored into a ref so the mount effect's closures
+  // Latest committed game, mirrored into a ref so the mount effect's closures
   // (the backstop interval and hydrate) can read it — they close over the
   // first render's `state` otherwise. Drives the lock-aware backstop cadence
   // and the stale-lock diagnostic below (#254).
-  const lockRef = useRef<string | null>(null);
+  const gameRef = useRef<ActiveGame | null>(null);
   useEffect(() => {
-    lockRef.current = state?.game.buzzed_team_id ?? null;
+    gameRef.current = state?.game ?? null;
   }, [state]);
 
   // Last-known state worth rendering as a final scoreboard once the game rows
@@ -363,6 +422,8 @@ export function useGameChannel(gameCode: string): {
     let lastAppliedHydrateId = 0;
     let inFlightHydrates = 0;
     let checkingUnlock = false;
+    let legacyGameSchema = false;
+    let buzzChannel: RealtimeChannel | undefined;
     let gameChange: { requestId: number; row: ActiveGame } | undefined;
     let roundInsert: { requestId: number; row: GameRound } | undefined;
     const teamChanges = new Map<string, SnapshotChange<Team>>();
@@ -457,7 +518,10 @@ export function useGameChannel(gameCode: string): {
       // A later snapshot can trust rows read after these frames arrived.
       if (inFlightHydrates === 0 || lastAppliedHydrateId === hydrateRequestId) return;
       if (action.type === "GAME_CHANGE" && action.payload.eventType !== "DELETE") {
-        gameChange = { requestId: hydrateRequestId, row: action.payload.new as ActiveGame };
+        const row = action.payload.new as ActiveGame;
+        if (!gameChange || !gameIsOlder(row, gameChange.row)) {
+          gameChange = { requestId: hydrateRequestId, row };
+        }
       } else if (action.type === "TEAM_CHANGE") {
         rememberRowChange(teamChanges, action.payload, hydrateRequestId);
       } else if (action.type === "ROUND_CHANGE") {
@@ -547,6 +611,29 @@ export function useGameChannel(gameCode: string): {
         }
       });
 
+    function subscribeToBuzzLocks(): void {
+      if (buzzChannel) return;
+      buzzChannel = supabase
+        .channel(`buzz:${gameCode}`, { config: { private: true } })
+        .on("broadcast", { event: "buzz_locked" }, ({ payload }) => {
+          if (isBuzzLock(payload)) dispatchOrQueue({ type: "BUZZ_LOCK", lock: payload });
+        })
+        .subscribe();
+    }
+
+    async function readGame() {
+      const query = (columns: string) =>
+        supabase.from("active_games").select(columns).eq("game_code", gameCode).maybeSingle();
+      if (legacyGameSchema) return query(ACTIVE_GAME_COLUMNS);
+      const result = await query(`${ACTIVE_GAME_COLUMNS},buzz_revision`);
+      if (result.error?.code === "42703") {
+        // The frontend preview can run ahead of the production migration.
+        legacyGameSchema = true;
+        return query(ACTIVE_GAME_COLUMNS);
+      }
+      return result;
+    }
+
     // Paint an early snapshot immediately, in parallel with the WebSocket
     // handshake, rather than waiting for the SUBSCRIBED callback: the three
     // state GETs overlap the ~300-800ms Realtime connect (worse on mobile), so
@@ -573,7 +660,11 @@ export function useGameChannel(gameCode: string): {
       resyncId = window.setInterval(() => {
         if (cancelled) return;
         tick += 1;
-        if (realtimeDisconnected || lockRef.current !== null || tick % quietEveryNthTick === 0) {
+        if (
+          realtimeDisconnected ||
+          gameRef.current?.buzzed_team_id != null ||
+          tick % quietEveryNthTick === 0
+        ) {
           void hydrate({ resync: true });
         }
       }, LOCKED_RESYNC_INTERVAL_MS);
@@ -592,6 +683,7 @@ export function useGameChannel(gameCode: string): {
       if (goneTornDown) return;
       goneTornDown = true;
       stopResync();
+      if (buzzChannel) void supabase.removeChannel(buzzChannel);
       void supabase.removeChannel(
         channel as unknown as Parameters<typeof supabase.removeChannel>[0],
       );
@@ -651,11 +743,7 @@ export function useGameChannel(gameCode: string): {
         (recoveryPoll && !realtimeDisconnected);
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
-          supabase
-            .from("active_games")
-            .select(ACTIVE_GAME_COLUMNS)
-            .eq("game_code", gameCode)
-            .maybeSingle(),
+          readGame(),
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);
@@ -672,12 +760,14 @@ export function useGameChannel(gameCode: string): {
             // Cast via unknown: a non-literal select() string makes
             // supabase-js infer GenericStringError rather than a row shape.
             const freshGame = gameRes.data as unknown as ActiveGame;
+            if (freshGame.buzz_revision !== undefined) subscribeToBuzzLocks();
             lastAppliedHydrateId = requestId;
             let game = freshGame;
             if (
               gameChange &&
               gameChange.requestId >= requestId &&
               gameChange.row.round_number >= game.round_number &&
+              !gameIsOlder(gameChange.row, game) &&
               (game.status !== "ended" || gameChange.row.status === "ended")
             ) {
               game = gameChange.row;
@@ -686,14 +776,12 @@ export function useGameChannel(gameCode: string): {
               game = deriveRoundAdvance(game, roundInsert.row);
             }
             // Only a lock taken from the snapshot can be a backstop repair.
-            if (game === freshGame) {
+            const lastGame = gameRef.current;
+            if (game === freshGame && (!lastGame || !gameIsOlder(freshGame, lastGame))) {
               const snapshotSeq = observeLock(freshGame, false);
-              if (
-                resync &&
-                lockRef.current !== null &&
-                (freshGame.buzzed_team_id ?? null) !== lockRef.current
-              ) {
-                confirmStaleLock(lockRef.current, freshGame, snapshotSeq);
+              const lastLock = lastGame?.buzzed_team_id;
+              if (resync && lastLock && freshGame.buzzed_team_id !== lastLock) {
+                confirmStaleLock(lastLock, freshGame, snapshotSeq);
               }
             }
             dispatch({
@@ -753,6 +841,7 @@ export function useGameChannel(gameCode: string): {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stopResync();
       for (const id of confirmTimers) window.clearTimeout(id);
+      if (buzzChannel && !goneTornDown) void supabase.removeChannel(buzzChannel);
       void supabase.removeChannel(
         channel as unknown as Parameters<typeof supabase.removeChannel>[0],
       );

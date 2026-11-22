@@ -221,6 +221,8 @@ If we ever add per-user scoping, RLS policies become more restrictive and Realti
 
 **Publication membership.** Only the three tables the frontend actually subscribes to — `active_games`, `game_teams`, `game_rounds` — are in the `supabase_realtime` publication. `game_secrets` (mig 034), `team_secrets` (mig 046), and `game_round_attempts` (mig 037) are deliberately **out** of it: the first two are secrets (fanning them out would defeat the whole point of splitting them off `active_games` / `game_teams`), the last is an analytics log with no subscriber, so publishing it only burned Realtime quota (a full row WAL-decoded and broadcast on every scored buzz, for nobody). A future streaks feature would re-add `game_round_attempts` to the publication as part of that work.
 
+**Buzz Broadcast.** The app joins the private `buzz:{game_code}` topic with its anonymous key. Migration 058 grants `anon` Broadcast read access for topics whose game exists, matching the existing game-code access model. The payload is an explicit projection of public game fields. A restrictive INSERT policy blocks `anon` and `authenticated` writes to that namespace, even if another permissive policy is added. The security-definer trigger publishes the committed winner and is unavailable as a browser RPC. Public and private Broadcast topics are isolated by Realtime.
+
 ## 4. Threat Model
 
 | Threat | Likelihood | Impact | Mitigation |
