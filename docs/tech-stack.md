@@ -51,9 +51,10 @@ For quota analysis (capacity in games/month), see `free-tier-budget.md`. For why
 
 ### Configuration
 
-- Environment variables set via Render dashboard (see `runbook.md` §3 for the full list).
+- Service `sound-clash-eu` in **Frankfurt (EU Central)**, next to Supabase `eu-central-1`, on the Free plan. It moved from Oregon on 2026-11-22 (`when-to-upgrade.md` §4), which made backend calls from Israel about 4–7× faster.
+- Environment variables live in the Render environment group `sound-clash-backend`, linked to the service (see `runbook.md` §3 for the full list).
 - Auto-deploy from `main` branch on push.
-- Health check path: `/health`, expects 200.
+- Health check path: none is set on the service (checked 2026-11-22); `/health` exists and is what the keepalive and smoke tests call.
 - Build command: autodetected from Dockerfile.
 - Start command: autodetected (`uvicorn app.main:app --host 0.0.0.0 --port $PORT`).
 

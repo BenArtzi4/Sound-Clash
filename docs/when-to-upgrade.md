@@ -2,7 +2,7 @@
 
 This file decides when Sound Clash needs a paid plan. It holds the numbers we measured, the triggers that start a purchase, and a 10-minute monthly check. [free-tier-budget.md](free-tier-budget.md) has the long quota analysis from the design phase.
 
-**Decision on 2026-11-22: pay nothing now.** Every free limit is far away. The one real speed problem (the backend REST calls) has a free fix: move the backend to Frankfurt (§4). Check the numbers once a month (§5). Pay only when a trigger in §3 fires.
+**Decision on 2026-11-22: pay nothing now.** Every free limit is far away. The one real speed problem (the backend REST calls) had a free fix: move the backend to Frankfurt (§4). **Done on 2026-11-22**: the backend is now the free Render service `sound-clash-eu` in Frankfurt, and backend calls are about 4–7× faster (§4). Check the numbers once a month (§5). Pay only when a trigger in §3 fires.
 
 ## 1. What the game uses now (measured 2026-11-22)
 
@@ -50,7 +50,7 @@ How we know the backend is far away (measured from Israel on 2026-11-22, warm se
 - `/health`, which makes one database call: 410–470 ms.
 - Supabase (Frankfurt) directly: 11–16 ms.
 
-So one trip to the backend costs about 200 ms, and one trip from the backend to the database costs about 200 ms more. A server in Frankfurt next to Supabase would make both trips short. The backend is very likely in a US region (Render's default is Oregon). Check the region in the Render dashboard (§4 step 1).
+So one trip to the backend cost about 200 ms, and one trip from the backend to the database cost about 200 ms more. The Render dashboard confirmed the backend was in **Oregon (US West)**. It moved to Frankfurt, next to Supabase, on 2026-11-22 (§4).
 
 Bonus no longer goes through the backend (PR #418). Only actions that happen once or twice per game still use it.
 
@@ -100,6 +100,30 @@ Render cannot change the region of an existing service. Make a new service in Fr
 
 Expected result: create, join and end get about 2–4× faster. This is an estimate. Trust only the week-later measurement.
 
+### Done on 2026-11-22
+
+| Step | Result |
+| --- | --- |
+| 1 | Old service `Sound-Clash` (`srv-d7tq7vpkh4rs7386lvhg`, `sound-clash-glea.onrender.com`) was in **Oregon (US West)**. |
+| 3 | New service `sound-clash-eu` (`srv-dc1c37hksfps738g3ai0`, `sound-clash-eu.onrender.com`): Frankfurt, **Free**, Docker, branch `main`, root `backend`, `./Dockerfile`, auto-deploy on commit. |
+| 4 | Environment variables: Render's **Create environment group** on the old service copied all 8 into the group `sound-clash-backend`, linked to the new service. No value was typed by hand. `PORT` is empty on both, as before (the Dockerfile falls back to 8000). The OTEL variables are still not set. |
+| 5 | `/health` on the new service: `"status":"ok"`, `"supabase":"ok"`. |
+| 6 | No live game. Domain removed from the old service, added to the new one (verified, certificate issued). Cloudflare `api` CNAME → `sound-clash-eu.onrender.com`, DNS only, TTL 300. The API answered again at 10:23 UTC. |
+| 7 | `post_deploy.sh` on `api.soundclash.org`: PASS. Real-browser game (`full-game/fullgame.mjs`: Host and Join screens, 4 team phones, TV display, 20 rounds): **39/39**. CORS from `www.soundclash.org`: allowed. |
+| 8 | Open: the GitHub secret `RENDER_DEPLOY_HOOK` still holds the old service's hook. |
+| 9 | Open: the old service still runs (for a quick rollback). Suspend it after 1–2 days. |
+
+Measured from Israel, warm server, same connection (median of 8):
+
+| Call | Oregon (old) | Frankfurt (new) |
+| --- | ---: | ---: |
+| `/docs` (no database) | 230 ms | 78 ms |
+| `/health` (one database call) | 748 ms | 103 ms |
+| `/genres` | 774 ms | 98 ms |
+| `post_deploy.sh` (health, genres, create, 2 joins, end) | 9.0 s | 2.2 s |
+
+**Rollback** (if the new service fails): remove `api.soundclash.org` from `sound-clash-eu`, add it back to `Sound-Clash`, and point the Cloudflare `api` CNAME to `sound-clash-glea.onrender.com`. This works only while the old service is not deleted.
+
 ## 5. Monthly check (10 minutes, first Sunday of the month)
 
 Ask Claude: "run the monthly upgrade check from `docs/when-to-upgrade.md`". Or do it by hand:
@@ -131,7 +155,7 @@ Ask Claude: "run the monthly upgrade check from `docs/when-to-upgrade.md`". Or d
 
 | Date | Peak connections | Realtime messages | Egress | DB size | Games / week | REST p95 (create / join / end) | Decision |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-22 | ~32 (estimate) | ~0.2–0.4 M (estimate) | not read | 20 MB | 63–118 | 2.5 / 3.0 / 7.6 s | Pay nothing. Move the backend to Frankfurt (free). |
+| 2026-11-22 | ~32 (estimate) | ~0.2–0.4 M (estimate) | not read | 20 MB | 63–118 | 2.5 / 3.0 / 7.6 s (Oregon, Nov 10–17) | Pay nothing. Move the backend to Frankfurt (free). Done the same day: `/health` 748 → 103 ms. Measure p95 again on 2026-11-29. |
 
 ## Sources
 

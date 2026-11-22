@@ -104,11 +104,13 @@ Supabase free tier does NOT have point-in-time recovery. For prod-impacting inci
 
 Secrets are stored in three places. Rotating means updating all three (if shared) or just the relevant one.
 
+**Render: edit the environment group, not the service.** Since 2026-11-22 the backend service `sound-clash-eu` (Frankfurt) has no variables of its own: it reads all of them from the environment group `sound-clash-backend` (Render dashboard → Environment Groups → `sound-clash-backend` → Edit). Saving the group redeploys every linked service. The old Oregon service `Sound-Clash` still holds its own copies until it is suspended; it no longer serves `api.soundclash.org`.
+
 ### 3.1 `ADMIN_PASSWORD`
 
 1. Generate new password (>=16 chars, random).
 2. Update GitHub repo secret `ADMIN_PASSWORD`.
-3. Update Render env var `ADMIN_PASSWORD` (Service → Environment → Edit). Triggers a redeploy.
+3. Update Render env var `ADMIN_PASSWORD` (Environment Groups → `sound-clash-backend` → Edit). Triggers a redeploy.
 4. Tell the host(s) the new password (out-of-band, e.g., in person).
 
 The frontend does NOT have this secret; users enter it via the admin login form.
@@ -119,7 +121,7 @@ This one is sensitive; it bypasses RLS. Rotate if leaked.
 
 1. Supabase dashboard → Settings → API → "Reset service role key". (This invalidates all sessions using the old key.)
 2. Update GitHub repo secret `SUPABASE_SERVICE_ROLE_KEY`.
-3. Update Render env var `SUPABASE_SERVICE_ROLE_KEY`. Triggers redeploy.
+3. Update Render env var `SUPABASE_SERVICE_ROLE_KEY` (Environment Groups → `sound-clash-backend` → Edit). Triggers redeploy.
 4. Verify by hitting an admin endpoint.
 
 ### 3.3 `SUPABASE_ANON_KEY` and `SUPABASE_URL`
