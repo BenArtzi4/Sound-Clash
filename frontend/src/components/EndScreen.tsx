@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, type CSSProperties, type RefObject } from "react";
 import { useCountUp } from "../hooks/useCountUp";
 import type { Team } from "../lib/types";
 import styles from "./EndScreen.module.css";
@@ -26,6 +26,46 @@ const TOP_N = 5;
 function Score({ value, delay }: { value: number; delay: number }) {
   const n = useCountUp(value, { from: 0, duration: 900, delay });
   return <>{n}</>;
+}
+
+// The display's upright final screen lets the podium shrink so a big tie's
+// leaderboard stays readable, but only a tie's names may be cut: a card with
+// one team (the winner's, most of all) must keep its whole name, score and
+// label. CSS can't size a grid by some of its items only, so this measures
+// each one-team card's natural height (its height plus whatever its team box
+// hides) and hands the tallest to the CSS as --podium-floor. Re-measured when
+// the frame changes size and once the fonts have loaded (names re-wrap).
+function usePodiumFloor(
+  podiumRef: RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  teamsKey: string,
+) {
+  useLayoutEffect(() => {
+    const podium = podiumRef.current;
+    if (!enabled || !podium) return;
+    let cancelled = false;
+    const measure = () => {
+      if (cancelled) return;
+      let floor = 0;
+      for (const card of podium.querySelectorAll<HTMLElement>("[data-podium-card]")) {
+        if (card.dataset.tie !== undefined) continue;
+        const box = card.querySelector<HTMLElement>("[data-podium-teams]");
+        const hidden = box ? Math.max(0, box.scrollHeight - box.clientHeight) : 0;
+        floor = Math.max(floor, card.offsetHeight + hidden);
+      }
+      podium.style.setProperty("--podium-floor", `${Math.ceil(floor)}px`);
+    };
+    measure();
+    void document.fonts?.ready.then(measure);
+    const frame = podium.parentElement;
+    const observer =
+      typeof ResizeObserver === "undefined" || !frame ? null : new ResizeObserver(measure);
+    if (observer && frame) observer.observe(frame);
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+    };
+  }, [podiumRef, enabled, teamsKey]);
 }
 
 // Group teams by distinct score, highest first. Teams within a group share a
@@ -96,8 +136,13 @@ function PodiumCard({
   fit: boolean;
 }) {
   const isWinner = place === 1;
+  const tie = fit && teams.length > 1;
   return (
-    <div className={`${styles.podiumCard} ${className}`}>
+    <div
+      className={`${styles.podiumCard} ${className}`}
+      data-podium-card=""
+      data-tie={tie ? "" : undefined}
+    >
       {isWinner ? (
         <span className={styles.crown} aria-hidden="true">
           <LaurelIcon />
@@ -108,8 +153,8 @@ function PodiumCard({
           never hidden while a lower-scoring team keeps its own card. The card
           grows to fit them (min-height, no internal scroll — issue #180); a
           realistic tie is a handful of teams. */}
-      <div className={styles.podiumTeams}>
-        {fit && teams.length > 1 ? (
+      <div className={styles.podiumTeams} data-podium-teams="">
+        {tie ? (
           // The display's frame can't grow, so a tie lists its names as one
           // wrapped group over the score they share. Each team still has its
           // own row on the leaderboard beside the podium.
@@ -156,6 +201,8 @@ export function EndScreen({ teams, gameCode, fit = false }: Props) {
   const silverGroup = groups[1];
   const bronzeGroup = groups[2];
   const teamCount = teams.length;
+  const podiumRef = useRef<HTMLDivElement>(null);
+  usePodiumFloor(podiumRef, fit, teams.map((t) => `${t.id}:${t.name}:${t.score}`).join("|"));
 
   return (
     <div
@@ -178,7 +225,7 @@ export function EndScreen({ teams, gameCode, fit = false }: Props) {
         <p className={styles.noTeams}>Game ended without any teams.</p>
       ) : (
         <>
-          <div className={styles.podium}>
+          <div className={styles.podium} ref={podiumRef}>
             {silverGroup ? (
               <PodiumCard
                 teams={silverGroup}

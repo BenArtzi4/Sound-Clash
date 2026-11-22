@@ -73,6 +73,7 @@ export default [
         Document: "readonly",
         DOMRect: "readonly",
         MutationObserver: "readonly",
+        ResizeObserver: "readonly",
         HTMLElement: "readonly",
         HTMLAnchorElement: "readonly",
         HTMLButtonElement: "readonly",

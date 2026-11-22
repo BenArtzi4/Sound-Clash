@@ -644,25 +644,34 @@
   font-size: clamp(0.6rem, calc(40cqh / var(--rows, 5)), var(--sb-font-max));
 }
 
+/* A row's inside height: the average share of the list minus the gap and
+   the row's border. Only binds once a big tie makes the rows short. */
+.fit .scoreboardList {
+  --sb-row-inner: calc((100cqh - (var(--rows, 5) - 1) * var(--sb-gap-px)) / var(--rows, 5) - 2px);
+}
+
 /* The ring never outgrows its row: 75% of an average row (cq units of the
-   list) once the type has hit its floor, and never more than the row's own
-   inside height (the average share minus the gap and the row's border),
-   which is what binds once a big tie makes the rows short. */
+   list) once the type has hit its floor, and never more than the row's
+   inside height. Its digit shrinks with it, so a 3 still fits an 11px ring
+   (12 teams on an iPhone SE); on a normal row the digit keeps the row's
+   size. */
 .fit .scoreboardRank {
-  --sb-ring: min(
-    2.1em,
-    calc(75cqh / var(--rows, 5)),
-    calc((100cqh - (var(--rows, 5) - 1) * var(--sb-gap-px)) / var(--rows, 5) - 2px)
-  );
+  --sb-ring: min(2.1em, calc(75cqh / var(--rows, 5)), var(--sb-row-inner));
   width: var(--sb-ring);
   height: var(--sb-ring);
+  font-size: min(1em, calc(var(--sb-ring) * 0.55));
 }
 
 /* line-height 1: the score's line box stays inside a short row (at 1.5 it
-   was taller than a 20px row); one line, so the digits barely move. */
+   was taller than a 20px row); one line, so the digits barely move. Never
+   taller than the row either. The name's line box gets the same room. */
 .fit .scoreboardScore {
-  font-size: 1.3em;
+  font-size: min(1.3em, var(--sb-row-inner));
   line-height: 1;
+}
+
+.fit .scoreboardName {
+  line-height: 1.2;
 }
 
 .fit .scoreboardMore {
@@ -694,14 +703,17 @@
    card used to keep its full height while eight to twelve leaderboard rows
    were squeezed to 7-17px, cutting their rank rings (an iPhone SE upright,
    375x548, with a 6-way tie). Now the leaderboard asks for about 22px a row
-   (its flex basis) and the podium shrinks first (flex-shrink 4) down to the
-   winner card's own minimum; the tied names clip inside their card, and the
-   leaderboard still lists every team. When everything fits, the leaderboard
+   (its flex basis) and the podium shrinks first (flex-shrink 4); the tied
+   names clip inside their card, and the leaderboard still lists every team.
+   The podium never shrinks below what a one-team card needs (the winner's
+   name, score and label stay whole; --podium-floor is measured by
+   usePodiumFloor in EndScreen.tsx): with 12 teams the first version cut the
+   winner's score on six phone sizes. When everything fits, the leaderboard
    takes the spare height as before. Landscape has its own grid below. */
 @container (orientation: portrait) {
   .fit .podium {
     flex: 0 4 auto;
-    min-height: clamp(130px, 25cqh, 320px);
+    min-height: max(clamp(130px, 25cqh, 320px), var(--podium-floor, 0px));
     grid-template-rows: minmax(0, 1fr);
   }
   .fit .scoreboard {
