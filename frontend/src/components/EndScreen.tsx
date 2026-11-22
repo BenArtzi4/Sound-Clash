@@ -220,14 +220,17 @@ export function EndScreen({ teams, gameCode, fit = false }: Props) {
               teams onto a single card, which made it look like teams were
               dropped when scores tied; this guarantees each is visible. Any
               teams below the cut line are summarized as "…and N more". */}
-          <div className={styles.scoreboard} data-testid="final-scoreboard">
+          {/* --rows: the fitted version shrinks the rows when a tie at the cut
+              line lists more than five, and on an upright frame asks the
+              podium for room first (set here so the scoreboard's own flex
+              size can read it; the list inherits it). */}
+          <div
+            className={styles.scoreboard}
+            data-testid="final-scoreboard"
+            style={{ "--rows": scoreboard.length } as CSSProperties}
+          >
             <h2 className={styles.scoreboardTitle}>Leaderboard</h2>
-            {/* --rows: the fitted version shrinks the rows when a tie at the cut
-                line lists more than five. */}
-            <ol
-              className={styles.scoreboardList}
-              style={{ "--rows": scoreboard.length } as CSSProperties}
-            >
+            <ol className={styles.scoreboardList}>
               {scoreboard.map(({ team, rank }) => (
                 <li
                   key={team.id}
