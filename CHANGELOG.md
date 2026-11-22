@@ -163,6 +163,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-11-22: Keep buzzers and scoreboards current when a slow refresh arrives after a live game update. (1269a97)
 - 2026-11-21: If two hosts advance the same round, the console catches up with the first successful advance. (Issue #424)
 - 2026-11-17: Hosts see pending bonus and approval points immediately, and the live display shows the new total as soon as it arrives. A visible scoreboard also checks for missed changes sooner when its Realtime connection drops.
 

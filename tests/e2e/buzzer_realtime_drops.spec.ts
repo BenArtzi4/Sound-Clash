@@ -145,4 +145,59 @@ test.describe("buzzer resilience under dropped Realtime frames", () => {
       .toBeGreaterThan(0);
     await expectIdle(team.page, 25_000);
   });
+
+  test("a slow snapshot cannot re-lock a buzzer after the room sees Continue", async ({
+    browser,
+  }) => {
+    const game = await createGame("rock");
+    const team = await joinTeamWithDropControl(browser, game, "Snapshot Team");
+    const displayContext = await browser.newContext();
+    const display = await displayContext.newPage();
+    await display.goto(`/display/${game.code}`);
+    await expect(display.getByText("Snapshot Team", { exact: true })).toBeVisible();
+
+    await advanceRound(game);
+    await expectIdle(team.page);
+    const buzz = team.page.getByTestId("buzz");
+    const displayedLock = display.getByRole("status").filter({ hasText: "Snapshot Team buzzed in!" });
+    await buzz.click();
+    await expect(buzz).toHaveAttribute("data-tone", "winner");
+    await expect(displayedLock).toBeVisible();
+
+    const roundsRead = "**/rest/v1/game_rounds?*";
+    const { promise: release, resolve: finishRead } = Promise.withResolvers<void>();
+    let roundsCaptured = false;
+    await team.page.route(roundsRead, async (route) => {
+      const response = await route.fetch();
+      roundsCaptured = true;
+      await release;
+      await route.fulfill({ response });
+    }, { times: 1 });
+
+    try {
+      const oldGameResponse = team.page.waitForResponse("**/rest/v1/active_games?*", { timeout: 8000 });
+      await team.page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      const oldGameBody = await (await oldGameResponse).json();
+      const oldGame = Array.isArray(oldGameBody) ? oldGameBody[0] : oldGameBody;
+      expect(oldGame.buzzed_team_id).toBe(team.teamId);
+      await expect.poll(() => roundsCaptured, { timeout: 8000 }).toBe(true);
+
+      await releaseBuzzLock(game);
+      await expectIdle(team.page);
+      await expect(displayedLock).toHaveCount(0);
+
+      const oldRoundsResponse = team.page.waitForResponse(roundsRead, { timeout: 8000 });
+      finishRead();
+      await (await oldRoundsResponse).finished();
+      await team.page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }));
+      await expectIdle(team.page, 1500);
+      await buzz.click({ timeout: 1500 });
+      await expect(buzz).toHaveAttribute("data-tone", "winner");
+      await expect(displayedLock).toBeVisible();
+    } finally {
+      finishRead();
+    }
+  });
 });
