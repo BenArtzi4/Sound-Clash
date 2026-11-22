@@ -104,7 +104,7 @@ Supabase free tier does NOT have point-in-time recovery. For prod-impacting inci
 
 Secrets are stored in three places. Rotating means updating all three (if shared) or just the relevant one.
 
-**Render: edit the environment group, not the service.** Since 2026-11-22 the backend service `sound-clash-eu` (Frankfurt) has no variables of its own: it reads all of them from the environment group `sound-clash-backend` (Render dashboard → Environment Groups → `sound-clash-backend` → Edit). Saving the group redeploys every linked service. The old Oregon service `Sound-Clash` still holds its own copies until it is suspended; it no longer serves `api.soundclash.org`.
+**Render: edit the environment group, not the service.** Since 2026-11-22 the backend service `sound-clash-eu` (Frankfurt) has no variables of its own: it reads all of them from the environment group `sound-clash-backend` (Render dashboard → Environment Groups → `sound-clash-backend` → Edit). Saving the group redeploys every linked service. The old Oregon service `Sound-Clash` is suspended (kept only for rollback) and holds its own copies from before the move; it does not serve `api.soundclash.org`.
 
 ### 3.1 `ADMIN_PASSWORD`
 
