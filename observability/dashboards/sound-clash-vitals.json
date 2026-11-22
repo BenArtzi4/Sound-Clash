@@ -703,8 +703,8 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "Song-start latency by preloaded (game.song_start)",
-      "description": "Next-song click -> audio playing, grouped by whether the next YouTube video was prebuffered (span.preloaded true/false). The hidden prebuffer player was removed on 2026-10-31 (YouTube's embed rules), so every start since is preloaded=false; true is the old warm start.",
+      "title": "Song-start latency by pick path (p50 and p95)",
+      "description": "Time from Next round tap to audible playback, split by peek and fallback. Failed starts and older traces without click_to_playing_ms are excluded.",
       "datasource": {
         "type": "tempo",
         "uid": "grafanacloud-traces"
@@ -717,7 +717,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "ms",
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -759,7 +759,7 @@
             "uid": "grafanacloud-traces"
           },
           "queryType": "traceql",
-          "query": "{ name = \"game.song_start\" } | quantile_over_time(duration, .5, .95) by (span.preloaded)",
+          "query": "{ name = \"game.song_start\" && status != error && span.click_to_playing_ms >= 0 } | quantile_over_time(span.click_to_playing_ms, .5, .95) by (span.pick_path)",
           "filters": []
         }
       ]
@@ -768,7 +768,7 @@
       "id": 14,
       "type": "timeseries",
       "title": "Song-start stage breakdown (p95)",
-      "description": "Where song-start time goes: click_to_rpc (optimistic UI) vs rpc_to_load (select_next_song) vs load_to_playing (YouTube).",
+      "description": "Song-start stages: click_to_rpc covers round confirmation, rpc_to_load measures the wait after confirmation on the fallback path, and load_to_playing measures visible YouTube startup. On peeked starts the RPC and player run in parallel.",
       "datasource": {
         "type": "tempo",
         "uid": "grafanacloud-traces"

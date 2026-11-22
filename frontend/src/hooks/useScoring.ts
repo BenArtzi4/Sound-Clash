@@ -71,6 +71,7 @@ export function useScoring(
   state: GameState | null,
   player: PlayerReadyHandle,
   hostPlayer: HostPlayer,
+  refreshGame: () => Promise<void>,
 ): Scoring {
   const { toast } = useToast();
   const {
@@ -179,6 +180,7 @@ export function useScoring(
   const wrongInFlightRef = useRef(false);
   const continueInFlightRef = useRef(false);
   const nextRoundInFlightRef = useRef(false);
+  const lastCommittedRoundRef = useRef(0);
   const extendInFlightRef = useRef(false);
 
   // When we get the buzz lock signal, pause playback on the live player.
@@ -296,6 +298,16 @@ export function useScoring(
       // surfaced it.
       if (err.message === "no_more_songs") {
         toast(noMoreSongsMessage(), { variant: "error" });
+        return;
+      }
+      if (err.message === "stale_round") {
+        toast("The round already advanced. The console is catching up.", { variant: "info" });
+        return;
+      }
+      if (err.message === "song_no_longer_eligible") {
+        toast("That song is no longer available. Tap Next round to try again.", {
+          variant: "info",
+        });
         return;
       }
       log("error", "manager_rpc_failed", { message: err.message });
@@ -482,7 +494,7 @@ export function useScoring(
 
   async function handleNextRound() {
     if (nextRoundInFlightRef.current) return;
-    if (!managerToken) return;
+    if (!managerToken || !state) return;
     nextRoundInFlightRef.current = true;
     // Bump the peek epoch so an in-flight peek is discarded: it answers for
     // the round we are leaving.
@@ -491,14 +503,13 @@ export function useScoring(
     // picker compares against the song that is about to play (mig 049).
     beginRoundCommit();
     let roundCommitted = false;
-    // Open the song-start span at the click instant (before the toast) so it
-    // captures click → RPC → load → audio actually playing.
-    const songStart = beginSongStart();
-    // Optimistic toast confirms the click immediately.
-    toast("Loading next round...", { variant: "info" });
-    // Snapshot + clear the peeked song now so a late peek can't reuse it.
-    const peeked = peekedRef.current;
+    // Snapshot and clear the peek. Only use a candidate based on the round
+    // the manager can see or has confirmed through their last RPC.
+    const expectedRound = Math.max(state.game.round_number, lastCommittedRoundRef.current);
+    const peeked = peekedRef.current?.expected_round === expectedRound ? peekedRef.current : null;
     peekedRef.current = null;
+    const songStart = beginSongStart(peeked ? "peek" : "fallback");
+    toast("Loading next round...", { variant: "info" });
     // Snapshot for the rollback in the catch below: the song card that was up
     // before the in-tap start.
     const prevSong = currentSong;
@@ -509,9 +520,9 @@ export function useScoring(
     // `await select_next_song` counts as blocked autoplay, which is exactly the
     // reported bug (round 1 / Next round stayed silent until a stray buzz +
     // Continue finally unlocked it). We pass peeked.song_id to the RPC below,
-    // so the video we begin loading here is guaranteed to be the one the round
-    // records — it's safe to start it before the round is committed
-    // server-side. Nothing is buffered ahead: YouTube's rules allow no hidden
+    // so a successful commit records the video we begin loading here. The
+    // expected round tells the server when another host has already advanced
+    // the game. Nothing is buffered ahead: YouTube's rules allow no hidden
     // player that plays (see useHostPlayer.ts), so this is a fresh load.
     if (peeked) {
       songStart.loadIssued();
@@ -536,66 +547,46 @@ export function useScoring(
     }
 
     try {
-      if (peeked) {
-        // Confirm/record the round for the exact song we already started.
-        const result = await selectNextSongDirect(gameCode, managerToken, peeked.song_id);
-        roundCommitted = true;
-        songStart.rpcDone({
-          roundNumber: result.round_number,
-          songId: result.song.id,
-          youtubeId: result.song.youtube_id,
-          // Nothing is prebuffered any more (2026-10-31): every song is a
-          // fresh load. Kept so old and new spans stay comparable.
-          preloaded: false,
-        });
-        setCurrentSong(result.song);
-        if (result.song.id !== peeked.song_id) {
-          // Defensive: the RPC picked something other than what we peeked and
-          // already began loading (should not happen with an explicit
-          // song_id). Load the real song instead.
-          await loadSongIntoPlayer(result.song);
-        }
-      } else {
-        // Slow path (the peek missed, failed, or the pool was empty at peek
-        // time): random pick, then the load. On mobile this load lands after
-        // the await, so it can't reliably autoplay — but the waiting-screen
-        // peek normally routes round 1 through the in-tap path above, leaving
-        // this as a rare fallback.
-        const result = await selectNextSongDirect(gameCode, managerToken);
-        roundCommitted = true;
-        songStart.rpcDone({
-          roundNumber: result.round_number,
-          songId: result.song.id,
-          youtubeId: result.song.youtube_id,
-          preloaded: false,
-        });
-        // The RPC answers before the new round's Realtime event (measured
-        // ~275 ms), so for a moment the card leads the round, just as on the
-        // in-tap path. Mark the lead or the song resolver reloads the previous
-        // round's song over this one.
-        optimisticSongIdRef.current = result.song.id;
-        setCurrentSong(result.song);
-        await loadSongIntoPlayer(result.song);
-      }
+      const result = await selectNextSongDirect(
+        gameCode,
+        managerToken,
+        expectedRound,
+        peeked?.song_id,
+      );
+      roundCommitted = true;
+      lastCommittedRoundRef.current = result.round_number;
+      songStart.rpcDone({
+        roundNumber: result.round_number,
+        songId: result.song.id,
+        youtubeId: result.song.youtube_id,
+        preloaded: false,
+      });
+      // The RPC can finish before the Realtime event. Keep the round's song
+      // from being replaced by the previous round while that update arrives.
+      optimisticSongIdRef.current = result.song.id;
+      setCurrentSong(result.song);
+      if (peeked?.song_id !== result.song.id) await loadSongIntoPlayer(result.song);
     } catch (err) {
-      songStart.fail("select_next_song_failed");
+      const stale = err instanceof RpcError && err.message === "stale_round";
+      const invalid = err instanceof RpcError && err.message === "song_no_longer_eligible";
+      songStart.fail(
+        stale ? "stale_round" : invalid ? "song_no_longer_eligible" : "select_next_song_failed",
+      );
       songStartRef.current = null;
       optimisticSongIdRef.current = null;
-      // The round failed to advance server-side, so the in-tap start (which
-      // has to happen before the await for mobile autoplay) must not stand.
-      // Roll it back: silence the new song, restore the pre-click song card,
-      // and reload the still-current round's song so the room isn't left in
-      // silence (best-effort on strict mobile autoplay — this load lands
-      // outside the gesture). The peeked song is kept: the round never
-      // advanced, so it is still exactly what select_next_song would record,
-      // and a retry click keeps the in-tap path.
       if (peeked) {
         livePlayer()?.stop();
-        setCurrentSong(prevSong);
-        if (prevSong) livePlayer()?.loadVideoById(prevSong.youtube_id, prevSong.start_time);
-        peekedRef.current = peeked;
+        if (!stale) {
+          setCurrentSong(prevSong);
+          if (prevSong) livePlayer()?.loadVideoById(prevSong.youtube_id, prevSong.start_time);
+          if (!invalid) peekedRef.current = peeked;
+        }
       }
       reportError(err);
+      if (stale) {
+        await refreshGame();
+        if (peeked) setCurrentSong(null); // Resolve and load the confirmed round, even on the same song.
+      }
     } finally {
       nextRoundInFlightRef.current = false;
       endRoundCommit(roundCommitted);

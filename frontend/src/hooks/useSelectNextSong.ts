@@ -31,17 +31,19 @@ interface SelectNextSongRow {
 export async function selectNextSongDirect(
   gameCode: string,
   managerToken: string,
+  expectedRound: number,
   songId?: string,
 ): Promise<SelectSongResponse> {
-  const { data, error } = await tracedRpc("select_next_song", { game_code: gameCode }, () =>
-    supabase.rpc("select_next_song", {
-      p_game_code: gameCode,
-      p_manager_token: managerToken,
-      // null vs undefined matters: PostgREST drops undefined-valued keys, which
-      // would route the call to a 2-arg overload that doesn't exist. Always
-      // send p_song_id explicitly so we hit the 3-arg signature.
-      p_song_id: songId ?? null,
-    }),
+  const { data, error } = await tracedRpc(
+    "select_next_song",
+    { game_code: gameCode, pick_path: songId ? "peek" : "fallback" },
+    () =>
+      supabase.rpc("select_next_song", {
+        p_game_code: gameCode,
+        p_manager_token: managerToken,
+        p_song_id: songId ?? null,
+        p_expected_round: expectedRound,
+      }),
   );
   throwOnRpcError(error);
   const row = (Array.isArray(data) ? data[0] : data) as SelectNextSongRow | null;

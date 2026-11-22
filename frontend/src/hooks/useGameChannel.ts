@@ -254,10 +254,12 @@ export function useGameChannel(gameCode: string): {
   status: ChannelStatus;
   error: Error | null;
   finalBoard: GameState | null;
+  refresh: () => Promise<void>;
 } {
   const [state, dispatch] = useReducer(gameReducer, null);
   const [status, setStatus] = useState<ChannelStatus>("idle");
   const [error, setError] = useState<Error | null>(null);
+  const refreshRef = useRef<(() => Promise<void>) | null>(null);
 
   // Latest lock holder, mirrored into a ref so the mount effect's closures
   // (the backstop interval and hydrate) can read it — they close over the
@@ -655,8 +657,10 @@ export function useGameChannel(gameCode: string): {
       }
     }
 
+    refreshRef.current = () => hydrate({ resync: true });
     return () => {
       cancelled = true;
+      refreshRef.current = null;
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stopResync();
       for (const id of confirmTimers) window.clearTimeout(id);
@@ -666,5 +670,13 @@ export function useGameChannel(gameCode: string): {
     };
   }, [gameCode]);
 
-  return { state, status, error, finalBoard };
+  return {
+    state,
+    status,
+    error,
+    finalBoard,
+    refresh: async () => {
+      await refreshRef.current?.();
+    },
+  };
 }

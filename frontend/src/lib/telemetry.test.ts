@@ -197,6 +197,65 @@ describe("telemetry (enabled)", () => {
     expect(() => song.playing("poll")).not.toThrow();
   });
 
+  it.each([false, true])(
+    "measures overlapping peek and RPC stages when the player finishes first = %s",
+    async (playerFirst) => {
+      await enable();
+      const i = spanCount();
+      const song = tele.startSongStart({ game_code: "ABC", pick_path: "peek" });
+      song.loadIssued();
+      const [parent, rpc, player] = spansFrom(i);
+      expect(rpc.end).not.toHaveBeenCalled();
+      if (playerFirst) {
+        song.playing("statechange");
+        expect(player.end).toHaveBeenCalledTimes(1);
+        expect(parent.end).not.toHaveBeenCalled();
+        song.rpcDone({ roundNumber: 3, songId: "s1" });
+      } else {
+        song.rpcDone({ roundNumber: 3, songId: "s1" });
+        expect(rpc.end).toHaveBeenCalledTimes(1);
+        expect(player.end).not.toHaveBeenCalled();
+        song.playing("statechange");
+      }
+      expect(spansFrom(i)).toHaveLength(3);
+      expect(parent.setAttribute).toHaveBeenCalledWith("pick_path", "peek");
+      expect(parent.setAttribute).toHaveBeenCalledWith("click_to_playing_ms", expect.any(Number));
+      expect(parent.setAttribute).toHaveBeenCalledWith("round_number", 3);
+      for (const span of spansFrom(i)) expect(span.end).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["timeout", "error"] as const)(
+    "records player %s and keeps the RPC completion",
+    async (outcome) => {
+      await enable();
+      const i = spanCount();
+      const song = tele.startSongStart({ game_code: "ABC", pick_path: "peek" });
+      song.loadIssued();
+      song.playing(outcome);
+      const [parent, rpc, player] = spansFrom(i);
+      expect(parent.setStatus).toHaveBeenCalledWith({ code: 2 });
+      expect(parent.end).not.toHaveBeenCalled();
+      expect(player.end).toHaveBeenCalledTimes(1);
+      song.rpcDone({ roundNumber: 3, songId: "s1" });
+      expect(rpc.end).toHaveBeenCalledTimes(1);
+      expect(parent.end).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("closes both in-flight spans when a peeked song commit fails", async () => {
+    await enable();
+    const i = spanCount();
+    const song = tele.startSongStart({ game_code: "ABC", pick_path: "peek" });
+    song.loadIssued();
+    song.fail("stale_round");
+    const [parent, rpc, player] = spansFrom(i);
+    expect(parent.setAttribute).toHaveBeenCalledWith("error_reason", "stale_round");
+    for (const span of [parent, rpc, player]) expect(span.end).toHaveBeenCalledTimes(1);
+    song.rpcDone({ roundNumber: 3 });
+    expect(parent.end).toHaveBeenCalledTimes(1);
+  });
+
   it("startSongStart records the preloaded flag on the parent span", async () => {
     await enable();
     const i = spanCount();

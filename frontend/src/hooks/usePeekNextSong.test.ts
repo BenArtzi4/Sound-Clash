@@ -27,6 +27,7 @@ describe("peekNextSongDirect", () => {
           song_artist: "Peeked Artist",
           is_soundtrack: false,
           release_year: 1999,
+          expected_round: 12,
         },
       ],
       error: null,
@@ -42,6 +43,7 @@ describe("peekNextSongDirect", () => {
       artist: "Peeked Artist",
       is_soundtrack: false,
       release_year: 1999,
+      expected_round: 12,
     });
     expect(supabaseMock.rpc).toHaveBeenCalledWith("peek_next_song", {
       p_game_code: "ABCDEF",

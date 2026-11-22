@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { YouTubePlayerHandle } from "../components/YouTubePlayer";
 import { useToast } from "../context/useToast";
 import { peekNextSongDirect, type PeekedSong } from "./usePeekNextSong";
-import { log, startSongStart, type SongStartHandle } from "../lib/telemetry";
+import { log, startSongStart, type SongPickPath, type SongStartHandle } from "../lib/telemetry";
 import type { GameState, Song } from "../lib/types";
 
 // The host console's one YouTube player: the next-song peek (`peek_next_song`,
@@ -38,7 +38,7 @@ export interface HostPlayer {
   loadSongIntoPlayer: (song: Song) => Promise<void>;
   armSongStartTimeout: () => void;
   maybePeekNext: () => void;
-  beginSongStart: () => SongStartHandle;
+  beginSongStart: (pickPath: SongPickPath) => SongStartHandle;
   beginRoundCommit: () => void;
   endRoundCommit: (committed: boolean) => void;
 }
@@ -126,9 +126,16 @@ export function useHostPlayer(
   const peekedRef = useRef<PeekedSong | null>(null);
   const peekInFlightRef = useRef(false);
   const peekEpochRef = useRef(0);
+  const latestGameState = useRef(state);
+  useEffect(() => {
+    latestGameState.current = state;
+    return () => {
+      latestGameState.current = null;
+    };
+  }, [state]);
   // The peek must not run while a Next round is still being recorded. The
-  // picker (mig 049) never repeats the genre of the song playing now and spaces
-  // artists from the last rounds, so it has to see the new round in
+  // picker accounts for the most recent genre and artist history, so it has
+  // to see the new round in
   // game_rounds. The new song can reach PLAYING before the ~150ms
   // select_next_song call returns, which would let the peek judge against the
   // previous song. `roundCommitPendingRef` holds the peek back from the click
@@ -170,30 +177,37 @@ export function useHostPlayer(
   // which song select_next_song would pick; on the click we load and commit
   // that exact id. Best-effort throughout: a peek failure must never disturb
   // the round.
-  function maybePeekNext() {
-    if (!managerToken) return;
-    const gameStatus = state?.game.status;
+  function maybePeekNext(retryStale = true) {
+    const latest = latestGameState.current;
+    if (!managerToken || !latest) return;
+    const gameStatus = latest.game.status;
     if (gameStatus !== "playing" && gameStatus !== "waiting") return;
     // During play, only peek once a round is live so peek excludes the current
     // song. During waiting there is no round yet — that's expected.
-    if (gameStatus === "playing" && !state?.currentRound?.id) return;
+    if (gameStatus === "playing" && !latest.currentRound?.id) return;
     if (roundCommitPendingRef.current) return;
+    if (peekedRef.current && peekedRef.current.expected_round < latest.game.round_number) {
+      peekedRef.current = null;
+    }
     if (peekedRef.current !== null || peekInFlightRef.current) return;
     peekInFlightRef.current = true;
     const epoch = peekEpochRef.current;
     void (async () => {
+      let stale = false;
       try {
         const peeked = await peekNextSongDirect(gameCode, managerToken);
-        // A Next round happened while we were peeking: this answer is stale.
-        if (epoch !== peekEpochRef.current) return;
-        if (!peeked) return; // pool exhausted -> Next round picks at the click
-        peekedRef.current = peeked;
+        const round = latestGameState.current?.game.round_number;
+        stale =
+          epoch !== peekEpochRef.current ||
+          (peeked !== null && round !== undefined && peeked.expected_round < round);
+        if (!stale && round !== undefined) peekedRef.current = peeked;
       } catch (err) {
         log("warn", "preload_peek_failed", {
           message: err instanceof Error ? err.message : String(err),
         });
       } finally {
         peekInFlightRef.current = false;
+        if (stale && retryStale) maybePeekNext(false);
       }
     })();
   }
@@ -249,8 +263,13 @@ export function useHostPlayer(
   // Open the song-start span at the "Next round" click instant, storing the
   // handle in the ref that spans the click → load → playing boundary. Returned
   // so the caller can also drive rpcDone/fail on the same handle.
-  function beginSongStart(): SongStartHandle {
-    const songStart = startSongStart({ game_code: gameCode });
+  function beginSongStart(pickPath: SongPickPath): SongStartHandle {
+    songStartRef.current?.fail("superseded");
+    if (songStartTimeoutRef.current !== null) {
+      window.clearTimeout(songStartTimeoutRef.current);
+      songStartTimeoutRef.current = null;
+    }
+    const songStart = startSongStart({ game_code: gameCode, pick_path: pickPath });
     songStartRef.current = songStart;
     return songStart;
   }
@@ -273,9 +292,9 @@ export function useHostPlayer(
     if (songStartTimeoutRef.current !== null) {
       window.clearTimeout(songStartTimeoutRef.current);
       songStartTimeoutRef.current = null;
+      songStartRef.current?.playing(detection);
+      songStartRef.current = null;
     }
-    songStartRef.current?.playing(detection);
-    songStartRef.current = null;
     livePlayingRef.current = true;
     maybePeekNext();
   }
@@ -307,6 +326,12 @@ export function useHostPlayer(
     if (videoId === null) {
       log("warn", "yt_idle_player_error", { code: String(code), game_code: gameCode });
       return;
+    }
+    if (songStartTimeoutRef.current !== null && videoId === liveSong?.youtube_id) {
+      window.clearTimeout(songStartTimeoutRef.current);
+      songStartTimeoutRef.current = null;
+      songStartRef.current?.playing("error");
+      songStartRef.current = null;
     }
     const peeked = peekedRef.current;
     const peekedSong: SongRef | null = peeked

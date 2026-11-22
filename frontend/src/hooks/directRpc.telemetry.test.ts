@@ -42,10 +42,10 @@ describe("direct-RPC telemetry wiring", () => {
       ],
       error: null,
     });
-    await selectNextSongDirect("ABCDEF", TOKEN);
+    await selectNextSongDirect("ABCDEF", TOKEN, 0);
     expect(telemetry.tracedRpc).toHaveBeenCalledWith(
       "select_next_song",
-      { game_code: "ABCDEF" },
+      { game_code: "ABCDEF", pick_path: "fallback" },
       expect.any(Function),
     );
   });
