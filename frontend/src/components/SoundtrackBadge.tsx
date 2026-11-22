@@ -2,7 +2,8 @@ import { FilmIcon } from "./icons";
 import styles from "./SoundtrackBadge.module.css";
 
 interface Props {
-  size?: "default" | "large";
+  // "heading": the TV's answer-card title, sized by its parent.
+  size?: "default" | "heading";
 }
 
 // Shown on manager + display screens when the current round's song is a
@@ -12,7 +13,7 @@ interface Props {
 export function SoundtrackBadge({ size = "default" }: Props) {
   return (
     <span
-      className={`${styles.badge}${size === "large" ? ` ${styles.large}` : ""}`}
+      className={`${styles.badge}${size === "heading" ? ` ${styles.heading}` : ""}`}
       role="img"
       aria-label="Soundtrack round"
       data-testid="soundtrack-badge"

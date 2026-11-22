@@ -513,6 +513,9 @@ describe("DisplayPage board", () => {
     );
     expect(screen.getByTestId("display-reveal-title")).toHaveAttribute("data-revealed", "true");
     expect(screen.getByTestId("display-reveal-artist")).toHaveAttribute("data-revealed", "false");
+    // A normal round: no Soundtrack sign, and the answer card keeps its plain look.
+    expect(screen.queryByTestId("soundtrack-badge")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Song reveal").className).not.toMatch(/revealPanelSoundtrack/);
     // The song comes from the game-scoped RPC (mig 053), for this game's code.
     expect(supabaseMock.rpc).toHaveBeenCalledWith("round_song", {
       p_game_code: "ABCDEF",
@@ -595,6 +598,14 @@ describe("DisplayPage board", () => {
     );
     expect(screen.queryByTestId("display-reveal-artist")).not.toBeInTheDocument();
     expect(screen.queryByText("He's a Pirate")).not.toBeInTheDocument();
+    // The Soundtrack sign is the answer card's own heading (big, for the room),
+    // not a separate pill above the card, and the card takes the orange look.
+    const card = screen.getByLabelText("Song reveal");
+    const badge = within(card).getByTestId("soundtrack-badge");
+    expect(badge.className).toMatch(/heading/);
+    expect(card.firstElementChild?.contains(badge)).toBe(true);
+    expect(card.className).toMatch(/revealPanelSoundtrack/);
+    expect(screen.getAllByTestId("soundtrack-badge")).toHaveLength(1);
   });
 });
 

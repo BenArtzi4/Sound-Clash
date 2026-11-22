@@ -103,7 +103,7 @@ Maximum per **buzz** from `award_attempt`: **+15** (title + artist together). Mi
 
 When the current song belongs to a **soundtrack genre** (`Soundtracks` or `Israeli Soundtracks`), the round plays differently:
 
-- A 🎬 **Soundtrack** badge appears on both the manager and display screens above the song area, so everyone knows the round is a soundtrack round.
+- A 🎬 **Soundtrack** badge appears on both the manager and display screens, so everyone knows the round is a soundtrack round. On the manager screen it is a small pill next to the song; on the display it is the big heading of the answer card, which turns orange for the round (about 43 px on a 1080p TV, so it reads from across the room).
 - The manager's two scoring buttons collapse into a single **Correct (+15)** button. The team's job is to name the **work** (the film / TV show / game / musical), not the song title — soundtrack trivia in practice means players recognise the show, not the track. Wrong (−3) still applies.
 - The single Correct button fires `award_attempt` with **both** correct flags (`p_correct_title` and `p_correct_artist`) so the DB claims both tokens and sums `10 + 5 = 15` — no new RPC, no soundtrack-specific scoring branch in the DB. Since migration 043 the DB derives those magnitudes itself; the client only sends the flags (T7.1).
 - On the display, the reveal panel shows a single **🎬 <work name>** row (instead of the separate "🎵 Title" / "🎤 Artist" rows) once the manager confirms. The work name shown is the song's **`artist`** field. On the manager screen the song's `title` also appears as a smaller hint (the clip that's playing, e.g. "Hakuna Matata"), but only when it differs from the work name.

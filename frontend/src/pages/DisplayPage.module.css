@@ -519,9 +519,21 @@
   justify-content: center;
 }
 
-.soundtrackBadgeRow {
+/* Soundtrack rounds (2026-11-22): the answer card turns orange and carries
+   the Soundtrack sign as its heading, so the room sees the question changed
+   (name the film or show) from across it. The heading sits in space the card
+   already had, so nothing else on the screen shrinks. Sized per frame in the
+   blocks below; this is the upright-phone size. */
+.revealPanelSoundtrack {
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.soundtrackHeading {
   display: flex;
   justify-content: center;
+  padding-bottom: 0.15em;
+  font-size: 1.6rem;
 }
 
 .tokenChip {
@@ -649,6 +661,11 @@
   }
   .revealRow {
     font-size: var(--reveal-font, 1.3rem);
+  }
+  /* About 43px on a 1080p TV (17px as the old pill), 31px on a 768px laptop;
+     "SOUNDTRACK" still fits the 340px column at the cap. */
+  .soundtrackHeading {
+    font-size: clamp(1.4rem, 4vh, 2.9rem);
   }
   /* In the sidebar a long Hebrew title has a ~260px column, not the page
      width, so the single-line ellipsis the phone layout uses would eat half
@@ -1144,6 +1161,9 @@
   }
   .shell[data-density] .revealRow {
     font-size: clamp(0.95rem, 4.6vh, 1.3rem);
+  }
+  .shell[data-density] .soundtrackHeading {
+    font-size: clamp(1.1rem, 6vh, 1.5rem);
   }
   /* A long title wraps in the narrow column, two lines at most. */
   .shell[data-density] .revealText {
