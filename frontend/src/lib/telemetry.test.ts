@@ -8,7 +8,9 @@ import { describe, expect, it, vi } from "vitest";
 // dynamic imports too, so the fakes still apply.)
 const h = vi.hoisted(() => {
   const makeSpan = () => ({ setAttribute: vi.fn(), setStatus: vi.fn(), end: vi.fn() });
-  const startSpan = vi.fn(() => makeSpan());
+  const startSpan = vi.fn<
+    (name: string, options?: { startTime?: number }) => ReturnType<typeof makeSpan>
+  >(() => makeSpan());
   const tracer = { startSpan };
   const otel = {
     trace: { getTracer: vi.fn(() => tracer), setSpan: vi.fn((ctx: unknown) => ctx) },
@@ -183,18 +185,60 @@ describe("telemetry (enabled)", () => {
     expect(span.setStatus).toHaveBeenCalledWith({ code: 2 });
   });
 
-  it("startSongStart runs the parent+children lifecycle and ends every span", async () => {
+  it("emits the RPC-to-load span only when the deferred load is issued", async () => {
     await enable();
     const i = spanCount();
-    const song = tele.startSongStart({ game_code: "ABC" });
-    song.rpcDone({ roundNumber: 3, songId: "s1", youtubeId: "yt" });
+    const clock = vi.spyOn(performance, "now");
+    try {
+      clock.mockReturnValue(100);
+      const song = tele.startSongStart({ game_code: "ABC", pick_path: "fallback" });
+      clock.mockReturnValue(250);
+      song.rpcDone({ roundNumber: 3, songId: "s1", youtubeId: "yt" });
+      expect(spansFrom(i)).toHaveLength(2);
+      expect(spansFrom(i)[1].end).toHaveBeenCalledWith(performance.timeOrigin + 250);
+
+      clock.mockReturnValue(420);
+      song.loadIssued();
+      const [parent, rpc, wait, player] = spansFrom(i);
+      expect(h.startSpan.mock.calls.slice(i).map(([name]) => name)).toEqual([
+        tele.SPAN_OPS.songStart,
+        tele.SPAN_OPS.songClickToRpc,
+        tele.SPAN_OPS.songRpcToLoad,
+        tele.SPAN_OPS.songLoadToPlaying,
+      ]);
+      expect(h.startSpan.mock.calls[i + 2]?.[1]).toEqual({
+        startTime: performance.timeOrigin + 250,
+      });
+      expect(wait.end).toHaveBeenCalledWith(performance.timeOrigin + 420);
+      expect(h.startSpan.mock.calls[i + 3]?.[1]).toEqual({
+        startTime: performance.timeOrigin + 420,
+      });
+
+      clock.mockReturnValue(650);
+      song.playing("poll");
+      expect(player.end).toHaveBeenCalledWith(performance.timeOrigin + 650);
+      expect(parent.end).toHaveBeenCalledWith(performance.timeOrigin + 650);
+      expect(parent.setAttribute).toHaveBeenCalledWith("click_to_playing_ms", 550);
+      song.playing("statechange");
+      for (const span of [parent, rpc, wait, player]) expect(span.end).toHaveBeenCalledTimes(1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("closes a fallback that times out before it issues any load", async () => {
+    await enable();
+    const i = spanCount();
+    const song = tele.startSongStart({ game_code: "ABC", pick_path: "fallback" });
+    song.rpcDone({ roundNumber: 3 });
+    song.playing("timeout");
     song.loadIssued();
-    song.playing("statechange");
-    // parent + click_to_rpc + rpc_to_load + load_to_playing = 4 spans, all ended.
-    const spans = spansFrom(i);
-    expect(spans.length).toBe(4);
-    for (const s of spans) expect(s.end).toHaveBeenCalled();
-    expect(() => song.playing("poll")).not.toThrow();
+    const [parent, rpc] = spansFrom(i);
+    expect(spansFrom(i)).toHaveLength(2);
+    expect(parent.setAttribute).toHaveBeenCalledWith("playing_detection", "timeout");
+    expect(parent.setStatus).toHaveBeenCalledWith({ code: 2 });
+    expect(parent.end).toHaveBeenCalledTimes(1);
+    expect(rpc.end).toHaveBeenCalledTimes(1);
   });
 
   it.each([false, true])(
@@ -202,26 +246,40 @@ describe("telemetry (enabled)", () => {
     async (playerFirst) => {
       await enable();
       const i = spanCount();
-      const song = tele.startSongStart({ game_code: "ABC", pick_path: "peek" });
-      song.loadIssued();
-      const [parent, rpc, player] = spansFrom(i);
-      expect(rpc.end).not.toHaveBeenCalled();
-      if (playerFirst) {
-        song.playing("statechange");
-        expect(player.end).toHaveBeenCalledTimes(1);
-        expect(parent.end).not.toHaveBeenCalled();
-        song.rpcDone({ roundNumber: 3, songId: "s1" });
-      } else {
-        song.rpcDone({ roundNumber: 3, songId: "s1" });
-        expect(rpc.end).toHaveBeenCalledTimes(1);
-        expect(player.end).not.toHaveBeenCalled();
-        song.playing("statechange");
+      const clock = vi.spyOn(performance, "now");
+      try {
+        clock.mockReturnValue(100);
+        const song = tele.startSongStart({ game_code: "ABC", pick_path: "peek" });
+        clock.mockReturnValue(110);
+        song.loadIssued();
+        const [parent, rpc, player] = spansFrom(i);
+        expect(rpc.end).not.toHaveBeenCalled();
+        if (playerFirst) {
+          clock.mockReturnValue(150);
+          song.playing("statechange");
+          expect(player.end).toHaveBeenCalledWith(performance.timeOrigin + 150);
+          expect(parent.end).not.toHaveBeenCalled();
+          clock.mockReturnValue(300);
+          song.rpcDone({ roundNumber: 3, songId: "s1" });
+          expect(rpc.end).toHaveBeenCalledWith(performance.timeOrigin + 300);
+        } else {
+          clock.mockReturnValue(130);
+          song.rpcDone({ roundNumber: 3, songId: "s1" });
+          expect(rpc.end).toHaveBeenCalledWith(performance.timeOrigin + 130);
+          expect(player.end).not.toHaveBeenCalled();
+          clock.mockReturnValue(150);
+          song.playing("statechange");
+        }
+        expect(spansFrom(i)).toHaveLength(3);
+        expect(parent.setAttribute).toHaveBeenCalledWith("pick_path", "peek");
+        expect(parent.setAttribute).toHaveBeenCalledWith("click_to_playing_ms", 50);
+        expect(parent.setAttribute).toHaveBeenCalledWith("round_number", 3);
+        expect(player.end).toHaveBeenCalledWith(performance.timeOrigin + 150);
+        expect(parent.end).toHaveBeenCalledWith(performance.timeOrigin + 150);
+        for (const span of spansFrom(i)) expect(span.end).toHaveBeenCalledTimes(1);
+      } finally {
+        clock.mockRestore();
       }
-      expect(spansFrom(i)).toHaveLength(3);
-      expect(parent.setAttribute).toHaveBeenCalledWith("pick_path", "peek");
-      expect(parent.setAttribute).toHaveBeenCalledWith("click_to_playing_ms", expect.any(Number));
-      expect(parent.setAttribute).toHaveBeenCalledWith("round_number", 3);
-      for (const span of spansFrom(i)) expect(span.end).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -236,6 +294,7 @@ describe("telemetry (enabled)", () => {
       const [parent, rpc, player] = spansFrom(i);
       expect(parent.setStatus).toHaveBeenCalledWith({ code: 2 });
       expect(parent.end).not.toHaveBeenCalled();
+      expect(player.setStatus).toHaveBeenCalledWith({ code: 2 });
       expect(player.end).toHaveBeenCalledTimes(1);
       song.rpcDone({ roundNumber: 3, songId: "s1" });
       expect(rpc.end).toHaveBeenCalledTimes(1);
@@ -243,18 +302,29 @@ describe("telemetry (enabled)", () => {
     },
   );
 
-  it("closes both in-flight spans when a peeked song commit fails", async () => {
-    await enable();
-    const i = spanCount();
-    const song = tele.startSongStart({ game_code: "ABC", pick_path: "peek" });
-    song.loadIssued();
-    song.fail("stale_round");
-    const [parent, rpc, player] = spansFrom(i);
-    expect(parent.setAttribute).toHaveBeenCalledWith("error_reason", "stale_round");
-    for (const span of [parent, rpc, player]) expect(span.end).toHaveBeenCalledTimes(1);
-    song.rpcDone({ roundNumber: 3 });
-    expect(parent.end).toHaveBeenCalledTimes(1);
-  });
+  it.each([false, true])(
+    "handles RPC failure when playback already started = %s",
+    async (played) => {
+      await enable();
+      const i = spanCount();
+      const song = tele.startSongStart({ game_code: "ABC", pick_path: "peek" });
+      song.loadIssued();
+      if (played) song.playing("statechange");
+      song.fail("stale_round");
+
+      const [parent, rpc, player] = spansFrom(i);
+      expect(spansFrom(i)).toHaveLength(3);
+      expect(parent.setAttribute).toHaveBeenCalledWith("error_reason", "stale_round");
+      expect(parent.setStatus).toHaveBeenCalledWith({ code: 2 });
+      expect(rpc.setStatus).toHaveBeenCalledWith({ code: 2 });
+      if (played) expect(player.setStatus).not.toHaveBeenCalled();
+      else expect(player.setStatus).toHaveBeenCalledWith({ code: 2 });
+
+      song.rpcDone({ roundNumber: 3 });
+      song.playing("statechange");
+      for (const span of [parent, rpc, player]) expect(span.end).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("startSongStart records the preloaded flag on the parent span", async () => {
     await enable();

@@ -79,9 +79,8 @@ export function useScoring(
     peekedRef,
     peekEpochRef,
     optimisticSongIdRef,
-    songStartRef,
     loadSongIntoPlayer,
-    armSongStartTimeout,
+    clearSongStart,
     beginSongStart,
     beginRoundCommit,
     endRoundCommit,
@@ -525,9 +524,7 @@ export function useScoring(
     // the game. Nothing is buffered ahead: YouTube's rules allow no hidden
     // player that plays (see useHostPlayer.ts), so this is a fresh load.
     if (peeked) {
-      songStart.loadIssued();
-      armSongStartTimeout();
-      livePlayer()?.loadVideoById(peeked.youtube_id, peeked.start_time);
+      loadSongIntoPlayer(peeked);
       // I-NextMeta: the new song is already starting, so render its card
       // in-gesture from the peeked metadata (mig 038) instead of leaving the
       // PREVIOUS title up until select_next_song resolves ~150ms later. Record
@@ -565,14 +562,14 @@ export function useScoring(
       // from being replaced by the previous round while that update arrives.
       optimisticSongIdRef.current = result.song.id;
       setCurrentSong(result.song);
-      if (peeked?.song_id !== result.song.id) await loadSongIntoPlayer(result.song);
+      if (peeked?.song_id !== result.song.id) loadSongIntoPlayer(result.song);
     } catch (err) {
       const stale = err instanceof RpcError && err.message === "stale_round";
       const invalid = err instanceof RpcError && err.message === "song_no_longer_eligible";
       songStart.fail(
         stale ? "stale_round" : invalid ? "song_no_longer_eligible" : "select_next_song_failed",
       );
-      songStartRef.current = null;
+      clearSongStart();
       optimisticSongIdRef.current = null;
       if (peeked) {
         livePlayer()?.stop();

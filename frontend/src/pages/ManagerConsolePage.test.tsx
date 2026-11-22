@@ -2605,6 +2605,20 @@ describe("ManagerConsolePage", () => {
     expect(await screen.findByText(/video unavailable/i)).toBeInTheDocument();
   });
 
+  it("ends the playback stage on an in-tap error before the song card updates", async () => {
+    await peekSong2();
+    vi.mocked(selectNextSongDirect).mockReturnValueOnce(new Promise<SelectSongResponse>(() => {}));
+    handle(0).loadVideoById.mockImplementationOnce(() => {
+      onErrorHandlers[0]?.(101, "vid2bbbbbbb");
+    });
+
+    fireEvent.click(screen.getByTestId("start-round"));
+
+    expect(telemetry.handle.loadIssued).toHaveBeenCalledBefore(telemetry.handle.playing);
+    expect(telemetry.handle.playing).toHaveBeenCalledExactlyOnceWith("error");
+    expect(telemetry.handle.rpcDone).not.toHaveBeenCalled();
+  });
+
   it("names the new song when its in-tap load errors before the round is recorded", async () => {
     await peekSong2();
     vi.mocked(selectNextSongDirect).mockReturnValueOnce(new Promise<SelectSongResponse>(() => {}));
