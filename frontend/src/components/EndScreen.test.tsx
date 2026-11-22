@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EndScreen } from "./EndScreen";
 import type { Team } from "../lib/types";
 
@@ -292,5 +292,140 @@ describe("EndScreen", () => {
     // final value on first paint instead of rolling up from 0.
     const winnerCard = screen.getByText(/winner/i).parentElement;
     expect(winnerCard?.textContent).toMatch(/42/);
+  });
+});
+
+// usePodiumFloor: jsdom has no layout, so the card and team-box heights come
+// from stubbed getters keyed on the card's class (gold / silver / bronze).
+describe("EndScreen podium floor (display, upright frames)", () => {
+  const teams: Team[] = [
+    { ...baseTeam, id: "1", name: "Winner", score: 30 },
+    { ...baseTeam, id: "2", name: "Second", score: 20 },
+    { ...baseTeam, id: "3", name: "TieA", score: 0 },
+    { ...baseTeam, id: "4", name: "TieB", score: 0 },
+  ];
+  const place = (el: HTMLElement | null) =>
+    el?.closest("[data-podium-card]")?.className.match(/_(gold|silver|bronze)_/)?.[1];
+  // offsetHeight of each card; [scrollHeight, clientHeight] of its team box.
+  let cardH: Record<string, number> = { gold: 140, silver: 110, bronze: 300 };
+  let boxH: Record<string, [number, number]> = {
+    gold: [90, 60],
+    silver: [40, 40],
+    bronze: [500, 100],
+  };
+  const props = ["offsetHeight", "scrollHeight", "clientHeight"] as const;
+  const saved = props.map((p) => Object.getOwnPropertyDescriptor(HTMLElement.prototype, p));
+  const observers: Array<{ cb: () => void; observed: HTMLElement[]; disconnected: boolean }> = [];
+
+  beforeEach(() => {
+    cardH = { gold: 140, silver: 110, bronze: 300 };
+    boxH = { gold: [90, 60], silver: [40, 40], bronze: [500, 100] };
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.hasAttribute("data-podium-card") ? (cardH[place(this) ?? ""] ?? 0) : 0;
+      },
+    });
+    for (const [i, p] of (["scrollHeight", "clientHeight"] as const).entries()) {
+      Object.defineProperty(HTMLElement.prototype, p, {
+        configurable: true,
+        get(this: HTMLElement) {
+          return this.hasAttribute("data-podium-teams") ? (boxH[place(this) ?? ""]?.[i] ?? 0) : 0;
+        },
+      });
+    }
+    observers.length = 0;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        entry: { cb: () => void; observed: HTMLElement[]; disconnected: boolean };
+        constructor(cb: () => void) {
+          this.entry = { cb, observed: [], disconnected: false };
+          observers.push(this.entry);
+        }
+        observe(el: HTMLElement) {
+          this.entry.observed.push(el);
+        }
+        disconnect() {
+          this.entry.disconnected = true;
+        }
+      },
+    );
+  });
+
+  afterEach(() => {
+    props.forEach((p, i) => {
+      const d = saved[i];
+      if (d) Object.defineProperty(HTMLElement.prototype, p, d);
+      else Reflect.deleteProperty(HTMLElement.prototype, p);
+    });
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(document, "fonts");
+  });
+
+  const podiumOf = (container: HTMLElement) =>
+    container.querySelector("[data-podium-card]")!.parentElement as HTMLElement;
+
+  it("marks the cards, and only a tie's card as a tie", () => {
+    const { container } = render(<EndScreen teams={teams} gameCode="ABCDEF" fit />);
+    const cards = [...container.querySelectorAll("[data-podium-card]")];
+    expect(cards.map((c) => place(c as HTMLElement))).toEqual(["silver", "gold", "bronze"]);
+    expect(cards.map((c) => c.hasAttribute("data-tie"))).toEqual([false, false, true]);
+    expect(cards.every((c) => c.querySelector("[data-podium-teams]"))).toBe(true);
+  });
+
+  it("floors the podium at the tallest one-team card's natural height, skipping a tie", () => {
+    const { container } = render(<EndScreen teams={teams} gameCode="ABCDEF" fit />);
+    // gold: 140 + (90 - 60) hidden = 170; silver: 110; the 300px tie is skipped.
+    expect(podiumOf(container).style.getPropertyValue("--podium-floor")).toBe("170px");
+  });
+
+  it("re-measures when the frame resizes, and stops when unmounted", () => {
+    const { container, unmount } = render(<EndScreen teams={teams} gameCode="ABCDEF" fit />);
+    const podium = podiumOf(container);
+    const observer = observers.at(-1)!;
+    expect(observer.observed).toEqual([podium.parentElement]);
+    cardH.silver = 190;
+    observer.cb();
+    expect(podium.style.getPropertyValue("--podium-floor")).toBe("190px");
+    unmount();
+    expect(observer.disconnected).toBe(true);
+  });
+
+  it("re-measures once the fonts have loaded, unless it has gone", async () => {
+    let loaded!: () => void;
+    const ready = new Promise<void>((resolve) => (loaded = resolve));
+    Object.defineProperty(document, "fonts", { configurable: true, value: { ready } });
+    const { container } = render(<EndScreen teams={teams} gameCode="ABCDEF" fit />);
+    const podium = podiumOf(container);
+    boxH.gold = [120, 60];
+    loaded();
+    await ready;
+    await Promise.resolve();
+    expect(podium.style.getPropertyValue("--podium-floor")).toBe("200px");
+
+    let loaded2!: () => void;
+    const ready2 = new Promise<void>((resolve) => (loaded2 = resolve));
+    Object.defineProperty(document, "fonts", { configurable: true, value: { ready: ready2 } });
+    const second = render(<EndScreen teams={teams} gameCode="GHIJKL" fit />);
+    const podium2 = podiumOf(second.container);
+    second.unmount();
+    boxH.gold = [400, 60];
+    loaded2();
+    await ready2;
+    await Promise.resolve();
+    expect(podium2.style.getPropertyValue("--podium-floor")).toBe("200px");
+  });
+
+  it("still sets the floor once where ResizeObserver is missing", () => {
+    vi.stubGlobal("ResizeObserver", undefined);
+    const { container } = render(<EndScreen teams={teams} gameCode="ABCDEF" fit />);
+    expect(podiumOf(container).style.getPropertyValue("--podium-floor")).toBe("170px");
+  });
+
+  it("leaves the phones' version alone", () => {
+    const { container } = render(<EndScreen teams={teams} gameCode="ABCDEF" />);
+    expect(podiumOf(container).style.getPropertyValue("--podium-floor")).toBe("");
+    expect(observers).toHaveLength(0);
   });
 });
