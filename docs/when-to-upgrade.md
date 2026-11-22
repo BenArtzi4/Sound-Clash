@@ -110,8 +110,8 @@ Expected result: create, join and end get about 2–4× faster. This is an estim
 | 5 | `/health` on the new service: `"status":"ok"`, `"supabase":"ok"`. |
 | 6 | No live game. Domain removed from the old service, added to the new one (verified, certificate issued). Cloudflare `api` CNAME → `sound-clash-eu.onrender.com`, DNS only, TTL 300. The API answered again at 10:23 UTC. |
 | 7 | `post_deploy.sh` on `api.soundclash.org`: PASS. Real-browser game (`full-game/fullgame.mjs`: Host and Join screens, 4 team phones, TV display, 20 rounds): **39/39**. CORS from `www.soundclash.org`: allowed. |
-| 8 | Open: the GitHub secret `RENDER_DEPLOY_HOOK` still holds the old service's hook. |
-| 9 | Open: the old service still runs (for a quick rollback). Suspend it after 1–2 days. |
+| 8 | Done 2026-11-22: the maintainer pasted the new service's hook into the GitHub secret `RENDER_DEPLOY_HOOK` (updated 10:45 UTC). Proof: a rerun of the `deploy (Render)` job of Backend run 44993873042 passed, and `sound-clash-eu` showed "Deploy started … Triggered via Deploy Hook" and went live; `post_deploy.sh` passed afterwards. |
+| 9 | Done 2026-11-22: the old service `Sound-Clash` (Oregon) is **suspended**, not deleted. `api.soundclash.org` kept answering from Frankfurt. The keepalives (cron-job.org job 7569155 and `render-keepalive.yml`) already call `api.soundclash.org/health`, so they reach the new service. |
 
 Measured from Israel, warm server, same connection (median of 8):
 
@@ -122,7 +122,7 @@ Measured from Israel, warm server, same connection (median of 8):
 | `/genres` | 774 ms | 98 ms |
 | `post_deploy.sh` (health, genres, create, 2 joins, end) | 9.0 s | 2.2 s |
 
-**Rollback** (if the new service fails): remove `api.soundclash.org` from `sound-clash-eu`, add it back to `Sound-Clash`, and point the Cloudflare `api` CNAME to `sound-clash-glea.onrender.com`. This works only while the old service is not deleted.
+**Rollback** (if the new service fails): **Resume** the suspended `Sound-Clash` service (Settings → Delete or suspend), remove `api.soundclash.org` from `sound-clash-eu`, add it back to `Sound-Clash`, point the Cloudflare `api` CNAME to `sound-clash-glea.onrender.com`, and put the old service's deploy hook back in `RENDER_DEPLOY_HOOK`. This works only while the old service is not deleted. Its variables are its own copies from before the move, so any secret rotated after 2026-11-22 must be updated there too.
 
 ## 5. Monthly check (10 minutes, first Sunday of the month)
 
