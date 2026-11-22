@@ -19,7 +19,23 @@
   font-size: 1.1em;
 }
 
-.large {
-  font-size: 1.05rem;
-  padding: 0.35em 1em;
+/* The TV's answer card on a soundtrack round: no pill, the display face in
+   the accent colour, as big as the card's heading slot makes it (font-size
+   comes from .soundtrackHeading in DisplayPage.module.css). */
+.heading {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1em;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  gap: 0.3em;
+}
+
+.heading .icon {
+  font-size: 0.9em;
 }

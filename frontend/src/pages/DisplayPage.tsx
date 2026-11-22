@@ -408,23 +408,27 @@ function DisplayBoard({ gameCode }: { gameCode: string }) {
           right-hand column of the frame; below that it un-wraps (display:
           contents) and the pieces stack in source order with the QR last. */}
       <aside className={styles.side}>
-        {round && game.status === "playing" && isSoundtrackRound ? (
-          <div className={styles.soundtrackBadgeRow}>
-            <SoundtrackBadge size="large" />
-          </div>
-        ) : null}
-
         {round && game.status === "playing" ? (
-          <div className={styles.revealPanel} aria-label="Song reveal">
+          <div
+            className={`${styles.revealPanel}${isSoundtrackRound ? ` ${styles.revealPanelSoundtrack}` : ""}`}
+            aria-label="Song reveal"
+          >
             {isSoundtrackRound ? (
               /* Soundtrack rounds ask for the film/show name, which lives in
-                 `artist` (title holds the song/clip name). */
-              <RevealRow
-                testId="display-reveal-title"
-                icon={<FilmIcon />}
-                text={currentSong?.artist ?? ""}
-                revealed={Boolean(titleClaimedById && currentSong)}
-              />
+                 `artist` (title holds the song/clip name). The card turns
+                 orange and carries the Soundtrack sign as its heading, big
+                 enough to read across the room. */
+              <>
+                <div className={styles.soundtrackHeading}>
+                  <SoundtrackBadge size="heading" />
+                </div>
+                <RevealRow
+                  testId="display-reveal-title"
+                  icon={<FilmIcon />}
+                  text={currentSong?.artist ?? ""}
+                  revealed={Boolean(titleClaimedById && currentSong)}
+                />
+              </>
             ) : (
               <>
                 <RevealRow
