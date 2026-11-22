@@ -13,7 +13,7 @@ Design and operational documentation for Sound Clash. Each file has a single, di
 7. **[security-rls.md](security-rls.md)**: auth model, RLS policies, threat model, rate limits, CSP.
 8. **[api-contracts.md](api-contracts.md)**: REST + Realtime wire-format contracts.
 9. **[testing-strategy.md](testing-strategy.md)**: test types, coverage gates, CI enforcement; the doc CI gates against.
-10. **[free-tier-budget.md](free-tier-budget.md)**: quota analysis; how many games/month before any service runs out.
+10. **[free-tier-budget.md](free-tier-budget.md)**: quota analysis; how many games/month before any service runs out. **[when-to-upgrade.md](when-to-upgrade.md)**: measured usage, the triggers for buying a paid plan, and the monthly check.
 11. **[local-development.md](local-development.md)**: how to run the stack on your laptop.
 12. **[runbook.md](runbook.md)**: day-2+ operations: deploy, rollback, secrets, incidents.
 13. **[planning/](planning/README.md)**: the improvement plan — current status, the open-task backlog (`TASKS.md`), the decision log, and the execution process. (The original build roadmap and the completed backlog/phase files shipped 100% and were removed; they live in git history.)
