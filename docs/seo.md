@@ -83,7 +83,7 @@ A static file always wins, so `/`, `/how-to-play`, every landing page, `/join`, 
 | `X-Robots-Tag: noindex` on `https://:project.pages.dev/*` | `frontend/public/_headers` | Keeps `sound-clash.pages.dev` out of search; matches only the pages.dev host |
 | `/html/* → / 301` | `frontend/public/_redirects` | A previous owner of the domain (a reggae sound-system archive) left `/html/en/welcome/` in search indexes |
 | Visually hidden "Sound Clash:" in the Home H1 | `src/pages/HomePage.tsx` | The page's one heading names the site |
-| Footer links | `src/components/SiteFooter.tsx` | Every content page links every other one with descriptive text |
+| Footer links | `src/components/SiteFooter.tsx` | Every content page links every other one with descriptive text. A last line links the Product Hunt product page (launched 22 Nov 2026) as a plain text link: no badge image or script, so nothing loads from Product Hunt until someone clicks |
 | `X-Robots-Tag: noindex` on the API | `backend/app/middleware/cors.py` | Every FastAPI response, including the Swagger UI at `api.soundclash.org/docs` |
 
 ## 5. What each page is written for

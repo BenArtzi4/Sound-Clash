@@ -21,7 +21,8 @@
   gap: var(--space-3) var(--space-5);
 }
 
-.links a {
+.links a,
+.note a {
   color: var(--text-muted);
   text-decoration: underline;
   text-decoration-color: var(--border-strong);
@@ -29,7 +30,8 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .links a:hover {
+  .links a:hover,
+  .note a:hover {
     color: var(--bone);
   }
 }
