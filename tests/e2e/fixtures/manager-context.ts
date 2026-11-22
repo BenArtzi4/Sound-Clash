@@ -20,6 +20,7 @@ export interface ManagerSession {
 }
 
 interface CreateOpts {
+  preparePage?: (page: Page) => Promise<void>;
   // Display name(s) as they appear in the UI (e.g. "Rock", "Pop"), matched
   // case-insensitively. Use `genreName` for a single genre or `genreNames`
   // to tick several (e.g. mix Soundtracks + Rock so a game draws both
@@ -34,6 +35,7 @@ export async function openManagerAndCreateGame(
 ): Promise<ManagerSession> {
   const context = await browser.newContext();
   const page = await context.newPage();
+  await opts.preparePage?.(page);
 
   const genres = opts.genreNames ?? (opts.genreName ? [opts.genreName] : []);
   if (genres.length === 0) throw new Error("openManagerAndCreateGame: no genre(s) given");

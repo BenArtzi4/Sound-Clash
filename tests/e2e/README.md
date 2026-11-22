@@ -66,3 +66,9 @@ API_URL=http://localhost:8000
 - **Never run against the prod Supabase project.** Preview only.
 - **Never embed secrets** in test code; always env vars.
 - The buzzer race relies on Postgres deciding the winner; do not weaken `expect.poll` timeouts trying to make the race deterministic on the client.
+
+## Paired buzzer comparison
+
+Point the frontend, backend, and Playwright environment at the same disposable Supabase project with all migrations and the song seed applied. Set `BUZZ_COMPARE_SAMPLES=40` and run `npm test -- --project=chromium --reporter=line buzzer_broadcast.spec.ts`. The standard frontend PR preview points at production Supabase and uses that project's data.
+
+The test drives the host, two teams, and display through the normal UI. It forwards the Broadcast lock to one set of remote views and the same write's Postgres Changes lock to another set. Both retain snapshot recovery and receive the other game events. The harness uses one Playwright monotonic clock for pointerdown, RPC response completion, frame receipt, and two-animation-frame render estimates. It logs p50/p95, paired deltas, and measurements missing after three seconds, and attaches the samples as JSON. The YouTube IFrame API is stubbed so external playback startup does not vary between runs.

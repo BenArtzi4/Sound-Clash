@@ -42,6 +42,81 @@ afterEach(() => {
 });
 
 describe("gameReducer", () => {
+  it("orders Broadcast, Postgres Changes, and snapshots by the database revision", () => {
+    const game = makeActiveGame({
+      status: "playing",
+      round_number: 1,
+      current_round_id: "r1",
+      buzz_revision: 1,
+    });
+    const round = makeRound({ id: "r1" });
+    const hydrate = (row: ActiveGame) => ({
+      type: "HYDRATE" as const,
+      game: row,
+      teams: [],
+      rounds: [round],
+    });
+    const first = gameReducer(null, hydrate(game));
+    const firstLock = {
+      type: "BUZZ_LOCK" as const,
+      lock: {
+        ...game,
+        status: "playing" as const,
+        current_round_id: "r1",
+        buzzed_team_id: "team-a",
+        locked_at: "2026-05-05T12:01:00Z",
+        buzz_revision: 2,
+      },
+    };
+    const locked = gameReducer(first, firstLock);
+    expect(locked?.game.buzzed_team_id).toBe("team-a");
+    expect(gameReducer(locked, firstLock)).toBe(locked);
+    expect(gameReducer(locked, hydrate(game))).toBe(locked);
+
+    const clear = { ...game, buzz_revision: 3 };
+    const cleared = gameReducer(locked, hydrate(clear));
+    expect(cleared?.game.buzzed_team_id).toBeNull();
+    expect(gameReducer(cleared, firstLock)).toBe(cleared);
+    expect(
+      gameReducer(cleared, {
+        type: "GAME_CHANGE",
+        payload: makePayload("active_games", "UPDATE", { new: { ...game, ...firstLock.lock } }),
+      }),
+    ).toBe(cleared);
+
+    const nextRound = makeRound({ id: "r2", round_number: 2 });
+    const advanced = gameReducer(locked, {
+      type: "ROUND_CHANGE",
+      payload: makePayload("game_rounds", "INSERT", { new: nextRound }),
+    });
+    expect(advanced?.game.buzzed_team_id).toBeNull();
+    expect(gameReducer(advanced, firstLock)).toBe(advanced);
+    expect(gameReducer(advanced, hydrate(game))?.game.current_round_id).toBe("r2");
+
+    const earlyLock = gameReducer(first, {
+      ...firstLock,
+      lock: { ...firstLock.lock, current_round_id: "r2", round_number: 2, buzz_revision: 4 },
+    });
+    const roundCaughtUp = gameReducer(earlyLock, {
+      type: "ROUND_CHANGE",
+      payload: makePayload("game_rounds", "INSERT", { new: nextRound }),
+    });
+    expect(roundCaughtUp?.game.buzzed_team_id).toBe("team-a");
+    expect(roundCaughtUp?.currentRound).toBe(nextRound);
+
+    const secondLock = {
+      ...firstLock,
+      lock: { ...firstLock.lock, buzz_revision: 4, buzzed_team_id: "team-b" },
+    };
+    const relocked = gameReducer(cleared, secondLock);
+    expect(relocked?.game.buzzed_team_id).toBe("team-b");
+    expect(gameReducer(relocked, firstLock)).toBe(relocked);
+    expect(
+      gameReducer(relocked, hydrate({ ...clear, status: "ended", buzz_revision: 5 }))?.game
+        .buzzed_team_id,
+    ).toBeNull();
+  });
+
   it("HYDRATE builds initial state with sorted rounds and current round", () => {
     const game = makeActiveGame({ current_round_id: "r1" });
     const next = gameReducer(null, {
@@ -561,6 +636,97 @@ describe("gameReducer", () => {
 });
 
 describe("useGameChannel - subscription", () => {
+  it("joins the private Broadcast topic for a versioned game and cleans it up", async () => {
+    const game = makeActiveGame({
+      status: "playing",
+      current_round_id: "round-1",
+      buzz_revision: 1,
+    });
+    const broadcast = { ...channelMock, on: vi.fn(), subscribe: vi.fn() };
+    broadcast.on.mockReturnValue(broadcast);
+    broadcast.subscribe.mockReturnValue(broadcast);
+    supabaseMock.channel.mockReturnValueOnce(channelMock).mockReturnValueOnce(broadcast);
+    setHydrate({ game });
+    const { result, unmount } = renderHook(() => useGameChannel(game.game_code));
+    await waitFor(() => expect(broadcast.subscribe).toHaveBeenCalledTimes(1));
+    await act(async () => fireSubscribed());
+    expect(supabaseMock.channel).toHaveBeenCalledWith("buzz:ABCDEF", { config: { private: true } });
+    expect(broadcast.on).toHaveBeenCalledWith(
+      "broadcast",
+      { event: "buzz_locked" },
+      expect.any(Function),
+    );
+    expect(broadcast.subscribe).toHaveBeenCalledTimes(1);
+
+    const receive = broadcast.on.mock.calls[0]![2] as (message: { payload: unknown }) => void;
+    act(() => receive({ payload: null }));
+    expect(result.current.state?.game.buzzed_team_id).toBeNull();
+    const lock = {
+      ...game,
+      buzz_revision: 2,
+      buzzed_team_id: "team-1",
+      locked_at: "2026-05-05T12:00:30Z",
+    };
+    // The winner reached the client before the team and round changes.
+    setHydrate({ game: lock, teams: [makeTeam()], rounds: [makeRound()] });
+    act(() => receive({ payload: lock }));
+    expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
+    await waitFor(() => expect(result.current.state?.teams.get("team-1")?.name).toBe("Alice"));
+    expect(result.current.state?.currentRound?.id).toBe("round-1");
+
+    setHydrate({ game });
+    await act(async () => result.current.refresh());
+    expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
+
+    act(() => fireGame(makePayload("active_games", "DELETE", { old: game })));
+    unmount();
+    expect(
+      supabaseMock.removeChannel.mock.calls.filter(([channel]) => channel === broadcast),
+    ).toHaveLength(1);
+  });
+
+  it("keeps CDC and snapshot reads available before migration 058", async () => {
+    const game = makeActiveGame();
+    setHydrate({ game });
+    const from = supabaseMock.from.getMockImplementation()!;
+    const columns: string[] = [];
+    supabaseMock.from.mockImplementation((table) => {
+      const query = from(table);
+      if (table === "active_games") {
+        const select = query.select.getMockImplementation()!;
+        query.select.mockImplementation((projection?: string) => {
+          columns.push(projection ?? "");
+          return select();
+        });
+        if (columns.length === 0) {
+          query.maybeSingle.mockResolvedValueOnce({
+            data: null,
+            error: { code: "42703", message: "column buzz_revision does not exist" },
+          });
+        }
+      }
+      return query;
+    });
+
+    const { result } = renderHook(() => useGameChannel(game.game_code));
+    await waitFor(() => expect(result.current.state?.game).toEqual(game));
+    await act(async () => fireSubscribed());
+    expect(columns).toHaveLength(3);
+    expect(columns[0]).toContain("buzz_revision");
+    expect(columns[1]).not.toContain("buzz_revision");
+    expect(columns[2]).toBe(columns[1]);
+    expect(supabaseMock.channel).toHaveBeenCalledTimes(1);
+
+    act(() =>
+      fireGame(
+        makePayload("active_games", "UPDATE", {
+          new: { ...game, buzzed_team_id: "team-1" },
+        }),
+      ),
+    );
+    expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
+  });
+
   it("subscribes to all three tables with the right filter", () => {
     renderHook(() => useGameChannel("ABCDEF"));
     expect(supabaseMock.channel).toHaveBeenCalledWith("game:ABCDEF");

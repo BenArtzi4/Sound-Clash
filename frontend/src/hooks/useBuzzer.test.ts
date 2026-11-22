@@ -117,6 +117,45 @@ describe("useBuzzer", () => {
     expect(result.current.lockedTeamId).toBe("team-1");
   });
 
+  it.each(["clear", "advance"])(
+    "does not restore a lock when the RPC resolves after a %s",
+    async (transition) => {
+      let resolveRpc!: (response: { data: unknown; error: null }) => void;
+      supabaseMock.rpc.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRpc = resolve;
+          }),
+      );
+      const { result, rerender } = renderHook(({ gs }) => useBuzzer("ABCDEF", "team-1", gs), {
+        initialProps: { gs: buildState() },
+      });
+
+      let buzz!: Promise<void>;
+      act(() => {
+        buzz = result.current.buzz();
+      });
+      if (transition === "clear") {
+        rerender({ gs: buildState({ buzzedTeamId: "team-1" }) });
+        expect(result.current.lockedByMe).toBe(true);
+        rerender({ gs: buildState() });
+      } else {
+        rerender({ gs: buildState({ roundNumber: 2 }) });
+      }
+
+      await act(async () => {
+        resolveRpc({
+          data: [{ locked: true, locked_team_id: "team-1", locked_at: "2026-05-05T12:00:00Z" }],
+          error: null,
+        });
+        await buzz;
+      });
+
+      expect(result.current.isBuzzing).toBe(false);
+      expect(result.current.lockedTeamId).toBeNull();
+    },
+  );
+
   it("paints an optimistic locked-other lock when we lose the race", async () => {
     setRpcResponse({
       data: [{ locked: false, locked_team_id: "team-2", locked_at: "2026-05-05T12:00:00Z" }],

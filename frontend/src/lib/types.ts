@@ -13,6 +13,7 @@ export interface ActiveGame {
   current_round_id: string | null;
   buzzed_team_id: string | null;
   locked_at: string | null;
+  buzz_revision?: number; // Absent until migration 058 is applied.
   started_at: string;
   ended_at: string | null;
   expires_at: string;
@@ -102,8 +103,17 @@ export interface GameState {
   currentRound: GameRound | null;
 }
 
+export interface BuzzLock extends ActiveGame {
+  status: "playing";
+  current_round_id: string;
+  buzzed_team_id: string;
+  locked_at: string;
+  buzz_revision: number;
+}
+
 export type GameAction =
   | { type: "HYDRATE"; game: ActiveGame; teams: Team[]; rounds: GameRound[] }
+  | { type: "BUZZ_LOCK"; lock: BuzzLock }
   | { type: "GAME_CHANGE"; payload: PostgresChangePayload<ActiveGame> }
   | { type: "TEAM_CHANGE"; payload: PostgresChangePayload<Team> }
   | { type: "ROUND_CHANGE"; payload: PostgresChangePayload<GameRound> }

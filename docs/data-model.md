@@ -75,6 +75,7 @@ CREATE TABLE active_games (
   current_round_id  uuid,                              -- FK added below
   buzzed_team_id    uuid,                              -- nullable; the lock
   locked_at         timestamptz,                       -- server-authoritative buzz time
+  buzz_revision     integer NOT NULL DEFAULT 0,        -- orders game rows across Realtime and REST
   started_at        timestamptz NOT NULL DEFAULT now(),
   ended_at          timestamptz,
   expires_at        timestamptz NOT NULL DEFAULT (now() + interval '4 hours')

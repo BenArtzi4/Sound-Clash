@@ -43,6 +43,7 @@ export function useBuzzer(
   // Synchronous in-flight guard so two rapid clicks can't both fire; React
   // state updates aren't applied between the two calls within the same tick.
   const inFlightRef = useRef(false);
+  const authorityEpoch = useRef(0);
 
   const realtimeLock = gameState?.game.buzzed_team_id ?? null;
   const roundNumber = gameState?.game.round_number;
@@ -53,33 +54,15 @@ export function useBuzzer(
   const lockedByMe = effectiveLock === teamId;
   const isPlaying = gameState?.game.status === "playing";
 
-  // Realtime is the source of truth. The instant it moves (a lock lands, the
-  // manager releases it, the round advances) drop the provisional guess so it
-  // can never override newer authoritative state -- this is what corrects a
-  // wrong optimistic paint.
+  // A lock change or round advance supersedes provisional feedback, even if
+  // the RPC response for that press is still on its way.
   useEffect(() => {
+    authorityEpoch.current += 1;
     setProvisionalLock(null);
-  }, [realtimeLock]);
+  }, [gameCode, isPlaying, realtimeLock, roundNumber]);
 
-  // Round-advance reconciler (issue #261). The effect above only fires on a
-  // *change* to the authoritative lock. In the stranding sequence the client's
-  // WebSocket is down while another team takes the lock AND it is released, so
-  // buzzed_team_id stays null->null from this tab's view and that effect never
-  // runs. But if the round advanced during the outage, round_number moving
-  // proves the prior round -- and any lock it held -- is over, so the guess
-  // must go even though the authoritative lock never appeared to change.
-  useEffect(() => {
-    setProvisionalLock(null);
-  }, [roundNumber]);
-
-  // TTL backstop (issue #261). Both reconcilers above need an authoritative
-  // *change* to fire; a client that misses BOTH the lock event and its clear
-  // during a WS-only outage sees the authoritative state stay null->null (same
-  // round, same null lock), so neither fires and the button strands on
-  // "SOMEONE ELSE BUZZED" until some other team next buzzes. Self-expire any
-  // provisional older than the fan-out window so the button re-arms on its own.
-  // Keyed on provisionalLock: a fresh guess restarts the timer, the reconcilers
-  // clearing it to null cancel the timer via cleanup, and unmount clears it too.
+  // If both the lock and release were missed (#261), the provisional lock
+  // expires so the button re-arms even without an authoritative change.
   useEffect(() => {
     if (provisionalLock === null) return;
     const timer = window.setTimeout(() => setProvisionalLock(null), PROVISIONAL_LOCK_TTL_MS);
@@ -89,6 +72,7 @@ export function useBuzzer(
   const buzz = useCallback(async () => {
     if (inFlightRef.current || isLocked || !isPlaying) return;
     inFlightRef.current = true;
+    const epochAtPress = authorityEpoch.current;
     setIsBuzzing(true);
     setError(null);
     // Open the end-to-end buzz span here (closest we get to the pointerdown --
@@ -110,7 +94,7 @@ export function useBuzzer(
       // gameState) remains the source of truth and reconciles this a fan-out
       // later; the effect above drops the guess the moment it lands.
       const row = (Array.isArray(data) ? data[0] : data) as BuzzResult | null | undefined;
-      if (row && row.locked_team_id != null) {
+      if (row?.locked_team_id != null && authorityEpoch.current === epochAtPress) {
         setProvisionalLock(row.locked_team_id);
       }
     } catch (e) {

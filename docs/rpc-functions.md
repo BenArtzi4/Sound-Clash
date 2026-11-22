@@ -66,7 +66,7 @@ REVOKE ALL ON FUNCTION buzz_in(char, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION buzz_in(char, uuid) TO anon;
 ```
 
-The lock lives **only** on `active_games` (`buzzed_team_id` + `locked_at`). `game_rounds.buzzed_team_id` is a vestigial nullable column, no longer written by any function (see `data-model.md §4`).
+The authoritative lock lives on `active_games` (`buzzed_team_id` + `locked_at`). Migration 058 increments `buzz_revision` on each game-row update and enqueues a private Broadcast in the winning transaction when an open round acquires a lock. The same write still produces the Postgres Changes event and the RPC response. If Broadcast fails, the write and response still complete. `game_rounds.buzzed_team_id` is a vestigial nullable column, no longer written by any function (see `data-model.md §4`).
 
 A `p_team_id` that isn't a member of `p_game_code` (i.e. a team from another game) can **never** win the lock: the `EXISTS` membership predicate (mig 041) fails the UPDATE, so the call falls through to the "already locked / not playable" return path. This closes a cross-game score-write vector — see `security-rls.md §4`.
 

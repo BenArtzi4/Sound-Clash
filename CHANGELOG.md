@@ -60,6 +60,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-11-22: The host, other teams, and display can show the winning buzz sooner. (05b9205)
 - 2026-11-22: **The big screen makes soundtrack rounds easier to see.** The small Soundtrack pill above the answer card is gone; instead the answer card turns orange and shows a big **Soundtrack** heading over the hidden film name (about two and a half times the old size on a TV), so players across the room know to name the movie or show. (#427)
 - 2026-11-21: Mixed games give covers a smaller share and vary the order of genres while keeping multi-genre picks in balance. (Issues #424 and #378)
 - 2026-11-01: **A shorter how-to-play video on the home page.** The 52-second video is replaced by a 20-second one: a living room seen from above, four numbered steps with the real game screens, and original music. (#411)

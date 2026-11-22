@@ -33,6 +33,7 @@ import {
   releaseBuzzLock,
   type DropTeam,
 } from "./fixtures/realtime-drop";
+import { raceTeamBuzzers } from "./fixtures/team-context";
 import { countSongsInGenreSlugs } from "./fixtures/supabase-admin";
 
 async function expectIdle(page: Page, timeout = 15_000): Promise<void> {
@@ -81,7 +82,7 @@ test.describe("buzzer resilience under dropped Realtime frames", () => {
       // Both race. buzz_in picks exactly one winner atomically; the lock-ACQUIRE
       // UPDATE is delivered (only the lock-CLEARS are droppable), so both tabs
       // agree on the winner.
-      await Promise.all(tabs.map((t) => t.page.getByTestId("buzz").click()));
+      await raceTeamBuzzers(teamA.page, teamB.page);
       await expectExactlyOneWinner(teamA.page, teamB.page);
 
       if (r === rounds) break;
