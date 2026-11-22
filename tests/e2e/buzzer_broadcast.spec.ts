@@ -20,7 +20,11 @@ test("private database Broadcast, delayed duplicates, and fallback lock delivery
 }) => {
   const host = await openManagerAndCreateGame(browser, {
     genreName: "Rock",
-    preparePage: stubYouTube,
+    preparePage: async (page) => {
+      await stubYouTube(page);
+      // The lock must still become scoreable if the host missed its roster events.
+      await routeBuzzFrames(page, (frame) => frame.deliver(), true);
+    },
   });
   let allowed: LockFrame["source"] | null = "broadcast";
   let callerReceivesLocks = false;
@@ -114,13 +118,36 @@ test("private database Broadcast, delayed duplicates, and fallback lock delivery
   callerReceivesLocks = true;
   allowed = "changes";
   frames = [];
-  await buzz(alpha.page).click();
-  await expect(buzz(bravo.page)).toHaveAttribute("data-tone", "locked-other");
-  await expect
-    .poll(() => frames.map((frame) => frame.source).sort())
-    .toEqual(["broadcast", "changes"]);
-  await host.page.getByTestId("continue-round").click();
-  await Promise.all([idle(alpha.page), idle(bravo.page)]);
+  const { promise: reply, resolve: releaseReply } =
+    Promise.withResolvers<void>();
+  await alpha.page.route(
+    "**/rest/v1/rpc/buzz_in",
+    async (route) => {
+      const response = await route.fetch();
+      await reply;
+      await route.fulfill({ response });
+    },
+    { times: 1 },
+  );
+  try {
+    await buzz(alpha.page).click();
+    // The database winner and clear both arrive before the held HTTP response.
+    await expect(buzz(alpha.page)).toHaveAttribute("data-tone", "winner");
+    await expect(buzz(bravo.page)).toHaveAttribute("data-tone", "locked-other");
+    await expect
+      .poll(() => frames.map((frame) => frame.source).sort())
+      .toEqual(["broadcast", "changes"]);
+    await host.page.getByTestId("continue-round").click();
+    await idle(bravo.page);
+    await expect(buzz(alpha.page)).toHaveAttribute("data-tone", "pending");
+    releaseReply();
+    await expect(buzz(alpha.page)).toHaveAttribute("data-tone", "idle", {
+      timeout: 1500,
+    });
+    await expect(buzz(alpha.page)).toBeEnabled();
+  } finally {
+    releaseReply();
+  }
 
   allowed = null;
   frames = [];

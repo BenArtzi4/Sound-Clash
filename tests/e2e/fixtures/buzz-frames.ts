@@ -28,6 +28,7 @@ function parse(raw: RawFrame) {
 export async function routeBuzzFrames(
   page: Page,
   onLock: (frame: LockFrame) => void,
+  dropTeamJoins = false,
 ): Promise<void> {
   await page.routeWebSocket(/\/realtime\//, (socket) => {
     const server = socket.connectToServer();
@@ -47,6 +48,12 @@ export async function routeBuzzFrames(
       }
       const change =
         msg?.event === "postgres_changes" ? msg.payload?.data : null;
+      if (
+        dropTeamJoins &&
+        change?.table === "game_teams" &&
+        change.type === "INSERT"
+      )
+        return;
       if (
         change?.table === "active_games" &&
         change.type === "UPDATE" &&

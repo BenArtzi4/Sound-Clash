@@ -360,6 +360,19 @@ export function useGameChannel(gameCode: string): {
     gameRef.current = state?.game ?? null;
   }, [state]);
 
+  // A lock can reach the room before its team or round change. Fetch the
+  // missing rows once for that lock so the host can score it right away.
+  const lockTeamId = state?.game.buzzed_team_id;
+  const lockRoundId = state?.game.current_round_id;
+  const lockNeedsSnapshot =
+    state?.game.game_code === gameCode &&
+    state.game.buzz_revision !== undefined &&
+    lockTeamId != null &&
+    (!state.teams.has(lockTeamId) || (lockRoundId != null && state.currentRound === null));
+  useEffect(() => {
+    if (lockNeedsSnapshot) void refreshRef.current?.();
+  }, [gameCode, lockNeedsSnapshot, lockTeamId, lockRoundId]);
+
   // Last-known state worth rendering as a final scoreboard once the game rows
   // are gone (I-FinalBoard). During live play every committed state refreshes
   // it. The expiry sweep cascade-deletes game_teams/game_rounds along with

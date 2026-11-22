@@ -661,17 +661,20 @@ describe("useGameChannel - subscription", () => {
     const receive = broadcast.on.mock.calls[0]![2] as (message: { payload: unknown }) => void;
     act(() => receive({ payload: null }));
     expect(result.current.state?.game.buzzed_team_id).toBeNull();
-    act(() =>
-      receive({
-        payload: {
-          ...game,
-          buzz_revision: 2,
-          buzzed_team_id: "team-1",
-          locked_at: "2026-05-05T12:00:30Z",
-        },
-      }),
-    );
+    const lock = {
+      ...game,
+      buzz_revision: 2,
+      buzzed_team_id: "team-1",
+      locked_at: "2026-05-05T12:00:30Z",
+    };
+    // The winner reached the client before the team and round changes.
+    setHydrate({ game: lock, teams: [makeTeam()], rounds: [makeRound()] });
+    act(() => receive({ payload: lock }));
     expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
+    await waitFor(() => expect(result.current.state?.teams.get("team-1")?.name).toBe("Alice"));
+    expect(result.current.state?.currentRound?.id).toBe("round-1");
+
+    setHydrate({ game });
     await act(async () => result.current.refresh());
     expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
 
