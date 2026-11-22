@@ -4,6 +4,8 @@ This is the early-warning system. It quantifies how many games you can run per m
 
 The design target is **comfortably free for 50–100 games per month**. Beyond that, this doc tells you what to upgrade and when.
 
+> **Measured usage and the current upgrade decision live in [when-to-upgrade.md](when-to-upgrade.md)** (2026-11-22: 60–120 games per week, still about 16% of the binding limit, pay nothing yet). The per-game estimates below are design-time guesses; where the two files disagree, trust the measured one.
+
 ## 1. Per-Game Resource Estimate
 
 A typical Sound Clash game has these characteristics (used as the unit of capacity throughout this doc):
@@ -31,7 +33,7 @@ These numbers are pessimistic; real-world will be lower. Round up for safety.
 | Resource | Limit | Per-game use | Capacity (games/mo) | Notes |
 |---|---|---|---|---|
 | Postgres storage | 500 MB | ~5 KB (rounds + teams + game row) | n/a (cleared in 4h) | songs catalog ~5–20 MB indefinitely |
-| Database egress | 2 GB / mo | ~50 KB per game (queries + RPC) | **40,000 games** | Far above any practical use |
+| Egress (database, API and Realtime together) | 5 GB / mo | not measured; read the Usage page | see [when-to-upgrade.md](when-to-upgrade.md) | The old ~50 KB/game guess left out Realtime payloads |
 | Realtime concurrent peers | 200 | 6 | **33 games in parallel** | Hard cap; affects max simultaneous games |
 | Realtime messages | 2,000,000 / mo | 250 | **8,000 games/mo** | Comfortable |
 | Auth users | 50,000 | 0 | n/a | Not used in MVP |
@@ -129,8 +131,9 @@ is a reliable every-10-minutes ping:
    root cause of the "sometimes long loading" reports over that period. Re-enabled
    2026-07-16; verified healthy since (exact 10-min cadence). Its requests are also
    *intermittently* served **HTTP 503 by Render's own Cloudflare edge** (Render
-   fronts every service with Cloudflare; our DNS is Namecheap, so there is no
-   user-side Cloudflare zone to allowlist in) — the block is per-egress-IP and
+   fronts every service with Cloudflare; our DNS was at Namecheap then, and since
+   2026-09-25 it is at Cloudflare, but the `api` record stays DNS-only, so there is
+   still no user-side Cloudflare rule that could allowlist it) — the block is per-egress-IP and
    comes and goes, but has not produced two consecutive failed ticks in the
    observed window (a cold-start window needs ~15 min with zero good pings).
 2. **GitHub Actions `render-keepalive.yml` (on-demand button + coarse monitor,
@@ -224,6 +227,8 @@ Configure these alerts:
 - Build failure → email
 
 ## 5. Scale-Out Triggers
+
+The live triggers, with measured numbers and a monthly check, are in [when-to-upgrade.md](when-to-upgrade.md) §3. The table below is the original design-time list.
 
 Upgrade only when you actually hit a ceiling. Order of likely upgrade:
 
