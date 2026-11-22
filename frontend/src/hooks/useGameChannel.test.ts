@@ -922,6 +922,174 @@ describe("useGameChannel - subscription", () => {
     }
   });
 
+  function delayNextRoundsRead(rounds: GameRound[] = []): () => void {
+    let finishRounds!: () => void;
+    const slowRounds = new Promise<{ data: GameRound[]; error: null }>((resolve) => {
+      finishRounds = () => resolve({ data: rounds, error: null });
+    });
+    const from = supabaseMock.from.getMockImplementation()!;
+    supabaseMock.from
+      .mockImplementationOnce(from)
+      .mockImplementationOnce(from)
+      .mockImplementationOnce((table) => {
+        const builder = from(table);
+        builder.then = (onfulfilled) => slowRounds.then(onfulfilled);
+        return builder;
+      });
+    return finishRounds;
+  }
+
+  it.each(["newer snapshot", "game deletion", "Realtime unlock"])(
+    "does not restore a stale buzz lock after %s",
+    async (newerState) => {
+      vi.useFakeTimers();
+      try {
+        const locked = makeActiveGame({ status: "playing", buzzed_team_id: "team-1" });
+        setHydrate({ game: locked });
+        const { result } = renderHook(() => useGameChannel("ABCDEF"));
+        await act(async () => {
+          await fireSubscribed();
+        });
+        expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
+
+        const unlocked = { ...locked, buzzed_team_id: null, locked_at: null };
+        const finishRounds = delayNextRoundsRead();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS);
+        });
+
+        if (newerState === "game deletion") {
+          act(() => fireGame(makePayload("active_games", "DELETE", { old: locked })));
+          expect(result.current.status).toBe("gone");
+        } else if (newerState === "Realtime unlock") {
+          act(() => fireGame(makePayload("active_games", "UPDATE", { new: unlocked })));
+          expect(result.current.state?.game.buzzed_team_id).toBeNull();
+        } else {
+          setHydrate({ game: unlocked });
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(LOCKED_RESYNC_INTERVAL_MS);
+          });
+          expect(result.current.state?.game.buzzed_team_id).toBeNull();
+        }
+        const freshState = result.current.state;
+        await act(async () => finishRounds());
+        expect(result.current.state).toBe(freshState);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("recovers a missed unlock and score while keeping live changes to other teams", async () => {
+    const locked = makeActiveGame({ status: "playing", buzzed_team_id: "t1" });
+    const team = makeTeam({ id: "t1", score: 10 });
+    const otherTeam = makeTeam({ id: "t2", score: 0 });
+    const removedTeam = makeTeam({ id: "t3" });
+    setHydrate({ game: locked, teams: [team, otherTeam, removedTeam] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => fireSubscribed());
+
+    setHydrate({
+      game: { ...locked, buzzed_team_id: null, locked_at: null },
+      teams: [team, { ...otherTeam, score: 4 }, removedTeam],
+    });
+    const finishRounds = delayNextRoundsRead();
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refresh();
+    });
+    act(() => {
+      fireTeam(makePayload("game_teams", "UPDATE", { new: { ...team, score: 7 } }));
+      fireTeam(makePayload("game_teams", "DELETE", { old: removedTeam }));
+    });
+    expect(result.current.state?.teams.get("t1")?.score).toBe(7);
+    await act(async () => {
+      finishRounds();
+      await refresh;
+    });
+
+    expect(result.current.state?.game.buzzed_team_id).toBeNull();
+    expect(result.current.state?.teams.get("t1")?.score).toBe(7);
+    expect(result.current.state?.teams.get("t2")?.score).toBe(4);
+    expect(result.current.state?.teams.has("t3")).toBe(false);
+  });
+
+  it("keeps a round advance derived from Realtime while a snapshot is pending", async () => {
+    const firstRound = makeRound({ id: "r1", round_number: 1 });
+    const locked = makeActiveGame({
+      status: "playing",
+      round_number: 1,
+      current_round_id: firstRound.id,
+      buzzed_team_id: "t1",
+    });
+    setHydrate({ game: locked, rounds: [firstRound] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => fireSubscribed());
+
+    const finishRounds = delayNextRoundsRead([firstRound]);
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refresh();
+    });
+    const nextRound = makeRound({ id: "r2", round_number: 2 });
+    const updatedRound = { ...nextRound, artist_claimed_by: "t1", artist_points: 5 };
+    act(() => {
+      fireRound(makePayload("game_rounds", "INSERT", { new: nextRound }));
+      fireRound(makePayload("game_rounds", "UPDATE", { new: updatedRound }));
+    });
+    expect(result.current.state?.game.round_number).toBe(2);
+    await act(async () => {
+      finishRounds();
+      await refresh;
+    });
+
+    expect(result.current.state?.game.buzzed_team_id).toBeNull();
+    expect(result.current.state?.currentRound).toEqual(updatedRound);
+  });
+
+  it("confirms an unlock when a delayed frame disagrees with the snapshot", async () => {
+    const locked = makeActiveGame({ status: "playing", buzzed_team_id: "t1" });
+    setHydrate({ game: locked });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await act(async () => fireSubscribed());
+
+    setHydrate({ game: { ...locked, buzzed_team_id: null, locked_at: null } });
+    const finishRounds = delayNextRoundsRead();
+    let refresh!: Promise<void>;
+    const callsBefore = supabaseMock.from.mock.calls.length;
+    act(() => {
+      refresh = result.current.refresh();
+    });
+    act(() => {
+      fireGame(makePayload("active_games", "UPDATE", { new: locked }));
+    });
+    await act(async () => {
+      finishRounds();
+      await refresh;
+    });
+
+    expect(result.current.state?.game.buzzed_team_id).toBeNull();
+    expect(supabaseMock.from).toHaveBeenCalledTimes(callsBefore + 6);
+  });
+
+  it("clears the early snapshot if the game is deleted during initial hydration", async () => {
+    const game = makeActiveGame({ status: "playing" });
+    const team = makeTeam({ id: "t1", score: 5 });
+    setHydrate({ game, teams: [team] });
+    const { result } = renderHook(() => useGameChannel("ABCDEF"));
+    await waitFor(() => expect(result.current.state?.teams.get("t1")).toEqual(team));
+
+    const finishRounds = delayNextRoundsRead();
+    await act(async () => fireSubscribed());
+    act(() => fireGame(makePayload("active_games", "DELETE", { old: game })));
+    expect(result.current.status).toBe("gone");
+    expect(result.current.state).toBeNull();
+    expect(result.current.finalBoard?.teams.get("t1")).toEqual(team);
+
+    await act(async () => finishRounds());
+    expect(result.current.state).toBeNull();
+  });
+
   it("tightens the backstop to LOCKED_RESYNC_INTERVAL_MS while a buzz lock is held and repairs a stale lock (#254)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

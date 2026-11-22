@@ -131,6 +131,48 @@ function roundEqual(a: GameRound, b: GameRound): boolean {
   );
 }
 
+type SnapshotChange<Row> = { requestId: number; row: Row | null };
+
+function rememberRowChange<Row extends { id: string }>(
+  changes: Map<string, SnapshotChange<Row>>,
+  payload: PostgresChangePayload<Row>,
+  requestId: number,
+): void {
+  if (payload.eventType === "DELETE") {
+    if (payload.old.id) changes.set(payload.old.id, { requestId, row: null });
+  } else if (payload.new.id) {
+    changes.set(payload.new.id, { requestId, row: payload.new as Row });
+  }
+}
+
+function mergeSnapshotRows<Row extends { id: string }>(
+  rows: Row[],
+  changes: Map<string, SnapshotChange<Row>>,
+  requestId: number,
+): Row[] {
+  if (changes.size === 0) return rows;
+  const merged = new Map(rows.map((row) => [row.id, row]));
+  for (const [id, change] of changes) {
+    if (change.requestId < requestId) continue;
+    if (change.row) merged.set(id, change.row);
+    else merged.delete(id);
+  }
+  return [...merged.values()];
+}
+
+function deriveRoundAdvance(game: ActiveGame, round: GameRound): ActiveGame {
+  if (round.round_number <= game.round_number) return game;
+  return {
+    ...game,
+    status: "playing",
+    round_number: round.round_number,
+    current_song_id: round.song_id,
+    current_round_id: round.id,
+    buzzed_team_id: null,
+    locked_at: null,
+  };
+}
+
 // Compare a freshly-hydrated payload against the current reducer state. If
 // every field the UI consumes matches, returning the same state reference from
 // the reducer lets React skip the whole render cascade. The periodic resync
@@ -224,18 +266,7 @@ export function gameReducer(state: GameState | null, action: GameAction): GameSt
         // until the 60s backstop. Strictly `>`: a re-delivered INSERT of the
         // in-progress round must never re-null a live buzz lock, and when the
         // UPDATE arrived first the game row is already ahead, so this no-ops.
-        const game: ActiveGame =
-          round.round_number > state.game.round_number
-            ? {
-                ...state.game,
-                status: "playing",
-                round_number: round.round_number,
-                current_song_id: round.song_id,
-                current_round_id: round.id,
-                buzzed_team_id: null,
-                locked_at: null,
-              }
-            : state.game;
+        const game = deriveRoundAdvance(state.game, round);
         const currentRound = game.current_round_id === round.id ? round : state.currentRound;
         return { ...state, game, rounds: merged, currentRound };
       }
@@ -328,6 +359,14 @@ export function useGameChannel(gameCode: string): {
     let cancelled = false;
     let hydrated = false;
     let realtimeDisconnected = false;
+    let hydrateRequestId = 0;
+    let lastAppliedHydrateId = 0;
+    let inFlightHydrates = 0;
+    let checkingUnlock = false;
+    let gameChange: { requestId: number; row: ActiveGame } | undefined;
+    let roundInsert: { requestId: number; row: GameRound } | undefined;
+    const teamChanges = new Map<string, SnapshotChange<Team>>();
+    const roundChanges = new Map<string, SnapshotChange<GameRound>>();
     // Set once the game is permanently gone (row deleted / missing). Stops the
     // backstop interval and tears the channel down so a display left open all
     // night on an ended game doesn't keep polling + holding a subscription
@@ -400,7 +439,7 @@ export function useGameChannel(gameCode: string): {
     }
 
     function dispatchOrQueue(action: GameAction): void {
-      if (cancelled) return;
+      if (cancelled || goneTornDown) return;
       if (!hydrated) {
         if (pending.length >= MAX_PENDING_EVENTS) {
           // Hydrate has been failing long enough for the queue to overflow.
@@ -415,6 +454,21 @@ export function useGameChannel(gameCode: string): {
         return;
       }
       dispatch(action);
+      // A later snapshot can trust rows read after these frames arrived.
+      if (inFlightHydrates === 0 || lastAppliedHydrateId === hydrateRequestId) return;
+      if (action.type === "GAME_CHANGE" && action.payload.eventType !== "DELETE") {
+        gameChange = { requestId: hydrateRequestId, row: action.payload.new as ActiveGame };
+      } else if (action.type === "TEAM_CHANGE") {
+        rememberRowChange(teamChanges, action.payload, hydrateRequestId);
+      } else if (action.type === "ROUND_CHANGE") {
+        rememberRowChange(roundChanges, action.payload, hydrateRequestId);
+        if (action.payload.eventType === "INSERT") {
+          const row = action.payload.new as GameRound;
+          if (row.round_number >= (roundInsert?.row.round_number ?? 0)) {
+            roundInsert = { requestId: hydrateRequestId, row };
+          }
+        }
+      }
     }
 
     const filter = `game_code=eq.${gameCode}`;
@@ -436,18 +490,16 @@ export function useGameChannel(gameCode: string): {
           recordFanout("game", typed.commit_timestamp);
           // Resolve the local player's open buzz span the moment we see the
           // lock land (won if it's our team, lost_race otherwise).
-          if (typed.eventType !== "DELETE") {
-            const row = typed.new as ActiveGame;
-            observeLock(row, true);
-            if (row.buzzed_team_id) {
-              resolveBuzzE2E(row.buzzed_team_id, typed.commit_timestamp);
-            }
+          if (typed.eventType === "DELETE") {
+            markGone();
+            return;
+          }
+          const row = typed.new as ActiveGame;
+          observeLock(row, true);
+          if (row.buzzed_team_id) {
+            resolveBuzzE2E(row.buzzed_team_id, typed.commit_timestamp);
           }
           dispatchOrQueue({ type: "GAME_CHANGE", payload: typed });
-          if (typed.eventType === "DELETE") {
-            setStatus("gone");
-            teardownLive();
-          }
         },
       )
       .on(
@@ -544,6 +596,13 @@ export function useGameChannel(gameCode: string): {
         channel as unknown as Parameters<typeof supabase.removeChannel>[0],
       );
     }
+    function markGone(): void {
+      if (cancelled || goneTornDown) return;
+      setStatus("gone");
+      dispatch({ type: "GAME_DELETED" });
+      pending.length = 0;
+      teardownLive();
+    }
     // Pause the backstop on background tabs (display in another window, a
     // player who switched to another app). When the tab becomes visible
     // again we hydrate once immediately then resume the interval — so the
@@ -578,8 +637,18 @@ export function useGameChannel(gameCode: string): {
     async function hydrate({
       authoritative = true,
       resync = false,
-    }: { authoritative?: boolean; resync?: boolean } = {}) {
+      checkUnlock = false,
+    }: { authoritative?: boolean; resync?: boolean; checkUnlock?: boolean } = {}) {
+      if (cancelled || goneTornDown) return;
+      const requestId = ++hydrateRequestId;
+      inFlightHydrates += 1;
       const recoveryPoll = resync && realtimeDisconnected;
+      // One slow table read can hold an older snapshot past a newer poll.
+      const ignoreResult = () =>
+        cancelled ||
+        goneTornDown ||
+        requestId < lastAppliedHydrateId ||
+        (recoveryPoll && !realtimeDisconnected);
       try {
         const [gameRes, teamsRes, roundsRes] = await Promise.all([
           supabase
@@ -590,43 +659,52 @@ export function useGameChannel(gameCode: string): {
           supabase.from("game_teams").select("*").eq("game_code", gameCode),
           supabase.from("game_rounds").select("*").eq("game_code", gameCode),
         ]);
-        if (recoveryPoll && !realtimeDisconnected) return;
-        if (!cancelled && (authoritative || !hydrated)) {
+        if (ignoreResult()) return;
+        if (authoritative || !hydrated) {
           if (gameRes.error) throw gameRes.error;
           if (teamsRes.error) throw teamsRes.error;
           if (roundsRes.error) throw roundsRes.error;
           if (!gameRes.data) {
             // Only an authoritative hydrate acts on a missing row; a pre-hydrate
             // stays silent so a transient miss can't briefly flash "gone".
-            if (authoritative) {
-              setStatus("gone");
-              dispatch({ type: "GAME_DELETED" });
-              teardownLive();
-              // The game is authoritatively gone and the channel is torn
-              // down: nothing further arrives, and the queued events describe
-              // a deleted game — close out the queue for good.
-              hydrated = true;
-              pending.length = 0;
-            }
+            if (authoritative) markGone();
           } else {
             // Cast via unknown: a non-literal select() string makes
             // supabase-js infer GenericStringError rather than a row shape.
             const freshGame = gameRes.data as unknown as ActiveGame;
-            const snapshotSeq = observeLock(freshGame, false);
-            // A backstop tick that finds a different lock than the one held
-            // here may have caught a lost event. confirmStaleLock decides.
+            lastAppliedHydrateId = requestId;
+            let game = freshGame;
             if (
-              resync &&
-              lockRef.current !== null &&
-              (freshGame.buzzed_team_id ?? null) !== lockRef.current
+              gameChange &&
+              gameChange.requestId >= requestId &&
+              gameChange.row.round_number >= game.round_number &&
+              (game.status !== "ended" || gameChange.row.status === "ended")
             ) {
-              confirmStaleLock(lockRef.current, freshGame, snapshotSeq);
+              game = gameChange.row;
+            }
+            if (roundInsert && roundInsert.requestId >= requestId && game.status !== "ended") {
+              game = deriveRoundAdvance(game, roundInsert.row);
+            }
+            // Only a lock taken from the snapshot can be a backstop repair.
+            if (game === freshGame) {
+              const snapshotSeq = observeLock(freshGame, false);
+              if (
+                resync &&
+                lockRef.current !== null &&
+                (freshGame.buzzed_team_id ?? null) !== lockRef.current
+              ) {
+                confirmStaleLock(lockRef.current, freshGame, snapshotSeq);
+              }
             }
             dispatch({
               type: "HYDRATE",
-              game: freshGame,
-              teams: (teamsRes.data ?? []) as Team[],
-              rounds: (roundsRes.data ?? []) as GameRound[],
+              game,
+              teams: mergeSnapshotRows((teamsRes.data ?? []) as Team[], teamChanges, requestId),
+              rounds: mergeSnapshotRows(
+                (roundsRes.data ?? []) as GameRound[],
+                roundChanges,
+                requestId,
+              ),
             });
             if (authoritative) {
               hydrated = true;
@@ -636,14 +714,35 @@ export function useGameChannel(gameCode: string): {
               }
               pending.length = 0;
             }
+            // A delayed frame can disagree with a newer REST unlock. Check once
+            // in the background so a dropped clear does not wait another tick.
+            if (
+              !checkingUnlock &&
+              requestId === hydrateRequestId &&
+              game.buzzed_team_id !== null &&
+              freshGame.buzzed_team_id === null
+            ) {
+              checkingUnlock = true;
+              void hydrate({ resync: true, checkUnlock: true }).finally(() => {
+                checkingUnlock = false;
+              });
+            }
           }
         }
       } catch (e) {
         // A pre-hydrate failure is silent (the SUBSCRIBED / backstop hydrate
         // retries); only an authoritative failure surfaces an error. Either
         // way the gate stays closed so live events keep queuing.
-        if (recoveryPoll && !realtimeDisconnected) return;
-        if (!cancelled && authoritative) setError(e instanceof Error ? e : new Error(String(e)));
+        if (authoritative && !checkUnlock && !ignoreResult())
+          setError(e instanceof Error ? e : new Error(String(e)));
+      } finally {
+        inFlightHydrates -= 1;
+        if (inFlightHydrates === 0 || lastAppliedHydrateId === hydrateRequestId) {
+          gameChange = undefined;
+          roundInsert = undefined;
+          teamChanges.clear();
+          roundChanges.clear();
+        }
       }
     }
 
