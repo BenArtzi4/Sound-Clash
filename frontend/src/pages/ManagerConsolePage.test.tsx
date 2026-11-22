@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 
@@ -247,10 +247,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderConsole() {
+function renderConsole(nextGameCode?: string) {
   return render(
     <MemoryRouter initialEntries={["/manager/game/ABCDEF"]}>
       <ToastProvider>
+        {nextGameCode && <Link to={`/manager/game/${nextGameCode}`}>Switch test game</Link>}
         <Routes>
           <Route path="/" element={<div>home page</div>} />
           <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
@@ -550,7 +551,14 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /start game/i }));
     // Optimistic toast fires before the RPC settles.
     expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
-    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() =>
+      expect(selectNextSongDirect).toHaveBeenCalledWith(
+        "ABCDEF",
+        TOKEN,
+        expect.any(Number),
+        undefined,
+      ),
+    );
     await waitFor(() => expect(screen.getByText("Wayne's World")).toBeInTheDocument());
     // Soundtrack rounds: show name is the only label; no "from X" subline.
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
@@ -584,8 +592,13 @@ describe("ManagerConsolePage", () => {
       onReadyHandler?.();
     });
     await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: /start game/i }));
-    expect(telemetry.startSongStart).toHaveBeenCalledWith({ game_code: "ABCDEF" });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /start game/i }));
+    });
+    expect(telemetry.startSongStart).toHaveBeenCalledWith({
+      game_code: "ABCDEF",
+      pick_path: "fallback",
+    });
     await waitFor(() =>
       expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
         expect.objectContaining({ roundNumber: 1, songId: "s1", youtubeId: "abcdefghijk" }),
@@ -1762,7 +1775,14 @@ describe("ManagerConsolePage", () => {
     // select_next_song (mig 022) closes the prior round inside the function
     // via start_round, so we only call ONE RPC from the browser. The held
     // buzz is cleared as a side effect.
-    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() =>
+      expect(selectNextSongDirect).toHaveBeenCalledWith(
+        "ABCDEF",
+        TOKEN,
+        expect.any(Number),
+        undefined,
+      ),
+    );
     // Score buttons no longer pre-fire award_attempt on Next; that responsibility
     // belongs to the per-button click. Manager must explicitly score before
     // advancing or accept the no-points outcome.
@@ -1800,7 +1820,14 @@ describe("ManagerConsolePage", () => {
     });
     fireEvent.click(screen.getByTestId("start-round"));
     expect(screen.getByText(/loading next round/i)).toBeInTheDocument();
-    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() =>
+      expect(selectNextSongDirect).toHaveBeenCalledWith(
+        "ABCDEF",
+        TOKEN,
+        expect.any(Number),
+        undefined,
+      ),
+    );
     expect(awardAttemptDirect).not.toHaveBeenCalled();
   });
 
@@ -2269,6 +2296,7 @@ describe("ManagerConsolePage", () => {
   }
 
   const SONG2 = {
+    expected_round: 1,
     song_id: "song-2",
     youtube_id: "vid2bbbbbbb",
     start_time: 30,
@@ -2326,7 +2354,7 @@ describe("ManagerConsolePage", () => {
     expect(handle(0).loadVideoById).toHaveBeenCalledTimes(loadsBefore + 1);
     expect(handle(0).loadVideoById).toHaveBeenLastCalledWith("vid2bbbbbbb", 30);
     expect(handle(0).stop).not.toHaveBeenCalled();
-    expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-2");
+    expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, 1, "song-2");
     expect(telemetry.handle.loadIssued).toHaveBeenCalled();
     expect(screen.getByText("Song Two")).toBeInTheDocument();
 
@@ -2345,6 +2373,111 @@ describe("ManagerConsolePage", () => {
     expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
       expect.objectContaining({ preloaded: false, songId: "song-2", roundNumber: 2 }),
     );
+  });
+
+  it("warms a new candidate when a cohost advances during an in-flight peek", async () => {
+    await setupPlayingRound();
+    let answer: (value: typeof SONG2) => void = () => {};
+    vi.mocked(peekNextSongDirect)
+      .mockReturnValueOnce(
+        new Promise<typeof SONG2>((resolve) => {
+          answer = resolve;
+        }),
+      )
+      .mockResolvedValueOnce({ ...SONG2, song_id: "song-3", expected_round: 2 });
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      fireRound(
+        makePayload<GameRound>("game_rounds", "INSERT", {
+          new: makeRound({ id: "r2", round_number: 2, song_id: "other-host-song" }),
+        }),
+      );
+    });
+    expect(screen.getByText("Round 2")).toBeInTheDocument();
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+      answer(SONG2);
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledTimes(2));
+  });
+
+  it("starts a fresh peek when switching between two waiting games", async () => {
+    setManagerToken("FEDCBA", "other-host-token");
+    setHydrate({ game: makeActiveGame(), teams: [], rounds: [] });
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({ ...SONG2, expected_round: 0 });
+    renderConsole("FEDCBA");
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    setHydrate({
+      game: makeActiveGame({ game_code: "FEDCBA" }),
+      teams: [],
+      rounds: [],
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("link", { name: "Switch test game" }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await fireSubscribed();
+    });
+    await waitFor(() =>
+      expect(peekNextSongDirect).toHaveBeenCalledWith("FEDCBA", "other-host-token"),
+    );
+  });
+
+  it("reconciles a stale advance with the server and never retries the click", async () => {
+    const { RpcError } = await import("../hooks/useManagerActions");
+    await peekSong2();
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 2, current_round_id: "r2" }),
+      teams: [],
+      rounds: [makeRound({ id: "r2", round_number: 2, song_id: "other-host-song" })],
+    });
+    setSongFetch({
+      id: "other-host-song",
+      title: "Other host's song",
+      artist: "B",
+      youtube_id: "vid3ccccccc",
+      start_time: 5,
+    });
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("stale_round", "P0001"));
+
+    fireEvent.click(screen.getByTestId("start-round"));
+
+    await waitFor(() => expect(screen.getByText("Other host's song")).toBeInTheDocument());
+    expect(selectNextSongDirect).toHaveBeenCalledTimes(1);
+    expect(handle(0).loadVideoById).toHaveBeenLastCalledWith("vid3ccccccc", 5);
+  });
+
+  it("uses the last RPC-confirmed round when Realtime is still on the previous round", async () => {
+    await peekSong2();
+    vi.mocked(selectNextSongDirect).mockResolvedValueOnce({
+      round_id: "r2",
+      round_number: 2,
+      song: SONG2_ROW,
+    });
+    vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      ...SONG2,
+      song_id: "song-3",
+      expected_round: 2,
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("start-round"));
+    });
+    await act(async () => {
+      onPlayingHandlers[0]?.("statechange");
+    });
+    await waitFor(() => expect(peekNextSongDirect).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("start-round"));
+    });
+    expect(selectNextSongDirect).toHaveBeenNthCalledWith(2, "ABCDEF", TOKEN, 2, "song-3");
   });
 
   it("records one round for a double click", async () => {
@@ -2504,6 +2637,7 @@ describe("ManagerConsolePage", () => {
       rounds: [],
     });
     vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      expected_round: 0,
       song_id: "song-1",
       youtube_id: "vid1aaaaaaa",
       start_time: 12,
@@ -2550,7 +2684,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(startBtn);
     expect(handle(0).loadVideoById).toHaveBeenCalledWith("vid1aaaaaaa", 12);
     await waitFor(() =>
-      expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-1"),
+      expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, 0, "song-1"),
     );
     expect(screen.queryByText(/video unavailable/i)).toBeNull();
   });
@@ -2641,7 +2775,14 @@ describe("ManagerConsolePage", () => {
     // Next round uses the 2-arg random pick (no songId); the load waits for it.
     fireEvent.click(screen.getByTestId("start-round"));
     expect(handle(0).loadVideoById).toHaveBeenCalledTimes(loadsBefore);
-    await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    await waitFor(() =>
+      expect(selectNextSongDirect).toHaveBeenCalledWith(
+        "ABCDEF",
+        TOKEN,
+        expect.any(Number),
+        undefined,
+      ),
+    );
     await waitFor(() => expect(handle(0).loadVideoById).toHaveBeenLastCalledWith("vid2bbbbbbb", 0));
     await waitFor(() =>
       expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
@@ -2725,6 +2866,7 @@ describe("ManagerConsolePage", () => {
       rounds: [],
     });
     vi.mocked(peekNextSongDirect).mockResolvedValueOnce({
+      expected_round: 0,
       song_id: "song-1",
       youtube_id: "vid1aaaaaaa",
       start_time: 12,
@@ -2771,7 +2913,7 @@ describe("ManagerConsolePage", () => {
     // Synchronously in the click, before the RPC await.
     expect(handle(0).loadVideoById).toHaveBeenCalledTimes(1);
     expect(handle(0).loadVideoById).toHaveBeenCalledWith("vid1aaaaaaa", 12);
-    expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "song-1");
+    expect(selectNextSongDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, 0, "song-1");
     await waitFor(() =>
       expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
         expect.objectContaining({ preloaded: false, songId: "song-1" }),
@@ -2831,8 +2973,8 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("start-round"));
     expect(handle(0).loadVideoById).toHaveBeenCalledWith("vid2bbbbbbb", 30);
     await waitFor(() => expect(selectNextSongDirect).toHaveBeenCalledTimes(2));
-    expect(selectNextSongDirect).toHaveBeenNthCalledWith(1, "ABCDEF", TOKEN, "song-2");
-    expect(selectNextSongDirect).toHaveBeenNthCalledWith(2, "ABCDEF", TOKEN, "song-2");
+    expect(selectNextSongDirect).toHaveBeenNthCalledWith(1, "ABCDEF", TOKEN, 1, "song-2");
+    expect(selectNextSongDirect).toHaveBeenNthCalledWith(2, "ABCDEF", TOKEN, 1, "song-2");
     await waitFor(() =>
       expect(telemetry.handle.rpcDone).toHaveBeenCalledWith(
         expect.objectContaining({ songId: "song-2" }),

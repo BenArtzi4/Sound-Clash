@@ -45,6 +45,10 @@ const LAPTOP_LAYOUT = "(min-width: 1024px)";
 
 export function ManagerConsolePage() {
   const { gameCode = "" } = useParams<{ gameCode: string }>();
+  return <ManagerConsole key={gameCode} gameCode={gameCode} />;
+}
+
+function ManagerConsole({ gameCode }: { gameCode: string }) {
   const { hash, pathname, search } = useLocation();
   const navigate = useNavigate();
   // Adopt a backup-host-link token (T4.10) — see useManagerToken for the full
@@ -61,7 +65,7 @@ export function ManagerConsolePage() {
       navigate(pathname + search, { replace: true });
     }
   }, [hash, pathname, search, navigate]);
-  const { state, status, finalBoard } = useGameChannel(gameCode);
+  const { state, status, finalBoard, refresh } = useGameChannel(gameCode);
   const player = usePlayerReady();
   // Host-only "reconnect a team" rescue modal (issue #183).
   const [rescueOpen, setRescueOpen] = useState(false);
@@ -91,7 +95,7 @@ export function ManagerConsolePage() {
     handleEarlyPause,
     livePlayer,
   } = hostPlayer;
-  const scoring = useScoring(gameCode, managerToken, state, player, hostPlayer);
+  const scoring = useScoring(gameCode, managerToken, state, player, hostPlayer, refresh);
   const {
     currentSong,
     scoreFeedback,

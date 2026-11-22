@@ -8,27 +8,19 @@
 // way the test exercises four teams, many rounds, live scoring, the podium, and
 // the durable game_history archive.
 //
-// Each round exactly one team (rotating Alpha->Bravo->Charlie->Delta) buzzes and
-// wins the lock; the manager applies a fixed per-team scoring combo. The
-// immediate-apply model credits the score the instant a judgement button is
-// clicked, so totals accumulate without a "submit". After the playthrough we
-// assert:
-//   1. the live display scoreboard shows each team's exact running total,
-//   2. ending the game renders the podium with the right winner, and
-//   3. the durable game_history archive (migration 033) captured the game:
-//      one history row (round_count = rounds played, team_count = 4), four team
-//      rows with the final scores, and one song row per round.
-//
-// Per-round points (title=+10, artist=+5): Alpha title+artist (15), Bravo title
-// (10), Charlie artist (5), Delta title (10), with Delta also taking artist on
-// round 8. At the full 20 rounds that lands Alpha 75 / Delta 55 / Bravo 50 /
-// Charlie 25; at any round count Alpha is the unique top scorer (15/round).
+// Teams rotate through title, artist and combined awards. A full game also
+// exercises a wrong guess and rebuzz, Continue, a free wrong guess, an
+// unscored skip and a bonus for another team. The display and archived scores
+// must match, and no two rounds may use the same song.
 
 import { test, expect, type Page } from "@playwright/test";
 import {
   advanceRound,
   applyCorrect,
   awardAndAdvance,
+  awardAndContinue,
+  awardBonusToTeam,
+  markWrong,
   openManagerAndCreateGame,
   type AttemptToggles,
 } from "./fixtures/manager-context";
@@ -62,7 +54,7 @@ function comboFor(teamIdx: number, round: number): AttemptToggles {
 
 const pointsFor = (c: AttemptToggles): number => (c.title ? 10 : 0) + (c.artist ? 5 : 0);
 
-test("4 teams, up to 20 rounds: live scoreboard, podium, and durable archive all correct", async ({
+test("4 teams, up to 20 rounds: scoring, unique songs, podium, and archive", async ({
   browser,
 }) => {
   test.setTimeout(360_000); // up to 20 rounds across 6 browser contexts
@@ -102,15 +94,42 @@ test("4 teams, up to 20 rounds: live scoreboard, podium, and durable archive all
     const team = teams[idx]!;
     const name = teamNames[idx]!;
 
+    if (r === 7 && r < TOTAL) {
+      await advanceRound(manager.page); // No team buzzed, so this round has no score.
+      continue;
+    }
+
     await buzzAndExpectWinner(team);
+    if (r === 2) {
+      await markWrong(manager.page);
+      expected[name]! -= 3;
+      await buzzAndExpectWinner(team);
+    }
 
     const combo = comboFor(idx, r);
-    if (r < TOTAL) {
+    if (r === 3 && r < TOTAL) {
+      // Continue releases the lock after a correct guess. The next Wrong is
+      // free, and the following Wrong costs points again.
+      await awardAndContinue(manager.page, combo);
+      await buzzAndExpectWinner(teams[3]!);
+      await markWrong(manager.page);
+      await buzzAndExpectWinner(teams[3]!);
+      await markWrong(manager.page);
+      expected.Delta! -= 3;
+      await advanceRound(manager.page);
+    } else if (r < TOTAL) {
       await awardAndAdvance(manager.page, combo); // score + advance (single accepted click)
     } else {
       await applyCorrect(manager.page, combo); // last round: score only
     }
     expected[name]! += pointsFor(combo);
+    if (r === 4) {
+      await awardBonusToTeam(manager.page, "Bravo");
+      expected.Bravo! += 4;
+      await expect(teams[1]!.page.getByTestId("standing-score")).toHaveText(
+        String(expected.Bravo) + " pts",
+      );
+    }
 
     // Live scoreboard must reflect this team's new running total (scoped to the
     // team's own row, so name+score must co-occur).
@@ -142,8 +161,7 @@ test("4 teams, up to 20 rounds: live scoreboard, podium, and durable archive all
   for (const name of teamNames) {
     await expect(finalSb.locator(`[data-team-id]:has-text("${name}")`)).toBeVisible();
   }
-  // Alpha scores 15/round (the per-round max), so it is the unique top scorer at
-  // any round count -> rank 1.
+  // Alpha is the unique top scorer in this scripted playthrough.
   const winnerName = Object.entries(expected).sort((a, b) => b[1] - a[1])[0]![0];
   expect(winnerName).toBe("Alpha");
   await expect(finalSb.locator(`[data-team-id]:has-text("${winnerName}")`)).toHaveAttribute(

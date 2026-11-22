@@ -472,15 +472,45 @@ async def test_peek_offers_only_the_genre_that_is_behind(db: asyncpg.Connection)
 
 
 @pytest.mark.asyncio
-async def test_peek_never_offers_the_genre_playing_now(db: asyncpg.Connection) -> None:
-    """One rock song is playing. Under 048 rock (only 1 ahead) could go again;
-    under migration 049's genre rotation every peek must offer pop, and every
-    pop song stays reachable."""
+async def test_an_explicit_repeat_counts_as_a_round_for_its_genre(db: asyncpg.Connection) -> None:
+    game_code, token, rock, pop, _ = await _two_genre_game(db, (5, 5))
+    for _ in range(2):
+        await _select(db, game_code, token, song_id=rock[0])
+    assert set(await _peek_counts(db, game_code, token, 60)) == set(pop)
+
+
+@pytest.mark.asyncio
+async def test_peek_can_offer_the_previous_genre_at_a_lower_weight(
+    db: asyncpg.Connection,
+) -> None:
     game_code, token, rock, pop, _ = await _two_genre_game(db, (5, 5))
     await _select(db, game_code, token, song_id=rock[0])
 
-    counts = await _peek_counts(db, game_code, token, 200)
-    assert set(counts) == set(pop)
+    counts = await _peek_counts(db, game_code, token, 240)
+    assert set(counts) == set(rock[1:]) | set(pop)
+    previous_genre_draws = sum(counts[song_id] for song_id in rock[1:])
+    assert 40 <= previous_genre_draws <= 120
+
+
+@pytest.mark.asyncio
+async def test_peek_checks_all_genre_tags_before_balancing(db: asyncpg.Connection) -> None:
+    game_code, token, rock, pop, dual = await _two_genre_game(db, (4, 1), dual=1)
+    (hip_hop,) = await _genre_ids(db, "hip-hop")
+    hip_songs = [await create_test_song(db, youtube_id=uuid.uuid4().hex[:11]) for _ in range(3)]
+    for sid in hip_songs:
+        await _attach_song_to_genre(db, sid, hip_hop)
+    await db.execute(
+        "UPDATE active_games SET selected_genres = array_append(selected_genres, $1) "
+        "WHERE game_code = $2",
+        hip_hop,
+        game_code,
+    )
+    for sid in (rock[0], pop[0], rock[1]):
+        await _select(db, game_code, token, song_id=sid)
+
+    counts = await _peek_counts(db, game_code, token, 80)
+    assert set(counts) == set(hip_songs)
+    assert dual[0] not in counts
 
 
 @pytest.mark.asyncio
@@ -507,9 +537,7 @@ async def test_multi_genre_song_counts_as_a_turn_for_each_genre(db: asyncpg.Conn
 
 @pytest.mark.asyncio
 async def test_peek_draws_every_song_of_an_allowed_genre(db: asyncpg.Connection) -> None:
-    """Within the genres allowed to go next the song is uniformly random: over
-    300 peeks of a fresh 3 + 3 game every song, including a dual-tagged one,
-    turns up."""
+    """A fresh pool can draw each song, including one tagged in both genres."""
     game_code, token, rock, pop, dual = await _two_genre_game(db, (3, 3), dual=1)
     counts = await _peek_counts(db, game_code, token, 300)
     assert set(counts) == set(rock) | set(pop) | set(dual)

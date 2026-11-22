@@ -8,7 +8,7 @@
 // and a load issued after `await select_next_song` is blocked autoplay on iOS.
 // Knowing the song first lets the Next-round tap load it on the visible player
 // synchronously, with no RPC in front of the load, then commit that exact song
-// via selectNextSongDirect(..., songId). (Until 2026-10-31 it also fed a hidden
+// via selectNextSongDirect(..., expectedRound, songId). (Until 2026-10-31 it also fed a hidden
 // second player that prebuffered the song; YouTube's embed rules forbid that,
 // see useHostPlayer.ts.)
 //
@@ -22,6 +22,7 @@ import { throwOnRpcError } from "../lib/rpcError";
 
 export interface PeekedSong {
   song_id: string;
+  expected_round: number;
   youtube_id: string;
   start_time: number;
   // Metadata (migration 038) so the Next-round fast path can render the new
@@ -36,6 +37,7 @@ export interface PeekedSong {
 
 interface PeekNextSongRow {
   song_id: string;
+  expected_round: number;
   youtube_id: string;
   start_time: number;
   song_title: string;
@@ -62,6 +64,7 @@ export async function peekNextSongDirect(
   if (!row) return null;
   return {
     song_id: row.song_id,
+    expected_round: row.expected_round,
     youtube_id: row.youtube_id,
     start_time: row.start_time,
     title: row.song_title,

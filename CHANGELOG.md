@@ -59,6 +59,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Changed
 
+- 2026-11-21: Mixed games give covers a smaller share and vary the order of genres while keeping multi-genre picks in balance. (Issues #424 and #378)
 - 2026-11-01: **A shorter how-to-play video on the home page.** The 52-second video is replaced by a 20-second one: a living room seen from above, four numbered steps with the real game screens, and original music. (#411)
 - 2026-11-01: **How to play and Home now say where the buzzer is.** Every team buzzes on its own phone from its seat; nobody gets up to press a buzzer. (#410)
 - 2026-11-01: **The home page's how-to-play video has its own music.** The same 52-second video now plays an original soundtrack made for it instead of a commercial song, so YouTube can't block or mute it. (#409)
@@ -162,6 +163,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
+- 2026-11-21: If two hosts advance the same round, the console catches up with the first successful advance. (Issue #424)
 - 2026-11-17: Hosts see pending bonus and approval points immediately, and the live display shows the new total as soon as it arrives. A visible scoreboard also checks for missed changes sooner when its Realtime connection drops.
 
 - 2026-10-31: A genre and decade mix with no songs (such as Hip-Hop + 80s) could be created, and its first Start game then said "All songs in your selected genres have been played". The Host a game page now says "No songs in this mix" and keeps Create game off until the mix has songs, and a game that still starts empty is told that no songs match its genres and decades. (#402)

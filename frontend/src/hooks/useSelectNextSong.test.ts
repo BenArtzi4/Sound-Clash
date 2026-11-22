@@ -34,7 +34,7 @@ describe("selectNextSongDirect", () => {
   it("calls select_next_song with the manager token and a null p_song_id by default", async () => {
     setRpcResponse({ data: [row()], error: null });
 
-    const result = await selectNextSongDirect("ABCDEF", TOKEN);
+    const result = await selectNextSongDirect("ABCDEF", TOKEN, 0);
 
     expect(result.round_id).toBe("r-1");
     expect(result.round_number).toBe(1);
@@ -46,16 +46,18 @@ describe("selectNextSongDirect", () => {
       p_game_code: "ABCDEF",
       p_manager_token: TOKEN,
       p_song_id: null,
+      p_expected_round: 0,
     });
   });
 
-  it("forwards an explicit song id for the manual-pick path", async () => {
-    setRpcResponse({ data: [row({ song_id: "s-manual" })], error: null });
-    await selectNextSongDirect("ABCDEF", TOKEN, "s-manual");
+  it("forwards an peeked song ID and its expected round", async () => {
+    setRpcResponse({ data: [row({ song_id: "s-peek" })], error: null });
+    await selectNextSongDirect("ABCDEF", TOKEN, 3, "s-peek");
     expect(supabaseMock.rpc).toHaveBeenCalledWith("select_next_song", {
       p_game_code: "ABCDEF",
       p_manager_token: TOKEN,
-      p_song_id: "s-manual",
+      p_song_id: "s-peek",
+      p_expected_round: 3,
     });
   });
 
@@ -64,7 +66,7 @@ describe("selectNextSongDirect", () => {
       data: null,
       error: { message: "manager_token_required", code: "28000" },
     });
-    await expect(selectNextSongDirect("ABCDEF", "wrong-token")).rejects.toMatchObject({
+    await expect(selectNextSongDirect("ABCDEF", "wrong-token", 0)).rejects.toMatchObject({
       name: "RpcError",
       message: "manager_token_required",
       sqlstate: "28000",
@@ -76,7 +78,7 @@ describe("selectNextSongDirect", () => {
       data: null,
       error: { message: "no_more_songs", code: "22023" },
     });
-    await expect(selectNextSongDirect("ABCDEF", TOKEN)).rejects.toMatchObject({
+    await expect(selectNextSongDirect("ABCDEF", TOKEN, 0)).rejects.toMatchObject({
       name: "RpcError",
       message: "no_more_songs",
     });
@@ -84,18 +86,18 @@ describe("selectNextSongDirect", () => {
 
   it("raises RpcError when PostgREST returns an empty array (no row from RETURNS TABLE)", async () => {
     setRpcResponse({ data: [], error: null });
-    await expect(selectNextSongDirect("ABCDEF", TOKEN)).rejects.toBeInstanceOf(RpcError);
+    await expect(selectNextSongDirect("ABCDEF", TOKEN, 0)).rejects.toBeInstanceOf(RpcError);
   });
 
   it("passes through is_soundtrack=true for soundtrack rounds", async () => {
     setRpcResponse({ data: [row({ is_soundtrack: true })], error: null });
-    const result = await selectNextSongDirect("ABCDEF", TOKEN);
+    const result = await selectNextSongDirect("ABCDEF", TOKEN, 0);
     expect(result.song.is_soundtrack).toBe(true);
   });
 
   it("passes the song's release_year through for the host's year chip (mig 050)", async () => {
     setRpcResponse({ data: [row()], error: null });
-    const result = await selectNextSongDirect("ABCDEF", TOKEN);
+    const result = await selectNextSongDirect("ABCDEF", TOKEN, 0);
     expect(result.song.release_year).toBe(1975);
   });
 
@@ -103,7 +105,7 @@ describe("selectNextSongDirect", () => {
     const withoutYear: Record<string, unknown> = row();
     delete withoutYear.release_year;
     setRpcResponse({ data: [withoutYear], error: null });
-    const result = await selectNextSongDirect("ABCDEF", TOKEN);
+    const result = await selectNextSongDirect("ABCDEF", TOKEN, 0);
     expect(result.song.release_year).toBeNull();
   });
 });

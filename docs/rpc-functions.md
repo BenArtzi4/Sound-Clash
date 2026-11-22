@@ -336,7 +336,8 @@ Added in migration 022. Called **direct from the manager browser** when the host
 CREATE OR REPLACE FUNCTION select_next_song(
   p_game_code      text,
   p_manager_token  uuid,
-  p_song_id        uuid DEFAULT NULL   -- NULL = random pick; non-NULL = manual
+  p_song_id        uuid,    -- NULL = draw at click time; otherwise the peeked song
+  p_expected_round integer -- current round, or 0 before the game starts
 ) RETURNS TABLE(
   round_id      uuid,
   round_number  integer,
@@ -354,11 +355,12 @@ SET search_path = public;
 
 Behavior:
 - Token + game-state gate runs first (same shape as `award_attempt`): raises `game_not_found` / `game_ended` / `manager_token_required` before any reads of song / round state.
+- The browser signature added in migration 057 serializes advances per game in the transaction. It raises `stale_round` (`P0001`) when the expected round differs from the current round.
 - Then `no_genres_selected` (`22023`) if `selected_genres` is empty.
-- Random path: calls the internal `pick_next_song` helper (§3cc): never the genre of the song playing now while another selected genre has songs (migration 049), genres kept within 2 songs of each other (migration 048), and artists spaced and shared out (migration 049). Raises `no_more_songs` (`22023`) when the helper finds nothing left. (Migration 047 drew uniformly per song, which let large genres dominate; before 047 the genre was drawn uniformly at random. See `game-rules.md §5`. Historically this logic lived in `backend/app/services/song_picker.py`, removed in the dead-code cleanup.)
+- The random path calls the shared `pick_next_song` helper (§3cc). It raises `no_more_songs` (`22023`) when the eligible pool is empty.
 - **Decade filter (migration 032):** when `active_games.selected_decades` is non-empty, the helper's `eligible` set additionally requires `(songs.release_year / 10 * 10) = ANY(selected_decades)` — the song's decade must be one the host chose. The empty default imposes no year limit. A `NULL` `release_year` matches no specific decade, so unknown-year songs are excluded when a decade is selected and included when none is. `selected_decades` is optional; only `selected_genres` is required.
 - **Dead-video auto-skip (migration 045):** the helper's `eligible` set also requires `songs.unavailable_at IS NULL`, so a video the availability scan confirmed dead (see §5b) is never randomly picked — an all-flagged pool raises the same `no_more_songs`.
-- Manual path: caller supplies `p_song_id`; validates it exists in `songs`, raises `song_not_found` (`P0002`) otherwise. No "already played in this game" check (matches the legacy REST manual-pick semantics — Restart-song flow), and **no `unavailable_at` filter** — a host forcing a specific song (the peek commit / a restart) is a deliberate act.
+- A guarded peek commit checks that its supplied song is still eligible for this game, including filters, availability and played history. It raises `song_no_longer_eligible` (`P0001`) on a mismatch. The three-argument signature remains available for older clients and deliberate manual overrides, where an explicit song only needs to exist.
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
 - Returns one row with the new round + the picked song's metadata.
 - The returned `is_soundtrack` flag is **computed** (migration 028), not read from a column — `songs.is_soundtrack` was dropped. It is `EXISTS(SELECT 1 FROM song_genres sg JOIN genres g ON g.id = sg.genre_id WHERE sg.song_id = <picked> AND g.slug IN ('soundtracks', 'israeli-soundtracks'))`, i.e. true when the song belongs to a soundtrack genre. The `RETURNS TABLE` shape is unchanged, so PostgREST routing and the realtime/frontend contract are identical.
@@ -388,16 +390,11 @@ SET search_path = public;
 
 Behavior:
 - **Eligible** `(genre, song)` pairs: the song belongs to a selected genre, has not been played in this game (`game_rounds`), passes the decade filter, and has `unavailable_at IS NULL`. A multi-genre song appears once per selected genre it is in.
-- **Turns** per selected genre: the songs already played in this game that belong to it (`game_rounds` joined to `song_genres`). A song in two selected genres counts as a turn for both, and a manual `p_song_id` commit counts like any other round.
-- **Alive** genres are those with at least one eligible song. A genre that runs out drops out of the comparison, so it never blocks the others.
-- **Rotation** (049): the genre(s) of the song playing now (the latest `game_rounds` row) are dropped, unless no other alive genre is left. With two genres this is a strict alternation.
-- **Balance** (048): of the rotating genres, those whose turns are at most the alive minimum + 1 may go next; if the rotation left none inside that limit (possible only through songs tagged in two selected genres), the limit is taken from the rotating genres instead, so rotation always wins. One allowed genre is drawn with `ORDER BY random()`. Genre counts never drift more than 2 apart.
-- **Song** (049), within the chosen genre, ranked in this order:
-  1. a song sharing no selected genre with the song playing now beats one that does;
-  2. a song none of whose artists was heard in the last 8 rounds beats one whose artist was; failing that, the artist heard longest ago wins, so a small pool spreads its repeats out;
-  3. the songs left tied are drawn with weight `1 / (1 + plays)^2`, where `plays` is how many songs in this game already credited the song's most-played artist (Efraimidis-Spirakis: `ORDER BY -ln(1 - random()) * (1 + plays)^2 LIMIT 1`). An artist holding half or more of the genre's remaining songs is weighted as if unplayed, because holding it back would only bunch its songs at the end of a long game.
+- **Balance.** Genres accumulate one unit per played song bearing that tag. Songs tagged `israeli-cover` add two units toward that genre. The picker evaluates the spread after the candidate across every matching tag and every genre with eligible songs left. It admits candidates within a two-unit spread, or within the best reachable spread when none meet that target. A game already in balance can skip the per-song check if every candidate fits.
+- **Genre draw.** The picker draws one genre with an allowed song. Covers and genres credited on the previous round each receive half weight. The factors multiply when both apply.
+- **Song draw.** Within the chosen genre, it first prefers songs whose artists were absent from the past eight rounds. If none meet that preference, it uses the least recent artist tier. Tied songs are drawn with weight `1 / (1 + plays)^2` based on their most-played credited artist. An artist holding at least half the genre's remaining pool is weighted as unplayed.
 - **Artists** come from `songs.artist_keys` (049), a STORED generated column: `song_artist_keys(artist)` splits the free-text credit on ` & `, ` ft. `, ` feat. `, ` featuring `, ` vs. `, ` x ` (not the X of "Lil Nas X & …"), commas and the Hebrew ` ו` prefix, then lowercases and trims, so a duet counts for both artists. Soundtrack songs list the film as the artist, so two songs from one film are spaced the same way. If `song_artist_keys` ever changes, run `UPDATE songs SET artist = artist` to recompute existing rows.
-- **Cost** (measured on prod 2026-10-09, catalog of 1,521 songs, rolled-back synthetic games): `peek_next_song` 2.6–4.8 ms on average, `select_next_song` 5–7.5 ms, worst single call 15 ms, against 1.2–3.4 ms under migration 048. A first draft that split artist names inside the pick took 250–900 ms per call on an 8-genre game, which is why the split is stored. Normally the picker runs in the background (`peek_next_song` during the current round) and the Next-round click commits the peeked id through `p_song_id`, which skips the picker entirely; the manager browser holds that peek until `select_next_song` has recorded the new round, so the rotation and spacing see the song that is actually playing.
+- **Cost.** Projection is computed once per distinct selected-genre tag set. The host usually runs the picker before the click and commits the peeked ID without running it again. The fallback draws once on click.
 - Not anon-callable (it takes no manager token): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. The two SECURITY DEFINER callers run it as their owner. `song_artist_keys` follows the same pattern; service_role keeps EXECUTE because the admin API and CSV import write songs as it.
 
 ## 3d. `peek_next_song`: read-only "what would the next random song be?"
@@ -417,7 +414,8 @@ CREATE OR REPLACE FUNCTION peek_next_song(
   song_title    text,     -- migration 038 (I-NextMeta)
   song_artist   text,     -- migration 038 (I-NextMeta)
   is_soundtrack boolean,  -- migration 038 (I-NextMeta); computed, same as select_next_song
-  release_year  integer   -- migration 050; NULL when unknown
+  release_year  integer,  -- migration 050; NULL when unknown
+  expected_round integer  -- migration 057; 0 before the first round
 ) LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public;
@@ -425,11 +423,11 @@ SET search_path = public;
 
 Behavior:
 - Token + game-state gate runs first, **identical** to `select_next_song`: raises `game_not_found` (`P0002`) / `game_ended` (`P0001`) / `manager_token_required` (`28000`) / `no_genres_selected` (`22023`) before returning any candidate.
-- Calls the **same** `pick_next_song` helper as `select_next_song`'s random path (genre rotation, balance and artist spacing, migrations 048/049 — §3cc), so the decade filter (migration 032), the dead-video auto-skip (migration 045) and the genre balance are identical by construction: a peeked candidate is always one the random path could have chosen at this point of the game, and a peeked video is never a known-dead one.
+- Calls the **same** `pick_next_song` helper as `select_next_song`'s random path (§3cc), so the decade filter (migration 032), the dead-video auto-skip (migration 045) and the genre balance are identical by construction: a peeked candidate is always one the random path could have chosen at this point of the game, and a peeked video is never a known-dead one.
 - **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
 - **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves. Migration 050 added `release_year` for the same reason: the host's year chip arrives with the card instead of a round-trip later.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "no song known in advance" and falls back to a random pick at the click; the real `no_more_songs` still surfaces from that `select_next_song` commit.
-- On the actual "Next round" click the browser loads the peeked video and commits the peeked song via `select_next_song(..., p_song_id => <peeked id>)` (manual-pick path), so the loading video and the started round can never disagree. If the RPC fails, the player goes back to the current round's song and the peeked song stays next, so a retry click keeps the in-tap load.
+- On the actual click the host starts the video in the gesture and passes its ID and `expected_round` to the guarded commit. A stale round triggers a snapshot refresh and a candidate that became ineligible is discarded. The console does not automatically submit another advance.
 - **Stalled loads (browser side, 2026-10-15, moved to the one player 2026-10-31).** YouTube often fails a load without an `onError`: the player just sits there, BUFFERING or UNSTARTED, with nothing loaded. So a load is judged by its loaded fraction, never by its state. If a load has not reached PLAYING after 10 s of a visible page and has loaded **nothing**, the player issues it once more (`yt_live_stall` with `retried=true`, plus `yt_preload_error` with `code=no_bytes` and the song's fields, so the weekly dead-video scan lists the song); a load with any bytes, however slow, is never touched, and a retry that stalls too is only logged. (Until 2026-10-31 this check ran on the hidden standby, logged as `yt_preload_retry` / `yt_preload_not_ready`.) See `frontend/src/components/YouTubePlayer.tsx` and `frontend/src/hooks/useHostPlayer.ts`.
 
 ### Idempotency

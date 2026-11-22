@@ -263,16 +263,16 @@ y += 8
 # ------------------------------------------------------ Song start (Tempo)
 panels.append(row("Song start (Tempo traces)", y)); y += 1
 panels.append(timeseries(
-    "Song-start latency by preloaded (game.song_start)",
-    [tempo_target('{ name = "game.song_start" } | quantile_over_time(duration, .5, .95) by (span.preloaded)')],
-    gridpos(0, y, 12, 8), TEMPO, unit="s",
-    desc="Next-song click -> audio playing, grouped by whether the next YouTube video was prebuffered (span.preloaded true/false). The hidden prebuffer player was removed on 2026-10-31 (YouTube's embed rules), so every start since is preloaded=false; true is the old warm start.",
+    "Song-start latency by pick path (p50 and p95)",
+    [tempo_target('{ name = "game.song_start" && status != error && span.click_to_playing_ms >= 0 } | quantile_over_time(span.click_to_playing_ms, .5, .95) by (span.pick_path)')],
+    gridpos(0, y, 12, 8), TEMPO, unit="ms",
+    desc="Time from Next round tap to audible playback, split by peek and fallback. Failed starts and older traces without click_to_playing_ms are excluded.",
     legend_table=True))
 panels.append(timeseries(
     "Song-start stage breakdown (p95)",
     [tempo_target('{ name =~ "game.song_start.click_to_rpc|game.song_start.rpc_to_load|game.song_start.load_to_playing" } | quantile_over_time(duration, .95) by (name)')],
     gridpos(12, y, 12, 8), TEMPO, unit="s",
-    desc="Where song-start time goes: click_to_rpc (optimistic UI) vs rpc_to_load (select_next_song) vs load_to_playing (YouTube).",
+    desc="Song-start stages: click_to_rpc covers round confirmation, rpc_to_load measures the wait after confirmation on the fallback path, and load_to_playing measures visible YouTube startup. On peeked starts the RPC and player run in parallel.",
     legend_table=True))
 y += 8
 
