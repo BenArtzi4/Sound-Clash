@@ -180,11 +180,12 @@ describe("EndScreen", () => {
     expect(names).toEqual(["Alice", "Bob"]);
     // One score for the pair, not one per team.
     expect(winnersCard.textContent?.match(/30/g)).toHaveLength(1);
-    // Each team still has its own leaderboard row, and the list knows how many
-    // rows it has (the fitted rows size themselves from it).
-    const list = container.querySelector('[data-testid="final-scoreboard"] ol') as HTMLElement;
-    expect(list.querySelectorAll("li")).toHaveLength(3);
-    expect(list.style.getPropertyValue("--rows")).toBe("3");
+    // Each team still has its own leaderboard row, and the leaderboard knows
+    // how many rows it has (the fitted rows size themselves from it, and on an
+    // upright frame the leaderboard's flex size asks the podium for room).
+    const board = container.querySelector('[data-testid="final-scoreboard"]') as HTMLElement;
+    expect(board.querySelectorAll("li")).toHaveLength(3);
+    expect(board.style.getPropertyValue("--rows")).toBe("3");
   });
 
   it("keeps one entry per tied team on the phones' version", () => {
