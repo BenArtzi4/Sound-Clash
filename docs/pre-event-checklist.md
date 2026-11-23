@@ -60,7 +60,7 @@ Requires Docker + `supabase start`. If the local stack can't come up, skip and n
 
 ## 4. Buzzer + scoring — every button (agent, prod, 3–4 team tabs)
 
-- [ ] Buzz states: WAITING (pre-start) → BUZZ → BUZZED! → YOU BUZZED / SOMEONE ELSE BUZZED; lock <200ms; concurrent buzz race → exactly one winner.
+- [ ] Buzz states: WAITING (pre-start) → BUZZ → YOU BUZZED / SOMEONE ELSE BUZZED. A press responds visually right away and shows BUZZING… only if the result takes 500 ms or longer. Verify lock <200ms and exactly one winner in a concurrent buzz race.
 - [ ] Correct Song +10, then a second team Correct Artist +5; both chips claimed → Continue and Song/Artist buttons disable.
 - [ ] Wrong −3 does **not** lock the team out; free-guess waiver right after a correct; Continue releases the lock with no score; re-claim guard (no double points).
 - [ ] Soundtrack round: single `Correct` +15 + 🎬 badge.

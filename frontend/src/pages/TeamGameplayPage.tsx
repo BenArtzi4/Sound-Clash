@@ -7,6 +7,7 @@ import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import { PointChange } from "../components/PointChange";
 import { Setlist } from "../components/Setlist";
+import { useSlowPending } from "../hooks/useBackendWarmup";
 import { useBuzzer } from "../hooks/useBuzzer";
 import { isGameExpired, useGameChannel } from "../hooks/useGameChannel";
 import { clearStoredTeam, getStoredTeam } from "../lib/teamStorage";
@@ -66,6 +67,7 @@ export function TeamGameplayPage() {
 
   const { state, status, finalBoard } = useGameChannel(gameCode);
   const buzzer = useBuzzer(gameCode, stored?.id ?? "", state);
+  const slowBuzz = useSlowPending(buzzer.isBuzzing, 500);
   const [pointEvents, setPointEvents] = useState<PointEvent[]>([]);
   const prevScoreRef = useRef<number | null>(null);
   const eventSeqRef = useRef(0);
@@ -215,10 +217,8 @@ export function TeamGameplayPage() {
           label: "SOMEONE ELSE BUZZED",
           subtitle: `${lockedTeam.name} got it first`,
         };
-      // Transient acknowledgment between the press and the RPC resolving: the
-      // press already fired buzz_in, so confirm it immediately rather than
-      // leaving the button reading "BUZZ" for the round-trip.
-      if (buzzer.isBuzzing) return { tone: "pending", label: "BUZZED!" };
+      // The pressed effect acknowledges the tap immediately. Only add text for a slow response.
+      if (buzzer.isBuzzing) return { tone: "pending", label: slowBuzz ? "BUZZING…" : "BUZZ" };
       return { tone: "idle", label: "BUZZ" };
     }
     // Game not playing yet — distinguish "still connecting" from "connected but

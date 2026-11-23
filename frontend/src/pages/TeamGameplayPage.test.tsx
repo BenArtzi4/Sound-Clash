@@ -34,6 +34,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
   window.localStorage.clear();
 });
 
@@ -531,34 +532,55 @@ describe("TeamGameplayPage", () => {
     expect(buzz).toHaveTextContent(/reconnecting/i);
   });
 
-  it("flips to the winner tone from the buzz_in result before any Realtime echo", async () => {
-    // No Realtime UPDATE is fired here: the winner tone must come purely from
-    // the optimistic provisional lock the buzz_in RPC returns.
-    window.localStorage.setItem(
-      "game:ABCDEF:team",
-      JSON.stringify({ id: "team-1", name: "Alice" }),
-    );
-    setHydrate({
-      game: makeActiveGame({ status: "playing" }),
-      teams: [makeTeam({ id: "team-1", name: "Alice" })],
-      rounds: [],
-    });
-    setRpcResponse({
-      data: [{ locked: true, locked_team_id: "team-1", locked_at: "2026-05-05T12:00:00Z" }],
-      error: null,
-    });
-    renderAt("/team/ABCDEF");
-    await act(async () => {
-      await fireSubscribed();
-    });
-    const buzz = screen.getByTestId("buzz");
-    await waitFor(() => expect(buzz).toBeEnabled());
-    await act(async () => {
-      buzz.click();
-    });
-    await waitFor(() => expect(buzz).toHaveAttribute("data-tone", "winner"));
-    expect(buzz).toHaveTextContent(/you buzzed/i);
-  });
+  it.each([
+    { responseMs: 499, pendingLabel: "BUZZ" },
+    { responseMs: 501, pendingLabel: "BUZZING…" },
+  ])(
+    "shows $pendingLabel before a $responseMs ms buzz result without a Realtime echo",
+    async ({ responseMs, pendingLabel }) => {
+      // No Realtime UPDATE is fired here: the winner tone must come purely from
+      // the optimistic provisional lock the buzz_in RPC returns.
+      window.localStorage.setItem(
+        "game:ABCDEF:team",
+        JSON.stringify({ id: "team-1", name: "Alice" }),
+      );
+      setHydrate({
+        game: makeActiveGame({ status: "playing" }),
+        teams: [makeTeam({ id: "team-1", name: "Alice" })],
+        rounds: [],
+      });
+      renderAt("/team/ABCDEF");
+      await act(async () => {
+        await fireSubscribed();
+      });
+      const buzz = screen.getByTestId("buzz");
+      await waitFor(() => expect(buzz).toBeEnabled());
+
+      vi.useFakeTimers();
+      supabaseMock.rpc.mockImplementationOnce(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, responseMs));
+        return {
+          data: [{ locked: true, locked_team_id: "team-1", locked_at: "2026-05-05T12:00:00Z" }],
+          error: null,
+        };
+      });
+      act(() => {
+        buzz.click();
+      });
+      expect(buzz).toHaveAttribute("data-tone", "pending");
+      expect(buzz).toHaveAccessibleName("BUZZ");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(responseMs - 1);
+      });
+      expect(buzz).toHaveAccessibleName(pendingLabel);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(buzz).toHaveAttribute("data-tone", "winner");
+      expect(buzz).toHaveTextContent(/you buzzed/i);
+      expect(buzz).toBeDisabled();
+    },
+  );
 
   it("flips to locked-other from the buzz_in result when another team wins the race", async () => {
     window.localStorage.setItem(
