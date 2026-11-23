@@ -300,6 +300,7 @@ export function makeActiveGame(overrides: Partial<ActiveGame> = {}): ActiveGame 
     current_round_id: null,
     buzzed_team_id: null,
     locked_at: null,
+    buzz_attempt_id: overrides.buzzed_team_id ? (overrides.buzzed_team_id === "t2" ? 2 : 1) : null,
     started_at: "2026-05-05T12:00:00.000Z",
     ended_at: null,
     // Far future on both clocks a test can run under (the real one, and a

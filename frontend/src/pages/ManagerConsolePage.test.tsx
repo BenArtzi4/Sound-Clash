@@ -696,6 +696,83 @@ describe("ManagerConsolePage", () => {
     expect(text).toHaveTextContent("The Midnight Lyric Hunters XL buzzed in — score it:");
   });
 
+  it("refreshes a stale verdict without retrying it on a new buzz", async () => {
+    const round = makeRound({ id: "r1" });
+    const teams = [makeTeam({ id: "t1", name: "Alice" }), makeTeam({ id: "t2", name: "Bravo" })];
+    const original = makeActiveGame({
+      status: "playing",
+      current_round_id: "r1",
+      buzzed_team_id: "t1",
+      buzz_attempt_id: 7,
+    });
+    setHydrate({ game: original, teams, rounds: [round] });
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(awardAttemptDirect).mockRejectedValueOnce(new RpcError("stale_buzz"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    setHydrate({
+      game: { ...original, buzzed_team_id: "t2", buzz_attempt_id: 9 },
+      teams,
+      rounds: [round],
+    });
+
+    fireEvent.click(screen.getByTestId("score-title"));
+
+    await screen.findByText(/that buzz changed/i);
+    await waitFor(() => expect(screen.getByTestId("status-text")).toHaveTextContent("Bravo"));
+    expect(awardAttemptDirect).toHaveBeenCalledTimes(1);
+    expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", 7, {
+      title_correct: true,
+      artist_correct: false,
+      wrong_buzz: false,
+    });
+  });
+
+  it("does not resume over the next buzz from the same team when the old Continue returns", async () => {
+    const original = makeActiveGame({
+      status: "playing",
+      current_round_id: "r1",
+      buzzed_team_id: "t1",
+      buzz_attempt_id: 7,
+    });
+    setHydrate({
+      game: original,
+      teams: [makeTeam({ id: "t1" })],
+      rounds: [makeRound({ id: "r1" })],
+    });
+    let finish!: () => void;
+    vi.mocked(releaseBuzzLockDirect).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+
+    const button = screen.getByTestId("continue-round");
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    handle(0).pause.mockClear();
+    await act(async () => {
+      fireGame(
+        makePayload<ActiveGame>("active_games", "UPDATE", {
+          new: { ...original, buzz_attempt_id: 9 },
+          old: original,
+        }),
+      );
+    });
+    expect(handle(0).pause).toHaveBeenCalledOnce();
+    expect(button).toBeEnabled();
+    await act(async () => finish());
+
+    expect(handle(0).play).not.toHaveBeenCalled();
+    expect(releaseBuzzLockDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, 7);
+  });
+
   it("Correct Song fires awardAttemptDirect with title_correct=true and toasts +10 immediately", async () => {
     setHydrate({
       game: makeActiveGame({
@@ -722,7 +799,7 @@ describe("ManagerConsolePage", () => {
     // Optimistic toast appears before the RPC settles.
     expect(screen.getByText(/\+10 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", 1, {
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
@@ -755,7 +832,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("score-artist"));
     expect(screen.getByText(/\+5 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", 1, {
         title_correct: false,
         artist_correct: true,
         wrong_buzz: false,
@@ -870,7 +947,7 @@ describe("ManagerConsolePage", () => {
     expect(screen.getByText(/\+15 to Alice/i)).toBeInTheDocument();
     // award_attempt receives both flags so the function sums to +15.
     await waitFor(() =>
-      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", 1, {
         title_correct: true,
         artist_correct: true,
         wrong_buzz: false,
@@ -1035,8 +1112,8 @@ describe("ManagerConsolePage", () => {
     await waitFor(() => expect(continueBtn).toBeEnabled());
     fireEvent.click(continueBtn);
     // Optimistic toast fires before the RPC settles.
-    expect(screen.getByText(/round continued/i)).toBeInTheDocument();
-    await waitFor(() => expect(releaseBuzzLockDirect).toHaveBeenCalledWith("ABCDEF", TOKEN));
+    expect(screen.getByText(/continuing round/i)).toBeInTheDocument();
+    await waitFor(() => expect(releaseBuzzLockDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, 1));
     await waitFor(() => expect(lastHandle?.play).toHaveBeenCalled());
   });
 
@@ -1106,7 +1183,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("score-wrong"));
     expect(screen.getByText(/-3 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", 1, {
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
@@ -1164,7 +1241,7 @@ describe("ManagerConsolePage", () => {
     // The -3 toast must NOT appear since the round is in free-guess state.
     expect(screen.queryByText(/-3 to Alice/i)).not.toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", 1, {
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
@@ -1201,7 +1278,7 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("score-wrong"));
     expect(screen.getByText(/-3 to Alice/i)).toBeInTheDocument();
     await waitFor(() =>
-      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", {
+      expect(awardAttemptDirect).toHaveBeenCalledWith("ABCDEF", TOKEN, "r1", 1, {
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
@@ -1544,12 +1621,12 @@ describe("ManagerConsolePage", () => {
     fireEvent.click(screen.getByTestId("score-title"));
     fireEvent.click(screen.getByTestId("score-wrong"));
     expect(awardAttemptDirect).toHaveBeenCalledTimes(2);
-    expect(awardAttemptDirect).toHaveBeenNthCalledWith(1, "ABCDEF", TOKEN, "r1", {
+    expect(awardAttemptDirect).toHaveBeenNthCalledWith(1, "ABCDEF", TOKEN, "r1", 1, {
       title_correct: true,
       artist_correct: false,
       wrong_buzz: false,
     });
-    expect(awardAttemptDirect).toHaveBeenNthCalledWith(2, "ABCDEF", TOKEN, "r1", {
+    expect(awardAttemptDirect).toHaveBeenNthCalledWith(2, "ABCDEF", TOKEN, "r1", 1, {
       title_correct: false,
       artist_correct: false,
       wrong_buzz: true,
