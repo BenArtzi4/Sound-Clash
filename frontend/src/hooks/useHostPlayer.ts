@@ -34,9 +34,8 @@ export interface HostPlayer {
   peekedRef: React.MutableRefObject<PeekedSong | null>;
   peekEpochRef: React.MutableRefObject<number>;
   optimisticSongIdRef: React.MutableRefObject<string | null>;
-  songStartRef: React.MutableRefObject<SongStartHandle | null>;
-  loadSongIntoPlayer: (song: Song) => Promise<void>;
-  armSongStartTimeout: () => void;
+  loadSongIntoPlayer: (song: Pick<Song, "youtube_id" | "start_time">) => void;
+  clearSongStart: () => void;
   maybePeekNext: () => void;
   beginSongStart: (pickPath: SongPickPath) => SongStartHandle;
   beginRoundCommit: () => void;
@@ -156,6 +155,7 @@ export function useHostPlayer(
   // lives in a ref rather than state.
   const songStartRef = useRef<SongStartHandle | null>(null);
   const songStartTimeoutRef = useRef<number | null>(null);
+  const songStartVideoRef = useRef<string | null>(null);
 
   // Peek the FIRST song during the pre-game "waiting" screen, so the "Start
   // game" tap can load it synchronously inside the gesture. Mobile browsers
@@ -249,51 +249,56 @@ export function useHostPlayer(
     });
   }
 
-  // Bound the song-start span so a video that never reaches PLAYING (autoplay
-  // blocked, dead embed) is recorded as a timeout outlier rather than left open.
+  function clearSongStart() {
+    if (songStartTimeoutRef.current !== null) window.clearTimeout(songStartTimeoutRef.current);
+    songStartTimeoutRef.current = null;
+    songStartVideoRef.current = null;
+    songStartRef.current = null;
+  }
+
+  // Allow a bounded wait for player readiness and a fresh playback window
+  // when the load is issued.
   function armSongStartTimeout() {
+    if (!songStartRef.current) return;
     if (songStartTimeoutRef.current !== null) window.clearTimeout(songStartTimeoutRef.current);
     songStartTimeoutRef.current = window.setTimeout(() => {
       songStartRef.current?.playing("timeout");
-      songStartRef.current = null;
-      songStartTimeoutRef.current = null;
+      clearSongStart();
     }, 8000);
   }
 
-  // Open the song-start span at the "Next round" click instant, storing the
-  // handle in the ref that spans the click → load → playing boundary. Returned
-  // so the caller can also drive rpcDone/fail on the same handle.
   function beginSongStart(pickPath: SongPickPath): SongStartHandle {
     songStartRef.current?.fail("superseded");
-    if (songStartTimeoutRef.current !== null) {
-      window.clearTimeout(songStartTimeoutRef.current);
-      songStartTimeoutRef.current = null;
-    }
+    clearSongStart();
     const songStart = startSongStart({ game_code: gameCode, pick_path: pickPath });
     songStartRef.current = songStart;
     return songStart;
   }
 
-  async function loadSongIntoPlayer(song: Song) {
+  function issueSongLoad(song: Pick<Song, "youtube_id" | "start_time">) {
+    armSongStartTimeout();
+    const target = livePlayer();
+    if (!target) return;
+    if (songStartRef.current) {
+      songStartVideoRef.current = song.youtube_id;
+      songStartRef.current.loadIssued();
+    }
+    target.loadVideoById(song.youtube_id, song.start_time);
+  }
+
+  function loadSongIntoPlayer(song: Pick<Song, "youtube_id" | "start_time">) {
     if (player.ready) {
-      songStartRef.current?.loadIssued();
-      armSongStartTimeout();
-      livePlayer()?.loadVideoById(song.youtube_id, song.start_time);
+      issueSongLoad(song);
     } else {
-      // Player not ready yet (first song): the load is deferred to
-      // onPlayerReady, which issues loadVideoById and marks loadIssued there.
       player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
+      armSongStartTimeout();
     }
   }
 
-  // Resolve the open song-start span when the player actually starts playing,
-  // then peek the song after it.
   function handlePlayerPlaying(detection: "statechange" | "poll") {
-    if (songStartTimeoutRef.current !== null) {
-      window.clearTimeout(songStartTimeoutRef.current);
-      songStartTimeoutRef.current = null;
+    if (songStartVideoRef.current !== null) {
       songStartRef.current?.playing(detection);
-      songStartRef.current = null;
+      clearSongStart();
     }
     livePlayingRef.current = true;
     maybePeekNext();
@@ -327,11 +332,9 @@ export function useHostPlayer(
       log("warn", "yt_idle_player_error", { code: String(code), game_code: gameCode });
       return;
     }
-    if (songStartTimeoutRef.current !== null && videoId === liveSong?.youtube_id) {
-      window.clearTimeout(songStartTimeoutRef.current);
-      songStartTimeoutRef.current = null;
+    if (videoId === songStartVideoRef.current) {
       songStartRef.current?.playing("error");
-      songStartRef.current = null;
+      clearSongStart();
     }
     const peeked = peekedRef.current;
     const peekedSong: SongRef | null = peeked
@@ -357,13 +360,7 @@ export function useHostPlayer(
   function onPlayerReady() {
     player.setReady();
     const queued = player.flushPendingSong();
-    if (queued) {
-      // This is the deferred first-song load; mark loadIssued here so the
-      // song-start span's load_to_playing child measures from the real load.
-      songStartRef.current?.loadIssued();
-      armSongStartTimeout();
-      livePlayer()?.loadVideoById(queued.youtube_id, queued.start_time);
-    }
+    if (queued) issueSongLoad(queued);
   }
 
   return {
@@ -377,9 +374,8 @@ export function useHostPlayer(
     peekedRef,
     peekEpochRef,
     optimisticSongIdRef,
-    songStartRef,
     loadSongIntoPlayer,
-    armSongStartTimeout,
+    clearSongStart,
     maybePeekNext,
     beginSongStart,
     beginRoundCommit,

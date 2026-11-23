@@ -126,12 +126,10 @@ function setAttrs(span: Span, attrs: Attributes): void {
 }
 
 /** Start a span parented to `parent` (for cross-file, non-callback nesting). */
-function startChild(name: string, parent: Span, attrs: Attributes = {}): Span | undefined {
+function startChild(name: string, parent: Span, startTime?: number): Span | undefined {
   if (!tracer || !otel) return undefined;
   const ctx = otel.trace.setSpan(otel.context.active(), parent);
-  const span = tracer.startSpan(name, undefined, ctx);
-  setAttrs(span, attrs);
-  return span;
+  return tracer.startSpan(name, { startTime }, ctx);
 }
 
 /** Milliseconds between a Realtime row's commit and our receipt of the event. */
@@ -197,8 +195,8 @@ export async function tracedFetch<T extends Response>(
 
 // ---------------------------------------------------------------------------
 // Song-start: click → audio actually playing (the headline "how long did the
-// song take to start?"). Parent span with three children. The end-point
-// (PLAYING) is detected by YouTubePlayer; see resolveSongStart via the handle.
+// song take to start?"). The RPC and player stages can overlap. The parent
+// exports after both settle, using the playback outcome's timestamp.
 // ---------------------------------------------------------------------------
 
 export type SongPickPath = "peek" | "fallback";
@@ -217,11 +215,11 @@ export interface SongStartHandle {
     youtubeId?: string;
     preloaded?: boolean;
   }): void;
-  /** Call right after loadVideoById is issued to the player. */
+  /** Call at the point of issuing loadVideoById to the player. */
   loadIssued(): void;
   /** Call when the player reaches PLAYING or the load times out. */
   playing(detection: "statechange" | "poll" | "timeout" | "error"): void;
-  /** Call on any error (RPC failure, player error). Ends all, errored. */
+  /** Call on RPC failure or cancellation. Ends any pending stages, errored. */
   fail(reason: string): void;
 }
 
@@ -238,66 +236,73 @@ export function startSongStart(attrs: {
 }): SongStartHandle {
   if (!tracer) return INERT_SONG_START;
   const started = performance.now();
-  const parent = tracer.startSpan(SPAN_OPS.songStart);
+  const clickAt = performance.timeOrigin + started;
+  const parent = tracer.startSpan(SPAN_OPS.songStart, { startTime: clickAt });
   setAttrs(parent, attrs);
-  const clickToRpc = startChild(SPAN_OPS.songClickToRpc, parent);
-  let rpcToLoad: Span | undefined;
+  const clickToRpc = startChild(SPAN_OPS.songClickToRpc, parent, clickAt);
+  let rpcAt: number | undefined;
+  let playbackAt: number | undefined;
   let loadToPlaying: Span | undefined;
-  let rpcPending = true;
-  let playerPending = true;
   let loadStarted = false;
   let done = false;
 
-  const finish = (): void => {
+  const finish = (endTime: number): void => {
     done = true;
-    parent.end();
+    parent.end(endTime);
   };
 
   return {
     rpcDone(info) {
-      if (done || !rpcPending) return;
-      rpcPending = false;
-      clickToRpc?.end();
+      if (done || rpcAt !== undefined) return;
+      rpcAt = performance.timeOrigin + performance.now();
+      clickToRpc?.end(rpcAt);
       setAttrs(parent, {
         round_number: info.roundNumber,
         song_id: info.songId,
         youtube_id: info.youtubeId,
         preloaded: info.preloaded,
       });
-      if (!playerPending) finish();
-      else if (!loadStarted) rpcToLoad = startChild(SPAN_OPS.songRpcToLoad, parent);
+      if (playbackAt !== undefined) finish(playbackAt);
     },
     loadIssued() {
-      if (done || loadStarted) return;
+      if (done || loadStarted || playbackAt !== undefined) return;
       loadStarted = true;
-      rpcToLoad?.end();
-      rpcToLoad = undefined;
-      loadToPlaying = startChild(SPAN_OPS.songLoadToPlaying, parent);
+      const loadAt = performance.timeOrigin + performance.now();
+      // Backdate the span only once a post-RPC load actually happens.
+      if (rpcAt !== undefined) startChild(SPAN_OPS.songRpcToLoad, parent, rpcAt)?.end(loadAt);
+      loadToPlaying = startChild(SPAN_OPS.songLoadToPlaying, parent, loadAt);
     },
     playing(detection) {
-      if (done || !playerPending || !loadStarted) return;
-      playerPending = false;
-      loadToPlaying?.end();
+      if (done || playbackAt !== undefined || (!loadStarted && detection !== "timeout")) return;
+      const now = performance.now();
+      playbackAt = performance.timeOrigin + now;
+      const failed = detection === "timeout" || detection === "error";
+      if (failed) {
+        loadToPlaying?.setStatus({ code: STATUS_ERROR });
+        parent.setStatus({ code: STATUS_ERROR });
+      }
+      loadToPlaying?.end(playbackAt);
       setAttrs(parent, {
         playing_detection: detection,
-        click_to_playing_ms:
-          detection === "timeout" || detection === "error"
-            ? undefined
-            : performance.now() - started,
+        click_to_playing_ms: failed ? undefined : now - started,
         error_reason: detection === "error" ? "player_error" : undefined,
       });
-      if (detection === "timeout" || detection === "error")
-        parent.setStatus({ code: STATUS_ERROR });
-      if (!rpcPending) finish();
+      if (rpcAt !== undefined) finish(playbackAt);
     },
     fail(reason) {
       if (done) return;
-      if (rpcPending) clickToRpc?.end();
-      if (playerPending) loadToPlaying?.end();
-      rpcToLoad?.end();
+      const failedAt = performance.timeOrigin + performance.now();
+      if (rpcAt === undefined) {
+        clickToRpc?.setStatus({ code: STATUS_ERROR });
+        clickToRpc?.end(failedAt);
+      }
+      if (playbackAt === undefined) {
+        loadToPlaying?.setStatus({ code: STATUS_ERROR });
+        loadToPlaying?.end(failedAt);
+      }
       setAttrs(parent, { error_reason: reason });
       parent.setStatus({ code: STATUS_ERROR });
-      finish();
+      finish(playbackAt ?? failedAt);
     },
   };
 }
