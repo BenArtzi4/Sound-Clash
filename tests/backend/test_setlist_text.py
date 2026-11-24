@@ -244,9 +244,20 @@ def test_clean_title_drops_nested_note_brackets() -> None:
     assert clean_title("Glass   Harbor\t(Live)") == "Glass Harbor"
 
 
+def test_clean_title_stays_linear_when_removing_notes_leaves_a_space_run() -> None:
+    # Removing every "(ft)" leaves a long run of spaces before the separator
+    # search. At 100,000 characters a quadratic search takes seconds.
+    title = "a" + " (ft)" * MAX_CHARS + " b"
+    start = time.perf_counter()
+    assert clean_title(title) == "a b"
+    assert time.perf_counter() - start < 1.0
+
+
 # One 20,000-character line must not take seconds (Review Focus 1): the parser
-# and clean_title stay linear. artist_keys is linear except on one long
-# whitespace run, which list sides never carry after the parser.
+# and clean_title stay linear, also when removing notes from a title leaves a
+# long run of spaces. artist_keys is linear except on one long whitespace run,
+# which list sides never carry after the parser.
+_NOTES = (MAX_CHARS - 4) // 5
 _HOSTILE = [
     pytest.param("a" + " " * (MAX_CHARS - 2) + "b", False, id="space-run"),
     pytest.param("a" + "\t" * (MAX_CHARS - 2) + "b", False, id="tab-run"),
@@ -254,6 +265,9 @@ _HOSTILE = [
     pytest.param("( a" * (MAX_CHARS // 3), True, id="opener-word"),
     pytest.param("a b " * (MAX_CHARS // 4), True, id="short-words"),
     pytest.param("(live " * (MAX_CHARS // 12) + ")" * (MAX_CHARS // 12), True, id="nested-junk"),
+    pytest.param("a" + " (ft)" * _NOTES + " b", True, id="removed-notes"),
+    pytest.param("(x" + " (ft)" * _NOTES + ")", True, id="removed-inner-notes"),
+    pytest.param("a" + " (1999)" * ((MAX_CHARS - 4) // 7) + " b", True, id="removed-years"),
 ]
 
 

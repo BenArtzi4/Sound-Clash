@@ -78,6 +78,7 @@ JUNK_WORDS = (
 # bracket); nested notes are removed inside out, see clean_title.
 _PAREN = re.compile(r"[\(\[\{][^\(\[\{\)\]\}]*[\)\]\}]")
 _BRACKET_PASSES = 3  # real titles nest brackets at most two deep
+_SPACES = re.compile(r"\s+")
 # A junk word as a whole word (not inside another word), or a year.
 _JUNK_IN = re.compile(
     rf"(?<![^\W\d_])(?:{JUNK_WORDS})(?![^\W\d_])|\b(?:19|20)\d\d\b", re.IGNORECASE
@@ -95,8 +96,13 @@ def clean_title(s: str) -> str:
     """Drop the bracketed and " - " parts of a title that only describe the recording.
 
     ``Let It Go - From "Frozen"/Soundtrack Version`` becomes ``Let It Go``;
-    ``Everybody (Backstreet's Back)`` keeps its brackets. Whitespace is
-    collapsed first, so no search runs over a long whitespace run.
+    ``Everybody (Backstreet's Back)`` keeps its brackets.
+
+    Linear on any input: the bracket passes start only at an opener, and
+    whitespace is collapsed before them and again after them (removing notes
+    can leave a long run of spaces), so the separator search never runs over
+    a long whitespace run. The second collapse keeps a single space at the
+    ends, so a title that starts with a note and " - " splits as before.
     """
     s = " ".join(s.split())
     for _ in range(_BRACKET_PASSES):
@@ -104,6 +110,7 @@ def clean_title(s: str) -> str:
         if cleaned == s:
             break
         s = cleaned
+    s = _SPACES.sub(" ", s)
     parts = _DASH.split(s)
     kept = [parts[0]] + [p for p in parts[1:] if not _JUNK_IN.search(p)]
     return " ".join(" - ".join(kept).strip(" -\u2013\u2014").split())
