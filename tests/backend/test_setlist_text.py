@@ -10,6 +10,7 @@ is proved in tests/db/test_artist_keys_parity.py.
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -225,6 +226,49 @@ def test_parse_first_line_without_header_names_is_a_song() -> None:
         ("Glass Harbor, Moonfish", None),
         ("Song", None),
     ]
+
+
+def test_parse_collapses_whitespace_in_the_sides_but_not_in_raw() -> None:
+    raw = "Moonfish \t  -   Glass\u00a0\u00a0Harbor"
+    assert parse_setlist_text(raw) == [ListLine(raw, "Moonfish", "Glass Harbor")]
+    assert _pairs("Title,Artist\nGlass   Harbor,Moon \t fish\n") == [("Moon fish", "Glass Harbor")]
+
+
+def test_clean_title_drops_nested_note_brackets() -> None:
+    assert clean_title("Glass Harbor (feat. Otters (Remix))") == "Glass Harbor"
+    assert (
+        clean_title('Glass Harbor (From "Night Swim (Original Motion Picture Soundtrack)")')
+        == "Glass Harbor"
+    )
+    assert clean_title("Glass Harbor (Night (Swim))") == "Glass Harbor (Night (Swim))"
+    assert clean_title("Glass   Harbor\t(Live)") == "Glass Harbor"
+
+
+# One 20,000-character line must not take seconds (Review Focus 1): the parser
+# and clean_title stay linear. artist_keys is linear except on one long
+# whitespace run, which list sides never carry after the parser.
+_HOSTILE = [
+    pytest.param("a" + " " * (MAX_CHARS - 2) + "b", False, id="space-run"),
+    pytest.param("a" + "\t" * (MAX_CHARS - 2) + "b", False, id="tab-run"),
+    pytest.param("(" * (MAX_CHARS - 1) + "a", True, id="openers"),
+    pytest.param("( a" * (MAX_CHARS // 3), True, id="opener-word"),
+    pytest.param("a b " * (MAX_CHARS // 4), True, id="short-words"),
+    pytest.param("(live " * (MAX_CHARS // 12) + ")" * (MAX_CHARS // 12), True, id="nested-junk"),
+]
+
+
+@pytest.mark.parametrize(("text", "keys_on_text"), _HOSTILE)
+def test_long_hostile_lines_stay_fast(text: str, keys_on_text: bool) -> None:
+    start = time.perf_counter()
+    for line in parse_setlist_text(text):
+        for side in (line.left, line.right):
+            if side is not None:
+                artist_keys(side)
+                clean_title(side)
+    clean_title(text)
+    if keys_on_text:
+        artist_keys(text)
+    assert time.perf_counter() - start < 1.0
 
 
 # ----- SetlistError ----------------------------------------------------------

@@ -73,7 +73,11 @@ JUNK_WORDS = (
     r"original|album|radio|extended|anniversary|edition|prod|theme|motion picture|"
     r"קליפ|רשמי|הרשמי|מתוך|גרסת|גרסה|הופעה|לייב|עם|בהופעה|רמיקס"
 )
-_PAREN = re.compile(r"[\(\[\{][^\)\]\}]*[\)\]\}]")
+# A bracket with no bracket inside it. Leaving openers out of the inside keeps
+# the search linear on a long run of "(" (each start stops at the next
+# bracket); nested notes are removed inside out, see clean_title.
+_PAREN = re.compile(r"[\(\[\{][^\(\[\{\)\]\}]*[\)\]\}]")
+_BRACKET_PASSES = 3  # real titles nest brackets at most two deep
 # A junk word as a whole word (not inside another word), or a year.
 _JUNK_IN = re.compile(
     rf"(?<![^\W\d_])(?:{JUNK_WORDS})(?![^\W\d_])|\b(?:19|20)\d\d\b", re.IGNORECASE
@@ -83,13 +87,23 @@ _JUNK_IN = re.compile(
 _DASH = re.compile(r"\s+[-\u2013\u2014]\s+")
 
 
+def _drop_note(bracket: re.Match[str]) -> str:
+    return "" if _JUNK_IN.search(bracket.group(0)) else bracket.group(0)
+
+
 def clean_title(s: str) -> str:
     """Drop the bracketed and " - " parts of a title that only describe the recording.
 
     ``Let It Go - From "Frozen"/Soundtrack Version`` becomes ``Let It Go``;
-    ``Everybody (Backstreet's Back)`` keeps its brackets.
+    ``Everybody (Backstreet's Back)`` keeps its brackets. Whitespace is
+    collapsed first, so no search runs over a long whitespace run.
     """
-    s = _PAREN.sub(lambda m: "" if _JUNK_IN.search(m.group(0)) else m.group(0), s)
+    s = " ".join(s.split())
+    for _ in range(_BRACKET_PASSES):
+        cleaned = _PAREN.sub(_drop_note, s)
+        if cleaned == s:
+            break
+        s = cleaned
     parts = _DASH.split(s)
     kept = [parts[0]] + [p for p in parts[1:] if not _JUNK_IN.search(p)]
     return " ".join(" - ".join(kept).strip(" -\u2013\u2014").split())
@@ -122,6 +136,11 @@ def artist_keys(s: str) -> tuple[str, ...]:
     database, each piece is trimmed of spaces only and empty pieces are
     dropped. Unlike it (it sorts), the credit order is kept and repeats are
     dropped.
+
+    One long whitespace run makes this split quadratic. A guard against that
+    changes some splits, and the split must stay the database's, so callers
+    keep such runs out: the list sides from parse_setlist_text have their
+    whitespace collapsed, and catalog credits are short.
     """
     keys: list[str] = []
     for piece in _ARTIST_SPLIT.split(s):
@@ -228,7 +247,7 @@ def _row_names(row: str, columns: _Columns | None) -> tuple[str, str] | None:
     cells = next(csv.reader([row], delimiter=delimiter), [])
     if len(cells) <= max(artist_col, title_col):
         return None
-    return cells[artist_col].strip(), cells[title_col].strip()
+    return " ".join(cells[artist_col].split()), " ".join(cells[title_col].split())
 
 
 def _has_alnum(s: str) -> bool:
@@ -243,7 +262,10 @@ def _cells_line(raw: str, artist: str, title: str) -> ListLine | None:
 
 
 def _text_line(raw: str, body: str) -> ListLine | None:
-    body = _DURATION.sub("", body)
+    # Whitespace is collapsed before any search: on one long run of spaces a
+    # search that may start anywhere in the run takes quadratic time. The
+    # sides are compared after norm(), which collapses it anyway.
+    body = _DURATION.sub("", " ".join(body.split()))
     if not _has_alnum(body):
         return None
     sep = _DASH.search(body)
