@@ -7,6 +7,9 @@ import { YouTubePlayer, type YouTubePlayerHandle } from "./YouTubePlayer";
 
 interface FakeYTPlayer {
   loadVideoById: ReturnType<typeof vi.fn>;
+  cueVideoById: ReturnType<typeof vi.fn>;
+  getVideoData: ReturnType<typeof vi.fn>;
+  getVideoUrl: ReturnType<typeof vi.fn>;
   pauseVideo: ReturnType<typeof vi.fn>;
   playVideo: ReturnType<typeof vi.fn>;
   stopVideo: ReturnType<typeof vi.fn>;
@@ -26,6 +29,7 @@ let lastConfig: {
     onReady?: () => void;
     onError?: (event: { data: number }) => void;
     onStateChange?: (event: { data: number }) => void;
+    onAutoplayBlocked?: () => void;
   };
 } | null = null;
 
@@ -37,11 +41,15 @@ function installFakeYT() {
         onReady?: () => void;
         onError?: (event: { data: number }) => void;
         onStateChange?: (event: { data: number }) => void;
+        onAutoplayBlocked?: () => void;
       };
     },
   ): FakeYTPlayer {
     const instance: FakeYTPlayer = {
       loadVideoById: vi.fn(),
+      cueVideoById: vi.fn(),
+      getVideoData: vi.fn(() => ({})),
+      getVideoUrl: vi.fn(() => ""),
       pauseVideo: vi.fn(),
       playVideo: vi.fn(),
       stopVideo: vi.fn(),
@@ -521,6 +529,29 @@ describe("YouTubePlayer load health", () => {
       expect(player.loadVideoById).toHaveBeenCalledTimes(2);
     });
 
+    it("offers Retry playback after a stalled load and lets the host retry at the cue", async () => {
+      const { ref, player } = await mount({ controls: true });
+      player.getPlayerState.mockReturnValue(3);
+      player.getVideoLoadedFraction.mockReturnValue(0.3);
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 45));
+      await advance(10_000);
+
+      const retry = screen.getByRole("button", { name: "Retry playback" });
+      expect(retry).toBeEnabled();
+      expect(player.loadVideoById).toHaveBeenCalledTimes(1);
+      fireEvent.click(retry);
+      expect(retry).toBeDisabled();
+      expect(player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "liveVIDEO01",
+        startSeconds: 45,
+      });
+      await advance(10_000);
+      expect(screen.getByRole("button", { name: "Retry playback" })).toBeEnabled();
+      fireEvent.click(retry);
+      state(1);
+      expect(retry).toHaveAccessibleName("Pause the song");
+    });
+
     it("never reloads a load that has bytes, however slow: it only reports it", async () => {
       const onStartStall = vi.fn();
       const { ref, player } = await mount({ onStartStall });
@@ -804,6 +835,100 @@ describe("YouTubePlayer host transport", () => {
     expect(btn("back").disabled).toBe(true);
     expect(btn("toggle").disabled).toBe(true);
     expect(btn("forward").disabled).toBe(true);
+  });
+
+  it("offers Play song after blocked autoplay and reloads the same cue within the click", async () => {
+    const { ref, player } = await mount();
+    player.getPlayerState.mockReturnValue(-1);
+    act(() => ref.current?.loadVideoById("liveVIDEO01", 30));
+    act(() => lastConfig?.events?.onAutoplayBlocked?.());
+
+    const play = screen.getByRole("button", { name: "Play song" });
+    expect(play).toBeEnabled();
+    act(() => {
+      play.click();
+      play.click();
+    });
+    expect(player.loadVideoById).toHaveBeenCalledTimes(2);
+    expect(player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "liveVIDEO01",
+      startSeconds: 30,
+    });
+    state(1);
+    expect(btn("toggle")).toHaveAccessibleName("Pause the song");
+  });
+
+  it("ignores late playback events whose video still belongs to the previous song", async () => {
+    const onPlaying = vi.fn();
+    const { ref, player } = await playing({ onPlaying });
+    player.getPlayerState.mockReturnValue(-1);
+    player.getVideoUrl.mockReturnValue("https://www.youtube.com/watch?v=liveVIDEO01");
+    act(() => ref.current?.loadVideoById("liveVIDEO02", 85));
+    state(1);
+    act(() => lastConfig?.events?.onAutoplayBlocked?.());
+    act(() => lastConfig?.events?.onError?.({ data: 150 }));
+    player.getVideoUrl.mockReturnValue("");
+    state(0);
+    expect(onPlaying).toHaveBeenCalledTimes(1);
+    expect(player.stopVideo).not.toHaveBeenCalled();
+    expect(btn("toggle")).toBeDisabled();
+
+    player.getVideoData.mockReturnValue({ video_id: "liveVIDEO02" });
+    act(() => lastConfig?.events?.onAutoplayBlocked?.());
+    fireEvent.click(screen.getByRole("button", { name: "Play song" }));
+    expect(player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "liveVIDEO02",
+      startSeconds: 85,
+    });
+  });
+
+  it("keeps an in-flight retry paused when a team buzzes until Wrong or Continue releases it", async () => {
+    const onPlaying = vi.fn();
+    const { ref, player, rerender } = await mount({ onPlaying });
+    player.getPlayerState.mockReturnValue(-1);
+    act(() => ref.current?.loadVideoById("liveVIDEO01", 30));
+    act(() => lastConfig?.events?.onAutoplayBlocked?.());
+    fireEvent.click(screen.getByRole("button", { name: "Play song" }));
+    rerender(<YouTubePlayer ref={ref} noCover controls holdPlayback onPlaying={onPlaying} />);
+    act(() => ref.current?.pause());
+    state(1);
+
+    expect(player.pauseVideo).toHaveBeenCalledTimes(2);
+    expect(onPlaying).not.toHaveBeenCalled();
+    const play = screen.getByRole("button", { name: "Play song" });
+    expect(play).toBeDisabled();
+    fireEvent.click(play);
+    expect(player.loadVideoById).toHaveBeenCalledTimes(2);
+
+    act(() => ref.current?.play());
+    rerender(<YouTubePlayer ref={ref} noCover controls onPlaying={onPlaying} />);
+    state(1);
+    expect(player.playVideo).toHaveBeenCalledTimes(1);
+    expect(onPlaying).toHaveBeenCalledOnce();
+    expect(btn("toggle")).toHaveAccessibleName("Pause the song");
+  });
+
+  it("keeps a host-paused song paused when a buzz takes over the pause", async () => {
+    const { ref, player, rerender } = await playing();
+    fireEvent.click(btn("toggle"));
+    rerender(<YouTubePlayer ref={ref} noCover controls holdPlayback />);
+    act(() => ref.current?.pause());
+    state(1);
+    expect(player.pauseVideo).toHaveBeenCalledTimes(3);
+    expect(btn("toggle")).toHaveAccessibleName("Play the song");
+    expect(btn("toggle")).toBeDisabled();
+  });
+
+  it("cues a song delivered after a team wins the floor", async () => {
+    const { ref, player } = await mount({ holdPlayback: true });
+    act(() => ref.current?.loadVideoById("liveVIDEO01", 55, true));
+
+    expect(player.cueVideoById).toHaveBeenCalledExactlyOnceWith({
+      videoId: "liveVIDEO01",
+      startSeconds: 55,
+    });
+    expect(player.loadVideoById).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Play song" })).toBeDisabled();
   });
 
   it("keeps the buttons and the −10s label out of the frame, in their own bar", async () => {

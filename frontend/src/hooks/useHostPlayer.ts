@@ -34,7 +34,10 @@ export interface HostPlayer {
   peekedRef: React.MutableRefObject<PeekedSong | null>;
   peekEpochRef: React.MutableRefObject<number>;
   optimisticSongIdRef: React.MutableRefObject<string | null>;
-  loadSongIntoPlayer: (song: Pick<Song, "youtube_id" | "start_time">) => void;
+  loadSongIntoPlayer: (
+    song: Pick<Song, "youtube_id" | "start_time">,
+    startPaused?: boolean,
+  ) => void;
   clearSongStart: () => void;
   maybePeekNext: () => void;
   beginSongStart: (pickPath: SongPickPath) => SongStartHandle;
@@ -275,7 +278,7 @@ export function useHostPlayer(
     return songStart;
   }
 
-  function issueSongLoad(song: Pick<Song, "youtube_id" | "start_time">) {
+  function issueSongLoad(song: Pick<Song, "youtube_id" | "start_time">, startPaused: boolean) {
     armSongStartTimeout();
     const target = livePlayer();
     if (!target) return;
@@ -283,12 +286,13 @@ export function useHostPlayer(
       songStartVideoRef.current = song.youtube_id;
       songStartRef.current.loadIssued();
     }
-    target.loadVideoById(song.youtube_id, song.start_time);
+    if (startPaused) target.loadVideoById(song.youtube_id, song.start_time, true);
+    else target.loadVideoById(song.youtube_id, song.start_time);
   }
 
-  function loadSongIntoPlayer(song: Pick<Song, "youtube_id" | "start_time">) {
+  function loadSongIntoPlayer(song: Pick<Song, "youtube_id" | "start_time">, startPaused = false) {
     if (player.ready) {
-      issueSongLoad(song);
+      issueSongLoad(song, startPaused);
     } else {
       player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
       armSongStartTimeout();
@@ -350,7 +354,7 @@ export function useHostPlayer(
       "yt_player_error",
       failedVideoContext(gameCode, code, videoId, [liveSong, peekedSong]),
     );
-    toast("Video unavailable — click Next round to pick a different song.", {
+    toast("Video unavailable — retry playback or pick a different song with Next round.", {
       variant: "error",
     });
   }
@@ -360,7 +364,7 @@ export function useHostPlayer(
   function onPlayerReady() {
     player.setReady();
     const queued = player.flushPendingSong();
-    if (queued) issueSongLoad(queued);
+    if (queued) issueSongLoad(queued, latestGameState.current?.game.buzzed_team_id != null);
   }
 
   return {

@@ -95,9 +95,10 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
     handleEarlyPause,
     livePlayer,
   } = hostPlayer;
-  const scoring = useScoring(gameCode, managerToken, state, player, hostPlayer, refresh);
+  const scoring = useScoring(gameCode, managerToken, state, player.ready, hostPlayer, refresh);
   const {
     currentSong,
+    advancingRound,
     scoreFeedback,
     busy,
     endConfirmOpen,
@@ -379,7 +380,7 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
             onEarlyPause={(ms) => handleEarlyPause(ms, currentSong)}
             idleLabel={idleLabel}
             controls
-            holdPlayback={game.buzzed_team_id != null}
+            holdPlayback={advancingRound || game.buzzed_team_id != null}
           />
         </div>
 

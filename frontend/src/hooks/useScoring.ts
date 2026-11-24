@@ -29,11 +29,6 @@ import type { HostPlayer } from "./useHostPlayer";
 // the pending-flag handoffs that bridge the RPC → Realtime gap. handleNextRound
 // drives the host's player through the HostPlayer surface passed in.
 
-interface PlayerReadyHandle {
-  ready: boolean;
-  enqueueSong: (song: { youtube_id: string; start_time: number }) => void;
-}
-
 interface ScoreReceipt {
   team: Team;
   pending: { points: number }[];
@@ -43,6 +38,7 @@ interface ScoreReceipt {
 
 export interface Scoring {
   currentSong: Song | null;
+  advancingRound: boolean;
   scoreFeedback: { name: string; total: number; pending: string | null } | null;
   busy: boolean;
   endConfirmOpen: boolean;
@@ -69,7 +65,7 @@ export function useScoring(
   gameCode: string,
   managerToken: string | null,
   state: GameState | null,
-  player: PlayerReadyHandle,
+  playerReady: boolean,
   hostPlayer: HostPlayer,
   refreshGame: () => Promise<void>,
 ): Scoring {
@@ -87,6 +83,7 @@ export function useScoring(
   } = hostPlayer;
 
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const [advancingRound, setAdvancingRound] = useState(false);
   const [busy, setBusy] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
@@ -180,7 +177,7 @@ export function useScoring(
   }, [state?.game]);
 
   // Pause on every winning buzz, including a new lock by the same team.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (state?.game.buzzed_team_id != null) {
       livePlayer()?.pause();
     }
@@ -202,16 +199,11 @@ export function useScoring(
 
   // After a manager-tab refresh mid-round, currentSong is null but the round
   // row still has a song_id. Resolve it and push it into the player so the
-  // host doesn't have to abandon the round and click Next round. Must stay
-  // loadVideoById (not cueVideoById): on the happy path the Realtime INSERT
-  // for the new round arrives before selectSong's HTTP response, so this
-  // effect races with handleNextRound's loadVideoById. Calling cue while load
-  // is in flight (or vice-versa) puts YT.Player into an inconsistent state and
-  // surfaces as the "Video unavailable" onError overlay.
+  // host can keep playing. A local Next/Start already owns the load, even
+  // when Realtime arrives before the RPC response.
   const currentRoundSongId = state?.currentRound?.song_id ?? null;
-  const playerReady = player.ready;
   useEffect(() => {
-    if (!currentRoundSongId) return;
+    if (!currentRoundSongId || advancingRound) return;
     if (currentSong && currentSong.id === currentRoundSongId) return;
     // I-NextMeta: currentSong is the optimistically-committed next song, ahead of
     // the round that hasn't advanced yet — NOT a stale leftover. Don't refetch
@@ -223,21 +215,16 @@ export function useScoring(
     // so one blip doesn't leave the post-refresh player empty for the round.
     // It asks the game-scoped round_song RPC (mig 053), so it needs the code.
     void fetchSongById(gameCode, currentRoundSongId, () => cancelled).then((song) => {
-      if (cancelled || !song) return;
+      if (cancelled || !song || nextRoundInFlightRef.current) return;
       setCurrentSong(song);
-      if (playerReady) {
-        livePlayer()?.loadVideoById(song.youtube_id, song.start_time);
-      } else {
-        player.enqueueSong({ youtube_id: song.youtube_id, start_time: song.start_time });
-      }
+      loadSongIntoPlayer(song, latestGame.current?.buzzed_team_id != null);
     });
     return () => {
       cancelled = true;
     };
-    // `player` is a stable hook handle; we only need to re-run when the
-    // current round's song changes or the player flips to ready.
+    // Re-run when the round's song changes or the player becomes ready.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRoundSongId, currentSong?.id, playerReady]);
+  }, [currentRoundSongId, currentSong?.id, playerReady, advancingRound]);
 
   // no_more_songs before round 1 means the game's mix never had a song (the
   // create page now blocks that, issue #375, but a game made before it, or
@@ -493,6 +480,7 @@ export function useScoring(
     if (nextRoundInFlightRef.current) return;
     if (!managerToken || !state) return;
     nextRoundInFlightRef.current = true;
+    setAdvancingRound(true);
     // Bump the peek epoch so an in-flight peek is discarded: it answers for
     // the round we are leaving.
     peekEpochRef.current += 1;
@@ -515,8 +503,7 @@ export function useScoring(
     // inside this tap*, BEFORE awaiting the RPC. Mobile browsers only allow
     // unmuted playback that begins within a user gesture; a load issued after
     // `await select_next_song` counts as blocked autoplay, which is exactly the
-    // reported bug (round 1 / Next round stayed silent until a stray buzz +
-    // Continue finally unlocked it). We pass peeked.song_id to the RPC below,
+    // case where the player offers Play song. We pass peeked.song_id to the RPC below,
     // so a successful commit records the video we begin loading here. The
     // expected round tells the server when another host has already advanced
     // the game. Nothing is buffered ahead: YouTube's rules allow no hidden
@@ -556,11 +543,24 @@ export function useScoring(
         youtubeId: result.song.youtube_id,
         preloaded: false,
       });
+      const game = latestGame.current;
+      if (game && game.round_number > result.round_number) {
+        songStart.fail("superseded");
+        clearSongStart();
+        optimisticSongIdRef.current = null;
+        livePlayer()?.stop();
+        setCurrentSong(null);
+        return;
+      }
       // The RPC can finish before the Realtime event. Keep the round's song
       // from being replaced by the previous round while that update arrives.
       optimisticSongIdRef.current = result.song.id;
       setCurrentSong(result.song);
-      if (peeked?.song_id !== result.song.id) loadSongIntoPlayer(result.song);
+      if (peeked?.song_id !== result.song.id) {
+        const startPaused =
+          game?.round_number === result.round_number && game.buzzed_team_id != null;
+        loadSongIntoPlayer(result.song, startPaused);
+      }
     } catch (err) {
       const stale = err instanceof RpcError && err.message === "stale_round";
       const invalid = err instanceof RpcError && err.message === "song_no_longer_eligible";
@@ -573,7 +573,7 @@ export function useScoring(
         livePlayer()?.stop();
         if (!stale) {
           setCurrentSong(prevSong);
-          if (prevSong) livePlayer()?.loadVideoById(prevSong.youtube_id, prevSong.start_time);
+          if (prevSong) loadSongIntoPlayer(prevSong, latestGame.current?.buzzed_team_id != null);
           if (!invalid) peekedRef.current = peeked;
         }
       }
@@ -584,6 +584,7 @@ export function useScoring(
       }
     } finally {
       nextRoundInFlightRef.current = false;
+      setAdvancingRound(false);
       endRoundCommit(roundCommitted);
     }
   }
@@ -652,6 +653,7 @@ export function useScoring(
 
   return {
     currentSong,
+    advancingRound,
     scoreFeedback,
     busy,
     endConfirmOpen,

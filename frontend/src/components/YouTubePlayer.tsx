@@ -12,7 +12,7 @@ import styles from "./YouTubePlayer.module.css";
 // The one panel over the iframe covers a player that has never been given a
 // video, so it hides no video, only YouTube's empty embed.
 export interface YouTubePlayerHandle {
-  loadVideoById: (videoId: string, startSeconds?: number) => void;
+  loadVideoById: (videoId: string, startSeconds?: number, startPaused?: boolean) => void;
   pause: () => void;
   play: () => void;
   // Resume playback ONLY if the player is currently paused (YT state 2). Used to
@@ -42,12 +42,12 @@ interface Props {
   // `noCover` mode only: the host's buttons in a bar beside the picture (back
   // 10 s, pause / play, forward 10 s), never over it. They are always there,
   // so the layout doesn't move when the first song loads, and stay disabled
-  // until the song is playing. Once it has played to its end, back replays its
+  // until playback starts or needs a manual retry. At the end, back replays its
   // last 10 s, the centre button replays it from its start point and forward
   // is off.
   controls?: boolean;
-  // A team holds the buzz, so the song is paused for scoring and Play is
-  // disabled (Wrong and Continue round restart it). Back / forward still move
+  // Disable Play during a round change or while a team holds the floor.
+  // Wrong and Continue round resume a buzz pause. Back / forward still move
   // the paused song, and it stays paused. After the end, back only picks the
   // point Wrong / Continue round start it from.
   holdPlayback?: boolean;
@@ -73,7 +73,7 @@ interface Props {
   // has loaded NOTHING by then (getVideoLoadedFraction() 0) is issued once
   // more (`retried: true`); a load that has bytes, however slowly, is never
   // touched. A retry that stalls too is reported once more (`retried: false`)
-  // and left alone: Next round is the host's way out. Not fired when the page
+  // and left for the host to retry or skip. Not fired when the page
   // was hidden during the wait (a hidden page may legitimately not play),
   // after a newer load, or after pause() or stop(). `videoId` is the stalled
   // load's video, so the parent can name the song.
@@ -89,6 +89,9 @@ interface Props {
 }
 
 interface YTPlayer {
+  cueVideoById: (opts: { videoId: string; startSeconds: number }) => void;
+  getVideoData?: () => { video_id?: string };
+  getVideoUrl?: () => string;
   loadVideoById: (opts: { videoId: string; startSeconds?: number }) => void;
   pauseVideo: () => void;
   playVideo: () => void;
@@ -144,6 +147,7 @@ interface YTNamespace {
       playerVars?: Record<string, number | string>;
       events?: {
         onReady?: () => void;
+        onAutoplayBlocked?: () => void;
         onError?: (event: YTErrorEvent) => void;
         onStateChange?: (event: YTStateChangeEvent) => void;
       };
@@ -226,6 +230,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // "paused", and "ended" once the song has played to its end (back replays
   // its last seconds, the centre button replays it).
   const [transport, setTransport] = useState<"idle" | "playing" | "paused" | "ended">("idle");
+  const [recovery, setRecoveryState] = useState<"blocked" | "stalled" | null>(null);
+  const recoveryRef = useRef(recovery);
+  const setRecovery = useCallback((value: typeof recovery) => {
+    recoveryRef.current = value;
+    setRecoveryState(value);
+  }, []);
   // The "−10s" / "+10s" confirmation in the button bar. `n` remounts it so a
   // second tap restarts its fade.
   const [seekFlash, setSeekFlash] = useState<{ text: string; n: number } | null>(null);
@@ -276,6 +286,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   // failure can be traced to a catalog song.
   const videoIdRef = useRef<string | null>(null);
 
+  // IFrame events carry the player, so compare its reported video with the
+  // requested one before letting an event from the previous round drive transport.
+  const isCurrentVideo = useCallback(() => {
+    const player = playerRef.current;
+    const reportedId =
+      player?.getVideoData?.()?.video_id || player?.getVideoUrl?.()?.match(/[?&]v=([^&]+)/)?.[1];
+    return !reportedId || reportedId === videoIdRef.current;
+  }, []);
+
   // Load health, on Date.now() so fake timers move it. `visibilityChangedAtRef`
   // is when the page's visibility last changed; the start watch only counts a
   // wait the page spent visible throughout.
@@ -322,9 +341,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     let ticks = 0;
     playWatchRef.current = window.setInterval(() => {
       ticks += 1;
-      if (!playingFiredRef.current && playerRef.current?.getPlayerState() === YT_STATE_PLAYING) {
-        // As in onStateChange(PLAYING): the song plays, so any app pause is over.
-        appPauseRef.current = false;
+      if (
+        !playingFiredRef.current &&
+        !appPauseRef.current &&
+        isCurrentVideo() &&
+        playerRef.current?.getPlayerState() === YT_STATE_PLAYING
+      ) {
+        setRecovery(null);
         setTransport("playing");
         playingFiredRef.current = true;
         playingAtRef.current = Date.now();
@@ -339,7 +362,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         playWatchRef.current = null;
       }
     }, PLAY_POLL_MS);
-  }, []);
+  }, [isCurrentVideo, setRecovery]);
 
   // Arm the start watch for the load just issued (see onStartStall). If the
   // load has loaded nothing after 10 s of a visible page, it is issued once
@@ -353,16 +376,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       startWatchRef.current = window.setTimeout(() => {
         startWatchRef.current = null;
         const player = playerRef.current;
-        if (
-          gen !== startWatchGenRef.current ||
-          !player ||
-          playingFiredRef.current ||
-          document.visibilityState !== "visible" ||
-          visibilityChangedAtRef.current > armedAt
-        ) {
+        if (gen !== startWatchGenRef.current || !player || playingFiredRef.current) return;
+        setRecovery("stalled");
+        if (document.visibilityState !== "visible" || visibilityChangedAtRef.current > armedAt) {
           return;
         }
-        const loadedFraction = player.getVideoLoadedFraction() || 0;
+        const loadedFraction = isCurrentVideo() ? player.getVideoLoadedFraction() || 0 : 0;
         const videoId = videoIdRef.current;
         const retry = !retriedRef.current && loadedFraction === 0 && videoId !== null;
         onStartStallRef.current?.({
@@ -380,7 +399,37 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       }, START_STALL_MS);
     };
     watch();
-  }, [armPlaying, cancelStartWatch]);
+  }, [armPlaying, cancelStartWatch, isCurrentVideo, setRecovery]);
+
+  const loadSong = useCallback(
+    (videoId: string, startSeconds = 0, startPaused = false) => {
+      setEnded(false);
+      setErrorCode(null);
+      setHasVideo(true);
+      appPauseRef.current = startPaused;
+      hostPausedRef.current = false;
+      songEndedRef.current = false;
+      replayFromRef.current = null;
+      seekOnPlayRef.current = null;
+      retriedRef.current = false;
+      songStartRef.current = startSeconds;
+      videoIdRef.current = videoId;
+      setTransport("idle");
+      setRecovery(startPaused ? "blocked" : null);
+      playingFiredRef.current = false;
+      cancelStartWatch();
+      const player = playerRef.current;
+      if (startPaused) {
+        player?.cueVideoById({ videoId, startSeconds });
+      } else {
+        armPlaying();
+        armStartWatch();
+        player?.unMute();
+        player?.loadVideoById({ videoId, startSeconds });
+      }
+    },
+    [armPlaying, armStartWatch, cancelStartWatch, setRecovery],
+  );
 
   // Play a song that ended again, from `seconds`. A finished song was stopped,
   // and on a stopped video both playVideo and seekTo start it at 0:00
@@ -394,6 +443,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
     replayFromRef.current = null;
     seekOnPlayRef.current = null;
     hostPausedRef.current = false;
+    appPauseRef.current = false;
     setEnded(false);
     setTransport("playing");
     player.loadVideoById({ videoId, startSeconds: seconds });
@@ -437,13 +487,31 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             playerInit.ready();
             onReadyRef.current?.();
           },
+          onAutoplayBlocked: () => {
+            if (!videoIdRef.current || !isCurrentVideo() || hostPausedRef.current) return;
+            if (playerRef.current?.getPlayerState() === YT_STATE_PLAYING) return;
+            cancelStartWatch();
+            setRecovery("blocked");
+          },
           onError: (event) => {
+            if (!isCurrentVideo()) return;
             setErrorCode(event.data);
+            if (videoIdRef.current) {
+              cancelStartWatch();
+              setRecovery("stalled");
+            }
             onErrorRef.current?.(event.data, videoIdRef.current);
           },
           onStateChange: (event) => {
+            if (!isCurrentVideo()) return;
             if (event.data === YT_STATE_PLAYING) {
+              if (appPauseRef.current && !hostPausedRef.current) {
+                playerRef.current?.pauseVideo();
+                return;
+              }
               appPauseRef.current = false;
+              hostPausedRef.current = false;
+              setRecovery(null);
               setTransport("playing");
               const seekTo = seekOnPlayRef.current;
               if (seekTo !== null) {
@@ -477,7 +545,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
                 onEarlyPauseRef.current?.(msAfterStart);
               }
             }
-            if (event.data === YT_STATE_ENDED) {
+            if (
+              event.data === YT_STATE_ENDED &&
+              (videoIdRef.current === null || playingFiredRef.current)
+            ) {
               const player = playerRef.current;
               endedAtRef.current = player?.getDuration() || player?.getCurrentTime() || 0;
               songEndedRef.current = true;
@@ -502,46 +573,27 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [cancelStartWatch]);
+  }, [cancelStartWatch, isCurrentVideo, setRecovery]);
 
   useImperativeHandle(
     ref,
     () => ({
-      loadVideoById: (videoId, startSeconds) => {
-        setEnded(false);
-        // Clear any error from a previous song so the cover (when in
-        // covered mode) doesn't keep showing "Video unavailable" for what
-        // is now a different, valid video.
-        setErrorCode(null);
-        setHasVideo(true);
-        // A new song: no app pause of it yet (a stop() before it was for the
-        // previous one), and no retry of its load yet.
-        appPauseRef.current = false;
-        hostPausedRef.current = false;
-        songEndedRef.current = false;
-        replayFromRef.current = null;
-        seekOnPlayRef.current = null;
-        retriedRef.current = false;
-        songStartRef.current = startSeconds ?? 0;
-        setTransport("idle");
-        armPlaying();
-        armStartWatch();
-        videoIdRef.current = videoId;
-        playerRef.current?.unMute();
-        playerRef.current?.loadVideoById({
-          videoId,
-          startSeconds: startSeconds ?? 0,
-        });
-      },
+      loadVideoById: loadSong,
       pause: () => {
         // A buzz can pause a song before it ever started; that is no stall.
+        hostPausedRef.current = false;
         appPauseRef.current = true;
         cancelStartWatch();
+        if (videoIdRef.current && !playingFiredRef.current && !recoveryRef.current) {
+          setRecovery("blocked");
+        }
         playerRef.current?.pauseVideo();
       },
       play: () => {
         // Wrong / Continue round restart the song, also one the host paused.
         hostPausedRef.current = false;
+        appPauseRef.current = false;
+        if (videoIdRef.current && !playingFiredRef.current) armPlaying();
         // A song that played to its end was stopped, and playVideo starts it
         // at 0:00. A reload at the point (as the buttons do) is not used here:
         // Wrong / Continue call play() after an RPC await, where a fresh load
@@ -565,6 +617,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         // A song the host paused stays paused.
         if (hostPausedRef.current) return;
         if (playerRef.current?.getPlayerState() === YT_STATE_PAUSED) {
+          appPauseRef.current = false;
           playerRef.current.playVideo();
         }
       },
@@ -576,12 +629,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
         replayFromRef.current = null;
         seekOnPlayRef.current = null;
         cancelStartWatch();
+        videoIdRef.current = null;
+        setRecovery(null);
         setEnded(true);
         setTransport("idle");
         playerRef.current?.stopVideo();
       },
     }),
-    [armPlaying, armStartWatch, cancelStartWatch],
+    [armPlaying, cancelStartWatch, loadSong, setRecovery],
   );
 
   // The "−10s" / "+10s" confirmation for a jump.
@@ -629,6 +684,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
   function togglePlayback(): void {
     const player = playerRef.current;
     if (!player || holdPlayback) return;
+    if (recovery) {
+      const videoId = videoIdRef.current;
+      if (recoveryRef.current && videoId) loadSong(videoId, songStartRef.current);
+      return;
+    }
     if (transport === "playing") {
       // An app pause for the early-pause telemetry, and no start to watch.
       hostPausedRef.current = true;
@@ -638,6 +698,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       setTransport("paused");
     } else if (transport === "paused") {
       hostPausedRef.current = false;
+      appPauseRef.current = false;
       player.playVideo();
       setTransport("playing");
     } else if (transport === "ended") {
@@ -668,6 +729,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
       </div>
     );
     if (!controls) return frame;
+    const recoveryLabel = recovery === "blocked" ? "Play song" : "Retry playback";
+    const canSeek = transport !== "idle" && !recovery;
     // The host's buttons sit in their own bar next to the frame, never on the
     // picture: YouTube's rules allow nothing of ours in front of the player.
     return (
@@ -683,7 +746,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             type="button"
             className={styles.transportBtn}
             onClick={() => seekBy(-SEEK_STEP_S)}
-            disabled={transport === "idle"}
+            disabled={!canSeek}
             aria-label={`Back ${SEEK_STEP_S} seconds`}
             data-testid={`${testId}-back`}
           >
@@ -694,17 +757,21 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             type="button"
             className={`${styles.transportBtn} ${styles.transportToggle}`}
             onClick={togglePlayback}
-            disabled={transport === "idle" || holdPlayback}
+            disabled={holdPlayback || (transport === "idle" && !recovery)}
             aria-label={
-              transport === "ended"
-                ? "Replay the song"
-                : transport === "paused"
-                  ? "Play the song"
-                  : "Pause the song"
+              recovery
+                ? recoveryLabel
+                : transport === "ended"
+                  ? "Replay the song"
+                  : transport === "paused"
+                    ? "Play the song"
+                    : "Pause the song"
             }
             data-testid={`${testId}-toggle`}
           >
-            {transport === "ended" ? (
+            {recovery ? (
+              <span>{recoveryLabel}</span>
+            ) : transport === "ended" ? (
               <RewindIcon />
             ) : transport === "paused" ? (
               <PlayIcon />
@@ -716,7 +783,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             type="button"
             className={styles.transportBtn}
             onClick={() => seekBy(SEEK_STEP_S)}
-            disabled={transport === "idle" || transport === "ended"}
+            disabled={!canSeek || transport === "ended"}
             aria-label={`Forward ${SEEK_STEP_S} seconds`}
             data-testid={`${testId}-forward`}
           >
