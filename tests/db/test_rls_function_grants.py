@@ -243,6 +243,42 @@ async def test_anon_cannot_execute_pick_next_song(
 
 
 @pytest.mark.asyncio
+async def test_anon_cannot_execute_the_song_pool_helpers(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 060: pick_next_pool_song (the custom-game picker) and
+    save_game_setlist (the backend's pool writer) take no manager token, so
+    the browser must not reach them."""
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await anon_conn.execute("SELECT pick_next_pool_song($1)", "ABCDEF")
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await anon_conn.execute(
+            "SELECT save_game_setlist($1, $2::uuid[], $3::uuid[], $4)",
+            "ABCDEF",
+            [uuid.uuid4()],
+            [],
+            1,
+        )
+
+
+@pytest.mark.asyncio
+async def test_anon_can_execute_game_pool_summary_but_token_check_runs(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 060: anon CAN call game_pool_summary (the host console's
+    "Your list: N of M left" line), but the in-function manager_token check
+    rejects forged calls -- it wasn't blocked at the grant gate."""
+    with pytest.raises(asyncpg.PostgresError) as exc:
+        await anon_conn.execute(
+            "SELECT * FROM game_pool_summary($1, $2)",
+            "ABCDEF",
+            uuid.uuid4(),
+        )
+    assert not isinstance(exc.value, asyncpg.InsufficientPrivilegeError)
+    assert exc.value.sqlstate in ("P0002", "28000")
+
+
+@pytest.mark.asyncio
 async def test_anon_peek_reaches_the_revoked_helper_through_the_definer(
     db: asyncpg.Connection, anon_conn: asyncpg.Connection
 ) -> None:
@@ -290,6 +326,11 @@ async def test_anon_peek_reaches_the_revoked_helper_through_the_definer(
         # Migration 049: computes songs.artist_keys. service_role must keep
         # EXECUTE, because the admin API and CSV import write songs as it.
         "song_artist_keys",
+        # Migration 060: the custom-game picker (called only from inside
+        # select_next_song / peek_next_song) and the pool writer the backend
+        # calls on "Create game".
+        "pick_next_pool_song",
+        "save_game_setlist",
     ],
 )
 async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) -> None:
@@ -431,6 +472,10 @@ async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) ->
         # game code scopes them to the songs that game played.
         ("game_setlist", "p_game_code text"),
         ("round_song", "p_game_code text, p_song_id uuid"),
+        # game_pool_summary (migration 060): how much of a custom game's pool
+        # is left. Same anon-grant + in-function token-check model as
+        # peek_next_song.
+        ("game_pool_summary", "p_game_code text, p_manager_token uuid"),
     ],
 )
 async def test_anon_executable_rpc_grant_matrix(

@@ -2,7 +2,7 @@
 
 The thirteen PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`.
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`. `db/migrations/060_game_song_pool.sql` added the custom-setlist functions `save_game_setlist` (§3i), `pick_next_pool_song` (§3j) and `game_pool_summary` (§3k), and the custom-game branch in `select_next_song` (§3c) and `peek_next_song` (§3d).
 
 ## 0. Conventions
 
@@ -367,6 +367,7 @@ Behavior:
 - **Decade filter (migration 032):** when `active_games.selected_decades` is non-empty, the helper's `eligible` set additionally requires `(songs.release_year / 10 * 10) = ANY(selected_decades)` — the song's decade must be one the host chose. The empty default imposes no year limit. A `NULL` `release_year` matches no specific decade, so unknown-year songs are excluded when a decade is selected and included when none is. `selected_decades` is optional; only `selected_genres` is required.
 - **Dead-video auto-skip (migration 045):** the helper's `eligible` set also requires `songs.unavailable_at IS NULL`, so a video the availability scan confirmed dead (see §5b) is never randomly picked — an all-flagged pool raises the same `no_more_songs`.
 - A guarded peek commit checks that its supplied song is still eligible for this game, including filters, availability and played history. It raises `song_no_longer_eligible` (`P0001`) on a mismatch. The three-argument signature remains available for older clients and deliberate manual overrides, where an explicit song only needs to exist.
+- **Custom setlist games (migration 060).** Right after the token check, one lookup by key in `game_setlists`. No row: a genre game, and everything above applies unchanged. Row found with `ready = false`: `setlist_not_ready` (`P0001`) on every path, before the advisory lock, so a half-saved pool can never start a round. Row found and ready: there is no `no_genres_selected` check (a custom game has no genres), the random path calls `pick_next_pool_song` (§3j) instead of `pick_next_song` (`no_more_songs` when it returns `NULL`), and the guarded commit accepts a song only if it is in this game's `game_song_pool`, not played in this game and `unavailable_at IS NULL` (any tier; `song_no_longer_eligible` otherwise). The unguarded explicit override (`p_expected_round` `NULL`, including the three-argument signature) is unchanged for custom games too: any catalog song that exists.
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
 - Returns one row with the new round + the picked song's metadata.
 - The returned `is_soundtrack` flag is **computed** (migration 028), not read from a column — `songs.is_soundtrack` was dropped. It is `EXISTS(SELECT 1 FROM song_genres sg JOIN genres g ON g.id = sg.genre_id WHERE sg.song_id = <picked> AND g.slug IN ('soundtracks', 'israeli-soundtracks'))`, i.e. true when the song belongs to a soundtrack genre. The `RETURNS TABLE` shape is unchanged, so PostgREST routing and the realtime/frontend contract are identical.
@@ -402,6 +403,7 @@ Behavior:
 - **Artists** come from `songs.artist_keys` (049), a STORED generated column: `song_artist_keys(artist)` splits the free-text credit on ` & `, ` ft. `, ` feat. `, ` featuring `, ` vs. `, ` x ` (not the X of "Lil Nas X & …"), commas and the Hebrew ` ו` prefix, then lowercases and trims, so a duet counts for both artists. Soundtrack songs list the film as the artist, so two songs from one film are spaced the same way. If `song_artist_keys` ever changes, run `UPDATE songs SET artist = artist` to recompute existing rows.
 - **Cost.** Projection is computed once per distinct selected-genre tag set. The host usually runs the picker before the click and commits the peeked ID without running it again. The fallback draws once on click.
 - Not anon-callable (it takes no manager token): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. The two SECURITY DEFINER callers run it as their owner. `song_artist_keys` follows the same pattern; service_role keeps EXECUTE because the admin API and CSV import write songs as it.
+- A custom setlist game (a `game_setlists` row, migration 060) never reaches this picker: its songs come from `pick_next_pool_song` (§3j), which reuses the song-draw steps above without the genre balance.
 
 ## 3d. `peek_next_song`: read-only "what would the next random song be?"
 
@@ -432,6 +434,7 @@ Behavior:
 - Calls the **same** `pick_next_song` helper as `select_next_song`'s random path (§3cc), so the decade filter (migration 032), the dead-video auto-skip (migration 045) and the genre balance are identical by construction: a peeked candidate is always one the random path could have chosen at this point of the game, and a peeked video is never a known-dead one.
 - **Read-only**: no `start_round`, no `game_rounds` insert, no `active_games` mutation — calling it repeatedly never advances the game.
 - **Returns the candidate's metadata** (migration 038): `song_title` / `song_artist` and the computed `is_soundtrack` (same `EXISTS` over soundtrack genres as `select_next_song §3c`), so the manager's Next-round fast path can render the new song's card **in-gesture** from the already-peeked row instead of showing the previous title until `select_next_song` resolves. Migration 050 added `release_year` for the same reason: the host's year chip arrives with the card instead of a round-trip later.
+- **Custom setlist games (migration 060):** the same branch as `select_next_song` (§3c), after the token check: `setlist_not_ready` (`P0001`) while the game's `game_setlists.ready` is false; when ready, no `no_genres_selected` check and the candidate comes from `pick_next_pool_song` (§3j), so a peeked song is always one the guarded commit accepts. A game with no `game_setlists` row keeps the genre path.
 - **Pool exhausted → returns zero rows, not an error.** The browser treats "no row" as "no song known in advance" and falls back to a random pick at the click; the real `no_more_songs` still surfaces from that `select_next_song` commit.
 - On the actual click the host starts the video in the gesture and passes its ID and `expected_round` to the guarded commit. A stale round triggers a snapshot refresh and a candidate that became ineligible is discarded. The console does not automatically submit another advance.
 - **Stalled loads (browser side, 2026-10-15, moved to the one player 2026-10-31).** YouTube often fails a load without an `onError`: the player just sits there, BUFFERING or UNSTARTED, with nothing loaded. So a load is judged by its loaded fraction, never by its state. If a load has not reached PLAYING after 10 s of a visible page and has loaded **nothing**, the player issues it once more (`yt_live_stall` with `retried=true`, plus `yt_preload_error` with `code=no_bytes` and the song's fields, so the weekly dead-video scan lists the song); a load with any bytes, however slow, is never touched, and a retry that stalls too is only logged. (Until 2026-10-31 this check ran on the hidden standby, logged as `yt_preload_retry` / `yt_preload_not_ready`.) See `frontend/src/components/YouTubePlayer.tsx` and `frontend/src/hooks/useHostPlayer.ts`.
@@ -583,6 +586,95 @@ As §3g (same migration, same pattern).
 ### Callers
 
 - Host console score panel and TV reveal → Supabase PostgREST RPC (`frontend/src/lib/songMetadata.ts::fetchSongById`, from `hooks/useScoring.ts` and `pages/DisplayPage.tsx`). Retries errors with 500 ms / 1 s / 2 s / 4 s backoff.
+
+## 3i. `save_game_setlist`: save a custom game's song pool (service-role only)
+
+Added in migration 060 (custom setlists, phase 1). The host's list is matched against the catalog before the game exists; on **Create game** the backend creates the game as today (no genres) and then saves the result as the game's song pool with this one call. Design: `docs/planning/2026-11-24-custom-setlist-design.md` §5 and §8.
+
+```sql
+CREATE OR REPLACE FUNCTION save_game_setlist(
+  p_game_code     text,
+  p_list_song_ids uuid[],   -- tier 1: the songs of the host's list
+  p_fill_song_ids uuid[],   -- tier 2: more songs by the same artists
+  p_list_total    integer   -- lines in the host's list, found or not
+) RETURNS integer           -- the pool size
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- Inserts the `game_setlists` row with `ready = true` and the `game_song_pool` rows **in the same call**, so a pool is either complete and ready or absent: `select_next_song` / `peek_next_song` can never start a round on a half-saved one.
+- Ids that are not in `songs` are skipped. An id in both arrays is tier 1. An id named twice is stored once (the pool's primary key is `(game_code, song_id)`). `NULL` arrays count as empty.
+- Returns how many pool rows it wrote.
+
+### Error semantics
+
+| Failure | Exception |
+|---|---|
+| Game doesn't exist | `P0002 game_not_found` |
+| The game already has a setlist (a second call, or a concurrent one: `INSERT ... ON CONFLICT DO NOTHING` makes it wait for the first and then refuse) | `P0001 setlist_exists` |
+| No id is left after skipping unknown ones | `22023 setlist_empty`; the exception undoes the call, so neither table gets a row |
+
+### Idempotency
+
+Not idempotent by design: the second call raises `setlist_exists` and leaves the first pool as it is.
+
+### Callers
+
+- No caller yet. Planned: FastAPI `POST /games` with a list, as the service role (`docs/planning/2026-11-24-custom-setlist-phase1-plan.md`, Task 7). Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. `SECURITY DEFINER`, so it does not depend on the service role holding grants on the two tables.
+
+## 3j. `pick_next_pool_song`: the custom-game picker (internal-only)
+
+Added in migration 060. The random picker of a custom setlist game, called by `select_next_song`'s random path (§3c) and `peek_next_song` (§3d) instead of `pick_next_song` (§3cc) when the game has a `game_setlists` row.
+
+```sql
+CREATE OR REPLACE FUNCTION pick_next_pool_song(p_game_code text)
+RETURNS uuid           -- NULL when nothing is left
+LANGUAGE sql VOLATILE
+SET search_path = public;
+```
+
+Behavior:
+- **Candidates:** the game's `game_song_pool` songs that were not played in this game (`game_rounds`) and have `unavailable_at IS NULL`.
+- **Tier:** only the lowest tier that still has a candidate. The host's list (tier 1) plays out before any same-artist song (tier 2).
+- **Song draw:** `pick_next_song`'s steps (migration 056), over that tier's songs: `artist_history` from the played rounds, `spacing` (rounds since one of the song's artists was heard, capped at 9) and `plays`, the songs with the best spacing (`rank() = 1`), then the weighted draw `1 / (1 + plays)^2`. There is no genre balance, and no `artist_left` / `genre_left` step: `plays` is used as it is.
+- **Spacing is a preference, not a filter.** When every song left is by an artist heard just now (a list by one artist), they all rank first and the list still plays to the last song.
+- Not anon-callable (it takes no manager token): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`. The two SECURITY DEFINER callers run it as their owner.
+
+## 3k. `game_pool_summary`: how much of a custom game's list is left
+
+Added in migration 060. For the host console's line "Your list: N of M left" (and "Your list is done. Now: more by the same artists (N left)").
+
+```sql
+CREATE OR REPLACE FUNCTION game_pool_summary(
+  p_game_code     text,
+  p_manager_token uuid
+) RETURNS TABLE(
+  list_total  integer,  -- game_setlists.list_total: lines in the host's list
+  list_songs  integer,  -- tier 1 songs in the pool
+  list_left   integer,  -- tier 1 songs not played and available
+  extra_songs integer,  -- tier 2 songs in the pool
+  extra_left  integer   -- tier 2 songs not played and available
+) LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- The game lookup and token check of `peek_next_song`: `game_not_found` (`P0002`), then `manager_token_required` (`28000`). An ended game is not refused: the function only reads.
+- **Zero rows** for a game with no `game_setlists` row (a normal genre game), so the console shows nothing.
+- "Left" means what `pick_next_pool_song` could still pick: not played in this game and `unavailable_at IS NULL`.
+- Read-only, no writes.
+
+### Idempotency
+
+Read-only. `CREATE OR REPLACE` plus re-runnable `REVOKE EXECUTE ... FROM PUBLIC` and `GRANT EXECUTE ... TO anon, authenticated, service_role`.
+
+### Callers
+
+- No caller yet. Planned: the host console → Supabase PostgREST RPC, on mount and when the round changes; zero rows, a missing function or any error shows nothing (`docs/planning/2026-11-24-custom-setlist-phase1-plan.md`, Task 11).
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -950,6 +1042,9 @@ migration's one-time backfill of existing teams never double-inserts.
 | `song_pool_counts` | ✅ (no token; read-only aggregate, SECURITY DEFINER since 053) | ✅ | Browser (create-game page) |
 | `game_setlist` | ✅ (no token; read-only, songs of that game only) | ✅ | Browser (end-of-game setlist on host console and team phones) |
 | `round_song` | ✅ (no token; read-only, one song of that game) | ✅ | Browser (host score panel, TV reveal) |
+| `game_pool_summary` | ✅ (token-gated, read-only) | ✅ | No caller yet (planned: host console's custom-setlist progress line) |
+| `save_game_setlist` | ❌ | ✅ | No caller yet (planned: FastAPI POST /games with a list) |
+| `pick_next_pool_song` | ❌ | ✅ | Internal call from `select_next_song` + `peek_next_song` for a custom setlist game. No HTTP caller. |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_manager_bonus` | ✅ (token-gated) | ✅ | Browser (manager bonus picker) |
@@ -960,7 +1055,7 @@ migration's one-time backfill of existing teams never double-inserts.
 | `set_song_availability` | ❌ | ✅ | FastAPI POST /admin/songs/check-availability with `commit=true` |
 | `create_team_secret` | ❌ | ✅ | Trigger only (`AFTER INSERT` on `game_teams`). No HTTP caller. Team rejoin is a FastAPI endpoint, not an anon RPC. |
 
-`buzz_in` checks the game code. Six manager RPCs check the per-game token. The three read-only RPCs return catalog counts or song metadata scoped to a game.
+`buzz_in` checks the game code. Seven manager RPCs check the per-game token (migration 060 added `game_pool_summary`). The three read-only RPCs without a token return catalog counts or song metadata scoped to a game.
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
 

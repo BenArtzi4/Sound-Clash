@@ -136,6 +136,24 @@ async def test_anon_cannot_read_the_catalog(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("table", ("game_setlists", "game_song_pool"))
+async def test_anon_cannot_read_the_song_pool(
+    table: str, db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 060: a custom game's song pool is the answer list. anon is
+    refused outright ("permission denied"), even with rows in the table."""
+    game_code = await create_test_game(db)
+    song_id = await create_test_song(db)
+    await db.execute(
+        "SELECT save_game_setlist($1, $2::uuid[], '{}'::uuid[], 1)", game_code, [song_id]
+    )
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.fetch(f"SELECT * FROM {table}")  # noqa: S608 - constant table list
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("table", CATALOG_TABLES)
 async def test_catalog_has_no_anon_policy_or_select_grant(
     table: str, db: asyncpg.Connection
