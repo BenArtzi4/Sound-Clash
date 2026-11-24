@@ -45,9 +45,12 @@ test("a preview miss on Start and Next leaves the current song playable from a f
         await route.fulfill({ response });
       });
       await host.route(
-        "https://www.youtube-nocookie.com/embed/**",
+        (url) =>
+          url.hostname === "www.youtube-nocookie.com" &&
+          url.pathname === "/embed/",
         async (route) => {
-          // WebKit needs an HTML frame navigation before the widget can attach.
+          // Keep the fake navigation asynchronous so the app can attach its load listener.
+          await new Promise((resolve) => setTimeout(resolve, 250));
           await route.fulfill({
             contentType: "text/html",
             body: "<!doctype html><title>Player</title>",
