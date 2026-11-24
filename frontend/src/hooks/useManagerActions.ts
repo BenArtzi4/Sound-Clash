@@ -29,17 +29,15 @@ export async function awardAttemptDirect(
   gameCode: string,
   managerToken: string,
   roundId: string,
+  attemptId: number,
   flags: AttemptFlags,
 ): Promise<AttemptResponse> {
-  // The wire carries only booleans — the DB (award_attempt, mig 043) derives
-  // the point magnitudes server-side, so the client can no longer send an
-  // arbitrary value (T7.1 / D-7). The boolean overload is the sole award_attempt
-  // signature: mig 044 dropped the legacy integer overload once the
-  // boolean-sending frontend had rolled out.
+  // The database sets the points and checks the attempt observed by the host.
   const { data, error } = await tracedRpc("award_attempt", { game_code: gameCode }, () =>
     supabase.rpc("award_attempt", {
       p_game_code: gameCode,
       p_round_id: roundId,
+      p_buzz_attempt_id: attemptId,
       p_correct_title: flags.title_correct,
       p_correct_artist: flags.artist_correct,
       p_wrong: flags.wrong_buzz,
@@ -106,11 +104,16 @@ export async function extendGameDirect(gameCode: string, managerToken: string): 
   return data;
 }
 
-export async function releaseBuzzLockDirect(gameCode: string, managerToken: string): Promise<void> {
+export async function releaseBuzzLockDirect(
+  gameCode: string,
+  managerToken: string,
+  attemptId: number,
+): Promise<void> {
   const { error } = await tracedRpc("release_buzz_lock", { game_code: gameCode }, () =>
     supabase.rpc("release_buzz_lock", {
       p_game_code: gameCode,
       p_manager_token: managerToken,
+      p_buzz_attempt_id: attemptId,
     }),
   );
   throwOnRpcError(error);

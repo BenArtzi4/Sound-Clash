@@ -257,17 +257,19 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
   // Host-only: the host may ask the teams for the year and award it with
   // Bonus. Players and the Display never see it.
   const songYear = currentSong?.release_year ?? null;
-  const titleActionDisabled = !lockedTeam || titleClaimedById != null || pendingTitle === round?.id;
+  const canJudge = lockedTeam != null && round != null && game.buzz_attempt_id != null;
+  const titleActionDisabled =
+    !canJudge || titleClaimedById != null || pendingTitle === game.buzz_attempt_id;
   const artistActionDisabled =
-    !lockedTeam || artistClaimedById != null || pendingArtist === round?.id;
+    !canJudge || artistClaimedById != null || pendingArtist === game.buzz_attempt_id;
   const soundtrackActionDisabled =
-    !lockedTeam ||
+    !canJudge ||
     titleClaimedById != null ||
     artistClaimedById != null ||
-    pendingTitle === round?.id ||
-    pendingArtist === round?.id;
-  const wrongActionDisabled = !lockedTeam || pendingWrong === round?.id;
-  const continueDisabled = !lockedTeam || pendingContinue === round?.id;
+    pendingTitle === game.buzz_attempt_id ||
+    pendingArtist === game.buzz_attempt_id;
+  const wrongActionDisabled = !canJudge || pendingWrong === game.buzz_attempt_id;
+  const continueDisabled = !canJudge || pendingContinue === game.buzz_attempt_id;
   const nextRoundDisabled = !player.ready;
   // Bonus is independent of buzz state — it stays actionable as long as the
   // page isn't mid-request. (It must NOT be wrapped in an aria-disabled

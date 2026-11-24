@@ -76,7 +76,7 @@ describe("direct-RPC telemetry wiring", () => {
       ],
       error: null,
     });
-    await awardAttemptDirect("ABCDEF", TOKEN, "r-1", {
+    await awardAttemptDirect("ABCDEF", TOKEN, "r-1", 1, {
       title_correct: true,
       artist_correct: false,
       wrong_buzz: false,
@@ -90,7 +90,7 @@ describe("direct-RPC telemetry wiring", () => {
 
   it("wraps release_buzz_lock", async () => {
     setRpcResponse({ data: null, error: null });
-    await releaseBuzzLockDirect("ABCDEF", TOKEN);
+    await releaseBuzzLockDirect("ABCDEF", TOKEN, 1);
     expect(telemetry.tracedRpc).toHaveBeenCalledWith(
       "release_buzz_lock",
       { game_code: "ABCDEF" },

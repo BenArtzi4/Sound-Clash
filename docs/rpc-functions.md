@@ -197,7 +197,7 @@ Not idempotent. Each call increments `round_number` and creates a new row. Calle
 
 ## 3. `award_attempt`: manager scores one buzz (multi-buzz model)
 
-Called **direct from the manager browser** via Supabase PostgREST RPC (as of migration 021). Replaces the old FastAPI `POST /games/{code}/attempt` endpoint; removing the Render hop drops manager-action latency from ~400-600ms to ~150ms. The function takes the per-game `manager_token` as its last argument and validates it before any side effect, so anon EXECUTE is safe here the same way it is for `buzz_in`. Replaces the older `award_points` (migration 016). `award_attempt` does **not** close the round — a round can accept many `award_attempt` calls (one per buzz) until the manager calls `end_round` (or `start_round` for the next song defensively closes it).
+Called **direct from the manager browser** via Supabase PostgREST RPC (as of migration 021). Replaces the old FastAPI `POST /games/{code}/attempt` endpoint; removing the Render hop drops manager-action latency from ~400-600ms to ~150ms. The function takes the per-game `manager_token` as a named argument and validates it before any side effect, so anon EXECUTE is safe here the same way it is for `buzz_in`. Replaces the older `award_points` (migration 016). `award_attempt` does **not** close the round — a round can accept many `award_attempt` calls (one per buzz) until the manager calls `end_round` (or `start_round` for the next song defensively closes it).
 
 ```sql
 CREATE OR REPLACE FUNCTION award_attempt(
@@ -206,7 +206,8 @@ CREATE OR REPLACE FUNCTION award_attempt(
   p_correct_title  boolean,            -- claim the TITLE token (+10, derived server-side)
   p_correct_artist boolean,            -- claim the ARTIST token (+5, derived server-side)
   p_wrong          boolean,            -- wrong buzz (−3, derived server-side; free-guess may waive it)
-  p_manager_token  uuid                -- NONE of the 6 args carry a DEFAULT: a default would make the overload ambiguous (Postgres 42725); see mig 021. The frontend always sends all six.
+  p_manager_token  uuid,
+  p_buzz_attempt_id integer             -- ID from the game row observed by the host
 )
 RETURNS TABLE(
   team_id            uuid,
@@ -235,15 +236,18 @@ stay emergent — the UI sends **both** correct flags and the function sums
 > resolving by the distinct named-arg set (`p_correct_title/p_correct_artist/
 > p_wrong` vs `p_title/p_artist/p_wrong_buzz`). Once the boolean-sending frontend
 > (PR #218) had soaked, **migration 044** dropped the integer overload (mirrors
-> mig 023), leaving this boolean signature as the **sole** `award_attempt`
-> overload.
+> mig 023), leaving the original boolean overload in place. Migration 059 adds an
+> overload with a required `p_buzz_attempt_id` argument and keeps the original
+> overload callable. The original overload captures the held buzz at RPC entry,
+> so only clients sending the new argument protect the entire tap-to-commit window.
 
-Token check (run before any other read/write):
+Token check (run before scoring and acquiring the host-action lock):
 - Fetch `ended_at` from `active_games` (LEFT JOIN `game_secrets` for `manager_token`) for the code. Since migration 034 the token lives in `game_secrets`, not `active_games`. Missing game row → `P0002 game_not_found`. Ended → `P0001 game_ended`. Mismatched or NULL token → `28000 manager_token_required`.
 
 Behavior:
 - Derives the point magnitudes from the flags server-side: `p_correct_title → 10`, `p_correct_artist → 5`, `p_wrong → 3` (a NULL flag is treated as false). Nothing on the wire carries a magnitude.
-- Reads the current `buzzed_team_id` off `active_games`. If null → raises `P0001 no_buzz_to_score`.
+- Uses the same per-game transaction lock as `select_next_song` and `release_buzz_lock`. Reads claims after acquiring it, so concurrent verdicts cannot claim the same token twice.
+- Resolves the team only if the round and `buzz_attempt_id` match the live lock. A mismatch raises `P0001 stale_buzz`. After the scoring writes, the final game-row check rolls back the transaction if the game ended or the lock changed.
 - `p_wrong AND (p_correct_title OR p_correct_artist)` → raises `P0001 wrong_buzz_with_correct`.
 - `p_correct_title` while `title_claimed_by` is already set → raises `P0001 title_already_claimed`. Same shape for `artist_already_claimed`.
 - On success: applies score delta to the buzzed team, marks `title_claimed_by` / `artist_claimed_by` if applicable, and inserts a `game_round_attempts` row.
@@ -260,14 +264,15 @@ Behavior:
 | Bad / missing / NULL manager token | `28000 manager_token_required` |
 | Round doesn't exist | `P0002 round_not_found` |
 | Round already ended | `P0001 round_already_ended` |
-| No buzz currently held | `P0001 no_buzz_to_score` |
+| Buzz changed or was released while the verdict was pending | `P0001 stale_buzz` |
+| Original overload called with no buzz currently held | `P0001 no_buzz_to_score` |
 | `wrong_buzz` combined with `title` or `artist` | `P0001 wrong_buzz_with_correct` |
 | Title token already claimed | `P0001 title_already_claimed` |
 | Artist token already claimed | `P0001 artist_already_claimed` |
 
 ### Idempotency
 
-Not idempotent. Each successful call records one attempt and may shift token claims. The frontend guards against double-submit with a `busy` flag; the function additionally raises `title_already_claimed` / `artist_already_claimed` so a leaked double-click cannot double-award.
+A successful verdict records one attempt. A repeated claim for the same buzz is rejected as already claimed, and a repeated Wrong is rejected because the first one released the lock. Separate Song and Artist awards for the same buzz can both succeed.
 
 ### Callers
 
@@ -280,7 +285,8 @@ Added in migration 018, opened to anon callers with the manager_token check in m
 ```sql
 CREATE OR REPLACE FUNCTION release_buzz_lock(
   p_game_code     text,
-  p_manager_token uuid
+  p_manager_token uuid,
+  p_buzz_attempt_id integer
 ) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -289,12 +295,12 @@ SET search_path = public;
 
 Behavior:
 - Validates `p_manager_token` against `game_secrets.manager_token` (LEFT JOIN from `active_games`; migration 034 moved the token off `active_games`). Same error matrix as `award_attempt`: `game_not_found` / `game_ended` / `manager_token_required`.
-- Then: `UPDATE active_games SET buzzed_team_id = NULL, locked_at = NULL WHERE game_code = p_game_code`. That's the entire post-check body.
-- No-op (post-check) if no buzz is held; never raises a "nothing to release" error.
+- Clears the lock only when the observed ID matches the current ID. A release for an earlier buzz raises `P0001 stale_buzz`.
+- The original two-argument overload captures the ID at RPC entry. It still succeeds when called on a game with no held lock.
 
 ### Idempotency
 
-Idempotent on the unlock side: safe to call any number of times once authorized.
+Repeating a release with the same observed ID raises `stale_buzz` after the first release. A later buzz is unaffected.
 
 ### Callers
 

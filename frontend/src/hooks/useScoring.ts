@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useToast } from "../context/useToast";
 import { ApiError, endGame } from "../lib/api";
 import {
@@ -49,10 +49,10 @@ export interface Scoring {
   setEndConfirmOpen: React.Dispatch<React.SetStateAction<boolean>>;
   bonusOpen: boolean;
   setBonusOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  pendingTitle: string | null;
-  pendingArtist: string | null;
-  pendingWrong: string | null;
-  pendingContinue: string | null;
+  pendingTitle: number | null;
+  pendingArtist: number | null;
+  pendingWrong: number | null;
+  pendingContinue: number | null;
   pendingExtendFor: string | null;
   handleCorrectTitle: () => Promise<void>;
   handleCorrectArtist: () => Promise<void>;
@@ -142,21 +142,12 @@ export function useScoring(
       });
   }
 
-  // Optimistic "we just clicked this" markers for the per-round action buttons,
-  // each holding the round id the click happened on. They bridge the ~50-
-  // 100ms gap between the RPC returning and the Realtime UPDATE on game_rounds
-  // (title_claimed_by / artist_claimed_by) or active_games (buzzed_team_id)
-  // arriving -- keeping the button disabled across that gap so it doesn't flash
-  // enabled in the window. The flag is naturally self-clearing on round change
-  // (stale id won't equal the new round.id) and gets reset by the effects
-  // below for tidiness. Cleared in each handler's catch on failure so a
-  // transient RPC error doesn't leave the button permanently disabled.
-  // pendingContinue mirrors pendingWrong: Continue releases the buzz lock, so
-  // it stays disabled until the Realtime UPDATE clears buzzed_team_id.
-  const [pendingTitle, setPendingTitle] = useState<string | null>(null);
-  const [pendingArtist, setPendingArtist] = useState<string | null>(null);
-  const [pendingWrong, setPendingWrong] = useState<string | null>(null);
-  const [pendingContinue, setPendingContinue] = useState<string | null>(null);
+  // Pending actions belong to the observed lock. A new buzz can replace it
+  // before an older request has returned.
+  const [pendingTitle, setPendingTitle] = useState<number | null>(null);
+  const [pendingArtist, setPendingArtist] = useState<number | null>(null);
+  const [pendingWrong, setPendingWrong] = useState<number | null>(null);
+  const [pendingContinue, setPendingContinue] = useState<number | null>(null);
   // Extend-game handoff, same shape as the flags above but keyed on the
   // expires_at value the click happened on: the banner's button stays disabled
   // until the Realtime UPDATE lands with the bumped value (at which point the
@@ -174,26 +165,29 @@ export function useScoring(
   // Matters most for handleNextRound, where a duplicate fire would insert an
   // orphan game_rounds row (the other actions are idempotent via the SQL
   // function's already-claimed / no-buzz-to-score branches).
-  const titleInFlightRef = useRef(false);
-  const artistInFlightRef = useRef(false);
-  const wrongInFlightRef = useRef(false);
-  const continueInFlightRef = useRef(false);
+  const titleInFlightRef = useRef<number | null>(null);
+  const artistInFlightRef = useRef<number | null>(null);
+  const wrongInFlightRef = useRef<number | null>(null);
+  const continueInFlightRef = useRef<number | null>(null);
   const nextRoundInFlightRef = useRef(false);
   const lastCommittedRoundRef = useRef(0);
   const extendInFlightRef = useRef(false);
 
-  // When we get the buzz lock signal, pause playback on the live player.
+  const attemptId = state?.game.buzz_attempt_id ?? null;
+  const latestGame = useRef(state?.game);
+  useLayoutEffect(() => {
+    latestGame.current = state?.game;
+  }, [state?.game]);
+
+  // Pause on every winning buzz, including a new lock by the same team.
   useEffect(() => {
     if (state?.game.buzzed_team_id != null) {
       livePlayer()?.pause();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.game.buzzed_team_id]);
+  }, [state?.game.buzzed_team_id, attemptId]);
 
-  // Reset the per-click pending flags whenever the round changes. The
-  // disabled checks already compare against `round?.id` so stale flags
-  // are inert, but clearing them keeps state tidy and avoids confusion
-  // when debugging.
+  // A new round discards pending feedback for the previous round.
   const currentRoundId = state?.currentRound?.id ?? null;
   useEffect(() => {
     setPendingTitle(null);
@@ -205,18 +199,6 @@ export function useScoring(
     optimisticSongIdRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoundId]);
-
-  // Wrong and Continue both release the buzz lock, so a follow-up buzz in the
-  // same round must re-enable their buttons. `pendingWrong` / `pendingContinue`
-  // only bridge the gap between the RPC returning and the Realtime UPDATE on
-  // buzzed_team_id; once that UPDATE has landed (lock cleared) the flags have
-  // done their job and must drop or the next buzz's click stays blocked.
-  useEffect(() => {
-    if (state?.game.buzzed_team_id == null) {
-      setPendingWrong(null);
-      setPendingContinue(null);
-    }
-  }, [state?.game.buzzed_team_id]);
 
   // After a manager-tab refresh mid-round, currentSong is null but the round
   // row still has a song_id. Resolve it and push it into the player so the
@@ -299,6 +281,11 @@ export function useScoring(
         toast(noMoreSongsMessage(), { variant: "error" });
         return;
       }
+      if (err.message === "stale_buzz" || err.message === "round_already_ended") {
+        toast("That buzz changed. Check the current team before scoring.", { variant: "info" });
+        void refreshGame();
+        return;
+      }
       if (err.message === "stale_round") {
         toast("The round already advanced. The console is catching up.", { variant: "info" });
         return;
@@ -321,6 +308,7 @@ export function useScoring(
 
   async function applyAttempt(
     roundId: string,
+    buzzAttempt: number,
     expected: number,
     flags: { title_correct: boolean; artist_correct: boolean; wrong_buzz: boolean },
   ): Promise<void> {
@@ -328,7 +316,7 @@ export function useScoring(
     if (!managerToken || !teamId) return;
     const finish = beginScore(teamId, expected);
     try {
-      const result = await awardAttemptDirect(gameCode, managerToken, roundId, flags);
+      const result = await awardAttemptDirect(gameCode, managerToken, roundId, buzzAttempt, flags);
       finish(result.team_id === teamId ? result.team_total_score : null);
     } catch (err) {
       finish(null);
@@ -344,56 +332,56 @@ export function useScoring(
   }
 
   async function handleCorrectTitle() {
-    if (titleInFlightRef.current) return;
+    if (titleInFlightRef.current === attemptId) return;
     if (!state?.currentRound || !managerToken) return;
-    if (!state.game.buzzed_team_id) return;
-    titleInFlightRef.current = true;
+    if (!state.game.buzzed_team_id || attemptId === null) return;
+    titleInFlightRef.current = attemptId;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
-    if (teamName) toast(`+${TITLE_POINTS} to ${teamName}`, { variant: "success" });
+    if (teamName) toast(`+${TITLE_POINTS} to ${teamName} pending`, { variant: "info" });
     // Pending flag flips the disabled prop synchronously on click and stays
     // set until the Realtime UPDATE on game_rounds.title_claimed_by lands
     // (after which the semantic gate takes over) -- no enable/disable
     // flicker in the gap.
-    setPendingTitle(roundId);
+    setPendingTitle(attemptId);
     markScoreStart(gameCode, roundId, "title");
     try {
-      await applyAttempt(roundId, TITLE_POINTS, {
+      await applyAttempt(roundId, attemptId, TITLE_POINTS, {
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
       });
     } catch (err) {
       failScore(roundId, "title");
-      setPendingTitle(null);
+      setPendingTitle((pending) => (pending === attemptId ? null : pending));
       reportError(err);
     } finally {
-      titleInFlightRef.current = false;
+      if (titleInFlightRef.current === attemptId) titleInFlightRef.current = null;
     }
   }
 
   async function handleCorrectArtist() {
-    if (artistInFlightRef.current) return;
+    if (artistInFlightRef.current === attemptId) return;
     if (!state?.currentRound || !managerToken) return;
-    if (!state.game.buzzed_team_id) return;
-    artistInFlightRef.current = true;
+    if (!state.game.buzzed_team_id || attemptId === null) return;
+    artistInFlightRef.current = attemptId;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
-    if (teamName) toast(`+${ARTIST_POINTS} to ${teamName}`, { variant: "success" });
-    setPendingArtist(roundId);
+    if (teamName) toast(`+${ARTIST_POINTS} to ${teamName} pending`, { variant: "info" });
+    setPendingArtist(attemptId);
     markScoreStart(gameCode, roundId, "artist");
     try {
-      await applyAttempt(roundId, ARTIST_POINTS, {
+      await applyAttempt(roundId, attemptId, ARTIST_POINTS, {
         title_correct: false,
         artist_correct: true,
         wrong_buzz: false,
       });
     } catch (err) {
       failScore(roundId, "artist");
-      setPendingArtist(null);
+      setPendingArtist((pending) => (pending === attemptId ? null : pending));
       reportError(err);
     } finally {
-      artistInFlightRef.current = false;
+      if (artistInFlightRef.current === attemptId) artistInFlightRef.current = null;
     }
   }
 
@@ -406,53 +394,62 @@ export function useScoring(
   // (lock held, player paused) and wait for the manager's "Next round" click,
   // mirroring how a regular round behaves once both title + artist are claimed.
   async function handleCorrectSoundtrack() {
-    if (titleInFlightRef.current || artistInFlightRef.current) return;
+    if (titleInFlightRef.current === attemptId || artistInFlightRef.current === attemptId) return;
     if (!state?.currentRound || !managerToken) return;
-    if (!state.game.buzzed_team_id) return;
-    titleInFlightRef.current = true;
-    artistInFlightRef.current = true;
+    if (!state.game.buzzed_team_id || attemptId === null) return;
+    titleInFlightRef.current = attemptId;
+    artistInFlightRef.current = attemptId;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
-    if (teamName) toast(`+${SOUNDTRACK_POINTS} to ${teamName}`, { variant: "success" });
-    setPendingTitle(roundId);
-    setPendingArtist(roundId);
+    if (teamName) toast(`+${SOUNDTRACK_POINTS} to ${teamName} pending`, { variant: "info" });
+    setPendingTitle(attemptId);
+    setPendingArtist(attemptId);
     markScoreStart(gameCode, roundId, "soundtrack");
     try {
-      await applyAttempt(roundId, SOUNDTRACK_POINTS, {
+      await applyAttempt(roundId, attemptId, SOUNDTRACK_POINTS, {
         title_correct: true,
         artist_correct: true,
         wrong_buzz: false,
       });
     } catch (err) {
       failScore(roundId, "soundtrack");
-      setPendingTitle(null);
-      setPendingArtist(null);
+      setPendingTitle((pending) => (pending === attemptId ? null : pending));
+      setPendingArtist((pending) => (pending === attemptId ? null : pending));
       reportError(err);
     } finally {
-      titleInFlightRef.current = false;
-      artistInFlightRef.current = false;
+      if (titleInFlightRef.current === attemptId) titleInFlightRef.current = null;
+      if (artistInFlightRef.current === attemptId) artistInFlightRef.current = null;
+    }
+  }
+
+  function resumeAfterRelease(roundId: string, releasedAttempt: number) {
+    const game = latestGame.current;
+    if (
+      game?.game_code === gameCode &&
+      game.status === "playing" &&
+      !nextRoundInFlightRef.current &&
+      game.round_number >= lastCommittedRoundRef.current &&
+      game.current_round_id === roundId &&
+      (game.buzzed_team_id === null || game.buzz_attempt_id === releasedAttempt)
+    ) {
+      livePlayer()?.play();
     }
   }
 
   async function handleContinueRound() {
-    if (continueInFlightRef.current) return;
-    if (!managerToken) return;
-    continueInFlightRef.current = true;
-    // Optimistic toast fires before the RPC so the click feels instant; the
-    // Realtime UPDATE on active_games.buzzed_team_id is still the source of
-    // truth for re-arming the buzzers.
-    toast("Round continued", { variant: "info" });
-    // Keep Continue disabled until the lock actually clears via Realtime, the
-    // same handoff pendingWrong uses -- no enable/disable flash in the gap.
-    setPendingContinue(state?.currentRound?.id ?? null);
+    if (!managerToken || attemptId === null || continueInFlightRef.current === attemptId) return;
+    if (!currentRoundId) return;
+    continueInFlightRef.current = attemptId;
+    toast("Continuing round…", { variant: "info" });
+    setPendingContinue(attemptId);
     try {
-      await releaseBuzzLockDirect(gameCode, managerToken);
-      livePlayer()?.play();
+      await releaseBuzzLockDirect(gameCode, managerToken, attemptId);
+      resumeAfterRelease(currentRoundId, attemptId);
     } catch (err) {
-      setPendingContinue(null);
+      setPendingContinue((pending) => (pending === attemptId ? null : pending));
       reportError(err);
     } finally {
-      continueInFlightRef.current = false;
+      if (continueInFlightRef.current === attemptId) continueInFlightRef.current = null;
     }
   }
 
@@ -467,27 +464,28 @@ export function useScoring(
   // Playback resume is held until the RPC commits so a failed Wrong leaves the
   // song paused with the lock still held -- the manager can simply retry.
   async function handleWrong() {
-    if (wrongInFlightRef.current) return;
+    if (wrongInFlightRef.current === attemptId) return;
     if (!state?.currentRound || !managerToken) return;
-    if (!state.game.buzzed_team_id) return;
-    wrongInFlightRef.current = true;
+    if (!state.game.buzzed_team_id || attemptId === null) return;
+    wrongInFlightRef.current = attemptId;
     const roundId = state.currentRound.id;
     const teamName = buzzedTeamName();
     const freeGuess = state.currentRound.free_guess_active;
-    if (teamName && !freeGuess) toast(`-${WRONG_BUZZ_PENALTY} to ${teamName}`, { variant: "info" });
-    setPendingWrong(roundId);
+    if (teamName && !freeGuess)
+      toast(`-${WRONG_BUZZ_PENALTY} to ${teamName} pending`, { variant: "info" });
+    setPendingWrong(attemptId);
     try {
-      await applyAttempt(roundId, freeGuess ? 0 : -WRONG_BUZZ_PENALTY, {
+      await applyAttempt(roundId, attemptId, freeGuess ? 0 : -WRONG_BUZZ_PENALTY, {
         title_correct: false,
         artist_correct: false,
         wrong_buzz: true,
       });
-      livePlayer()?.play();
+      resumeAfterRelease(roundId, attemptId);
     } catch (err) {
-      setPendingWrong(null);
+      setPendingWrong((pending) => (pending === attemptId ? null : pending));
       reportError(err);
     } finally {
-      wrongInFlightRef.current = false;
+      if (wrongInFlightRef.current === attemptId) wrongInFlightRef.current = null;
     }
   }
 

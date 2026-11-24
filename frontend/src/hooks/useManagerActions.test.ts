@@ -41,7 +41,7 @@ describe("awardAttemptDirect", () => {
       error: null,
     });
 
-    const res = await awardAttemptDirect("ABCDEF", TOKEN, "r1", {
+    const res = await awardAttemptDirect("ABCDEF", TOKEN, "r1", 1, {
       title_correct: true,
       artist_correct: false,
       wrong_buzz: false,
@@ -53,6 +53,7 @@ describe("awardAttemptDirect", () => {
     expect(supabaseMock.rpc).toHaveBeenCalledWith("award_attempt", {
       p_game_code: "ABCDEF",
       p_round_id: "r1",
+      p_buzz_attempt_id: 1,
       p_correct_title: true,
       p_correct_artist: false,
       p_wrong: false,
@@ -74,7 +75,7 @@ describe("awardAttemptDirect", () => {
       error: null,
     });
 
-    await awardAttemptDirect("ABCDEF", TOKEN, "r1", {
+    await awardAttemptDirect("ABCDEF", TOKEN, "r1", 1, {
       title_correct: false,
       artist_correct: false,
       wrong_buzz: true,
@@ -95,7 +96,7 @@ describe("awardAttemptDirect", () => {
     });
 
     await expect(
-      awardAttemptDirect("ABCDEF", "wrong-token", "r1", {
+      awardAttemptDirect("ABCDEF", "wrong-token", "r1", 1, {
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
@@ -110,7 +111,7 @@ describe("awardAttemptDirect", () => {
   it("raises when PostgREST returns an empty array (no row from RETURNS TABLE)", async () => {
     setRpcResponse({ data: [], error: null });
     await expect(
-      awardAttemptDirect("ABCDEF", TOKEN, "r1", {
+      awardAttemptDirect("ABCDEF", TOKEN, "r1", 1, {
         title_correct: true,
         artist_correct: false,
         wrong_buzz: false,
@@ -161,9 +162,10 @@ describe("awardBonusDirect", () => {
 describe("releaseBuzzLockDirect", () => {
   it("passes the manager token", async () => {
     setRpcResponse({ data: null, error: null });
-    await releaseBuzzLockDirect("ABCDEF", TOKEN);
+    await releaseBuzzLockDirect("ABCDEF", TOKEN, 1);
     expect(supabaseMock.rpc).toHaveBeenCalledWith("release_buzz_lock", {
       p_game_code: "ABCDEF",
+      p_buzz_attempt_id: 1,
       p_manager_token: TOKEN,
     });
   });
@@ -173,7 +175,7 @@ describe("releaseBuzzLockDirect", () => {
       data: null,
       error: { message: "manager_token_required", code: "28000" },
     });
-    await expect(releaseBuzzLockDirect("ABCDEF", "wrong")).rejects.toBeInstanceOf(RpcError);
+    await expect(releaseBuzzLockDirect("ABCDEF", "wrong", 1)).rejects.toBeInstanceOf(RpcError);
   });
 });
 

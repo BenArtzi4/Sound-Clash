@@ -2,11 +2,8 @@
 // console + four team tabs + the display board), then verified against ground
 // truth in the DB.
 //
-// Target is 20 rounds. Against the local real catalog (hundreds of Rock songs)
-// all 20 run; against the tiny CI seed we cap at the available pool so the game
-// never hits `no_more_songs` (same approach as soundtrack_playthrough). Either
-// way the test exercises four teams, many rounds, live scoring, the podium, and
-// the durable game_history archive.
+// Run 10 rounds on the small CI mix and up to 20 with the real catalog.
+// Check the four team phones, display, podium and durable game history.
 //
 // Teams rotate through title, artist and combined awards. A full game also
 // exercises a wrong guess and rebuzz, Continue, a free wrong guess, an
@@ -34,14 +31,19 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 function svc(): HeadersInit {
   if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for DB assertions");
+    throw new Error(
+      "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for DB assertions",
+    );
   }
   return { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: svc() });
-  if (!res.ok) throw new Error(`GET ${path} -> ${res.status} ${await res.text()}`);
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: svc(),
+  });
+  if (!res.ok)
+    throw new Error(`GET ${path} -> ${res.status} ${await res.text()}`);
   return (await res.json()) as T;
 }
 
@@ -52,19 +54,21 @@ function comboFor(teamIdx: number, round: number): AttemptToggles {
   return round === 8 ? { title: true, artist: true } : { title: true }; // Delta: 10 (15 on r8)
 }
 
-const pointsFor = (c: AttemptToggles): number => (c.title ? 10 : 0) + (c.artist ? 5 : 0);
+const pointsFor = (c: AttemptToggles): number =>
+  (c.title ? 10 : 0) + (c.artist ? 5 : 0);
 
 test("4 teams, up to 20 rounds: scoring, unique songs, podium, and archive", async ({
   browser,
 }) => {
   test.setTimeout(360_000); // up to 20 rounds across 6 browser contexts
 
-  // Size the playthrough to the Rock pool so the tiny CI seed never exhausts it.
-  const pool = await countSongsInGenreSlugs(["rock"]);
+  const pool = await countSongsInGenreSlugs(["rock", "pop", "electronic"]);
   const TOTAL = Math.min(TARGET_ROUNDS, pool);
-  expect(TOTAL).toBeGreaterThanOrEqual(1);
+  expect(TOTAL).toBeGreaterThanOrEqual(10);
 
-  const manager = await openManagerAndCreateGame(browser, { genreName: "Rock" });
+  const manager = await openManagerAndCreateGame(browser, {
+    genreNames: ["Rock", "Pop", "Electronic"],
+  });
   const code = manager.gameCode;
 
   const teamNames = ["Alpha", "Bravo", "Charlie", "Delta"];
@@ -77,12 +81,19 @@ test("4 teams, up to 20 rounds: scoring, unique songs, podium, and archive", asy
   const display = await displayCtx.newPage();
   await display.goto(`/display/${code}`);
   for (const name of teamNames) {
-    await expect(display.locator(`[data-team-id]:has-text("${name}")`).first()).toBeVisible({
+    await expect(
+      display.locator(`[data-team-id]:has-text("${name}")`).first(),
+    ).toBeVisible({
       timeout: 15_000,
     });
   }
 
-  const expected: Record<string, number> = { Alpha: 0, Bravo: 0, Charlie: 0, Delta: 0 };
+  const expected: Record<string, number> = {
+    Alpha: 0,
+    Bravo: 0,
+    Charlie: 0,
+    Delta: 0,
+  };
 
   // Bootstrap: open round 1 (the "Start game" click; header goes Round 0 -> 1).
   // Each iteration then scores the live round and advances to the next; the last
@@ -100,6 +111,17 @@ test("4 teams, up to 20 rounds: scoring, unique songs, podium, and archive", asy
     }
 
     await buzzAndExpectWinner(team);
+    await expect(manager.page.getByTestId("status-text")).toContainText(name);
+    await Promise.all(
+      teams
+        .filter((other) => other !== team)
+        .map((other) =>
+          expect(other.page.getByTestId("buzz")).toHaveAttribute(
+            "data-tone",
+            "locked-other",
+          ),
+        ),
+    );
     if (r === 2) {
       await markWrong(manager.page);
       expected[name]! -= 3;
@@ -131,17 +153,30 @@ test("4 teams, up to 20 rounds: scoring, unique songs, podium, and archive", asy
       );
     }
 
-    // Live scoreboard must reflect this team's new running total (scoped to the
-    // team's own row, so name+score must co-occur).
-    await expect(
-      display.locator(`[data-team-id]:has-text("${name}"):has-text("${expected[name]}")`).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await Promise.all(
+      teams.map(async ({ page, name: member }) => {
+        await expect(page.getByTestId("standing-score")).toHaveText(
+          `${expected[member]} pts`,
+        );
+        const row = display
+          .locator("[data-team-id]")
+          .filter({ hasText: member })
+          .first();
+        await expect(row.locator("span").last()).toHaveText(
+          String(expected[member]),
+        );
+      }),
+    );
   }
 
   // Final live totals, all four teams, exact.
   for (const name of teamNames) {
     await expect(
-      display.locator(`[data-team-id]:has-text("${name}"):has-text("${expected[name]}")`).first(),
+      display
+        .locator(
+          `[data-team-id]:has-text("${name}"):has-text("${expected[name]}")`,
+        )
+        .first(),
     ).toBeVisible({ timeout: 10_000 });
   }
 
@@ -153,21 +188,26 @@ test("4 teams, up to 20 rounds: scoring, unique songs, podium, and archive", asy
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /^end game$/i }).click();
 
-  await expect(display.getByRole("heading", { name: /final results/i })).toBeVisible({
+  await expect(
+    display.getByRole("heading", { name: /final results/i }),
+  ).toBeVisible({
     timeout: 15_000,
   });
   await expect(display.getByText("WINNER")).toBeVisible();
   const finalSb = display.getByTestId("final-scoreboard");
   for (const name of teamNames) {
-    await expect(finalSb.locator(`[data-team-id]:has-text("${name}")`)).toBeVisible();
+    await expect(
+      finalSb.locator(`[data-team-id]:has-text("${name}")`),
+    ).toBeVisible();
   }
   // Alpha is the unique top scorer in this scripted playthrough.
-  const winnerName = Object.entries(expected).sort((a, b) => b[1] - a[1])[0]![0];
+  const winnerName = Object.entries(expected).sort(
+    (a, b) => b[1] - a[1],
+  )[0]![0];
   expect(winnerName).toBe("Alpha");
-  await expect(finalSb.locator(`[data-team-id]:has-text("${winnerName}")`)).toHaveAttribute(
-    "data-rank",
-    "1",
-  );
+  await expect(
+    finalSb.locator(`[data-team-id]:has-text("${winnerName}")`),
+  ).toHaveAttribute("data-rank", "1");
 
   // --- Ground truth #1: live game_teams scores ---
   const gtRows = await getJson<Array<{ name: string; score: number }>>(

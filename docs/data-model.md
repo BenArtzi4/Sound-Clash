@@ -75,6 +75,7 @@ CREATE TABLE active_games (
   current_round_id  uuid,                              -- FK added below
   buzzed_team_id    uuid,                              -- nullable; the lock
   locked_at         timestamptz,                       -- server-authoritative buzz time
+  buzz_attempt_id   integer,                           -- stable identity of the held buzz
   buzz_revision     integer NOT NULL DEFAULT 0,        -- orders game rows across Realtime and REST
   started_at        timestamptz NOT NULL DEFAULT now(),
   ended_at          timestamptz,
@@ -317,7 +318,7 @@ Default `now() + 4 hours`, stamped at game **creation** — lobby time counts ag
 
 ### `active_games.buzzed_team_id` and `locked_at`
 
-These two columns implement the buzzer lock. Both are NULL when no team holds the buzz. Set together by the `buzz_in` RPC. Cleared together by `start_round`, `award_attempt`, and `end_round`. This is the **only** buzzer lock the running system reads (the UI pages and `award_attempt` all read it here).
+`buzzed_team_id` and `locked_at` implement the buzzer lock. Both are NULL when no team holds the buzz. Set together by the `buzz_in` RPC. Cleared together by `start_round`, `award_attempt`, and `end_round`. This is the **only** buzzer lock the running system reads (the UI pages and `award_attempt` all read it here). Migration 059 assigns `buzz_attempt_id` from the new row revision when a lock is acquired. The ID survives a countdown refresh and clears with the lock. The same team receives a new ID on its next buzz, including in the same round.
 
 ### `game_rounds.buzzed_team_id` — vestigial (mig 035)
 
@@ -370,8 +371,8 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | Function | Purpose | Caller |
 |---|---|---|
 | `buzz_in(p_game_code, p_team_id)` | Atomic buzzer lock | Browser via PostgREST (anon) |
-| `award_attempt(p_game_code, p_round_id, p_correct_title, p_correct_artist, p_wrong, p_manager_token)` | Score one buzz (DB derives the +10/+5/−3 magnitudes); round stays open | Browser via PostgREST (`manager_token`) |
-| `release_buzz_lock(p_game_code, p_manager_token)` | "Continue round" — clear the buzzer lock so play resumes | Browser via PostgREST (`manager_token`) |
+| `award_attempt(p_game_code, p_round_id, p_correct_title, p_correct_artist, p_wrong, p_manager_token, p_buzz_attempt_id)` | Score the observed buzz (DB derives the +10/+5/−3 magnitudes); round stays open | Browser via PostgREST (`manager_token`) |
+| `release_buzz_lock(p_game_code, p_manager_token, p_buzz_attempt_id)` | "Continue round" — clear the buzzer lock so play resumes | Browser via PostgREST (`manager_token`) |
 | `select_next_song(p_game_code, p_manager_token, p_song_id DEFAULT NULL)` | Close the prior round and open the next on an unplayed song | Browser via PostgREST (`manager_token`) |
 | `peek_next_song(p_game_code, p_manager_token)` | Read-only next-song candidate, so the Next-round tap can load it on the host's player in the gesture (no round advance) | Browser via PostgREST (`manager_token`) |
 | `extend_game(p_game_code, p_manager_token)` | Push `expires_at` out by 1h ("Keep playing +1h") | Browser via PostgREST (`manager_token`) |

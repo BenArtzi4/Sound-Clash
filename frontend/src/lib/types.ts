@@ -13,6 +13,7 @@ export interface ActiveGame {
   current_round_id: string | null;
   buzzed_team_id: string | null;
   locked_at: string | null;
+  buzz_attempt_id?: number | null; // Stable until the held lock changes.
   buzz_revision?: number; // Absent until migration 058 is applied.
   started_at: string;
   ended_at: string | null;

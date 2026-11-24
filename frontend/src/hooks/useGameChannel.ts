@@ -101,7 +101,11 @@ function gameIsOlder(game: ActiveGame, current: ActiveGame): boolean {
   return (
     age < 0 ||
     (age === 0 &&
-      (game.buzz_revision < current.buzz_revision || game.round_number < current.round_number))
+      (game.buzz_revision < current.buzz_revision ||
+        game.round_number < current.round_number ||
+        (game.buzz_revision === current.buzz_revision &&
+          game.buzz_attempt_id === undefined &&
+          current.buzz_attempt_id !== undefined)))
   );
 }
 
@@ -122,7 +126,9 @@ function isBuzzLock(payload: unknown): payload is BuzzLock {
     typeof lock.locked_at === "string" &&
     Number.isFinite(Date.parse(lock.locked_at)) &&
     typeof lock.buzz_revision === "number" &&
-    Number.isSafeInteger(lock.buzz_revision)
+    Number.isSafeInteger(lock.buzz_revision) &&
+    (lock.buzz_attempt_id === undefined ||
+      (typeof lock.buzz_attempt_id === "number" && Number.isSafeInteger(lock.buzz_attempt_id)))
   );
 }
 
@@ -135,6 +141,7 @@ function activeGameEqual(a: ActiveGame, b: ActiveGame): boolean {
     a.current_round_id !== b.current_round_id ||
     a.buzzed_team_id !== b.buzzed_team_id ||
     a.locked_at !== b.locked_at ||
+    a.buzz_attempt_id !== b.buzz_attempt_id ||
     a.buzz_revision !== b.buzz_revision ||
     a.started_at !== b.started_at ||
     a.ended_at !== b.ended_at ||
@@ -211,6 +218,7 @@ function deriveRoundAdvance(game: ActiveGame, round: GameRound): ActiveGame {
     current_song_id: round.song_id,
     current_round_id: round.id,
     buzzed_team_id: null,
+    buzz_attempt_id: game.buzz_attempt_id === undefined ? undefined : null,
     locked_at: null,
   };
 }
@@ -435,7 +443,9 @@ export function useGameChannel(gameCode: string): {
     let lastAppliedHydrateId = 0;
     let inFlightHydrates = 0;
     let checkingUnlock = false;
-    let legacyGameSchema = false;
+    const revisionColumns = `${ACTIVE_GAME_COLUMNS},buzz_revision`;
+    const attemptColumns = `${revisionColumns},buzz_attempt_id`;
+    let gameColumns = attemptColumns;
     let buzzChannel: RealtimeChannel | undefined;
     let gameChange: { requestId: number; row: ActiveGame } | undefined;
     let roundInsert: { requestId: number; row: GameRound } | undefined;
@@ -572,6 +582,7 @@ export function useGameChannel(gameCode: string): {
             return;
           }
           const row = typed.new as ActiveGame;
+          if (row.buzz_attempt_id !== undefined) gameColumns = attemptColumns;
           observeLock(row, true);
           if (row.buzzed_team_id) {
             resolveBuzzE2E(row.buzzed_team_id, typed.commit_timestamp);
@@ -629,7 +640,10 @@ export function useGameChannel(gameCode: string): {
       buzzChannel = supabase
         .channel(`buzz:${gameCode}`, { config: { private: true } })
         .on("broadcast", { event: "buzz_locked" }, ({ payload }) => {
-          if (isBuzzLock(payload)) dispatchOrQueue({ type: "BUZZ_LOCK", lock: payload });
+          if (isBuzzLock(payload)) {
+            if (payload.buzz_attempt_id !== undefined) gameColumns = attemptColumns;
+            dispatchOrQueue({ type: "BUZZ_LOCK", lock: payload });
+          }
         })
         .subscribe();
     }
@@ -637,12 +651,18 @@ export function useGameChannel(gameCode: string): {
     async function readGame() {
       const query = (columns: string) =>
         supabase.from("active_games").select(columns).eq("game_code", gameCode).maybeSingle();
-      if (legacyGameSchema) return query(ACTIVE_GAME_COLUMNS);
-      const result = await query(`${ACTIVE_GAME_COLUMNS},buzz_revision`);
-      if (result.error?.code === "42703") {
-        // The frontend preview can run ahead of the production migration.
-        legacyGameSchema = true;
-        return query(ACTIVE_GAME_COLUMNS);
+      let columns = gameColumns;
+      let result = await query(columns);
+      while (result.error?.code === "42703" && columns !== ACTIVE_GAME_COLUMNS) {
+        if (columns === gameColumns) {
+          // Preview can run ahead of either migration. Keep Broadcast if available.
+          gameColumns =
+            columns === attemptColumns && !result.error.message.includes("buzz_revision")
+              ? revisionColumns
+              : ACTIVE_GAME_COLUMNS;
+        }
+        columns = gameColumns;
+        result = await query(columns);
       }
       return result;
     }
@@ -847,7 +867,10 @@ export function useGameChannel(gameCode: string): {
       }
     }
 
-    refreshRef.current = () => hydrate({ resync: true });
+    refreshRef.current = () => {
+      gameColumns = attemptColumns;
+      return hydrate({ resync: true });
+    };
     return () => {
       cancelled = true;
       refreshRef.current = null;

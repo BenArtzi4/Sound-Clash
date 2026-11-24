@@ -664,6 +664,7 @@ describe("useGameChannel - subscription", () => {
     const lock = {
       ...game,
       buzz_revision: 2,
+      buzz_attempt_id: 2,
       buzzed_team_id: "team-1",
       locked_at: "2026-05-05T12:00:30Z",
     };
@@ -673,6 +674,15 @@ describe("useGameChannel - subscription", () => {
     expect(result.current.state?.game.buzzed_team_id).toBe("team-1");
     await waitFor(() => expect(result.current.state?.teams.get("team-1")?.name).toBe("Alice"));
     expect(result.current.state?.currentRound?.id).toBe("round-1");
+    expect(result.current.state?.game.buzz_attempt_id).toBe(2);
+
+    setHydrate({
+      game: { ...lock, buzz_attempt_id: undefined },
+      teams: [makeTeam()],
+      rounds: [makeRound()],
+    });
+    await act(async () => result.current.refresh());
+    expect(result.current.state?.game.buzz_attempt_id).toBe(2);
 
     setHydrate({ game });
     await act(async () => result.current.refresh());
