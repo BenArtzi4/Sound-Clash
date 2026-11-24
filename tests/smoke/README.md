@@ -45,3 +45,16 @@ The Playwright spec derives `API_URL` from `BASE_URL` if not set (`https://sound
 ## When to run
 
 After every backend or frontend deploy that touches user-visible behaviour, and after applying any prod migration (see `docs/runbook.md`). For pre-event validation, see `docs/pre-event-checklist.md`.
+
+## Custom setlist no-regression checks (SQL, production)
+
+Two SQL files prove that migrations 060 and 061 (custom setlists, phase 1) change nothing a normal game runs on and make no genre round slower (spec §10 of `docs/planning/2026-11-24-custom-setlist-design.md`). Each file's header has the full instructions.
+
+- `setlist_fingerprint.sql`: one read-only SELECT that lists `(kind, name, fingerprint)` rows: the md5 of the definitions of `buzz_in`, `award_attempt`, `release_buzz_lock`, `start_round`, `end_round`, `pick_next_song`, the 3-argument `select_next_song` wrapper and every function behind a non-internal trigger on `active_games` (with their owners and grants), plus `active_games`' columns, constraints, indexes, non-internal triggers, owner, grants, RLS flags, policies, replica identity and `supabase_realtime` publication rows. Run it on production before 060 and again after 060 and 061, then `diff` the two outputs. **Pass: the diff is empty.** Safe while games are live.
+- `setlist_timing_selfcheck.sql`: one DO block that rolls itself back by raising `TIMING_ROLLBACK ...`. It times 200 `peek_next_song` and 200 guarded `select_next_song` calls on synthetic 8-genre games with today's bodies, then with migration 060's bodies (installed with `EXECUTE`, and its two tables without foreign keys so no lock lands on `active_games`), then 200 `pick_next_pool_song` calls on a 300-song pool. Run it on production **before** 060, only after `SELECT count(*) FROM active_games WHERE ended_at IS NULL AND expires_at > now()`. **Pass: the error message starts with `TIMING_ROLLBACK `** (any other error is a failed run), `new_peek <= old_peek + 1`, `new_select <= old_select + 1` and `pool_pick < 10` (ms averages; `verdict=` applies them). Then run the leftover check from the header (synthetic games `ZT0%` = 0, the pool tables absent). It takes about 13 s on a 1,700-song local catalog.
+- `gen_setlist_timing.py`: writes `setlist_timing_selfcheck.sql`, cutting the three function bodies out of `db/migrations/060_game_song_pool.sql` byte for byte. Never edit the `.sql` by hand: after a change to those bodies in 060, run `python tests/smoke/gen_setlist_timing.py` (`--check` exits 1 when the file is stale).
+
+```bash
+supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" > fingerprint-before.txt
+supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_timing_selfcheck.sql"
+```
