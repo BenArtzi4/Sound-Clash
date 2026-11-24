@@ -96,6 +96,7 @@ export async function stubYouTube(page: Page): Promise<void> {
             queueMicrotask(() => events?.onReady?.());
           }
           loadVideoById() {}
+          cueVideoById() {}
           mute() {}
           unMute() {}
           seekTo() {}

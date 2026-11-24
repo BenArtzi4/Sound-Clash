@@ -167,7 +167,7 @@ This project does not currently cut versioned releases; every change lands direc
 
 ### Fixed
 
-- 2026-11-24: Hosts can use **Play song** or **Retry playback** to start a silent song from its cue point and keep the current round.
+- 2026-11-24: Hosts can use **Play song** or **Retry playback** to start a silent song from its cue point and keep the current round. (#439)
 
 - 2026-11-23: Scores and Continue stay tied to the buzz the host saw, even when two host actions overlap. (#376)
 - 2026-11-22: **Final results on a phone held upright as the big screen no longer squeeze the leaderboard when many teams tie.** The podium card that lists the tied teams now gives up room first (its names are cut inside the card), while the winner's card always keeps its whole name, score and label, so every leaderboard row keeps its full rank circle and score; before, a 6-way tie on an iPhone SE, or a 10-way tie on any phone, cut the rows to a few pixels. (#428, #429)
