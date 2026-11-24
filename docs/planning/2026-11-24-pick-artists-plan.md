@@ -128,7 +128,7 @@ async def test_artist_game_plays_only_its_pool(db)              # select_next_so
 - [ ] **Step 2: Run, see them fail** (the functions do not exist).
 - [ ] **Step 3: Write the migration.**
 - [ ] **Step 4: Run the tests. Expected: pass.** Apply the migration twice on the local stack. Run the existing `tests/db` files for `select_next_song`, `peek_next_song` and the setlist pool: pass, unchanged.
-- [ ] **Step 5: Timing.** On the local stack with 2,000 made-up songs by 900 artists, run each of `list_pickable_artists()` and `artist_pick_status(<50 keys>)` 20 times. Write the two medians in the PR. Target: under 30 ms each.
+- [ ] **Step 5: Timing.** On the local stack with 2,000 made-up songs by 900 artists, run each of `list_pickable_artists()` and `artist_pick_status(<50 keys>)` 20 times. Write the two medians in the PR. Target: under 30 ms each. If either median is over 30 ms, say so in the PR and propose a precomputed table refreshed when the catalog changes; do not cache inside the function.
 - [ ] **Step 6: Fingerprint.** Run `tests/smoke/setlist_fingerprint.sql` on the local stack before and after the migration; `diff` must be empty.
 - [ ] **Step 7: Update the four docs** (two more functions that a browser may call; the new private table). **Commit:** `Add the artist list, the ready rule and the save for artist games`.
 
@@ -222,6 +222,8 @@ export type CreateGameBody = /* the two shapes of phase 1 */ | { artists: { name
 `filterArtists` keeps the order of the list. It trims and lower-cases the query; an artist matches when its name holds the query, or when one of its aliases does (then `viaAlias` is that alias). An empty query matches every artist.
 
 `useArtistPickStatus` asks 150 ms after the last change of `keys`, and once at the start with no keys (the answer carries `minArtists`). From a change until its answer, `pending` is true and `status` is the last answer. An answer to an older question is dropped. A failed call sets `failed` and keeps `status`; the next change asks again.
+
+**Caching (decide in this task; the maintainer asked for it on 2026-11-24).** `loadPickableArtists` keeps the list in page memory, so every visit to the tab fetches all names and aliases again. Decide, and write the choice in the PR: keep the list across visits (localStorage with a short time limit, or a catalog version stamp), or keep it per page. Also decide whether `useArtistPickStatus` remembers answers per sorted key set inside the page, so unticking and re-ticking an artist answers at once. A stale list or answer is safe, because `POST /games` checks again on the server.
 
 - [ ] **Step 1: Write the failing tests**
 

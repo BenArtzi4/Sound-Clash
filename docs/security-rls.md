@@ -404,7 +404,12 @@ All API inputs validated with Pydantic (FastAPI auto-validates request bodies):
 
 ```python
 class CreateGameRequest(BaseModel):
-    selected_genres: conlist(UUID, min_length=1)
+    # Exactly one song source (a model_validator refuses both or neither):
+    # genres, or the host's pasted list (text read and capped at 20,000
+    # characters / 300 song lines by parse_setlist_text, not by the model).
+    selected_genres: list[UUID] = []
+    selected_decades: list[Decade] = []
+    setlist: SetlistInput | None = None
 
 class JoinTeamRequest(BaseModel):
     # TeamName = strip_whitespace + 1–30 chars, plus a BeforeValidator that
@@ -426,6 +431,7 @@ Reject anything that doesn't fit. Don't try to "fix" invalid input.
 - **Never log admin passwords from request headers**. The middleware reads the header, validates, then drops it from the request context.
 - **Game codes ARE logged** (low sensitivity; expires in 4h anyway).
 - **Team names ARE logged** (entered by users; non-PII assumption).
+- **A host's pasted song list is NOT logged.** When `POST /games` with a list cannot record the missing lines in `song_demand`, the warning carries the game code and the error's SQLSTATE and message only.
 - Sentry `beforeSend` hook scrubs known sensitive fields.
 
 ## 10. Auth Failure Modes

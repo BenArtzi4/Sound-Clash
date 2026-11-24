@@ -127,6 +127,12 @@ def _extract(exc: object) -> tuple[str | None, str | None]:
     return sqlstate, message
 
 
+def sqlstate_and_message(exc: object) -> tuple[str | None, str | None]:
+    """The (SQLSTATE, message) of a postgrest-py-shaped error, for a caller
+    that must tell one database refusal from another (``None`` where absent)."""
+    return _extract(exc)
+
+
 def map_postgrest_error(exc: Exception) -> DomainError:
     """Translate a postgrest-py / asyncpg-shaped error to a DomainError."""
     sqlstate, message = _extract(exc)

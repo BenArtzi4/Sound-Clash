@@ -454,9 +454,9 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | `game_setlist(p_game_code)` | Read-only: the songs a game's rounds played, in round order (live rows, else the most recent archive with that code), for the end-of-game setlist | Browser via PostgREST (anon, no token) |
 | `round_song(p_game_code, p_song_id)` | Read-only: one song, only if that game played it, for the host score panel and the TV reveal | Browser via PostgREST (anon, no token) |
 | `game_pool_summary(p_game_code, p_manager_token)` | Read-only: a custom game's list size and how many songs are left per tier; zero rows for a genre game | Browser via PostgREST (`manager_token`); no caller yet |
-| `save_game_setlist(p_game_code, p_list_song_ids, p_fill_song_ids, p_list_total)` | Save a custom game's pool and set `ready` in one call; returns the pool size | FastAPI (service role); no caller yet |
+| `save_game_setlist(p_game_code, p_list_song_ids, p_fill_song_ids, p_list_total)` | Save a custom game's pool and set `ready` in one call; returns the pool size | FastAPI `POST /games` with a list (service role) |
 | `pick_next_pool_song(p_game_code)` | The custom-game picker: lowest tier left, then artist spacing, then a weighted draw | Internal (called by `select_next_song` / `peek_next_song`) |
-| `record_song_demand(p_keys, p_lines)` | Count list lines the catalog lacks in `song_demand` (a key repeated in one call counts once); returns the rows touched | FastAPI (service role); no caller yet |
+| `record_song_demand(p_keys, p_lines)` | Count list lines the catalog lacks in `song_demand` (a key repeated in one call counts once); returns the rows touched | FastAPI `POST /games` with a list (service role), after the pool is saved |
 | `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | Internal (called by `select_next_song`) |
 | `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal; nothing calls it today (`start_round` closes the prior round itself) |
 | `award_manager_bonus(p_game_code, p_manager_token, p_team_id)` | Fixed +4 to a team, returns its new score | Manager browser |

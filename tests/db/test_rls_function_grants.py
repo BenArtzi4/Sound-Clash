@@ -2,21 +2,24 @@
 
 Spec: docs/security-rls.md §2.
 
-Six RPCs are callable by anon -- ``buzz_in`` (since migration 006),
-``award_attempt`` and ``release_buzz_lock`` (as of migration 021, with the
-legacy un-tokenised overloads retired by migration 023), ``select_next_song``
-(as of migration 022), ``peek_next_song`` (the read-only prebuffer probe, as of
-migration 029), and ``extend_game`` (the "keep playing" TTL bump, as of
-migration 039). Each does its own in-function manager-token check before
-performing any work, so the function-level EXECUTE grant is safe. Three more
-take no token and write nothing: ``song_pool_counts`` (migration 052; SECURITY
-DEFINER since 053), a read-only aggregate of song counts, and ``game_setlist``
-/ ``round_song`` (migration 053), which return song metadata only for songs the
-given game played. The remaining
-backend-only RPCs -- ``start_round``, ``end_round``, ``award_bonus``,
-``end_game``, ``cleanup_expired_games``, ``archive_game``,
-``set_song_availability``, ``pick_next_song``, ``song_artist_keys`` -- must
-still reject anon.
+Eleven RPCs are callable by anon. Eight check the caller inside the function
+body before performing any work, so the function-level EXECUTE grant is safe:
+``buzz_in`` (since migration 006; it checks the game and the team), and seven
+that check the per-game manager token -- ``award_attempt`` and
+``release_buzz_lock`` (as of migration 021, with the legacy un-tokenised
+overloads retired by migration 023), ``select_next_song`` (as of migration
+022), ``peek_next_song`` (the read-only prebuffer probe, as of migration 029),
+``extend_game`` (the "keep playing" TTL bump, as of migration 039),
+``award_manager_bonus`` (migration 055) and ``game_pool_summary`` (the custom
+setlist's progress line, migration 060). Three more take no token and write
+nothing: ``song_pool_counts`` (migration 052; SECURITY DEFINER since 053), a
+read-only aggregate of song counts, and ``game_setlist`` / ``round_song``
+(migration 053), which return song metadata only for songs the given game
+played. The twelve backend-only RPCs -- ``start_round``, ``end_round``,
+``award_bonus``, ``end_game``, ``cleanup_expired_games``, ``archive_game``,
+``set_song_availability``, ``pick_next_song``, ``song_artist_keys``,
+``pick_next_pool_song``, ``save_game_setlist`` and ``record_song_demand`` --
+must still reject anon.
 """
 
 from __future__ import annotations
@@ -498,7 +501,7 @@ async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) ->
 async def test_anon_executable_rpc_grant_matrix(
     db: asyncpg.Connection, proname: str, args: str
 ) -> None:
-    """The three RPCs the browser calls direct must keep anon EXECUTE on the
+    """The eleven RPCs the browser calls direct must keep anon EXECUTE on the
     exact overload signature the browser sends."""
     anon_exec = await db.fetchval(
         """

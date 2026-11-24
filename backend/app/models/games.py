@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Self
 from uuid import UUID
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
+from pydantic_core import PydanticCustomError
+
+from app.models.setlists import SetlistInput, SetlistSummary
 
 # Code points stripped from a team name before it is length-checked, stored, and
 # shown on the projector (T5.2 — objective sanitization only): C0/C1 control
@@ -65,10 +75,30 @@ Decade = Annotated[int, Field(ge=1900, le=2100)]
 
 
 class CreateGameRequest(BaseModel):
+    """A game's songs come from exactly one source: genres (optionally narrowed
+    by decades) or the host's pasted list. A list game has no genres and no
+    decades (design spec §8)."""
+
     model_config = ConfigDict(extra="forbid")
 
-    selected_genres: list[UUID] = Field(min_length=1)
+    selected_genres: list[UUID] = Field(default_factory=list)
     selected_decades: list[Decade] = Field(default_factory=list)
+    setlist: SetlistInput | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_song_source(self) -> Self:
+        # One entry per song source. A new source is one more entry here (the
+        # Pick artists plan adds `artists`: `bool(self.artists)`).
+        sources = [bool(self.selected_genres), self.setlist is not None]
+        if sources.count(True) != 1:
+            # PydanticCustomError, not ValueError: its error has no exception
+            # object in ctx, so the 400 envelope's details stay JSON.
+            raise PydanticCustomError(
+                "song_source", "choose genres or a song list: exactly one of them"
+            )
+        if self.setlist is not None and self.selected_decades:
+            raise PydanticCustomError("song_source", "a game from a song list has no decades")
+        return self
 
 
 class CreateGameResponse(BaseModel):
@@ -81,6 +111,8 @@ class CreateGameResponse(BaseModel):
     started_at: datetime
     expires_at: datetime
     manager_token: UUID
+    # A game from a list: how many songs it holds. None for a genre game.
+    setlist: SetlistSummary | None = None
 
 
 class JoinTeamRequest(BaseModel):

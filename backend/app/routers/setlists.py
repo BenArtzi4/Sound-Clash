@@ -1,10 +1,11 @@
 """Check a host's pasted song list; see ``docs/api-contracts.md §2.2a``.
 
 ``POST /setlists/check`` is what the create page calls on "Check my list". It
-matches the list against the catalog snapshot (``get_catalog_index``, cached
-for 10 minutes) and answers which lines can play and how many songs the game
-would have. It writes nothing: no game, no pool and no demand row (demand is
-recorded only when the game is created).
+reads and matches the list with ``read_and_match`` (the same match
+``POST /games`` saves; the text is parsed before the catalog snapshot, cached
+for 10 minutes, is loaded) and answers which lines can play and how many songs
+the game would have. It writes nothing: no game, no pool and no demand row
+(demand is recorded only when the game is created).
 
 Catalogue protection: the answer is built field by field from titles and
 artists. It never holds a song id, a YouTube id or a start time.
@@ -22,9 +23,9 @@ from app.models.setlists import (
     SetlistMissLine,
     SetlistReadyLine,
 )
-from app.services.setlist_catalog import get_catalog_index
-from app.services.setlist_matcher import CatalogIndex, CatalogSong, LineResult, match_setlist
-from app.services.setlist_text import norm, parse_setlist_text
+from app.services.setlist_matcher import CatalogIndex, CatalogSong, LineResult
+from app.services.setlist_reader import MatchedList, read_and_match
+from app.services.setlist_text import norm
 
 router = APIRouter(tags=["setlists"])
 
@@ -59,10 +60,9 @@ def _ready_line(index: CatalogIndex, result: LineResult) -> SetlistReadyLine:
     )
 
 
-def _check_blocking(index: CatalogIndex, text: str) -> SetlistCheckResponse:
-    """Parse and match the list; CPU work, so it runs in a worker thread."""
-    lines = parse_setlist_text(text)
-    match = match_setlist(index, lines)
+def _answer_blocking(matched: MatchedList) -> SetlistCheckResponse:
+    """Build the answer from the match; CPU work, so it runs in a worker thread."""
+    index, match = matched.index, matched.match
     ready: list[SetlistReadyLine] = []
     not_found: list[SetlistMissLine] = []
     for result in match.results:
@@ -75,7 +75,7 @@ def _check_blocking(index: CatalogIndex, text: str) -> SetlistCheckResponse:
     list_songs = len(match.list_song_ids)
     same_artist_songs = len(match.fill_song_ids)
     return SetlistCheckResponse(
-        lines_total=len(lines),
+        lines_total=len(matched.lines),
         ready=ready,
         not_found=not_found,
         list_songs=list_songs,
@@ -87,5 +87,5 @@ def _check_blocking(index: CatalogIndex, text: str) -> SetlistCheckResponse:
 @router.post("/setlists/check", response_model=SetlistCheckResponse)
 @limiter.limit("10/minute")
 async def check_setlist(request: Request, body: SetlistInput) -> SetlistCheckResponse:
-    index = await get_catalog_index()
-    return await anyio.to_thread.run_sync(_check_blocking, index, body.text)
+    matched = await read_and_match(body.text)
+    return await anyio.to_thread.run_sync(_answer_blocking, matched)

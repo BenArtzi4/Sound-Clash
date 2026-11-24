@@ -7,8 +7,11 @@ made up.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
+from ._fake_supabase import FakeAPIError
 from ._helpers import insert_song
 
 pytestmark = pytest.mark.needs_docker
@@ -118,6 +121,30 @@ async def test_check_no_songs_is_a_400(client) -> None:
     assert resp.status_code == 400
     assert resp.json()["error"] == "setlist_no_songs"
     assert resp.json()["message"] == "No song names found."
+
+
+@pytest.mark.parametrize(
+    ("text", "error"),
+    [
+        pytest.param("x" * 20_001, "setlist_too_long", id="too-long"),
+        pytest.param("https://open.spotify.com/track/abc", "setlist_links_only", id="links-only"),
+        pytest.param("# my party list\n", "setlist_no_songs", id="no-songs"),
+    ],
+)
+async def test_check_refuses_a_list_without_reading_the_catalog(
+    client, fake_supabase, monkeypatch, text: str, error: str
+) -> None:
+    # The list is read before the catalog loads: with the database down, a
+    # refused list still gets its own 400, not a 500.
+    def database_down(name: str) -> Any:
+        raise FakeAPIError(code="XX000", message="connection refused")
+
+    monkeypatch.setattr(fake_supabase, "table", database_down)
+
+    resp = await client.post(URL, json={"text": text})
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == error
 
 
 HTML_PAGE = """<!doctype html>
