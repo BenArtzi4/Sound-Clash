@@ -286,7 +286,7 @@ Triage:
 
 | Data | Backup mechanism | Retention |
 |---|---|---|
-| Songs catalog (`songs`, `genres`, `song_genres`) | (1) weekly deterministic CSV dump, encrypted with `CATALOG_BACKUP_PASSPHRASE` and stored as a workflow artifact by `.github/workflows/catalog-backup.yml`; (2) Supabase daily backup (free tier) | (1) 90 days (about 13 weekly copies); (2) 1 day |
+| Songs catalog (`songs`, `genres`, `song_genres`) and the setlist tables (`artist_aliases`, `song_demand`) | (1) weekly deterministic CSV dump, encrypted with `CATALOG_BACKUP_PASSPHRASE` and stored as a workflow artifact by `.github/workflows/catalog-backup.yml`; (2) Supabase daily backup (free tier) | (1) 90 days (about 13 weekly copies); (2) 1 day |
 | Active game data | Not backed up (ephemeral) | n/a |
 | Source code | GitHub | indefinite |
 | Configuration (env vars, secrets) | Manually documented in 1Password / Bitwarden / wherever | indefinite |
@@ -302,7 +302,7 @@ Triage:
 | Supabase project deleted | Re-create. Apply all migrations from `db/migrations/`, decrypt the newest catalog backup (below), then `db/backups/restore.sql` to reload the catalog. ~1 hour. |
 | Domain expires | Re-register; update DNS. |
 
-The system is designed to be **rebuildable from source**: if everything except the GitHub repo is gone, you can reconstruct in under an hour. The songs catalog is the only critical persistent state. It is **not** in the repo (the repo is public and the curated catalog is the product's core asset; the committed dump was removed on 2026-10-31). Instead `.github/workflows/catalog-backup.yml` dumps `songs`/`genres`/`song_genres` weekly, encrypts the CSVs (gpg, AES-256, passphrase in the prod environment secret `CATALOG_BACKUP_PASSPHRASE`, also kept by the maintainer outside GitHub) and stores them as a workflow artifact for 90 days. The run's summary shows each table's row count and checksum, so drift is visible week to week.
+The system is designed to be **rebuildable from source**: if everything except the GitHub repo is gone, you can reconstruct in under an hour. The songs catalog is the only critical persistent state, with the artist aliases that the custom-setlist matcher needs (private, like the catalog, and built by hand). It is **not** in the repo (the repo is public and the curated catalog is the product's core asset; the committed dump was removed on 2026-10-31). Instead `.github/workflows/catalog-backup.yml` dumps `songs`/`genres`/`song_genres` and `artist_aliases`/`song_demand` weekly, encrypts the CSVs (gpg, AES-256, passphrase in the prod environment secret `CATALOG_BACKUP_PASSPHRASE`, also kept by the maintainer outside GitHub) and stores them as a workflow artifact for 90 days. The run's summary shows each table's row count and checksum, so drift is visible week to week.
 
 **Restore the catalog** (Git Bash has `gpg`; run from the repo root):
 
@@ -311,7 +311,10 @@ gh run list --workflow=catalog-backup.yml --status success --limit 3      # pick
 gh run download <run-id> --dir db/backups/                                 # creates db/backups/catalog-backup-<date>/
 gpg --decrypt db/backups/catalog-backup-*/catalog-*.tar.gz.gpg | tar -xz -C db/backups/   # asks for the passphrase
 psql "$SUPABASE_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/backups/restore.sql
+# an archive made before 2026-11-24 has no artist_aliases.csv / song_demand.csv: add -v skip_setlist_tables=1
 ```
+
+`restore.sql` inserts only the columns that can take a value: `songs.artist_keys` is a generated column (migration 049), and Postgres computes it again from the restored `artist`. Before 2026-11-24 the script inserted every column, so a restore stopped at `songs` with `cannot insert a non-DEFAULT value into column "artist_keys"` and restored nothing.
 
 Keep an occasional decrypted-or-encrypted copy outside GitHub (for example with the secrets DR backup), because artifacts expire after 90 days and live in the same GitHub account. (A legacy `s3://soundclash-songs-data/songs.csv` fallback was referenced here previously; that bucket was deleted in the 2026-05-07 AWS teardown and is gone.)
 
