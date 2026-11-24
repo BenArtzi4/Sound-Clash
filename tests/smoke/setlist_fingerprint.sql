@@ -41,17 +41,21 @@
 --   1. BEFORE migration 060, right before it is applied, with every earlier
 --      migration already on production (otherwise an unrelated earlier
 --      migration would show in the diff):
---        supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" > fingerprint-before.txt
---   2. Apply 060 (named by the maintainer). Then, after 060 and before 061,
---      run the same command into fingerprint-after-060.txt and
+--        supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating' > fingerprint-before.txt
+--   2. Apply 060 (named by the maintainer). Then, after 060 and before 061:
+--        supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating' > fingerprint-after-060.txt
 --        diff fingerprint-before.txt fingerprint-after-060.txt
 --      It must be empty before 061 is applied.
---   3. Apply 061 (named by the maintainer). Then run the same command into
---      fingerprint-after-061.txt and
+--   3. Apply 061 (named by the maintainer). Then:
+--        supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating' > fingerprint-after-061.txt
 --        diff fingerprint-before.txt fingerprint-after-061.txt
 --      It must be empty.
---   Drop the CLI's own chatter lines from each file first if it printed any
---   (grep -v -E 'Initialising|new version|recommend updating').
+--   Why this exact command: JSON output does not truncate wide cells (the
+--   table output can cut a long fingerprint, so a real change could hide in
+--   the cut), and the grep drops the CLI's own chatter lines, which would
+--   otherwise make a diff non-empty for no reason (2>&1 puts stderr through
+--   the same filter, so the chatter is dropped from either stream and a real
+--   error still lands in the file, where the diff shows it).
 --   Use the same tool and the same login every time: the text of
 --   pg_get_functiondef and of regprocedure names can depend on search_path.
 --

@@ -40,7 +40,7 @@
 --   (averages and p95 in ms, 3 decimals; verdict applies the pass marks above;
 --   defs are the first 12 hex digits of md5(pg_get_functiondef(...)) of the
 --   three bodies that were timed: after 060 is applied, the same md5s of the
---   live functions must match.)
+--   live functions must match, see step 4 below.)
 --   PASS of the RUN means the message starts with "TIMING_ROLLBACK ". Any
 --   other error is a FAILED run, never a result: TIMING_SETUP_FAILED and
 --   TIMING_ABORTED say why; "canceling statement due to lock timeout" means
@@ -48,18 +48,27 @@
 --   "canceling statement due to statement timeout" means it ran too long.
 --
 -- How to run (production, from a tree that is linked to the project):
---   0. Live-game check first, and run this only when it returns 0 (or the
+--   0. From the repo root, prove this file still holds migration 060's
+--      bodies; it must print "... is up to date":
+--        python tests/smoke/gen_setlist_timing.py --check
+--   1. Live-game check, and run this only when it returns 0 (or the
 --      maintainer accepts the games that are live; a "live" game can be
 --      another session's harness, so watch round_number for a few minutes):
 --        SELECT count(*) FROM active_games WHERE ended_at IS NULL AND expires_at > now();
---   1. supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_timing_selfcheck.sql"
---   2. Leftover check, as one statement; every column must be 0 or NULL:
+--   2. supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_timing_selfcheck.sql"
+--   3. Leftover check, as one statement; every column must be 0 or NULL:
 --        SELECT (SELECT count(*) FROM active_games WHERE game_code LIKE 'ZT0%') AS games,
 --               (SELECT count(*) FROM game_rounds  WHERE game_code LIKE 'ZT0%') AS rounds,
 --               (SELECT count(*) FROM game_secrets WHERE game_code LIKE 'ZT0%') AS secrets,
 --               to_regclass('public.game_setlists') AS setlists,
 --               to_regclass('public.game_song_pool') AS pool,
 --               to_regprocedure('public.pick_next_pool_song(text)') AS picker;
+--   4. Later, once migration 060 is applied, check that what was timed is
+--      what was applied. One statement; its three values must equal the
+--      run's defs= values (select, peek, pool, in that order):
+--        SELECT left(md5(pg_get_functiondef('public.select_next_song(text,uuid,uuid,integer)'::regprocedure)),12) AS select_next_song,
+--               left(md5(pg_get_functiondef('public.peek_next_song(text,uuid)'::regprocedure)),12) AS peek_next_song,
+--               left(md5(pg_get_functiondef('public.pick_next_pool_song(text)'::regprocedure)),12) AS pick_next_pool_song;
 --   The synthetic game codes are ZT0001, ZT0002, ... The backend's code
 --   alphabet has no 0 (backend/app/services/codes.py), so no real game can
 --   have one; match them with LIKE 'ZT0%', not 'ZT%' (a real code can start
@@ -78,7 +87,8 @@
 -- today's bodies. Nothing is committed, so Realtime sends nothing.
 -- lock_timeout 1 s turns any unexpected wait into an error instead of a queue;
 -- statement_timeout 55 s and the block's own 50 s deadline keep the run under
--- the 100 s cut of the CLI's proxy (it takes a few seconds on ~1,700 songs).
+-- the 100 s cut of the CLI's proxy (it takes about 13 s on ~1,700 songs;
+-- local runs 12.4–12.7 s).
 
 SET statement_timeout = '55s';
 SET lock_timeout = '1s';

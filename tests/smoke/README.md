@@ -48,19 +48,32 @@ After every backend or frontend deploy that touches user-visible behaviour, and 
 
 ## Custom setlist no-regression checks (SQL, production)
 
-Two SQL files prove that migrations 060 and 061 (custom setlists, phase 1) change nothing a normal game runs on and make no genre round slower (spec §10 of `docs/planning/2026-11-24-custom-setlist-design.md`). Each file's header has the full instructions.
+Three SQL files check migrations 060 and 061 (custom setlists, phase 1) on production. Two prove that they change nothing a normal game runs on and make no genre round slower (spec §10 of `docs/planning/2026-11-24-custom-setlist-design.md`); the third proves players cannot reach the four new tables. Each file's header has the full instructions.
 
 - `setlist_fingerprint.sql`: one read-only SELECT that lists `(kind, name, fingerprint)` rows: the md5 of the definitions of `buzz_in`, `award_attempt`, `release_buzz_lock`, `start_round`, `end_round`, `pick_next_song`, the 3-argument `select_next_song` wrapper and every function behind a non-internal trigger on `active_games` (with their owners and grants), plus `active_games`' columns, constraints, indexes, non-internal triggers, owner, grants, RLS flags, policies, replica identity and `supabase_realtime` publication rows. Run it on production right before 060 is applied (with every earlier migration already there), again after 060 and before 061, and again after 061; `diff` each later output against the first. **Pass: both diffs are empty**, and the after-060 diff must be empty before 061 is applied. Safe while games are live.
 - `setlist_timing_selfcheck.sql`: one DO block that rolls itself back by raising `TIMING_ROLLBACK ...`. It times 200 `peek_next_song` and 200 guarded `select_next_song` calls on synthetic 8-genre games with today's bodies, then with migration 060's bodies (installed with `EXECUTE`, and its two tables without foreign keys so no lock lands on `active_games`), then 200 `pick_next_pool_song` calls on a 300-song pool. Run it on production **before** 060, only after `SELECT count(*) FROM active_games WHERE ended_at IS NULL AND expires_at > now()`. **Pass: the error message starts with `TIMING_ROLLBACK `** (any other error is a failed run), `new_peek <= old_peek + 1`, `new_select <= old_select + 1` and `pool_pick < 10` (ms averages; `verdict=` applies them). Then run the leftover check from the header (synthetic games `ZT0%` = 0, the pool tables absent). It takes about 13 s on a 1,700-song local catalog.
 - `gen_setlist_timing.py`: writes `setlist_timing_selfcheck.sql`, cutting the three function bodies out of `db/migrations/060_game_song_pool.sql` byte for byte. Never edit the `.sql` by hand: after a change to those bodies in 060, run `python tests/smoke/gen_setlist_timing.py` (`--check` exits 1 when the file is stale).
+- `setlist_privileges.sql`: one read-only SELECT that returns `has_table_privilege` for `anon` and `authenticated` × `SELECT`, `INSERT`, `UPDATE`, `DELETE` on `game_setlists` and `game_song_pool` (060) and `artist_aliases` and `song_demand` (061), with a `verdict` per row. The DB tests run on a bare Postgres that never auto-grants, so only this query proves the REVOKEs beat hosted Supabase's auto-grant. **Pass: every privilege is false** (`verdict` = `PASS`); a table that does not exist yet says `not applied yet`, so it runs after 060 alone. Safe while games are live.
+
+The fingerprint runs use JSON output, which does not truncate wide cells, and drop the CLI's chatter lines, which would otherwise make a diff non-empty for no reason (details in the `setlist_fingerprint.sql` header).
 
 ```bash
-supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" > fingerprint-before.txt
+python tests/smoke/gen_setlist_timing.py --check   # must print "... is up to date"
+supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating' > fingerprint-before.txt
 supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_timing_selfcheck.sql"
-# apply 060, then:
-supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" > fingerprint-after-060.txt
+# apply 060 only when this returns 0 and no catalog write (admin song edit, CSV upload,
+# availability scan commit) is running: its two foreign keys take SHARE ROW EXCLUSIVE on
+# active_games and songs until COMMIT. On a lock-timeout or deadlock error, simply rerun 060.
+#   SELECT count(*) FROM active_games WHERE ended_at IS NULL AND expires_at > now();
+# then:
+supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating' > fingerprint-after-060.txt
 diff fingerprint-before.txt fingerprint-after-060.txt   # must be empty before 061
+supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_privileges.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating'
+#   the game_setlists and game_song_pool rows must say PASS (all privileges false)
+# step 4 of the setlist_timing_selfcheck.sql header: the live md5s must match the run's defs=
 # apply 061, then:
-supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" > fingerprint-after-061.txt
+supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating' > fingerprint-after-061.txt
 diff fingerprint-before.txt fingerprint-after-061.txt   # must be empty
+supabase db query --linked --output-format json -f "C:/abs/path/tests/smoke/setlist_privileges.sql" 2>&1 | grep -v -E 'Initialising|new version|recommend updating'
+#   all eight rows must say PASS
 ```
