@@ -35,19 +35,29 @@
 --                 accident). On a bare Postgres without the publication these
 --                 rows say "absent" instead of failing.
 --
--- How to run (production, from a tree that is linked to the project):
---   1. BEFORE migration 060:
+-- How to run (production, from a tree that is linked to the project). Spec
+-- §10 compares before and after EACH migration, so there are three runs and
+-- two diffs:
+--   1. BEFORE migration 060, right before it is applied, with every earlier
+--      migration already on production (otherwise an unrelated earlier
+--      migration would show in the diff):
 --        supabase db query --linked -f "C:/abs/path/tests/smoke/setlist_fingerprint.sql" > fingerprint-before.txt
---   2. Apply 060 and 061 (each named by the maintainer).
---   3. Run the same command again into fingerprint-after.txt, then
---        diff fingerprint-before.txt fingerprint-after.txt
---      Drop the CLI's own chatter lines first if it printed any
---      (grep -v -E 'Initialising|new version|recommend updating').
---   Use the same tool and the same login both times: the text of
+--   2. Apply 060 (named by the maintainer). Then, after 060 and before 061,
+--      run the same command into fingerprint-after-060.txt and
+--        diff fingerprint-before.txt fingerprint-after-060.txt
+--      It must be empty before 061 is applied.
+--   3. Apply 061 (named by the maintainer). Then run the same command into
+--      fingerprint-after-061.txt and
+--        diff fingerprint-before.txt fingerprint-after-061.txt
+--      It must be empty.
+--   Drop the CLI's own chatter lines from each file first if it printed any
+--   (grep -v -E 'Initialising|new version|recommend updating').
+--   Use the same tool and the same login every time: the text of
 --   pg_get_functiondef and of regprocedure names can depend on search_path.
 --
--- PASS: the diff is empty. Any changed, added or missing row is a FAIL; the
--- row's kind and name say what changed.
+-- PASS: both diffs are empty. Any changed, added or missing row is a FAIL;
+-- the row's kind and name say what changed, and the diff it first appears in
+-- says which migration changed it.
 --
 -- One SELECT, read-only: no temp table, no DO block, no lock beyond
 -- AccessShare on the catalogs. Safe to run while games are live, and it
