@@ -35,6 +35,23 @@ class ValidationError(DomainError):
     status = 400
 
 
+class SetlistError(DomainError):
+    """A host's song list or song choice the server refuses (400).
+
+    The code names the reason and is set per instance, so one class serves
+    every refusal: ``setlist_too_long``, ``setlist_links_only``,
+    ``setlist_no_songs`` and ``setlist_empty`` for a pasted list, and later
+    ``artists_not_enough`` for the Pick artists game. The message is the short
+    plain-English text the host sees.
+    """
+
+    status = 400
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class UnauthorizedError(DomainError):
     code = "unauthorized"
     status = 401
