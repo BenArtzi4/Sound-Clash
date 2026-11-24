@@ -48,6 +48,7 @@
 | `backend/app/models/games.py`, `backend/app/routers/games.py` | `POST /games` with a list |
 | `tools/song-curation/aliases/` | Offline alias build, SQL generator, pilot replay (code only; data stays in `batches/`) |
 | `frontend/src/lib/setlistText.ts` | Count lines, detect pasted links |
+| `frontend/src/components/MusicSourceSwitch.tsx` | The switch at the top of the Host page; one address for each tab |
 | `frontend/src/components/SetlistPanel.tsx`, `SetlistHelp.tsx` | The "My own list" panel and the converter helper |
 | `frontend/src/hooks/useSetlistProgress.ts` | The console's "left in your list" numbers |
 | `tests/e2e/custom_setlist.spec.ts` | One custom game from create to "no more songs" |
@@ -595,30 +596,55 @@ expect(detectLinks("Queen - A\nhttps://open.spotify.com/track/a")).toBeNull();
 - [ ] **Step 2: Run, see them fail.** **Step 3: Implement.** **Step 4: Run, then `npm run typecheck && npm run lint`.**
 - [ ] **Step 5: Commit:** `Add the frontend API and helpers for pasted song lists`.
 
-### Task 10: "My own list" on the create page, with the converter helper
+### Task 10: The switch on the create page, "My own list", and the converter helper
+
+> **Changed on 2026-11-24**, after the maintainer chose the look of the Host page. The design is [2026-11-24-host-music-choices.md](2026-11-24-host-music-choices.md): read its section 7 (how the switch is made, the motion) and section 9 (the final choices) before this task. Where they differ, section 9 is right. The third tab, `Pick artists`, is not part of this task; it has [its own plan](2026-11-24-pick-artists-plan.md).
 
 **Files:**
-- Create: `frontend/src/components/SetlistPanel.tsx`, `SetlistPanel.module.css`, `SetlistPanel.test.tsx`, `frontend/src/components/SetlistHelp.tsx`, `SetlistHelp.test.tsx`
-- Modify: `frontend/src/pages/ManagerCreateGamePage.tsx`, its `.module.css` and `.test.tsx` (add cases), `frontend/src/pages/HowToPlayPage.tsx`, `frontend/src/lib/funnel.ts`, `CHANGELOG.md`
+- Create: `frontend/src/components/MusicSourceSwitch.tsx`, `MusicSourceSwitch.module.css`, `MusicSourceSwitch.test.tsx`, `frontend/src/components/SetlistPanel.tsx`, `SetlistPanel.module.css`, `SetlistPanel.test.tsx`, `frontend/src/components/SetlistHelp.tsx`, `SetlistHelp.test.tsx`, `tests/e2e/host_page_layout.spec.ts`
+- Modify: `frontend/src/App.tsx` (the route), `frontend/public/_redirects`, `frontend/src/lib/redirects.test.ts`, `frontend/src/pages/ManagerCreateGamePage.tsx`, its `.module.css` and `.test.tsx` (add cases), `frontend/src/lib/songPool.ts` and its test, `frontend/src/pages/HowToPlayPage.tsx`, `frontend/src/lib/funnel.ts` and its test, `CHANGELOG.md`
 
 **Interfaces:**
 - Consumes: Task 9.
 - Produces:
 
 ```ts
+// MusicSourceSwitch.tsx
+export type MusicSource = "genres" | "list" | "artists";
+export interface MusicSourceTab { id: MusicSource; label: string; to: string }
+export const MUSIC_SOURCE_TABS: readonly MusicSourceTab[];   // this task: genres ("/manager/create"), list ("/manager/create/list")
+export function MusicSourceSwitch(props: { tabs: readonly MusicSourceTab[]; active: MusicSource }): JSX.Element;
+
 export interface SetlistPanelState { text: string; check: SetlistCheckResponse | null }
-export function SetlistPanel(props: { onChange: (s: SetlistPanelState) => void }): JSX.Element;
+export function SetlistPanel(props: { value: SetlistPanelState; onChange: (s: SetlistPanelState) => void }): JSX.Element;
 export function SetlistHelp(props: { open: boolean; onToggle: () => void; linksPasted: boolean }): JSX.Element;
 export function trackSetlistGameCreated(listSongs: number, poolSize: number): void;   // funnel.ts
+export function describeMix(count: number, noun?: "mix" | "game"): { text: string; tone: MixTone };   // songPool.ts; default "mix"
 ```
 
-The create page gets a `source` state, `"genres" | "setlist"`, shown as two tabs. `SetlistPanel` is loaded with `React.lazy` when the host opens the tab, so the page's first load does not grow. In the `setlist` source the Create button is enabled only when `check !== null && check.pool_size > 0`; editing the text sets `check` back to `null`. The small-pool heads-up reuses `describeMix(check.pool_size)`. Submit sends `createGame({ setlist: { text } })`.
+**The address decides the tab.** One route, `/manager/create/:source?`, draws `ManagerCreateGamePage`, so the page stays mounted when the tab changes. No `source` opens Genres; `list` opens My own list; anything else goes to `/manager/create` with `replace`. A tab is a link (`replace`, so Back leaves the Host page) and keeps the query string (`?test=1`). The page owns every tab's state (picked genres and decades, the pasted text and its check), so each tab is as the host left it.
+
+**A reload must not give a 404.** `frontend/public/_redirects` has no catch-all, so add the exact line `/manager/create/list   /spa-shell   200` (not a `/*` line: a wrong address under it must stay a real 404). Add `/manager/create/list` to `STATIC_VIEWS` in `funnel.ts`, so its page views are not counted as `/other`.
+
+**The top of the page.** Under `Host a game` one fixed line, `Choose how to pick the songs`, replaces today's `Pick at least one genre to start.` Then the switch. There is no changing line under the switch: the instruction moves to the status line in the bottom bar (`data-testid="mix-count"`), which is empty today when no genre is picked.
+
+**The switch** (design section 7). A track with 4 px of padding. The row of labels is drawn twice; the second copy is `aria-hidden`, has the light colours (background `--bone`, text `--bg`) and is clipped to the open part with `clip-path: inset(… round 6px)`. The position comes from two attributes on that copy, `data-n` (2 or 3 tabs) and `data-i`, with a fixed `clip-path` for each pair; the clip moves in `--dur-state` with `--ease-move`. `role="tablist"`; the left and right arrow keys open the next tab and wrap; only the open tab is in the tab order. Each label is 44 px high and stays on one line; when the switch is narrower than 340 px its font is 0.86rem (a container query).
+
+**Content.** The open tab's content is keyed by the tab. It enters with `@starting-style`: opacity 0 and 12 px from the side of its tab (`translateX(12px)`, or `-12px` when the new tab is left of the old one), over `--dur-state` with `--ease-arrive`. The old content leaves at once. No animation on the first load of the page. CSS only, no keyframes, no View Transitions; the site's reduced-motion rule makes it instant. A browser without `@starting-style` shows the content at once, which is fine.
+
+**My own list.** `SetlistPanel` is loaded with `React.lazy`; fetch its chunk when the page is idle (as the page already does for the console), so the tab opens with no wait and the first load does not grow. The Create button is enabled only when `check !== null && check.pool_size > 0`; editing the text sets `check` back to `null`. The panel keeps its `Check my list` button: it does not check by itself. Submit sends `createGame({ setlist: { text } })`.
+
+**Genres tab, two changes.** (1) Quick start shows that it slides: an edge fade on each side that has more mixes, a round arrow button on that side (44 px hit area; a tap moves the row by about 70% of its width), and `6 mixes` (`PRESETS.length`) at the right of the `Quick start` label. Fades and arrows follow the scroll position, and a tap on a mix must not move the row. (2) On a phone (600 px and narrower) the genre tiles are in two columns: `grid-template-columns: 1fr 1fr`, tile padding 10 px, font 0.95rem, `overflow-wrap: anywhere`. The longest names go onto two lines; none is cut.
 
 Exact copy:
 
 | Where | Text |
 | --- | --- |
-| Tabs | `Genres` · `My own list` |
+| Under the title | `Choose how to pick the songs` |
+| Switch | `Genres` · `My own list` |
+| Bottom bar, Genres, no genre picked | `Pick at least one genre to start.` |
+| Bottom bar, My own list | nothing pasted: `Paste your songs to start.` · pasted, not checked: `Check your list to see the songs` · checking: `Checking your list…` · checked: `describeMix(check.pool_size, "game")`, for example `61 songs in this game` |
+| Quick start, right of the label | `6 mixes` |
 | Box label | `Paste a list of songs` |
 | Placeholder | `One per line: Artist - Song. A film or an artist alone works too.` |
 | While typing | `Found {n} songs` (`Found 1 song`) |
@@ -632,11 +658,27 @@ Exact copy:
 | Helper, last line | `Sound Clash is not connected to Spotify, Apple Music or Chosic.` |
 | How to Play, new FAQ entry | Q: `Can I play my own playlist?` A: `Yes. On the Host page choose My own list and paste your songs, one per line. Films, shows and artists work too. The game plays your songs first, then more songs by the same artists. For a Spotify playlist, export the song names with Chosic's playlist exporter and paste them.` (the same link) |
 
-Test ids: `music-source-genres`, `music-source-setlist`, `setlist-input`, `setlist-found`, `setlist-check`, `setlist-result`, `setlist-missing`, `setlist-help`.
+Test ids: `music-source-genres`, `music-source-list`, `music-source-panel`, `quick-start-count`, `quick-start-prev`, `quick-start-next`, `setlist-input`, `setlist-found`, `setlist-check`, `setlist-result`, `setlist-missing`, `setlist-help`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
+// MusicSourceSwitch.test.tsx
+it("draws one tab for each entry and marks the open one")     // aria-selected, data-i, data-n="2"
+it("opens the next tab with the arrow keys, and wraps")
+it("keeps the query string in each tab's link")               // ?test=1
+// ManagerCreateGamePage.test.tsx (new cases)
+it("opens Genres at /manager/create and My own list at /manager/create/list")
+it("goes to /manager/create for an unknown tab")
+it("keeps the picked genres and the pasted text when the tab changes")   // genres -> list -> genres -> list
+it("shows the fixed line under the title")                    // "Choose how to pick the songs"
+it("puts the instruction in the bottom bar")                  // no genre: "Pick at least one genre to start."
+it("does not animate the first content")                      // the first panel has data-first
+it("says how many mixes Quick start has")                     // "6 mixes"
+// redirects.test.ts: /manager/create/list is served the SPA shell; /manager/create/nope matches no rule
+// funnel test: viewName("/manager/create/list") === "/manager/create/list"
+// songPool.test.ts: describeMix(61, "game").text === "61 songs in this game"; describeMix(61).text is unchanged
+// SetlistPanel.test.tsx
 it("counts songs while the host types")                       // "Found 2 songs"
 it("checks the list and shows the counts")                     // mocked checkSetlist -> the five result lines
 it("lists the lines that cannot play, with the reason")
@@ -645,15 +687,26 @@ it("opens the helper when Spotify links are pasted")           // Review Focus 1
 it("shows the server's message for a refused list")            // 400 setlist_too_long -> toast, no result card
 it("creates a game from the list")                             // createGame called with { setlist: { text } }
 it("keeps Create disabled until the check has songs")          // pool_size 0 -> disabled
-it("leaves the genre flow as it was")                          // existing tests unchanged and green
+it("leaves the genre flow as it was")                          // existing tests green
 // SetlistHelp.test.tsx: the link href, target and rel; the last line is present
+```
+
+Two existing assertions change on purpose, and only these: the line under the title, and an empty `mix-count` when no genre is picked.
+
+```ts
+// tests/e2e/host_page_layout.spec.ts, viewport 320 x 568
+test("the fixed line and each switch label stay on one line")      // scrollWidth <= clientWidth, height of one line
+test("genre tiles are in two columns and no name is cut")          // tiles 1 and 2 share a top; scrollWidth <= clientWidth
+test("Quick start shows that it slides")                           // next arrow visible; a tap moves the row; then the prev arrow shows
+test("a tap on a mix does not move the row")                       // scrollLeft is the same before and after
+test("a reload on /manager/create/list opens My own list")
 ```
 
 - [ ] **Step 2: Run, see them fail.**
 - [ ] **Step 3: Before writing the helper copy into code, send one research agent (Opus) to confirm that Chosic's exporter still works with no login, and to save one TXT sample.** Add that sample's shape as one more case in `tests/backend/test_setlist_text.py` (made-up song names in the same layout). If the exporter no longer works, stop and tell the maintainer; do not ship a dead link.
-- [ ] **Step 4: Build the two components and the page change.** Follow the page's existing chip and button styles; no new colour.
-- [ ] **Step 5: Run vitest, typecheck, lint, format check, and `npm run build`.** Compare the create route's chunk size with `main`: the entry chunk must not grow by more than 1 KB.
-- [ ] **Step 6: Add the `CHANGELOG.md` lines. Commit:** `Add My own list to the host page with a guide for Spotify playlists`.
+- [ ] **Step 4: Build the switch, the route, the `_redirects` line and the top of the page; then the Genres tab changes; then the two list components.** Follow the page's existing chip and button styles; no new colour, no new package.
+- [ ] **Step 5: Run vitest, typecheck, lint, format check, and `npm run build`.** Compare the create route's chunk size with `main`: the entry chunk must not grow by more than 1 KB. Run `tests/e2e/host_page_layout.spec.ts` and `tests/e2e/redesign_guards.spec.ts` against the local stack.
+- [ ] **Step 6: Add the `CHANGELOG.md` lines (My own list under Added; the new top of the Host page under Changed). Commit:** `Add My own list to the host page with a guide for Spotify playlists`.
 
 ### Task 11: The console's progress line
 
@@ -672,7 +725,7 @@ export function useSetlistProgress(gameCode: string, managerToken: string | null
 
 It calls the RPC on mount and each time `roundNumber` changes. Zero rows, a missing function (PGRST202) or any error gives `null` and no toast: a normal game and an old database both show nothing.
 
-Copy: `Your list: {listLeft} of {listSongs} left`; when `listLeft` is 0: `Your list is done. Now: more by the same artists ({extraLeft} left)`. Test id `setlist-progress`. The `setlist_not_ready` error shows `Your songs are not ready yet. Try again in a moment.`
+Copy: `Your songs: {listLeft} of {listSongs} left`; when `listLeft` is 0 and `extraSongs` is more than 0: `Your songs are done. Now: more by the same artists ({extraLeft} left)`. ("Your songs", not "Your list", so the same line also fits a game from chosen artists.) Test id `setlist-progress`. The `setlist_not_ready` error shows `Your songs are not ready yet. Try again in a moment.`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -708,9 +761,9 @@ test("a game from a pasted list plays the list first, then the same artist", asy
   // Check -> "3 ready to play", "1 cannot play", "+ 1 more by the same artists"
   // Create -> console -> one team joins -> Start
   // rounds 1 to 3: the console's song titles are {Song 1, Song 2, Star Wars} in any order
-  // progress line: "Your list: 2 of 3 left" after round 1
-  // reload the console after round 2 -> the line still reads "Your list: 1 of 3 left"      (Review Focus 5)
-  // round 4: "E2E Extra Song"; the line reads "Your list is done. Now: more by the same artists (0 left)"
+  // progress line: "Your songs: 2 of 3 left" after round 1
+  // reload the console after round 2 -> the line still reads "Your songs: 1 of 3 left"      (Review Focus 5)
+  // round 4: "E2E Extra Song"; the line reads "Your songs are done. Now: more by the same artists (0 left)"
   // Next round -> the existing "no more songs" message
 });
 ```
@@ -730,6 +783,6 @@ test("a game from a pasted list plays the list first, then the same artist", asy
 - [ ] **Step 1: Fingerprint.** `setlist_fingerprint.sql` returns one row per function with `md5(pg_get_functiondef(oid))` for `buzz_in`, `award_attempt`, `release_buzz_lock`, `start_round`, `end_round`, `pick_next_song`, plus the column list, trigger list and publication row of `active_games`. Save the output on production **before** migration 060. After 060 and 061: run again; `diff` must be empty.
 - [ ] **Step 2: Timing, before production changes.** `setlist_timing_selfcheck.sql` is one `DO` block that builds a synthetic 8-genre game, times 200 `peek_next_song` and 200 guarded `select_next_song` calls with `clock_timestamp()`, then installs the new function bodies with `EXECUTE`, times the same calls again, times 200 `pick_next_pool_song` calls on a 300-song pool, and ends with `RAISE EXCEPTION 'TIMING_ROLLBACK old_peek=… new_peek=… old_select=… new_select=… pool_pick=…'`. Pass: each new average is at most 1 ms above the old one, and `pool_pick` is under 10 ms. Then confirm that no synthetic row is left. Keep the run under 60 seconds.
 - [ ] **Step 3: CI.** Add the `run-stress` and `run-e2e` labels to PR 1 and PR 4; trust the labelled runs.
-- [ ] **Step 4: Release order.** PR 1 merged, then migrations 060 and 061 on production (each named by the maintainer) → fingerprint diff → PR 2 → alias upload (Task 8 step 7) → PR 4 → `node tests/smoke/ui_prod_pass.mjs all` (29 of 29) → one full custom game on production with `?test=1` → the Full-Game Exit Gate.
+- [ ] **Step 4: Release order.** PR 1 merged, then migrations 060 and 061 on production (each named by the maintainer) → fingerprint diff → PR 2 → alias upload (Task 8 step 7) → PR 4 → `node tests/smoke/ui_prod_pass.mjs all` (29 of 29) → open `https://www.soundclash.org/manager/create/list` directly: the Host page with My own list open, not the 404 page → one full custom game on production with `?test=1` → the Full-Game Exit Gate.
 - [ ] **Step 5: One week later.** Open a GitHub issue now, dated one week after the release, to compare the median and 95th percentile of `buzz_in`, `select_next_song` and `peek_next_song` spans in normal games, one week before against one week after. A rise blocks phase 2.
 - [ ] **Step 6: Tick the task in `TASKS.md`, refresh `NEXT-SESSION.md`. Commit:** `Record the custom setlist phase 1 release checks`.
