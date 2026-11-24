@@ -14,8 +14,12 @@
 --      trigger enforces it: the offline verify tool checks it. The index on
 --      artist_key answers "which spellings point at this artist".
 --      The ROWS are private catalog data (they name the catalog's artists):
---      they are never committed to git, they are uploaded like songs and kept
---      in the private catalog backup. This migration creates the empty table.
+--      they are never committed to git and are uploaded like songs. The
+--      encrypted weekly catalog backup (.github/workflows/catalog-backup.yml)
+--      dumps only genres, songs and song_genres today; adding artist_aliases
+--      to it before the first alias upload is a follow-up the maintainer
+--      approves. Until then nothing can be lost: no alias row exists yet.
+--      This migration creates the empty table.
 --   2. song_demand (line_key, raw_line, request_count, first_requested_at,
 --      last_requested_at, status): the list lines that matched no catalog
 --      song, one row per cleaned line, so the maintainer sees which songs
