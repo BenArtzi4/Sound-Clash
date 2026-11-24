@@ -194,6 +194,9 @@ _NUMBERING = re.compile(
 # separator, so a song called "12:51" keeps its title.
 _DURATION = re.compile(r"(?<![-\u2013\u2014\s])\s+[(\[]?\d{1,2}:\d{2}(?::\d{2})?[)\]]?$")
 _URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# A comment: "#" then a space, another "#" or nothing. "#1 ..." and "#Word"
+# are song lines, so the host sees them if they cannot play.
+_COMMENT = re.compile(r"#(?:\s|#|$)")
 
 # A CSV or TSV export's header: a title column and an artist column.
 _TITLE_COLUMNS = frozenset({"track name", "title", "song"})
@@ -252,7 +255,7 @@ def _text_line(raw: str, body: str) -> ListLine | None:
 def parse_setlist_text(text: str) -> list[ListLine]:
     """Split a pasted song list into its song lines.
 
-    Drops the invisible marks, empty lines, ``#`` comments, numbering,
+    Drops the invisible marks, empty lines, ``# `` comments, numbering,
     bullets and durations, and lines that are only a link or have no letter
     or digit. A first line that is a CSV or TSV header turns every row into
     artist and title. Raises ``SetlistError``: ``setlist_too_long`` (over
@@ -264,7 +267,7 @@ def parse_setlist_text(text: str) -> list[ListLine]:
     rows = [
         row
         for row in text.translate(_INVISIBLE).splitlines()
-        if row.strip() and not row.lstrip().startswith("#")
+        if row.strip() and not _COMMENT.match(row.lstrip())
     ]
     columns = _csv_columns(rows[0]) if rows else None
     if columns is not None:

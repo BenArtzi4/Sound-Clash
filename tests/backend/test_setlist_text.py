@@ -169,6 +169,16 @@ def test_parse_keeps_numbers_that_are_names() -> None:
     ]
 
 
+def test_parse_keeps_song_lines_that_start_with_a_hashtag() -> None:
+    text = "#1 Moonfish - Glass Harbor\n#NEONTIDE - Velvet Otters\n"
+    assert _pairs(text) == [("#1 Moonfish", "Glass Harbor"), ("#NEONTIDE", "Velvet Otters")]
+
+
+@pytest.mark.parametrize("comment", ["# my party - 2026", "## Side B", "#", "  #\tnote"])
+def test_parse_drops_comment_lines(comment: str) -> None:
+    assert _pairs(f"{comment}\nMoonfish - Glass Harbor\n") == [("Moonfish", "Glass Harbor")]
+
+
 def test_parse_drops_link_and_symbol_lines_among_songs() -> None:
     text = "Moonfish - Glass Harbor\nhttps://youtu.be/abc\n2. www.example.com/x\n***\n- - -\n"
     assert _pairs(text) == [("Moonfish", "Glass Harbor")]
