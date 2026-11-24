@@ -506,7 +506,7 @@ class CreateGameRequest:             # selected_genres: list[UUID] = [];  setlis
 class CreateGameResponse:            # + setlist: SetlistSummary | None = None
 ```
 
-Order inside the handler: parse and match first (no row exists yet) → pool empty: `SetlistError("setlist_empty", ...)` → insert the game as today with empty genres → `client.rpc("save_game_setlist", {...})` → if that fails, delete the game row and raise → `record_song_demand` for the lines that were not found (`line_key` = `norm` of the raw line), inside `try/except` that only logs: demand must never fail a create.
+Order inside the handler: parse and match first (no row exists yet) → pool empty: `SetlistError("setlist_empty", ...)` → insert the game as today with empty genres → `client.rpc("save_game_setlist", {...})` → if that fails, delete the game row and raise → `record_song_demand` for the lines that were not found (`line_key` = the demand key as built: `norm(clean_title(side))` of each of the line's two sides, empty pieces dropped, sorted, joined by one space; at most 100 keys per create, `raw_line` cut to 300 characters), inside `try/except` that only logs: demand must never fail a create.
 
 - [ ] **Step 1: Write the failing tests** (added to `test_games_create.py`; the existing tests stay as they are)
 

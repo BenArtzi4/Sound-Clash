@@ -163,8 +163,10 @@ async def test_choice_shrinks_between_status_and_save(client, db, monkeypatch): 
     # the status says ready, then save_game_artists raises artists_not_enough -> 400 and no active_games row
 async def test_failed_pool_save_removes_the_game(client, db, monkeypatch)
 async def test_exactly_one_source(client)                            # genres + artists, setlist + artists, and none: refused as phase 1 Task 7 refuses
-async def test_more_than_200_names_is_a_422(client)
+async def test_more_than_200_names_is_a_400(client)                  # this app maps every request validation error to a 400 validation_error
 ```
+
+`_exactly_one_song_source` in models/games.py gets `artists` as one more source; a list or artists game has no decades, so update the decades refusal and the 'choose genres or a song list' message.
 
 - [ ] **Step 2: Run, see them fail.**
 - [ ] **Step 3: Change the models and the handler.**

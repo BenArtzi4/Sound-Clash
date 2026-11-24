@@ -222,6 +222,12 @@ Both sides are cleaned in the same way first: lower case, no punctuation or niqq
 
 A name with no dash is looked up as an artist or film first, then as a song name.
 
+Three more rules about recording notes:
+
+- **A film note with no dash.** `Let It Go (From "Frozen")` has no dash, so it is a song name. When several catalog songs have that title, the film named in the note picks its soundtrack song (rule 5).
+- **Notes on the artist side.** When the artist side, as written, is not a catalog artist, it is tried again without its recording notes: `Frozen (Original Motion Picture Soundtrack)` is `Frozen`.
+- **A side that is only notes.** In `Bohemian Rhapsody - Remastered 2011` one side is only a recording note. A side counts as notes only when it has two or more words, each word is a note word or a year, the words are not years only, and neither side is a catalog artist or film. When no rule matches the line, the other side is then looked up as a song name only, never as an artist, so a song line never brings in a whole artist. Otherwise the line is "not found", and a catalog artist it names fills tier 2 ("same artists", section 8).
+
 ### The alias table
 
 `artist_aliases` maps a spelling to one catalog artist: `omer adam` → `עומר אדם`, `kesha` → `ke$ha`.

@@ -682,7 +682,7 @@ Added in migration 061 (custom setlists, phase 1). When a host creates a game fr
 
 ```sql
 CREATE OR REPLACE FUNCTION record_song_demand(
-  p_keys  text[],   -- the cleaned line, one per missing line (song_demand.line_key)
+  p_keys  text[],   -- one key per song: the line's cleaned sides, sorted (song_demand.line_key)
   p_lines text[]    -- the host's line as written, same order
 ) RETURNS integer   -- rows touched (inserted or counted)
 LANGUAGE plpgsql
@@ -707,7 +707,7 @@ Not idempotent by design: every call counts its keys once more.
 
 ### Callers
 
-- FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`backend/app/routers/games.py::_record_demand_blocking`). It sends only the lines the matcher marked `not_in_catalog` (not `several_songs_share_this_name`), with one key per song: each side of the parsed line is cleaned (`clean_title`, then `norm()`), the empty pieces are dropped, and the rest are sorted and joined with one space, so numbering, a duration, a recording note, a CSV row's other cells and the artist/title order never change the key (`api-contracts.md §2.2`). It skips an empty key, a key over 1,000 UTF-8 bytes (one key past the btree row limit would fail the whole call) and a line with a NUL character (Postgres text cannot hold one); with nothing left it makes no call. Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
+- FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`backend/app/routers/games.py::_record_demand_blocking`). It sends only the lines the matcher marked `not_in_catalog` (not `several_songs_share_this_name`), with one key per song: each side of the parsed line is cleaned (`clean_title`, then `norm()`), the empty pieces are dropped, and the rest are sorted and joined with one space, so numbering, a duration, a recording note, a CSV row's other cells and the artist/title order never change the key (`api-contracts.md §2.2`). It skips an empty key, a key over 1,000 UTF-8 bytes (one key past the btree row limit would fail the whole call) and a line with a NUL character (Postgres text cannot hold one); with nothing left it makes no call. One create sends at most 100 keys: the first 100 different songs in list order (a key named again keeps its first line and takes no second place). Each `raw_line` is cut to its first 300 characters (it is only shown to the maintainer); the key is never cut. Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -969,6 +969,52 @@ Idempotent on `(game_code, started_at)` — the existence check short-circuits a
 ## 5b. `mark_game_test`: flag a test game after the fact (service-role only)
 
 Migration 051. `mark_game_test(p_game_code text, p_started_at timestamptz DEFAULT NULL) RETURNS integer`. Sets `is_test = true` on the live `game_secrets` row (so the later archive copies it) and on any `game_history` row with that code, narrowed to one start instant when `p_started_at` is given (codes recycle after the TTL). Returns how many rows it flagged. `SECURITY DEFINER`, EXECUTE revoked from `anon`/`authenticated`, granted to `service_role`. No HTTP caller: run it from the Supabase SQL editor or `supabase db query --linked` for a test game that `POST /games` didn't catch.
+
+## 5c. `create_team_secret`: provision a per-team rejoin token (trigger)
+
+Added in migration 046 (issue #183). A trigger function, **not** an RPC — it has no
+HTTP caller and is not exposed to anon. It runs from an `AFTER INSERT` trigger on
+`game_teams` (`trg_create_team_secret`), in the **same transaction** as the team insert,
+so every team always has exactly one `team_secrets` row (its per-team `rejoin_token`) and
+the two can never diverge. `SECURITY DEFINER` so it succeeds regardless of which role
+inserts the team. Mirrors `create_game_secret` (mig 034, the `active_games` twin).
+
+```sql
+CREATE OR REPLACE FUNCTION create_team_secret() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO team_secrets (team_id, game_code)
+  VALUES (NEW.id, NEW.game_code)
+  ON CONFLICT (team_id) DO NOTHING;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_create_team_secret ON game_teams;
+CREATE TRIGGER trg_create_team_secret
+  AFTER INSERT ON game_teams
+  FOR EACH ROW EXECUTE FUNCTION create_team_secret();
+```
+
+**Team rejoin has no anon RPC.** Unlike the manager-token host actions (which validate
+the token inside SECURITY DEFINER functions), reconnecting a team is a pair of
+cold-start-tolerant **FastAPI endpoints** off the buzzer hot path: `POST
+/games/{code}/rejoin` (resolves the rejoin token back to the team row) and the
+manager-token-gated `GET /games/{code}/teams/{team_id}/rejoin-token` (reveals it to the
+host). Both read the anon-invisible `team_secrets` table with the service-role key; see
+`api-contracts.md §2.3a / §2.8a` and `security-rls.md §1`.
+
+### Idempotency
+
+Idempotent per team via `ON CONFLICT (team_id) DO NOTHING`; a re-fired trigger or the
+migration's one-time backfill of existing teams never double-inserts.
+
+### Callers
+
+- The `trg_create_team_secret` `AFTER INSERT` trigger on `game_teams`. No HTTP caller.
+
 ## 5d. `set_song_availability`: persist dead-video scan verdicts
 
 Added in migration 045 (I-Liveness Phase 2, issue #248). Service-role only — called by
@@ -1016,51 +1062,6 @@ nothing and counts zero.
   once the catalog is clean again). Migration 045 REVOKEs EXECUTE from
   anon/authenticated (an anon grant would let anyone bury the whole catalog) and GRANTs
   it to service_role, per the migration-020 pattern.
-
-## 5c. `create_team_secret`: provision a per-team rejoin token (trigger)
-
-Added in migration 046 (issue #183). A trigger function, **not** an RPC — it has no
-HTTP caller and is not exposed to anon. It runs from an `AFTER INSERT` trigger on
-`game_teams` (`trg_create_team_secret`), in the **same transaction** as the team insert,
-so every team always has exactly one `team_secrets` row (its per-team `rejoin_token`) and
-the two can never diverge. `SECURITY DEFINER` so it succeeds regardless of which role
-inserts the team. Mirrors `create_game_secret` (mig 034, the `active_games` twin).
-
-```sql
-CREATE OR REPLACE FUNCTION create_team_secret() RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO team_secrets (team_id, game_code)
-  VALUES (NEW.id, NEW.game_code)
-  ON CONFLICT (team_id) DO NOTHING;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS trg_create_team_secret ON game_teams;
-CREATE TRIGGER trg_create_team_secret
-  AFTER INSERT ON game_teams
-  FOR EACH ROW EXECUTE FUNCTION create_team_secret();
-```
-
-**Team rejoin has no anon RPC.** Unlike the manager-token host actions (which validate
-the token inside SECURITY DEFINER functions), reconnecting a team is a pair of
-cold-start-tolerant **FastAPI endpoints** off the buzzer hot path: `POST
-/games/{code}/rejoin` (resolves the rejoin token back to the team row) and the
-manager-token-gated `GET /games/{code}/teams/{team_id}/rejoin-token` (reveals it to the
-host). Both read the anon-invisible `team_secrets` table with the service-role key; see
-`api-contracts.md §2.3a / §2.8a` and `security-rls.md §1`.
-
-### Idempotency
-
-Idempotent per team via `ON CONFLICT (team_id) DO NOTHING`; a re-fired trigger or the
-migration's one-time backfill of existing teams never double-inserts.
-
-### Callers
-
-- The `trg_create_team_secret` `AFTER INSERT` trigger on `game_teams`. No HTTP caller.
 
 ## 6. Function ↔ Caller Reference Matrix
 

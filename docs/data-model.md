@@ -79,8 +79,9 @@ CREATE TABLE artist_aliases (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- The list lines that matched no catalog song, one row per cleaned line,
--- written by record_song_demand (migration 061). Operator-only, like the above.
+-- The list lines that matched no catalog song, one row per song (the key is
+-- the line's cleaned sides, sorted), written by record_song_demand
+-- (migration 061). Operator-only, like the above.
 CREATE TABLE song_demand (
   line_key           text PRIMARY KEY,
   raw_line           text NOT NULL,              -- the first line seen for this key
@@ -428,7 +429,7 @@ See `rpc-functions.md` §3c, §3d and §3i-§3k.
 Migration 061, custom setlists phase 1 (design: `docs/planning/2026-11-24-custom-setlist-design.md` §7 and §13 point 5). Both are durable (no foreign key to the game tables, so the 4-hour sweep never reaches them) and operator-only: RLS on with no policy, every base privilege revoked from `anon` and `authenticated`, not in the Realtime publication. `service_role` holds `SELECT`, `INSERT`, `UPDATE`, `DELETE` (granted explicitly, as migrations 030 and 033 do), because the backend's list matcher reads `artist_aliases` through PostgREST.
 
 - **`artist_aliases`** maps a spelling a host may type to one catalog artist, so a line in the other script still finds the artist. `alias` is the primary key and is stored cleaned: a `CHECK` refuses a value that is not lower case and trimmed, or is empty. `artist_key` is a value that appears in `songs.artist_keys`; it cannot be a foreign key (`artist_keys` is an array) and no trigger enforces it, so the offline verify tool checks it. One artist may have many spellings; the `artist_key` index finds them. **The rows are private:** they name the catalog's artists, so they are never committed to git; they are uploaded like songs. They are in the encrypted weekly catalog backup (`.github/workflows/catalog-backup.yml`) with `song_demand`, and `db/backups/restore.sql` restores them. An alias never joins two catalog entries that are translations of each other (two recordings).
-- **`song_demand`** is the Demand Queue: the list lines that matched no catalog song, one row per cleaned line (`line_key`). `record_song_demand` writes it: a new key gets a row with `request_count = 1`; a known key gets `request_count + 1` and a new `last_requested_at`, and keeps its first `raw_line`, its `first_requested_at` and its `status`. `status` (`pending`, `approved`, `rejected`, `added`) is the maintainer's review state; a new request never changes it.
+- **`song_demand`** is the Demand Queue: the list lines that matched no catalog song, one row per song (`line_key`: the line's two sides, each cleaned as a title, sorted and joined; `api-contracts.md §2.2`), so the same song written in another order or with numbering or a note is one row. `record_song_demand` writes it: a new key gets a row with `request_count = 1`; a known key gets `request_count + 1` and a new `last_requested_at`, and keeps its first `raw_line`, its `first_requested_at` and its `status`. `status` (`pending`, `approved`, `rejected`, `added`) is the maintainer's review state; a new request never changes it.
 
 See `rpc-functions.md` §3l.
 
