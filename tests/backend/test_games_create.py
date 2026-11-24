@@ -487,6 +487,40 @@ async def test_demand_skips_a_line_with_a_nul_character(client, db) -> None:
     assert keys == {"nobody not a real song"}
 
 
+# The JSON escape for a lone UTF-16 high surrogate, built from chr(92) (a
+# backslash) so the character itself is never in this file or the request.
+LONE_SURROGATE = chr(92) + "ud800"
+
+
+@pytest.mark.parametrize(
+    ("text", "status", "demand"),
+    [
+        pytest.param(f"Abc {LONE_SURROGATE} def", 400, set(), id="nothing-playable"),
+        pytest.param(
+            f"Velvet Comet {LONE_SURROGATE} - Paper Lanterns\\nAbc {LONE_SURROGATE} def",
+            201,
+            {"abc def"},
+            id="playable-and-demand",
+        ),
+    ],
+)
+async def test_a_lone_surrogate_in_the_list_is_dropped_not_a_500(
+    client, db, text: str, status: int, demand: set[str]
+) -> None:
+    await _seed_setlist_catalog(db)
+    raw = ('{"setlist": {"text": "' + text + '"}}').encode("ascii")
+
+    resp = await client.post("/games", content=raw, headers={"Content-Type": "application/json"})
+
+    assert resp.status_code == status, resp.text
+    if status == 400:
+        assert resp.json() == {"error": "setlist_empty", "message": SETLIST_EMPTY_MESSAGE}
+    else:
+        assert resp.json()["setlist"] == {"list_songs": 1, "same_artist_songs": 1}
+    keys = {row["line_key"] for row in await db.fetch("SELECT line_key FROM song_demand")}
+    assert keys == demand
+
+
 async def test_a_name_several_songs_share_is_not_recorded_as_demand(client, db) -> None:
     await _seed_setlist_catalog(db)
     await insert_song(db, title="Lucky Stone", artist="Velvet Comet")

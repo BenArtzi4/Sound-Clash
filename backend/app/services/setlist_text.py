@@ -38,8 +38,13 @@ _NO_SONGS = "No song names found."
 # Invisible characters a paste carries: the byte-order mark, and the
 # direction marks, embeddings, overrides and isolates that Hebrew text picks
 # up in chat apps and spreadsheets (U+200E, U+200F, U+202A-U+202E,
-# U+2066-U+2069).
-_INVISIBLE = dict.fromkeys([0xFEFF, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)])
+# U+2066-U+2069). Also lone UTF-16 surrogates (U+D800-U+DFFF): half of an
+# emoji when a paste is cut inside it. JSON can carry one as an escape, but
+# UTF-8 cannot encode it, so a line that kept one could not be echoed back or
+# stored.
+_INVISIBLE = dict.fromkeys(
+    [0xFEFF, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A), *range(0xD800, 0xE000)]
+)
 
 # ----- comparing names ------------------------------------------------------
 

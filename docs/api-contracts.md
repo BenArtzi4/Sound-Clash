@@ -103,7 +103,7 @@ Check a host's pasted song list against the catalog before the game is created. 
 ```
 
 Validation:
-- `text`: one song per line: `Artist - Title` or `Title - Artist` (each line is tried in both orders), a film, show or artist alone, or a song name alone. At most 20,000 characters and 300 song lines. Empty lines, `# ` comments, numbering, bullets, durations and lines that are only a link are dropped. A first line that is a CSV or TSV header with a title column and an artist column (a playlist export) turns each row into artist and title. No other field is allowed.
+- `text`: one song per line: `Artist - Title` or `Title - Artist` (each line is tried in both orders), a film, show or artist alone, or a song name alone. At most 20,000 characters and 300 song lines. The byte-order mark, invisible direction marks and lone UTF-16 surrogates (half of an emoji cut by the paste) are removed first. Empty lines, `# ` comments, lines that are only a link and lines with no letter or digit are dropped; numbering, bullets and a trailing duration are removed from a line. A first line that is a CSV or TSV header with a title column and an artist column (a playlist export) turns each row into artist and title. No other field is allowed.
 - The length is checked when the list is read, not by the body model, so an over-long text is `setlist_too_long`, not `validation_error`.
 - The text is read before the catalog snapshot is loaded, so a refused text answers its 400 with no database read, even when the database is slow or down.
 
@@ -128,7 +128,7 @@ Matching follows section 7 of [the custom setlist design](planning/2026-11-24-cu
 - `lines_total`: the song lines read from the text. Each one is in `ready` or in `not_found`, in list order.
 - `ready[]`: `line` is the line as the host wrote it, trimmed. `title` and `artist` are the catalog's spelling of the song it matched (the first song when it matched more than one), and `songs` is how many catalog songs it matched. For a line that names a film, a show or an artist, `title` is `null` and `artist` is the catalog's spelling of that name (the credit of a song credited to it alone, else the first song's credit).
 - `not_found[].reason`: `not_in_catalog`, or `several_songs_share_this_name` for a song name alone that more than one catalog song has (the host adds the artist).
-- `list_songs`: the songs the list names, each counted once (they play first). `same_artist_songs`: the other catalog songs by the main artist of any line, found or not (they play after the list). `pool_size` is their sum. A pool of `0` is still a 200; the create page keeps Create disabled.
+- `list_songs`: the songs the list names, each counted once (they play first). `same_artist_songs`: the other catalog songs by the main artist of any line, found or not, or of a song it matched (they play after the list). `pool_size` is their sum. A pool of `0` is still a 200; the create page keeps Create disabled.
 
 **Catalogue protection.** The answer names songs by title and artist only, built field by field. It never holds a song id, a YouTube id or a start time.
 

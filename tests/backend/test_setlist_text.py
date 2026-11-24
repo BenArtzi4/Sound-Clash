@@ -162,6 +162,39 @@ def test_parse_drops_marks_bullets_and_durations() -> None:
     ]
 
 
+def _has_surrogate(s: str) -> bool:
+    return any(0xD800 <= ord(ch) <= 0xDFFF for ch in s)
+
+
+def test_parse_drops_lone_surrogates() -> None:
+    # Half of a UTF-16 pair (a paste cut inside an emoji) cannot be written as
+    # UTF-8, so the reader drops it with the invisible marks. Built with chr():
+    # a lone surrogate cannot be stored in this source file.
+    high, low = chr(0xD800), chr(0xDFFF)
+    text = (
+        f"Velvet Otters{high} - Neon Tide\n"
+        f"{low}Moonfish - Glass Harbor\n"
+        f"Paper Lanterns - Slow Rain {high}{low}\n"
+        f"{high}\n"
+    )
+
+    lines = parse_setlist_text(text)
+
+    assert _pairs(text) == [
+        ("Velvet Otters", "Neon Tide"),
+        ("Moonfish", "Glass Harbor"),
+        ("Paper Lanterns", "Slow Rain"),
+    ]
+    for line in lines:
+        for field in (line.raw, line.left, line.right or ""):
+            assert not _has_surrogate(field)
+            field.encode("utf-8")  # raises on a surrogate
+    assert norm(f"Moon{low}fish") == "moonfish"
+    with pytest.raises(SetlistError) as e:
+        parse_setlist_text(f"{high}\n{low}")
+    assert e.value.code == "setlist_no_songs"
+
+
 def test_parse_keeps_numbers_that_are_names() -> None:
     assert _pairs("The Moonfish - 12:51\n10.000 Lanterns - Moonfish\n*Otters - Tide") == [
         ("The Moonfish", "12:51"),

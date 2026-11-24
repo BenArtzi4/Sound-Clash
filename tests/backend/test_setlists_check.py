@@ -11,6 +11,9 @@ from typing import Any
 
 import pytest
 
+from app.db.errors import InternalError
+from app.services import setlist_reader
+
 from ._fake_supabase import FakeAPIError
 from ._helpers import insert_song
 
@@ -145,6 +148,78 @@ async def test_check_refuses_a_list_without_reading_the_catalog(
 
     assert resp.status_code == 400
     assert resp.json()["error"] == error
+
+
+async def test_check_answers_links_only_when_the_catalog_cannot_load(client, monkeypatch) -> None:
+    # Controller ruling m2: the text is read before the catalog snapshot is
+    # asked for, so a refused text never waits on (or fails with) the catalog.
+    calls = 0
+
+    async def catalog_down() -> Any:
+        nonlocal calls
+        calls += 1
+        raise InternalError("catalog unavailable")
+
+    monkeypatch.setattr(setlist_reader, "get_catalog_index", catalog_down)
+    links = "https://open.spotify.com/track/abc\nhttps://open.spotify.com/track/def"
+
+    resp = await client.post(URL, json={"text": links})
+
+    assert resp.status_code == 400 and resp.json()["error"] == "setlist_links_only"
+    assert calls == 0
+    # The patch is live: a list with a song line does ask for the catalog.
+    resp = await client.post(URL, json={"text": "Velvet Comet - Paper Lanterns"})
+    assert resp.status_code == 500 and calls == 1
+
+
+# The JSON escape for a lone UTF-16 high surrogate, built from chr(92) (a
+# backslash) so neither this file nor the request holds the character itself:
+# the server's JSON reader turns it into U+D800, which UTF-8 cannot encode.
+LONE_SURROGATE = chr(92) + "ud800"
+
+
+def _raw_json(text_with_escape: str) -> bytes:
+    """A request body sent as bytes, so the escape reaches the server unchanged."""
+    return ('{"text": "' + text_with_escape + '"}').encode("ascii")
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        pytest.param(
+            f"Abc {LONE_SURROGATE} def",
+            {"ready": [], "not_found": [{"line": "Abc  def", "reason": "not_in_catalog"}]},
+            id="not-found-line",
+        ),
+        pytest.param(
+            f"Velvet Comet {LONE_SURROGATE} - Paper Lanterns",
+            {
+                "ready": [
+                    {
+                        "line": "Velvet Comet  - Paper Lanterns",
+                        "title": "Paper Lanterns",
+                        "artist": "Velvet Comet",
+                        "songs": 1,
+                    }
+                ],
+                "not_found": [],
+            },
+            id="ready-line",
+        ),
+    ],
+)
+async def test_a_lone_surrogate_is_dropped_not_a_500(
+    client, db, text: str, expected: dict[str, Any]
+) -> None:
+    await _seed_catalog(db)
+
+    resp = await client.post(
+        URL, content=_raw_json(text), headers={"Content-Type": "application/json"}
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert {"ready": body["ready"], "not_found": body["not_found"]} == expected
 
 
 HTML_PAGE = """<!doctype html>
