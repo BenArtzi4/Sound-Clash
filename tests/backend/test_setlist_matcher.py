@@ -152,6 +152,12 @@ EXTRA: list[Row] = [
     ("x11", "Radio", "Signal Tower", False),  # a title that is a recording note
     ("x12", "Night Bells", "Iron Choir", False),
     ("x13", "Dust Road", "Iron Choir", False),
+    ("g1", "Frost Waltz", "Glacier", True),  # the film "Glacier"
+    ("g2", "Ice Parade", "Glacier", True),
+    ("gn1", "Glacier", "Nova Hart", False),  # another artist's song called "Glacier"
+    ("gn2", "Ember Lane", "Nova Hart", False),
+    ("x14", "Static Bloom", "Live Version", False),  # a band named with two note words
+    ("x15", "Radio Edit", "Signal Tower", False),  # a title of two note words
 ]
 EXTRA_ALIASES = {
     "kesha moon": "ke$ha moon",  # alias rows are lower + trim only
@@ -247,9 +253,9 @@ def test_soundtrack_counts_words_by_spaces(line: str, ids: tuple[str, ...]) -> N
 
 def test_names_that_norm_to_nothing_are_not_indexed() -> None:
     assert EXTRA_INDEX.artist_key("!!!") is None
-    # The empty "???" never equals e1's empty "!!!" (that would be same_song);
-    # a side that cleans to nothing leaves the title alone (ruling R-m6).
-    assert _match("??? - Quiet Song", EXTRA_INDEX).rule == "title_alone"
+    # The empty "???" never equals e1's empty "!!!" (that would be same_song),
+    # and a side with no words is not a recording note (ruling m6c).
+    assert _match("??? - Quiet Song", EXTRA_INDEX).reason == "not_in_catalog"
     assert _ids(_match("Quiet Song", EXTRA_INDEX)) == ("e1",)
     # e2's title "???" is in no title entry; its artist still lists it.
     assert _ids(_match("Quiet Band", EXTRA_INDEX)) == ("e2",)
@@ -336,7 +342,7 @@ def test_film_with_notes_fills_like_the_film() -> None:
         ("Bohemian Rhapsody - Remastered 2011", ("q1",), "title_alone", None),
         ("Remastered 2011 - Bohemian Rhapsody", ("q1",), "title_alone", None),
         ("Queen - Bohemian Rhapsody - Remastered 2011", ("q1",), "same_song", None),
-        ("Sunny - Remastered", (), None, "several_songs_share_this_name"),
+        ("Sunny - Remastered 2011", (), None, "several_songs_share_this_name"),
     ],
 )
 def test_side_that_is_only_notes(
@@ -344,6 +350,12 @@ def test_side_that_is_only_notes(
 ) -> None:
     result = _match(line)
     assert (_ids(result), result.rule, result.reason) == (ids, rule, reason)
+
+
+def test_side_that_is_only_notes_beside_a_note_word_title() -> None:
+    # One note word ("Radio") is a song name here, not a second notes side.
+    result = _match("Remastered 2011 - Radio", EXTRA_INDEX)
+    assert (_ids(result), result.rule) == (("x11",), "title_alone")
 
 
 @pytest.mark.parametrize(
@@ -362,12 +374,43 @@ def test_notes_beside_an_artist_fill_tier_2_only(
 
 
 @pytest.mark.parametrize(
+    ("index", "text"),
+    [  # ruling m6c, N1: the side beside the notes is a catalog film
+        (EXTRA_INDEX, "Glacier - Soundtrack"),
+        (EXTRA_INDEX, "Soundtrack - Glacier"),
+        (EXTRA_INDEX, "Glacier - Deluxe Edition"),
+    ],
+)
+def test_notes_beside_a_film_fill_the_film(index: CatalogIndex, text: str) -> None:
+    # Never Nova Hart's "Glacier" by title alone: the line names the film.
+    m = match_setlist(index, parse_setlist_text(text))
+    assert (m.results[0].rule, m.results[0].reason) == (None, "not_in_catalog")
+    assert (m.list_song_ids, m.fill_song_ids) == ((), ("g1", "g2"))
+
+
+@pytest.mark.parametrize(
+    "line",
+    [  # ruling m6c, N2 and N3: these sides name an artist, not notes
+        "Mono - Beyond",  # one note word can be a band outside the catalog
+        "Live - Beyond",  # no band "Live" in this catalog
+        "Deluxe - Dancing Queen",
+        "Beyond - (feat. Kai Rivers)",  # a bracket naming another artist
+        "Dancing Queen - (Live Cover by Some Band)",
+    ],
+)
+def test_one_note_word_or_a_named_artist_is_not_notes(line: str) -> None:
+    assert _match(line).reason == "not_in_catalog"
+
+
+@pytest.mark.parametrize(
     "line",
     [
         "1999 - Moonfish",  # a year alone can be the title ("1999"), not a note
         "1999 - Paper Lanterns",  # so "Paper Lanterns" is not a title alone either
+        "1984 1999 - Paper Lanterns",  # years only, however many, are not notes
         "Live - Paper Lanterns",  # "Live" is a catalog band here, so it names an artist
-        "Remix - Radio",  # both sides are notes: which one is the title is a guess
+        "Live Version - Paper Lanterns",  # a catalog band of two note words, too
+        "Live 1985 - Radio Edit",  # both sides are notes: which one is the title is a guess
     ],
 )
 def test_side_that_is_only_notes_guards(line: str) -> None:

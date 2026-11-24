@@ -23,7 +23,15 @@ from difflib import SequenceMatcher
 from types import MappingProxyType
 from typing import Literal
 
-from app.services.setlist_text import ListLine, artist_keys, clean_title, is_hebrew, norm, skeleton
+from app.services.setlist_text import (
+    JUNK_WORDS,
+    ListLine,
+    artist_keys,
+    clean_title,
+    is_hebrew,
+    norm,
+    skeleton,
+)
 
 Rule = Literal[
     "same_song",
@@ -196,11 +204,10 @@ def _in_notes(key: str, side_words: tuple[str, ...], title_words: tuple[str, ...
 
 # A year; alone it can be a title ("1999"), so it does not make a side notes.
 _YEAR = re.compile(r"(?:19|20)\d\d")
-
-
-def _is_note(word: str) -> bool:
-    """True when ``clean_title`` drops ``word`` as a recording note ("live", "2011")."""
-    return not clean_title(f"({word})")
+# The recording-note words clean_title knows (setlist_text.JUNK_WORDS), one
+# by one and in norm form: "motion picture" counts as "motion" and "picture".
+_NOTE_WORDS = frozenset(norm(word) for entry in JUNK_WORDS.split("|") for word in entry.split())
+_MIN_NOTE_WORDS = 2  # one note word alone ("Live", "Mono") can be a band's name
 
 
 def _ratio(a: str, b: str, floor: float) -> float:
@@ -391,19 +398,22 @@ def _not_found(line: ListLine, reason: Reason) -> _Found:
 
 
 def _only_notes(index: CatalogIndex, side: str) -> bool:
-    """True when a side of a line holds recording notes only ("Remastered 2011").
+    """True when a side of a line is a recording note and nothing else (ruling m6c).
 
-    That is a side that cleans to nothing, or whose every word is a note
-    word. A side of years only ("1999") can be a song title, and a side that
-    is a catalog artist ("Live") names that artist, so neither counts.
+    Read as words, with brackets and quotes dropped, the side has at least two
+    words, each a note word or a year, and not years only: ``Remastered
+    2011``, ``Radio Edit``, ``(Live 1985)``. One word alone (``Live``,
+    ``Mono``) can be a band, years alone can be a title (``1999``), a word
+    that is no note (``(feat. Some Singer)``) names someone, and a side that
+    is a catalog artist names that artist: none of these is notes.
     """
     if index.artist_key(side) is not None:
         return False
-    if not norm(clean_title(side)):
-        return True
     words = norm(side).split()
-    return all(_is_note(word) for word in words) and not all(
-        _YEAR.fullmatch(word) for word in words
+    return (
+        len(words) >= _MIN_NOTE_WORDS
+        and all(word in _NOTE_WORDS or _YEAR.fullmatch(word) for word in words)
+        and not all(_YEAR.fullmatch(word) for word in words)
     )
 
 
@@ -413,8 +423,9 @@ def _match_pair(index: CatalogIndex, line: ListLine, right: str) -> _Found:
     When none matches and exactly one side is only recording notes
     (``Bohemian Rhapsody - Remastered 2011``), the other side is looked up as
     a song name, never as an artist or film: a song line never becomes a
-    whole artist in tier 1 (``Queen - Live`` is not found, and Queen's songs
-    join tier 2 through the fill).
+    whole artist in tier 1. When that other side is itself a catalog artist
+    or film (``Glacier - Deluxe Edition``) the line is not found, and the
+    fill brings that artist's songs into tier 2.
     """
     readings = (_reading(index, line.left, right), _reading(index, right, line.left))
     for rule, find in _PAIR_RULES:
@@ -424,6 +435,8 @@ def _match_pair(index: CatalogIndex, line: ListLine, right: str) -> _Found:
                 return _found(line, entries, rule, _main_key(index, reading.artist))
     for notes, other in ((line.left, right), (right, line.left)):
         if _only_notes(index, notes) and not _only_notes(index, other):
+            if index.artist_key(other) is not None:
+                break
             return _match_song_name(index, line, other)
     return _not_found(line, "not_in_catalog")
 
