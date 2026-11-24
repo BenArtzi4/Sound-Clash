@@ -1,22 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const abortSignal = vi.hoisted(() => vi.fn());
-
 vi.mock("../lib/supabase", async () => {
-  const { supabaseMock } = await import("../test/supabaseMock");
-  return {
-    supabase: {
-      rpc(...args: Parameters<typeof supabaseMock.rpc>) {
-        const result = supabaseMock.rpc(...args);
-        return {
-          abortSignal(signal: AbortSignal) {
-            abortSignal(signal);
-            return result;
-          },
-        };
-      },
-    },
-  };
+  const mod = await import("../test/supabaseMock");
+  return { supabase: mod.supabaseMock };
 });
 
 import { selectNextSongDirect } from "./useSelectNextSong";
@@ -42,7 +28,6 @@ function row(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   resetSupabaseMock();
-  abortSignal.mockClear();
 });
 
 describe("selectNextSongDirect", () => {
@@ -97,7 +82,9 @@ describe("selectNextSongDirect", () => {
         /round response timed out/i,
       );
       expect(timeout).toHaveBeenCalledExactlyOnceWith(10_000);
-      expect(abortSignal).toHaveBeenCalledExactlyOnceWith(signal);
+      expect(supabaseMock.rpc.mock.results[0]?.value.abortSignal).toHaveBeenCalledExactlyOnceWith(
+        signal,
+      );
     } finally {
       timeout.mockRestore();
     }

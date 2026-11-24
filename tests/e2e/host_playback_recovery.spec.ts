@@ -44,8 +44,15 @@ test("a preview miss on Start and Next leaves the current song playable from a f
         await reply.deliver.promise;
         await route.fulfill({ response });
       });
-      await host.route("https://www.youtube-nocookie.com/embed/**", (route) =>
-        route.fulfill(),
+      await host.route(
+        "https://www.youtube-nocookie.com/embed/**",
+        async (route) => {
+          // WebKit needs an HTML frame navigation before the widget can attach.
+          await route.fulfill({
+            contentType: "text/html",
+            body: "<!doctype html><title>Player</title>",
+          });
+        },
       );
       await host.addInitScript(() => {
         let inTap = false;
