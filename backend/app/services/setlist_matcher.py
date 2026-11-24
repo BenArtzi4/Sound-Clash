@@ -16,8 +16,9 @@ the whole catalog.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+import re
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
 from types import MappingProxyType
 from typing import Literal
@@ -135,8 +136,16 @@ class CatalogIndex:
         return self._aliases
 
     def artist_key(self, name: str) -> str | None:
-        """The catalog artist key (norm form) ``name`` is, directly or by alias."""
-        return self._resolve(norm(name))
+        """The catalog artist key (norm form) ``name`` is, directly or by alias.
+
+        A name with recording notes (``Frozen (Original Motion Picture
+        Soundtrack)``) is tried as written first, then without its notes.
+        """
+        for text in _with_and_without_notes(name):
+            key = self._resolve(norm(text))
+            if key is not None:
+                return key
+        return None
 
     def _resolve(self, key: str) -> str | None:
         if key in self._by_key:
@@ -153,6 +162,45 @@ class CatalogIndex:
 
 def _unique(items: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(items))
+
+
+def _with_and_without_notes(text: str) -> Iterator[str]:
+    """``text`` as written, then (when it differs) with its recording notes removed.
+
+    Spec section 7 cleans both sides of a line the same way, so an artist or
+    film side may carry notes too: ``Queen (Live)``.
+    """
+    yield text
+    cleaned = clean_title(text)
+    if cleaned != text:
+        yield cleaned
+
+
+def _occurrences(key: str, words: tuple[str, ...]) -> int:
+    """How many times ``key`` (norm form) stands in ``words`` as whole words."""
+    parts = tuple(key.split())
+    size = len(parts)
+    return sum(1 for i in range(len(words) - size + 1) if words[i : i + size] == parts)
+
+
+def _in_notes(key: str, side_words: tuple[str, ...], title_words: tuple[str, ...]) -> bool:
+    """True when ``key`` is in the recording notes of a side.
+
+    The notes are what ``clean_title`` dropped, so the key is in them when it
+    stands in the side more often than in the side's cleaned title. A film
+    key found only in the title itself does not count: ``Dallas`` names no
+    film, ``Dallas (From "Dallas")`` does.
+    """
+    return _occurrences(key, side_words) > _occurrences(key, title_words)
+
+
+# A year; alone it can be a title ("1999"), so it does not make a side notes.
+_YEAR = re.compile(r"(?:19|20)\d\d")
+
+
+def _is_note(word: str) -> bool:
+    """True when ``clean_title`` drops ``word`` as a recording note ("live", "2011")."""
+    return not clean_title(f"({word})")
 
 
 def _ratio(a: str, b: str, floor: float) -> float:
@@ -177,35 +225,50 @@ class _Reading:
     """One way to read a line with a separator: this side the artist, that the title."""
 
     artist: str  # the side read as the artist, as written
-    keys: tuple[str, ...]  # its credited artists, norm form, main first
+    # Its credited artists, norm form, main first; then those it credits
+    # once its recording notes are removed ("Queen (Live)" -> "queen").
+    keys: tuple[str, ...]
     resolved: tuple[str, ...]  # those that are catalog keys, directly or by alias
-    title: str  # the other side, norm(clean_title(...))
-    title_words: int  # words of the cleaned title, split on spaces only ("Don't" is one)
+    artist_words: tuple[str, ...]  # norm(artist side).split(), to find a film named there
+    side_words: tuple[str, ...]  # norm(title side as written).split(), notes included
+    title: str  # the title side, norm(clean_title(...))
+    title_tokens: tuple[str, ...]  # title.split()
+    title_word_count: int  # words of the cleaned title, split on spaces only ("Don't" is one)
     title_is_hebrew: bool
     title_skeleton: str
-    line_text: str  # " <both sides in norm form> ", for whole-word searches
 
 
-def _reading(index: CatalogIndex, artist: str, title: str, line_text: str) -> _Reading:
-    keys = tuple(key for key in _unique(norm(key) for key in artist_keys(artist)) if key)
+def _reading(index: CatalogIndex, artist: str, title: str) -> _Reading:
+    names = [norm(key) for text in _with_and_without_notes(artist) for key in artist_keys(text)]
+    keys = tuple(key for key in _unique(names) if key)
     resolved = _unique(r for r in (index._resolve(key) for key in keys) if r is not None)
     cleaned = clean_title(title)
+    normed = norm(cleaned)
     return _Reading(
         artist=artist,
         keys=keys,
         resolved=tuple(resolved),
-        title=norm(cleaned),
-        title_words=sum(1 for word in cleaned.split() if any(ch.isalnum() for ch in word)),
+        artist_words=tuple(norm(artist).split()),
+        side_words=tuple(norm(title).split()),
+        title=normed,
+        title_tokens=tuple(normed.split()),
+        title_word_count=sum(1 for word in cleaned.split() if any(ch.isalnum() for ch in word)),
         title_is_hebrew=is_hebrew(cleaned),
         title_skeleton=skeleton(cleaned),
-        line_text=line_text,
     )
 
 
 def _main_key(index: CatalogIndex, text: str) -> str | None:
-    """The catalog key of the main artist ``text`` credits, after alias mapping."""
-    keys = artist_keys(text)
-    return index._resolve(norm(keys[0])) if keys else None
+    """The catalog key of the main artist ``text`` credits, after alias mapping.
+
+    ``text`` is tried as written first, then without its recording notes.
+    """
+    for candidate in _with_and_without_notes(text):
+        keys = artist_keys(candidate)
+        key = index._resolve(norm(keys[0])) if keys else None
+        if key is not None:
+            return key
+    return None
 
 
 def _artist_songs(index: CatalogIndex, reading: _Reading) -> list[_Entry]:
@@ -255,13 +318,19 @@ def _other_script_title(index: CatalogIndex, r: _Reading) -> list[_Entry]:
     )
 
 
+def _film_named(key: str, r: _Reading) -> bool:
+    """True when the line names the film ``key`` outside the song title itself:
+    in the artist side, or in the title side's recording notes."""
+    return _occurrences(key, r.artist_words) > 0 or _in_notes(key, r.side_words, r.title_tokens)
+
+
 def _soundtrack(index: CatalogIndex, r: _Reading) -> list[_Entry]:
     """Rule 4: a soundtrack song of that title; the catalog credits the film."""
     films = [e for e in index._titled(r.title) if e.song.is_soundtrack]
-    named = [e for e in films if any(f" {key} " in r.line_text for key in e.keys)]
+    named = [e for e in films if any(_film_named(key, r) for key in e.keys)]
     if named:
         return named
-    return films if r.title_words >= SOUNDTRACK_MIN_WORDS else []
+    return films if r.title_word_count >= SOUNDTRACK_MIN_WORDS else []
 
 
 def _artist_likeness(list_key: str, catalog_key: str) -> float:
@@ -321,30 +390,65 @@ def _not_found(line: ListLine, reason: Reason) -> _Found:
     return _Found(LineResult(line, (), None, reason), (), None)
 
 
-def _match_pair(index: CatalogIndex, line: ListLine, right: str) -> _Found:
-    """Rules 1 to 5 for a line with a separator, rule by rule in both orders."""
-    line_text = f" {norm(line.left + ' ' + right)} "
-    readings = (
-        _reading(index, line.left, right, line_text),
-        _reading(index, right, line.left, line_text),
+def _only_notes(index: CatalogIndex, side: str) -> bool:
+    """True when a side of a line holds recording notes only ("Remastered 2011").
+
+    That is a side that cleans to nothing, or whose every word is a note
+    word. A side of years only ("1999") can be a song title, and a side that
+    is a catalog artist ("Live") names that artist, so neither counts.
+    """
+    if index.artist_key(side) is not None:
+        return False
+    if not norm(clean_title(side)):
+        return True
+    words = norm(side).split()
+    return all(_is_note(word) for word in words) and not all(
+        _YEAR.fullmatch(word) for word in words
     )
+
+
+def _match_pair(index: CatalogIndex, line: ListLine, right: str) -> _Found:
+    """Rules 1 to 5 for a line with a separator, rule by rule in both orders.
+
+    When none matches and exactly one side is only recording notes
+    (``Bohemian Rhapsody - Remastered 2011``), the other side is matched as a
+    line with no separator.
+    """
+    readings = (_reading(index, line.left, right), _reading(index, right, line.left))
     for rule, find in _PAIR_RULES:
         for reading in readings:
             entries = find(index, reading)
             if entries:
                 return _found(line, entries, rule, _main_key(index, reading.artist))
+    for notes, other in ((line.left, right), (right, line.left)):
+        if _only_notes(index, notes) and not _only_notes(index, other):
+            alone = _match_name(index, ListLine(line.raw, other, None))
+            return replace(alone, result=replace(alone.result, line=line))
     return _not_found(line, "not_in_catalog")
 
 
 def _match_name(index: CatalogIndex, line: ListLine) -> _Found:
-    """Rule 6 for a line with no separator: an artist or film, then a song name."""
+    """Rule 6 for a line with no separator: an artist or film, then a song name.
+
+    When several songs share the name, a film named in the line's recording
+    notes (``Beyond (From "Moana 2")``) picks its soundtrack song.
+    """
     key = index.artist_key(line.left)
     if key is not None:
         return _found(line, index._credited(key), "artist_or_film", key)
-    titled = index._titled(norm(clean_title(line.left)))
+    title = norm(clean_title(line.left))
+    titled = index._titled(title)
     if len(titled) == 1:
         return _found(line, titled, "title_alone", None)
     if titled:
+        side_words, title_words = tuple(norm(line.left).split()), tuple(title.split())
+        named = [
+            e
+            for e in titled
+            if e.song.is_soundtrack and any(_in_notes(k, side_words, title_words) for k in e.keys)
+        ]
+        if len(named) == 1:
+            return _found(line, named, "soundtrack", None)
         return _not_found(line, "several_songs_share_this_name")
     return _not_found(line, "not_in_catalog")
 

@@ -147,6 +147,9 @@ EXTRA: list[Row] = [
     ("x6", "צ'יפס", "סרט הירח", True),
     ("x7", "Copper Sky", "Jinx", False),
     ("e2", "???", "Quiet Band", False),
+    ("t1", "Dallas", "Dallas", True),  # a one-word theme named after its show
+    ("x10", "Glass Bells", "Live", False),  # a band whose name is a recording note
+    ("x11", "Radio", "Signal Tower", False),  # a title that is a recording note
 ]
 EXTRA_ALIASES = {
     "kesha moon": "ke$ha moon",  # alias rows are lower + trim only
@@ -242,14 +245,113 @@ def test_soundtrack_counts_words_by_spaces(line: str, ids: tuple[str, ...]) -> N
 
 def test_names_that_norm_to_nothing_are_not_indexed() -> None:
     assert EXTRA_INDEX.artist_key("!!!") is None
-    assert _match("??? - Quiet Song", EXTRA_INDEX).reason == "not_in_catalog"
+    # The empty "???" never equals e1's empty "!!!" (that would be same_song);
+    # a side that cleans to nothing leaves the title alone (ruling R-m6).
+    assert _match("??? - Quiet Song", EXTRA_INDEX).rule == "title_alone"
     assert _ids(_match("Quiet Song", EXTRA_INDEX)) == ("e1",)
     # e2's title "???" is in no title entry; its artist still lists it.
     assert _ids(_match("Quiet Band", EXTRA_INDEX)) == ("e2",)
-    line = ListLine("Quiet Band | ???", "Quiet Band", "???")
-    assert match_line(EXTRA_INDEX, line).reason == "not_in_catalog"
+    result = match_line(EXTRA_INDEX, ListLine("Quiet Band | ???", "Quiet Band", "???"))
+    assert (_ids(result), result.rule) == (("e2",), "artist_or_film")  # not same_song
     assert "" not in EXTRA_INDEX.aliases
     assert "empty target" not in EXTRA_INDEX.aliases
+
+
+# ----- fix round 1: film names, recording notes ----------------------------
+
+
+@pytest.mark.parametrize(
+    ("line", "ids", "rule"),
+    [
+        ('Some Rapper - Dallas (From "Dallas")', ("t1",), "soundtrack"),  # the film in a note
+        ("Dallas - Dallas", ("t1",), "same_song"),
+        ("Moana 2 Cast - Beyond", ("m1",), "soundtrack"),  # the film in the artist side
+    ],
+)
+def test_film_named_outside_the_title(line: str, ids: tuple[str, ...], rule: str) -> None:
+    index = INDEX if "Moana" in line else EXTRA_INDEX
+    result = _match(line, index)
+    assert (_ids(result), result.rule) == (ids, rule)
+
+
+def test_film_named_only_by_the_title_is_refused() -> None:
+    # "Dallas" is both the title and the show: the line names no film.
+    assert _match("Some Rapper - Dallas", EXTRA_INDEX).reason == "not_in_catalog"
+
+
+SECOND_BEYOND = _index([*CATALOG, ("x9", "Beyond", "Sol Rivera", False)], ALIASES)
+
+
+def test_name_alone_with_a_film_note() -> None:  # ruling R-m3
+    result = _match('Beyond (From "Moana 2")', SECOND_BEYOND)
+    assert (_ids(result), result.rule) == (("m1",), "soundtrack")
+    assert _match("Beyond", SECOND_BEYOND).reason == "several_songs_share_this_name"
+    assert _match("Beyond (From Nowhere)", SECOND_BEYOND).reason == (
+        "several_songs_share_this_name"
+    )
+
+
+@pytest.mark.parametrize(
+    ("line", "ids", "rule"),
+    [  # ruling R-m4: the artist side is cleaned like a title when its exact name fails
+        ("Frozen (Original Motion Picture Soundtrack)", ("f1", "f2"), "artist_or_film"),
+        ("Queen (Live) - Bohemian Rhapsody", ("q1",), "same_song"),
+        ("Bohemian Rhapsody - Queen (Live)", ("q1",), "same_song"),
+    ],
+)
+def test_notes_on_the_artist_side(line: str, ids: tuple[str, ...], rule: str) -> None:
+    result = _match(line)
+    assert (_ids(result), result.rule) == (ids, rule)
+
+
+@pytest.mark.parametrize(
+    ("text", "fill"),
+    [
+        ("Frozen (Original Motion Picture Soundtrack) - Not In Catalog", ("f1", "f2")),
+        ("Queen (Live) - Not In Catalog", ("q1", "q2")),
+    ],
+)
+def test_notes_on_the_artist_side_fill(text: str, fill: tuple[str, ...]) -> None:
+    assert match_setlist(INDEX, parse_setlist_text(text)).fill_song_ids == fill
+
+
+def test_film_with_notes_fills_like_the_film() -> None:
+    with_notes = match_setlist(
+        INDEX, parse_setlist_text("Frozen (Original Motion Picture Soundtrack)")
+    )
+    plain = match_setlist(INDEX, parse_setlist_text("Frozen"))
+    assert (with_notes.list_song_ids, with_notes.fill_song_ids) == (
+        plain.list_song_ids,
+        plain.fill_song_ids,
+    )
+
+
+@pytest.mark.parametrize(
+    ("line", "ids", "rule", "reason"),
+    [  # ruling R-m6: a side that is only recording notes
+        ("Bohemian Rhapsody - Remastered 2011", ("q1",), "title_alone", None),
+        ("Remastered 2011 - Bohemian Rhapsody", ("q1",), "title_alone", None),
+        ("Queen - Bohemian Rhapsody - Remastered 2011", ("q1",), "same_song", None),
+        ("Sunny - Remastered", (), None, "several_songs_share_this_name"),
+    ],
+)
+def test_side_that_is_only_notes(
+    line: str, ids: tuple[str, ...], rule: str | None, reason: str | None
+) -> None:
+    result = _match(line)
+    assert (_ids(result), result.rule, result.reason) == (ids, rule, reason)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "1999 - Moonfish",  # a year alone can be the title ("1999"), not a note
+        "Live - Paper Lanterns",  # "Live" is a catalog band here, so it names an artist
+        "Remix - Radio",  # both sides are notes: which one is the title is a guess
+    ],
+)
+def test_side_that_is_only_notes_guards(line: str) -> None:
+    assert _match(line, EXTRA_INDEX).reason == "not_in_catalog"
 
 
 def test_alias_to_a_name_outside_the_catalog_matches_nothing() -> None:
