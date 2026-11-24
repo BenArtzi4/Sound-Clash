@@ -39,13 +39,39 @@ async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse
     )
 
 
+# The keys of a pydantic error that the 400 envelope keeps. Never "input", the
+# part of the body that failed (a whole pasted list, or the raw bytes of a body
+# that is not JSON), and never "ctx", which can hold an exception object:
+# echoing them gave a 2 MB answer, or a 500 when they could not be written as
+# JSON.
+_PUBLIC_ERROR_KEYS = ("type", "loc", "msg", "url")
+# A "loc" can hold a field name from the body (an unknown field), so its text
+# is cut too.
+_MAX_ERROR_TEXT = 200
+
+
+def _safe_text(text: str) -> str:
+    """Cut to ``_MAX_ERROR_TEXT`` characters, lone surrogates (which UTF-8
+    cannot encode) replaced with "?"."""
+    return text[:_MAX_ERROR_TEXT].encode("utf-8", "replace").decode("utf-8")
+
+
+def _public_error(error: Any) -> dict[str, Any]:
+    kept = {key: error[key] for key in _PUBLIC_ERROR_KEYS if key in error}
+    if "loc" in kept:
+        kept["loc"] = [_safe_text(p) if isinstance(p, str) else p for p in kept["loc"]]
+    if "msg" in kept:
+        kept["msg"] = _safe_text(str(kept["msg"]))
+    return kept
+
+
 async def request_validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     return _envelope(
         status=400,
         code="validation_error",
         message="invalid request body",
-        details={"errors": exc.errors()},
+        details={"errors": [_public_error(error) for error in exc.errors()]},
     )
 
 

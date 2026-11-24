@@ -367,6 +367,22 @@ async def test_create_with_setlist_and_decades_is_a_400(client, db) -> None:
     assert await _count(db, "active_games") == 0
 
 
+async def test_a_refused_create_answers_none_of_the_list(client, db) -> None:
+    # The 400 of a refused create names what was wrong, never the body: it
+    # used to echo the whole list (a 2 MB list gave a 2 MB answer).
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    text = "Velvet Comet - Paper Lanterns\n" * 5000  # 150,000 characters
+
+    for extra in ({"selected_genres": [str(genres[0])]}, {"selected_decades": [1980]}):
+        resp = await _create_from_list(client, text, **extra)
+
+        assert resp.status_code == 400, extra
+        assert resp.json()["error"] == "validation_error", extra
+        assert "Velvet Comet" not in resp.text and "Paper Lanterns" not in resp.text
+        assert len(resp.content) < 1000, extra
+    assert await _count(db, "active_games") == 0
+
+
 async def test_setlist_with_no_playable_song_is_a_400_and_creates_nothing(client, db) -> None:
     await _seed_setlist_catalog(db)
 
@@ -533,6 +549,34 @@ async def test_demand_skips_keys_over_1000_bytes(client, db) -> None:
     assert keys == {kept, "nobody not a real song"}
 
 
+async def test_demand_records_at_most_100_songs_per_create(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    # The first song is named 5 times: it counts once and takes one place.
+    missing = ["Nobody - Missing Song 0"] * 5 + [f"Nobody - Missing Song {i}" for i in range(120)]
+    text = "\n".join(["Velvet Comet - Paper Lanterns", *missing])
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    keys = {row["line_key"] for row in await db.fetch("SELECT line_key FROM song_demand")}
+    assert keys == {f"missing song {i} nobody" for i in range(100)}
+
+
+async def test_demand_cuts_a_long_raw_line_but_never_its_key(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    long_line = "Nobody - " + " ".join(["Long Song"] * 40)  # 408 characters
+    text = f"Velvet Comet - Paper Lanterns\n{long_line}"
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    rows = await db.fetch("SELECT line_key, raw_line FROM song_demand")
+    assert [dict(row) for row in rows] == [
+        {"line_key": " ".join(["long song"] * 40) + " nobody", "raw_line": long_line[:300]}
+    ]
+    assert len(rows[0]["raw_line"]) == 300
+
+
 async def test_demand_skips_a_line_with_a_nul_character(client, db) -> None:
     await _seed_setlist_catalog(db)
     text = "Velvet Comet - Paper Lanterns\nNobody - Not\x00Real\nNobody - Not A Real Song"
@@ -576,6 +620,29 @@ async def test_a_lone_surrogate_in_the_list_is_dropped_not_a_500(
         assert resp.json()["setlist"] == {"list_songs": 1, "same_artist_songs": 1}
     keys = {row["line_key"] for row in await db.fetch("SELECT line_key FROM song_demand")}
     assert keys == demand
+
+
+@pytest.mark.parametrize(
+    "other_field",
+    [
+        pytest.param('"selected_genres": ["00000000-0000-4000-8000-000000000001"]', id="both"),
+        pytest.param('"selected_decades": [1980]', id="list-and-decades"),
+    ],
+)
+async def test_a_refused_create_with_a_lone_surrogate_is_a_400_not_a_500(
+    client, db, other_field: str
+) -> None:
+    # The refusal used to echo the body; UTF-8 cannot encode a lone surrogate,
+    # so writing the answer failed with a 500.
+    text = f"Velvet Comet {LONE_SURROGATE} - Paper Lanterns"
+    raw = ('{"setlist": {"text": "' + text + '"}, ' + other_field + "}").encode("ascii")
+
+    resp = await client.post("/games", content=raw, headers={"Content-Type": "application/json"})
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    assert "Velvet Comet" not in resp.text
+    assert await _count(db, "active_games") == 0
 
 
 async def test_a_name_several_songs_share_is_not_recorded_as_demand(client, db) -> None:

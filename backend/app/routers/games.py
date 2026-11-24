@@ -77,6 +77,12 @@ SETLIST_EMPTY_MESSAGE = "None of the songs in your list can play."
 # primary key is a btree, and one key past its row limit (about 2,700 bytes)
 # fails the whole record_song_demand call.
 MAX_DEMAND_KEY_BYTES = 1000
+# One create records at most this many songs (different keys), the first ones
+# in list order, so a long list of unknown lines stays one small write.
+MAX_DEMAND_SONGS = 100
+# raw_line is only shown to whoever reads the demand queue, so a long one is
+# cut to this many characters. The key is never cut.
+MAX_DEMAND_LINE_CHARS = 300
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +229,8 @@ def _demand_entry(result: LineResult) -> tuple[str, str] | None:
     Only ``not_in_catalog`` lines count: a song name several songs share is in
     the catalog. A key that is empty or over ``MAX_DEMAND_KEY_BYTES``, and a
     line with a NUL character (Postgres text cannot hold one), are skipped.
-    ``raw_line`` is the line as the host wrote it.
+    ``raw_line`` is the line as the host wrote it, cut to
+    ``MAX_DEMAND_LINE_CHARS`` characters.
     """
     if result.reason != "not_in_catalog":
         return None
@@ -233,7 +240,21 @@ def _demand_entry(result: LineResult) -> tuple[str, str] | None:
         return None
     if len(key.encode("utf-8")) > MAX_DEMAND_KEY_BYTES:
         return None
-    return key, raw
+    return key, raw[:MAX_DEMAND_LINE_CHARS]
+
+
+def _demand_entries(results: Sequence[LineResult]) -> dict[str, str]:
+    """{line_key: raw_line} of the first ``MAX_DEMAND_SONGS`` songs the
+    catalog lacks, in list order; a key named again keeps its first line (as
+    ``record_song_demand`` does) and takes no second place."""
+    entries: dict[str, str] = {}
+    for entry in map(_demand_entry, results):
+        if entry is None or entry[0] in entries:
+            continue
+        entries[entry[0]] = entry[1]
+        if len(entries) == MAX_DEMAND_SONGS:
+            break
+    return entries
 
 
 def _record_demand_blocking(
@@ -245,12 +266,12 @@ def _record_demand_blocking(
     its error only, never with the host's list.
     """
     try:
-        entries = [entry for entry in map(_demand_entry, results) if entry is not None]
+        entries = _demand_entries(results)
         if not entries:
             return
         client.rpc(
             "record_song_demand",
-            {"p_keys": [key for key, _ in entries], "p_lines": [raw for _, raw in entries]},
+            {"p_keys": list(entries), "p_lines": list(entries.values())},
         ).execute()
     except Exception as exc:
         logger.warning("song demand not recorded for game %s: %s", code, _error_reason(exc))

@@ -329,3 +329,17 @@ async def test_a_malformed_body_is_a_validation_error(client, payload: dict[str,
 
     assert resp.status_code == 400
     assert resp.json()["error"] == "validation_error"
+
+
+async def test_a_body_that_is_not_json_is_a_validation_error_not_a_500(client) -> None:
+    # A text/plain body reaches the model as bytes. The 400 names what was
+    # wrong and never echoes the body.
+    text = "Velvet Comet - Paper Lanterns\nGlass Harbor\n"
+
+    resp = await client.post(
+        URL, content=text.encode("utf-8"), headers={"Content-Type": "text/plain"}
+    )
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    assert "Velvet Comet" not in resp.text and "Glass Harbor" not in resp.text
