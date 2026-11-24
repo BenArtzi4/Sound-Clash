@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 from types import MappingProxyType
 from typing import Literal
@@ -411,8 +411,10 @@ def _match_pair(index: CatalogIndex, line: ListLine, right: str) -> _Found:
     """Rules 1 to 5 for a line with a separator, rule by rule in both orders.
 
     When none matches and exactly one side is only recording notes
-    (``Bohemian Rhapsody - Remastered 2011``), the other side is matched as a
-    line with no separator.
+    (``Bohemian Rhapsody - Remastered 2011``), the other side is looked up as
+    a song name, never as an artist or film: a song line never becomes a
+    whole artist in tier 1 (``Queen - Live`` is not found, and Queen's songs
+    join tier 2 through the fill).
     """
     readings = (_reading(index, line.left, right), _reading(index, right, line.left))
     for rule, find in _PAIR_RULES:
@@ -422,26 +424,30 @@ def _match_pair(index: CatalogIndex, line: ListLine, right: str) -> _Found:
                 return _found(line, entries, rule, _main_key(index, reading.artist))
     for notes, other in ((line.left, right), (right, line.left)):
         if _only_notes(index, notes) and not _only_notes(index, other):
-            alone = _match_name(index, ListLine(line.raw, other, None))
-            return replace(alone, result=replace(alone.result, line=line))
+            return _match_song_name(index, line, other)
     return _not_found(line, "not_in_catalog")
 
 
 def _match_name(index: CatalogIndex, line: ListLine) -> _Found:
-    """Rule 6 for a line with no separator: an artist or film, then a song name.
-
-    When several songs share the name, a film named in the line's recording
-    notes (``Beyond (From "Moana 2")``) picks its soundtrack song.
-    """
+    """Rule 6 for a line with no separator: an artist or film, then a song name."""
     key = index.artist_key(line.left)
     if key is not None:
         return _found(line, index._credited(key), "artist_or_film", key)
-    title = norm(clean_title(line.left))
+    return _match_song_name(index, line, line.left)
+
+
+def _match_song_name(index: CatalogIndex, line: ListLine, text: str) -> _Found:
+    """``text`` as a song name with no artist: the one catalog song of that name.
+
+    When several songs share the name, a film named in the recording notes of
+    ``text`` (``Beyond (From "Moana 2")``) picks its soundtrack song.
+    """
+    title = norm(clean_title(text))
     titled = index._titled(title)
     if len(titled) == 1:
         return _found(line, titled, "title_alone", None)
     if titled:
-        side_words, title_words = tuple(norm(line.left).split()), tuple(title.split())
+        side_words, title_words = tuple(norm(text).split()), tuple(title.split())
         named = [
             e
             for e in titled

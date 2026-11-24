@@ -150,6 +150,8 @@ EXTRA: list[Row] = [
     ("t1", "Dallas", "Dallas", True),  # a one-word theme named after its show
     ("x10", "Glass Bells", "Live", False),  # a band whose name is a recording note
     ("x11", "Radio", "Signal Tower", False),  # a title that is a recording note
+    ("x12", "Night Bells", "Iron Choir", False),
+    ("x13", "Dust Road", "Iron Choir", False),
 ]
 EXTRA_ALIASES = {
     "kesha moon": "ke$ha moon",  # alias rows are lower + trim only
@@ -251,8 +253,10 @@ def test_names_that_norm_to_nothing_are_not_indexed() -> None:
     assert _ids(_match("Quiet Song", EXTRA_INDEX)) == ("e1",)
     # e2's title "???" is in no title entry; its artist still lists it.
     assert _ids(_match("Quiet Band", EXTRA_INDEX)) == ("e2",)
-    result = match_line(EXTRA_INDEX, ListLine("Quiet Band | ???", "Quiet Band", "???"))
-    assert (_ids(result), result.rule) == (("e2",), "artist_or_film")  # not same_song
+    line = ListLine("Quiet Band | ???", "Quiet Band", "???")
+    result = match_line(EXTRA_INDEX, line)
+    assert (result.rule, result.reason) == (None, "not_in_catalog")  # not same_song
+    assert match_setlist(EXTRA_INDEX, [line]).fill_song_ids == ("e2",)
     assert "" not in EXTRA_INDEX.aliases
     assert "empty target" not in EXTRA_INDEX.aliases
 
@@ -343,9 +347,25 @@ def test_side_that_is_only_notes(
 
 
 @pytest.mark.parametrize(
+    ("index", "text", "fill"),
+    [  # ruling m6b: the side beside the notes is a song name, never an artist
+        (EXTRA_INDEX, "Iron Choir - Acoustic", ("x12", "x13")),
+        (INDEX, "Queen - Live", ("q1", "q2")),
+    ],
+)
+def test_notes_beside_an_artist_fill_tier_2_only(
+    index: CatalogIndex, text: str, fill: tuple[str, ...]
+) -> None:
+    m = match_setlist(index, parse_setlist_text(text))
+    assert (m.results[0].rule, m.results[0].reason) == (None, "not_in_catalog")
+    assert (m.list_song_ids, m.fill_song_ids) == ((), fill)
+
+
+@pytest.mark.parametrize(
     "line",
     [
         "1999 - Moonfish",  # a year alone can be the title ("1999"), not a note
+        "1999 - Paper Lanterns",  # so "Paper Lanterns" is not a title alone either
         "Live - Paper Lanterns",  # "Live" is a catalog band here, so it names an artist
         "Remix - Radio",  # both sides are notes: which one is the title is a guess
     ],
