@@ -482,6 +482,7 @@ describe("YouTubePlayer load health", () => {
   }
   const state = (data: number) =>
     act(() => {
+      lastPlayer?.getPlayerState.mockReturnValue(data);
       lastConfig?.events?.onStateChange?.({ data });
     });
   const advance = (ms: number) =>
@@ -527,6 +528,17 @@ describe("YouTubePlayer load health", () => {
       await advance(30_000);
       expect(onStartStall).toHaveBeenCalledTimes(2);
       expect(player.loadVideoById).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps watching a new song after an unidentified stale PLAYING event", async () => {
+      const { ref, player } = await mount({ controls: true });
+      act(() => ref.current?.loadVideoById("liveVIDEO01", 30));
+      state(1);
+      act(() => ref.current?.loadVideoById("liveVIDEO02", 45));
+      player.getPlayerState.mockReturnValue(-1);
+      act(() => lastConfig?.events?.onStateChange?.({ data: 1 }));
+      await advance(10_000);
+      expect(screen.getByRole("button", { name: "Retry playback" })).toBeEnabled();
     });
 
     it("offers Retry playback after a stalled load and lets the host retry at the cue", async () => {
@@ -814,6 +826,7 @@ describe("YouTubePlayer host transport", () => {
   }
   const state = (data: number) =>
     act(() => {
+      lastPlayer?.getPlayerState.mockReturnValue(data);
       lastConfig?.events?.onStateChange?.({ data });
     });
   const btn = (name: "back" | "toggle" | "forward") =>

@@ -2883,7 +2883,7 @@ describe("ManagerConsolePage", () => {
   });
 
   it.each([2, 3])(
-    "keeps the observed lock and cues round %i when the round-2 response arrives late",
+    "cues locked Realtime round %i before the round-2 response arrives",
     async (liveRound) => {
       await setupPlayingRound();
       let resolveSelect: (value: SelectSongResponse) => void = () => {};
@@ -2919,9 +2919,6 @@ describe("ManagerConsolePage", () => {
           }),
         );
       });
-      expect(handle(0).loadVideoById).not.toHaveBeenCalled();
-      await act(async () => resolveSelect({ round_id: "r2", round_number: 2, song: SONG2_ROW }));
-
       await waitFor(() => {
         expect(handle(0).loadVideoById).toHaveBeenCalledExactlyOnceWith(
           current.youtube_id,
@@ -2931,8 +2928,36 @@ describe("ManagerConsolePage", () => {
       });
       expect(playerHold).toEqual([true]);
       expect(screen.getByText(current.title)).toBeInTheDocument();
+      await act(async () => resolveSelect({ round_id: "r2", round_number: 2, song: SONG2_ROW }));
+      expect(handle(0).loadVideoById).toHaveBeenCalledTimes(1);
+      expect(handle(0).stop).not.toHaveBeenCalled();
     },
   );
+
+  it("allows playback of an unlocked Realtime round while the response is still pending", async () => {
+    await setupPlayingRound();
+    vi.mocked(selectNextSongDirect).mockReturnValueOnce(new Promise(() => {}));
+    setSongFetch(SONG2_ROW);
+    fireEvent.click(screen.getByTestId("start-round"));
+    expect(playerHold).toEqual([true]);
+
+    act(() => {
+      fireRound(
+        makePayload<GameRound>("game_rounds", "INSERT", {
+          new: makeRound({ id: "r2", round_number: 2, song_id: SONG2_ROW.id }),
+        }),
+      );
+      fireGame(
+        makePayload<ActiveGame>("active_games", "UPDATE", {
+          new: makeActiveGame({ status: "playing", round_number: 2, current_round_id: "r2" }),
+        }),
+      );
+    });
+    await screen.findByText(SONG2_ROW.title);
+    expect(playerHold).toEqual([false]);
+    expect(handle(0).loadVideoById).toHaveBeenLastCalledWith(SONG2_ROW.youtube_id, 30);
+    expect(selectNextSongDirect).toHaveBeenCalledTimes(1);
+  });
 
   it("holds the next peek until select_next_song has recorded the new round", async () => {
     // The picker (mig 049) never repeats the genre playing now, so it must see

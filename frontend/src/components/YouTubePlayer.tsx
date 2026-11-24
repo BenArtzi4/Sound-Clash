@@ -288,11 +288,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
 
   // IFrame events carry the player, so compare its reported video with the
   // requested one before letting an event from the previous round drive transport.
-  const isCurrentVideo = useCallback(() => {
+  const isCurrentVideo = useCallback((corroboratePlaying = false) => {
     const player = playerRef.current;
     const reportedId =
       player?.getVideoData?.()?.video_id || player?.getVideoUrl?.()?.match(/[?&]v=([^&]+)/)?.[1];
-    return !reportedId || reportedId === videoIdRef.current;
+    return reportedId
+      ? reportedId === videoIdRef.current
+      : !corroboratePlaying || player?.getPlayerState() === YT_STATE_PLAYING;
   }, []);
 
   // Load health, on Date.now() so fake timers move it. `visibilityChangedAtRef`
@@ -503,7 +505,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, Props>(function You
             onErrorRef.current?.(event.data, videoIdRef.current);
           },
           onStateChange: (event) => {
-            if (!isCurrentVideo()) return;
+            if (!isCurrentVideo(event.data === YT_STATE_PLAYING)) return;
             if (event.data === YT_STATE_PLAYING) {
               if (appPauseRef.current && !hostPausedRef.current) {
                 playerRef.current?.pauseVideo();

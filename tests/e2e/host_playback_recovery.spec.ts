@@ -11,6 +11,10 @@ test("a preview miss on Start and Next leaves the current song playable from a f
   const latePeek = Promise.withResolvers<void>();
   let peeks = 0;
   const advances: Array<string | null> = [];
+  const roundReplies = [1, 2].map(() => ({
+    row: Promise.withResolvers<{ youtube_id: string; start_time: number }>(),
+    deliver: Promise.withResolvers<void>(),
+  }));
   const { page } = await openManagerAndCreateGame(browser, {
     genreName: "Rock",
     contextOptions: {
@@ -29,10 +33,15 @@ test("a preview miss on Start and Next leaves the current song playable from a f
       });
       await host.route("**/rpc/select_next_song", async (route) => {
         if (route.request().method() !== "POST") return route.continue();
+        const reply = roundReplies[advances.length];
         advances.push(route.request().postDataJSON().p_song_id);
-        // Let Realtime arrive before the round response and outlast the tap.
+        if (!reply) throw new Error("unexpected round advance");
+        // Commit the round, then keep the response out of the browser until
+        // the host has recovered playback using the Realtime round alone.
         const response = await route.fetch();
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        const [song] = await response.json();
+        reply.row.resolve(song);
+        await reply.deliver.promise;
         await route.fulfill({ response });
       });
       await host.route("https://www.youtube-nocookie.com/embed/**", (route) =>
@@ -91,20 +100,20 @@ test("a preview miss on Start and Next leaves the current song playable from a f
   const frame = page.getByTestId("youtube-player").locator("iframe");
   const play = page.getByRole("button", { name: "Play song", exact: true });
 
-  for (const round of [1, 2]) {
+  for (const [index, reply] of roundReplies.entries()) {
+    const round = index + 1;
     const result = page.waitForResponse(
       (response) =>
         response.url().endsWith("/rpc/select_next_song") &&
         response.request().method() === "POST",
     );
     await advanceRound(page);
-    const [song] = await (await result).json();
+    const song = await reply.row.promise;
     const sameSong = JSON.stringify({
       videoId: song.youtube_id,
       startSeconds: song.start_time,
     });
     await expect(play).toBeEnabled();
-    await expect(page.getByTestId("start-round")).toBeEnabled();
     await expect(frame).toHaveAttribute("data-loads", String(round * 2 - 1));
     await expect(frame).toHaveAttribute("data-in-tap", "false");
     await expect(frame).toHaveAttribute("data-requested-song", sameSong);
@@ -119,6 +128,11 @@ test("a preview miss on Start and Next leaves the current song playable from a f
       page.getByText(new RegExp("Round " + round + "$", "i")),
     ).toBeVisible();
     expect(advances).toEqual(Array(round).fill(null));
+
+    reply.deliver.resolve();
+    expect((await result).ok()).toBe(true);
+    await expect(page.getByTestId("start-round")).toBeEnabled();
+    await expect(frame).toHaveAttribute("data-loads", String(round * 2));
 
     if (round === 1) {
       latePeek.resolve();

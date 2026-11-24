@@ -1,8 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const abortSignal = vi.hoisted(() => vi.fn());
+
 vi.mock("../lib/supabase", async () => {
-  const mod = await import("../test/supabaseMock");
-  return { supabase: mod.supabaseMock };
+  const { supabaseMock } = await import("../test/supabaseMock");
+  return {
+    supabase: {
+      rpc(...args: Parameters<typeof supabaseMock.rpc>) {
+        const result = supabaseMock.rpc(...args);
+        return {
+          abortSignal(signal: AbortSignal) {
+            abortSignal(signal);
+            return result;
+          },
+        };
+      },
+    },
+  };
 });
 
 import { selectNextSongDirect } from "./useSelectNextSong";
@@ -28,6 +42,7 @@ function row(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   resetSupabaseMock();
+  abortSignal.mockClear();
 });
 
 describe("selectNextSongDirect", () => {
@@ -71,6 +86,21 @@ describe("selectNextSongDirect", () => {
       message: "manager_token_required",
       sqlstate: "28000",
     });
+  });
+
+  it("bounds the round request and reports an abort as a timeout", async () => {
+    const signal = AbortSignal.abort();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(signal);
+    setRpcResponse({ data: null, error: { message: "Aborted" } });
+    try {
+      await expect(selectNextSongDirect("ABCDEF", TOKEN, 0)).rejects.toThrow(
+        /round response timed out/i,
+      );
+      expect(timeout).toHaveBeenCalledExactlyOnceWith(10_000);
+      expect(abortSignal).toHaveBeenCalledExactlyOnceWith(signal);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   it("throws RpcError when the pool is exhausted (no_more_songs)", async () => {
