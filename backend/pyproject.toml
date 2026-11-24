@@ -16,7 +16,8 @@ dependencies = [
     "pydantic>=2.9",
     "python-multipart>=0.0.18",
     "slowapi>=0.1.9",
-    "sentry-sdk[fastapi]>=2.18",
+    # shortcut: Sentry 3 removes send_default_pii, upgrade when equivalent privacy settings are configured.
+    "sentry-sdk[fastapi]>=2.18,<3",
     "python-dotenv>=1.0",
     # OpenTelemetry → Grafana Cloud (Tempo/Loki). Tracing is opt-in at runtime
     # via OTEL_EXPORTER_OTLP_ENDPOINT; see app/middleware/otel.py.
