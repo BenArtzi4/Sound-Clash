@@ -2,7 +2,7 @@
 
 The thirteen PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`. `db/migrations/060_game_song_pool.sql` added the custom-setlist functions `save_game_setlist` (§3i), `pick_next_pool_song` (§3j) and `game_pool_summary` (§3k), and the custom-game branch in `select_next_song` (§3c) and `peek_next_song` (§3d).
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`. `db/migrations/060_game_song_pool.sql` added the custom-setlist functions `save_game_setlist` (§3i), `pick_next_pool_song` (§3j) and `game_pool_summary` (§3k), and the custom-game branch in `select_next_song` (§3c) and `peek_next_song` (§3d). `db/migrations/061_setlist_support_tables.sql` added `record_song_demand` (§3l), the writer of the durable `song_demand` queue.
 
 ## 0. Conventions
 
@@ -676,6 +676,39 @@ Read-only. `CREATE OR REPLACE` plus re-runnable `REVOKE EXECUTE ... FROM PUBLIC`
 
 - No caller yet. Planned: the host console → Supabase PostgREST RPC, on mount and when the round changes; zero rows, a missing function or any error shows nothing (`docs/planning/2026-11-24-custom-setlist-phase1-plan.md`, Task 11).
 
+## 3l. `record_song_demand`: count the list lines the catalog lacks (service-role only)
+
+Added in migration 061 (custom setlists, phase 1). When a host creates a game from a list, the lines that matched no catalog song go into the durable `song_demand` queue, so the maintainer sees which songs hosts ask for. Design: `docs/planning/2026-11-24-custom-setlist-design.md` §13 point 5.
+
+```sql
+CREATE OR REPLACE FUNCTION record_song_demand(
+  p_keys  text[],   -- the cleaned line, one per missing line (song_demand.line_key)
+  p_lines text[]    -- the host's line as written, same order
+) RETURNS integer   -- rows touched (inserted or counted)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- One `INSERT ... SELECT ... FROM unnest(p_keys, p_lines) ... ON CONFLICT (line_key) DO UPDATE`. A new key gets a row with `request_count = 1`, `status = 'pending'` and its line as `raw_line`. A known key gets `request_count + 1` and `last_requested_at = now()`; its `raw_line` (the first line ever seen for it), `first_requested_at` and `status` are not changed, so a `rejected` key stays rejected and still counts.
+- **A key named twice in one call counts once**, and the first line for it (by position) wins. One `INSERT ... ON CONFLICT DO UPDATE` cannot touch a row twice, so the keys are de-duplicated inside the statement (`DISTINCT ON (line_key) ... ORDER BY line_key, ordinality`). The rows go in key order, so two concurrent calls lock shared rows in the same order.
+- `NULL` or empty arrays record nothing and return 0. A `NULL` element is not skipped: it fails the table's `NOT NULL` constraint.
+
+### Error semantics
+
+| Failure | Exception |
+|---|---|
+| `p_keys` and `p_lines` have different lengths (`NULL` counts as empty) | `22023 demand_arrays_unequal`; nothing is written |
+
+### Idempotency
+
+Not idempotent by design: every call counts its keys once more.
+
+### Callers
+
+- No caller yet. Planned: FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`docs/planning/2026-11-24-custom-setlist-phase1-plan.md`, Task 7). Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
+
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
 Added in migration 014. Independent of round state and the buzz lock; the host picks any team in the game and grants a positive number of points (default 4). Does not touch `game_rounds`. Called by FastAPI (`POST /games/{code}/bonus`). Not exposed to anon.
@@ -1045,6 +1078,7 @@ migration's one-time backfill of existing teams never double-inserts.
 | `game_pool_summary` | ✅ (token-gated, read-only) | ✅ | No caller yet (planned: host console's custom-setlist progress line) |
 | `save_game_setlist` | ❌ | ✅ | No caller yet (planned: FastAPI POST /games with a list) |
 | `pick_next_pool_song` | ❌ | ✅ | Internal call from `select_next_song` + `peek_next_song` for a custom setlist game. No HTTP caller. |
+| `record_song_demand` | ❌ | ✅ | No caller yet (planned: FastAPI POST /games with a list, for the lines it could not match) |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_manager_bonus` | ✅ (token-gated) | ✅ | Browser (manager bonus picker) |

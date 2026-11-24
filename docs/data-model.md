@@ -1,6 +1,6 @@
 # Sound Clash: Data Model
 
-The schema for Postgres on Supabase. Fourteen tables in three groups: a **durable song catalog** (`songs`, `genres`, `song_genres`), **ephemeral per-game state** (`active_games`, `game_secrets`, `game_teams`, `team_secrets`, `game_rounds`, `game_round_attempts`, and the custom setlist pool `game_setlists` / `game_song_pool`, mig 060) that cascade-deletes ~4h after game creation, and a **durable game-history archive** (`game_history`, `game_history_teams`, `game_history_songs`, mig 033) snapshotted at game end and never pruned.
+The schema for Postgres on Supabase. Sixteen tables in three groups: a **durable song catalog** (`songs`, `genres`, `song_genres`, plus the custom setlist support tables `artist_aliases` and `song_demand`, mig 061), **ephemeral per-game state** (`active_games`, `game_secrets`, `game_teams`, `team_secrets`, `game_rounds`, `game_round_attempts`, and the custom setlist pool `game_setlists` / `game_song_pool`, mig 060) that cascade-deletes ~4h after game creation, and a **durable game-history archive** (`game_history`, `game_history_teams`, `game_history_songs`, mig 033) snapshotted at game end and never pruned.
 
 For PL/pgSQL function bodies that mutate this schema, see **`rpc-functions.md`**.
 For RLS policies and access matrix, see **`security-rls.md`**.
@@ -23,9 +23,12 @@ active_games (PK: game_code) ◄────────────────
    │
    └── game_setlists (FK: game_code): custom games only (mig 060)
           └── game_song_pool (FK: game_code; song_id → songs, ON DELETE CASCADE)
+
+artist_aliases (PK: alias): artist_key is a value in songs.artist_keys (no FK; mig 061)
+song_demand (PK: line_key): standalone (mig 061)
 ```
 
-**Durable** (never auto-deleted): `songs`, `genres`, `song_genres`. Only `genres` is anon-readable; the browser gets songs through game-scoped RPCs (mig 053, 054).
+**Durable** (never auto-deleted): `songs`, `genres`, `song_genres`, and the operator-only `artist_aliases` / `song_demand` (mig 061). Only `genres` is anon-readable; the browser gets songs through game-scoped RPCs (mig 053, 054).
 **Ephemeral** (deleted 4h after `started_at`): `active_games`, `game_teams`, `game_rounds`, and the tables that cascade from them (`game_secrets`, `team_secrets`, `game_round_attempts`, `game_setlists`, `game_song_pool`). Pruned by pg_cron.
 **Durable game history** (never pruned; mig 033): `game_history`, `game_history_teams`, `game_history_songs` — an end-of-game snapshot written by `archive_game()` so a finished game survives the 4h sweep. Operator-only (no `anon` read). Indefinite retention (incl. team names) is a **consciously accepted** tradeoff — the strings are pseudonyms and the archive is operator-only; see `security-rls.md` §4 (T5.4).
 
@@ -64,6 +67,28 @@ CREATE TABLE song_genres (
   song_id  uuid REFERENCES songs(id)  ON DELETE CASCADE,
   genre_id uuid REFERENCES genres(id) ON DELETE CASCADE,
   PRIMARY KEY (song_id, genre_id)
+);
+
+-- Custom setlists (migration 061). A spelling a host may type, mapped to one
+-- catalog artist. The rows are private catalog data: never committed to git,
+-- uploaded like songs. RLS on with no policy, anon/authenticated revoked.
+CREATE TABLE artist_aliases (
+  alias      text PRIMARY KEY
+             CHECK (alias = lower(btrim(alias)) AND alias <> ''),  -- stored cleaned
+  artist_key text NOT NULL,   -- a value in songs.artist_keys (not an FK: an array)
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- The list lines that matched no catalog song, one row per cleaned line,
+-- written by record_song_demand (migration 061). Operator-only, like the above.
+CREATE TABLE song_demand (
+  line_key           text PRIMARY KEY,
+  raw_line           text NOT NULL,              -- the first line seen for this key
+  request_count      integer NOT NULL DEFAULT 1,
+  first_requested_at timestamptz NOT NULL DEFAULT now(),
+  last_requested_at  timestamptz NOT NULL DEFAULT now(),
+  status             text NOT NULL DEFAULT 'pending'
+                     CHECK (status IN ('pending', 'approved', 'rejected', 'added'))
 );
 
 -- ====== Ephemeral: live game state ======
@@ -214,6 +239,7 @@ CREATE INDEX game_teams_game_code_idx     ON game_teams  (game_code);
 CREATE INDEX game_rounds_game_code_idx    ON game_rounds (game_code);
 CREATE INDEX song_genres_genre_idx        ON song_genres (genre_id);
 CREATE INDEX team_secrets_rejoin_token_idx ON team_secrets (rejoin_token);  -- rejoin lookup (mig 046)
+CREATE INDEX artist_aliases_artist_key_idx ON artist_aliases (artist_key); -- an artist's spellings (mig 061)
 
 -- Game history (mig 033)
 CREATE INDEX game_history_teams_history_idx ON game_history_teams (game_history_id);
@@ -396,9 +422,18 @@ Migration 060, custom setlists phase 1 (design: `docs/planning/2026-11-24-custom
 
 See `rpc-functions.md` §3c, §3d and §3i-§3k.
 
+### `artist_aliases` and `song_demand`
+
+Migration 061, custom setlists phase 1 (design: `docs/planning/2026-11-24-custom-setlist-design.md` §7 and §13 point 5). Both are durable (no foreign key to the game tables, so the 4-hour sweep never reaches them) and operator-only: RLS on with no policy, every base privilege revoked from `anon` and `authenticated`, not in the Realtime publication. `service_role` holds `SELECT`, `INSERT`, `UPDATE`, `DELETE` (granted explicitly, as migrations 030 and 033 do), because the backend's list matcher reads `artist_aliases` through PostgREST.
+
+- **`artist_aliases`** maps a spelling a host may type to one catalog artist, so a line in the other script still finds the artist. `alias` is the primary key and is stored cleaned: a `CHECK` refuses a value that is not lower case and trimmed, or is empty. `artist_key` is a value that appears in `songs.artist_keys`; it cannot be a foreign key (`artist_keys` is an array) and no trigger enforces it, so the offline verify tool checks it. One artist may have many spellings; the `artist_key` index finds them. **The rows are private:** they name the catalog's artists, so they are never committed to git; they are uploaded like songs and kept in the private catalog backup. An alias never joins two catalog entries that are translations of each other (two recordings).
+- **`song_demand`** is the Demand Queue: the list lines that matched no catalog song, one row per cleaned line (`line_key`). `record_song_demand` writes it: a new key gets a row with `request_count = 1`; a known key gets `request_count + 1` and a new `last_requested_at`, and keeps its first `raw_line`, its `first_requested_at` and its `status`. `status` (`pending`, `approved`, `rejected`, `added`) is the maintainer's review state; a new request never changes it.
+
+See `rpc-functions.md` §3l.
+
 ## 5. Row-Level Security (summary)
 
-Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on `genres` and the live-game tables; mutations are exclusively via service_role or via the six browser-callable writes (`buzz_in`, `award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The browser reads song metadata only through the read-only, game-scoped `game_setlist` / `round_song` RPCs (mig 053; a song only for a game that played it, from the archive once the game is swept), and the create page's counts through `song_pool_counts`; migration 054 dropped anon's policies on `songs` / `song_genres` and revoked its `SELECT` (and `authenticated`'s), so a direct read is "permission denied". `genres` stays readable. The exceptions are the song catalog (`songs`, `song_genres`, mig 054), the durable history tables (`game_history*`, mig 033), the secret tables (`game_secrets`, mig 034; `team_secrets`, mig 046), the per-buzz analytics log (`game_round_attempts`, mig 037), and the custom setlist pool (`game_setlists`, `game_song_pool`, mig 060): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
+Two principals: `anon` (browser) and `service_role` (FastAPI). All tables have RLS enabled; `anon` gets SELECT-only on `genres` and the live-game tables; mutations are exclusively via service_role or via the six browser-callable writes (`buzz_in`, `award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `extend_game` — each a `SECURITY DEFINER` function that validates the game code or the `manager_token` in-body; see `security-rls.md` for the grant matrix). The browser reads song metadata only through the read-only, game-scoped `game_setlist` / `round_song` RPCs (mig 053; a song only for a game that played it, from the archive once the game is swept), and the create page's counts through `song_pool_counts`; migration 054 dropped anon's policies on `songs` / `song_genres` and revoked its `SELECT` (and `authenticated`'s), so a direct read is "permission denied". `genres` stays readable. The exceptions are the song catalog (`songs`, `song_genres`, mig 054), the durable history tables (`game_history*`, mig 033), the secret tables (`game_secrets`, mig 034; `team_secrets`, mig 046), the per-buzz analytics log (`game_round_attempts`, mig 037), the custom setlist pool (`game_setlists`, `game_song_pool`, mig 060), and the custom setlist support tables (`artist_aliases`, `song_demand`, mig 061): each has RLS on with **no `anon` policy at all**, so they are operator-only (read via the service role / Supabase SQL editor).
 
 Full policy DDL and threat model: see **`security-rls.md`**.
 
@@ -420,6 +455,7 @@ These core PL/pgSQL functions encode the game's state transitions (plus the hist
 | `game_pool_summary(p_game_code, p_manager_token)` | Read-only: a custom game's list size and how many songs are left per tier; zero rows for a genre game | Browser via PostgREST (`manager_token`); no caller yet |
 | `save_game_setlist(p_game_code, p_list_song_ids, p_fill_song_ids, p_list_total)` | Save a custom game's pool and set `ready` in one call; returns the pool size | FastAPI (service role); no caller yet |
 | `pick_next_pool_song(p_game_code)` | The custom-game picker: lowest tier left, then artist spacing, then a weighted draw | Internal (called by `select_next_song` / `peek_next_song`) |
+| `record_song_demand(p_keys, p_lines)` | Count list lines the catalog lacks in `song_demand` (a key repeated in one call counts once); returns the rows touched | FastAPI (service role); no caller yet |
 | `start_round(p_game_code, p_song_id)` | Begin a new round; closes any prior open round | Internal (called by `select_next_song`) |
 | `end_round(p_game_code, p_round_id)` | Close the round (idempotent) | Internal; nothing calls it today (`start_round` closes the prior round itself) |
 | `award_manager_bonus(p_game_code, p_manager_token, p_team_id)` | Fixed +4 to a team, returns its new score | Manager browser |
@@ -476,7 +512,8 @@ db/migrations/
 ├── 053_catalogue_rpcs.sql      -- game-scoped game_setlist() / round_song() so the browser stops reading songs directly; song_pool_counts() becomes SECURITY DEFINER (expand step; the revoke is 054)
 ├── 054_revoke_anon_catalogue_reads.sql -- drop anon_read_songs / anon_read_song_genres and REVOKE SELECT on songs, song_genres from anon + authenticated (contract step after 053); genres stays readable
 │   … 055–059: award_manager_bonus, weighted genre balance, guarded round advance, buzz-lock broadcast, scoring bound to the buzz
-└── 060_game_song_pool.sql      -- custom setlists: game_setlists + game_song_pool, pick_next_pool_song, save_game_setlist, game_pool_summary, and the custom-game branch in select_next_song / peek_next_song
+├── 060_game_song_pool.sql      -- custom setlists: game_setlists + game_song_pool, pick_next_pool_song, save_game_setlist, game_pool_summary, and the custom-game branch in select_next_song / peek_next_song
+└── 061_setlist_support_tables.sql -- custom setlists: durable artist_aliases (empty; rows are private) + song_demand, and record_song_demand
 ```
 
 All migrations are written to be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, `DROP POLICY IF EXISTS … ; CREATE POLICY …`. Re-running them is safe.
@@ -494,10 +531,12 @@ At expected scale (100–1000 games/mo):
 - `game_teams`: max ~30 × 8 = ~240 rows; ~200 bytes each.
 - `game_rounds`: max ~30 × 30 = ~900 rows; ~300 bytes each.
 - `game_setlists` / `game_song_pool` (mig 060): one row per custom game, plus at most a few hundred pool rows each (a list holds up to 300 lines, plus same-artist songs); ~50 bytes per pool row.
+- `artist_aliases` (mig 061): a few spellings per catalog artist, so hundreds to a few thousand rows; ~100 bytes each. Static between catalog uploads.
+- `song_demand` (mig 061): one row per distinct missing line, ~150 bytes each. It accumulates like `game_history*` (below), but a repeated request only raises a count.
 
 **Total live size**: ~5 MB. Free tier is 500 MB. Headroom is enormous.
 
-`game_history*` (mig 033) is the one set of tables that **accumulates** rather than being pruned: roughly 1 + ~8 team + ~30 song rows per archived game, ~150 bytes each → on the order of tens of MB per year at the high end of this range. Still tiny against the 500 MB tier for years, but unlike the ephemeral tables it grows monotonically. If pruning is ever wanted it's a one-line cron `DELETE FROM game_history WHERE started_at < now() - interval '<N> years'` (children cascade); none is scheduled today.
+`game_history*` (mig 033) is the main set of tables that **accumulates** rather than being pruned: roughly 1 + ~8 team + ~30 song rows per archived game, ~150 bytes each → on the order of tens of MB per year at the high end of this range. Still tiny against the 500 MB tier for years, but unlike the ephemeral tables it grows monotonically. If pruning is ever wanted it's a one-line cron `DELETE FROM game_history WHERE started_at < now() - interval '<N> years'` (children cascade); none is scheduled today.
 
 ## 9. Dropped from Old Schema
 

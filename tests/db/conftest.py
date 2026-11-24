@@ -47,8 +47,11 @@ ANON_LOGIN_PASSWORD = "anon_login_test_pw"  # noqa: S105 - throwaway local test 
 # (songs/genres/song_genres) are included so tests populate exactly what they need.
 # The game_history* tables are durable and have NO FK to active_games, so the
 # CASCADE that clears the ephemeral tables does not reach them -- list them
-# explicitly or archived rows leak across tests.
+# explicitly or archived rows leak across tests. artist_aliases and
+# song_demand (migration 061) are durable with no FK at all, likewise.
 ALL_TABLES = (
+    "artist_aliases",
+    "song_demand",
     "game_history_songs",
     "game_history_teams",
     "game_history",

@@ -262,6 +262,20 @@ async def test_anon_cannot_execute_the_song_pool_helpers(
 
 
 @pytest.mark.asyncio
+async def test_anon_cannot_execute_record_song_demand(
+    anon_conn: asyncpg.Connection,
+) -> None:
+    """Migration 061: record_song_demand (the backend's demand-queue writer)
+    takes no token, so anon could flood the queue."""
+    with pytest.raises(asyncpg.InsufficientPrivilegeError):
+        await anon_conn.execute(
+            "SELECT record_song_demand($1::text[], $2::text[])",
+            ["example line"],
+            ["Example - Line"],
+        )
+
+
+@pytest.mark.asyncio
 async def test_anon_can_execute_game_pool_summary_but_token_check_runs(
     anon_conn: asyncpg.Connection,
 ) -> None:
@@ -331,6 +345,9 @@ async def test_anon_peek_reaches_the_revoked_helper_through_the_definer(
         # calls on "Create game".
         "pick_next_pool_song",
         "save_game_setlist",
+        # Migration 061: the demand-queue writer the backend calls after
+        # "Create game" with a list.
+        "record_song_demand",
     ],
 )
 async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) -> None:

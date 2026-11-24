@@ -154,6 +154,32 @@ async def test_anon_cannot_read_the_song_pool(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("table", ("artist_aliases", "song_demand"))
+async def test_anon_cannot_read_or_write_the_setlist_support_tables(
+    table: str, db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 061: the alias table names the catalog's artists and the
+    demand queue is the maintainer's. anon is refused outright ("permission
+    denied"), even with rows in the table, and cannot add a row."""
+    await db.execute(
+        "INSERT INTO artist_aliases (alias, artist_key) VALUES ('example spelling', 'example')"
+    )
+    await db.execute("SELECT record_song_demand(ARRAY['example line'], ARRAY['Example - Line'])")
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.fetch(f"SELECT * FROM {table}")  # noqa: S608 - constant table list
+    inserts = {
+        "artist_aliases": "INSERT INTO artist_aliases (alias, artist_key) VALUES ('x', 'y')",
+        "song_demand": "INSERT INTO song_demand (line_key, raw_line) VALUES ('x', 'X')",
+    }
+    with pytest.raises(
+        (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+    ):
+        await anon_conn.execute(inserts[table])
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("table", CATALOG_TABLES)
 async def test_catalog_has_no_anon_policy_or_select_grant(
     table: str, db: asyncpg.Connection
