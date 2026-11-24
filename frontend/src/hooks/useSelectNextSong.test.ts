@@ -73,6 +73,23 @@ describe("selectNextSongDirect", () => {
     });
   });
 
+  it("bounds the round request and reports an abort as a timeout", async () => {
+    const signal = AbortSignal.abort();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(signal);
+    setRpcResponse({ data: null, error: { message: "Aborted" } });
+    try {
+      await expect(selectNextSongDirect("ABCDEF", TOKEN, 0)).rejects.toThrow(
+        /round response timed out/i,
+      );
+      expect(timeout).toHaveBeenCalledExactlyOnceWith(10_000);
+      expect(supabaseMock.rpc.mock.results[0]?.value.abortSignal).toHaveBeenCalledExactlyOnceWith(
+        signal,
+      );
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
   it("throws RpcError when the pool is exhausted (no_more_songs)", async () => {
     setRpcResponse({
       data: null,

@@ -15,6 +15,8 @@ import { tracedRpc } from "../lib/telemetry";
 import { RpcError, throwOnRpcError } from "../lib/rpcError";
 import type { SelectSongResponse } from "../lib/types";
 
+const SELECT_TIMEOUT_MS = 10_000;
+
 interface SelectNextSongRow {
   round_id: string;
   round_number: number;
@@ -34,17 +36,24 @@ export async function selectNextSongDirect(
   expectedRound: number,
   songId?: string,
 ): Promise<SelectSongResponse> {
+  const signal = AbortSignal.timeout(SELECT_TIMEOUT_MS);
   const { data, error } = await tracedRpc(
     "select_next_song",
     { game_code: gameCode, pick_path: songId ? "peek" : "fallback" },
     () =>
-      supabase.rpc("select_next_song", {
-        p_game_code: gameCode,
-        p_manager_token: managerToken,
-        p_song_id: songId ?? null,
-        p_expected_round: expectedRound,
-      }),
+      supabase
+        .rpc("select_next_song", {
+          p_game_code: gameCode,
+          p_manager_token: managerToken,
+          p_song_id: songId ?? null,
+          p_expected_round: expectedRound,
+        })
+        .abortSignal(signal),
   );
+  if (error && signal.aborted)
+    throw new RpcError(
+      "Round response timed out. Check the current round before trying Next round.",
+    );
   throwOnRpcError(error);
   const row = (Array.isArray(data) ? data[0] : data) as SelectNextSongRow | null;
   if (!row) {

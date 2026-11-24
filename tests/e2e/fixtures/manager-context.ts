@@ -11,7 +11,7 @@
 // expiration), `openManagerAndCreateGame` also returns the token; read
 // it from `ManagerSession.managerToken` and forward it on REST requests.
 
-import { type Browser, type Page, expect } from "@playwright/test";
+import { type Browser, type BrowserContextOptions, type Page, expect } from "@playwright/test";
 
 export interface ManagerSession {
   page: Page;
@@ -20,6 +20,7 @@ export interface ManagerSession {
 }
 
 interface CreateOpts {
+  contextOptions?: BrowserContextOptions;
   preparePage?: (page: Page) => Promise<void>;
   // Display name(s) as they appear in the UI (e.g. "Rock", "Pop"), matched
   // case-insensitively. Use `genreName` for a single genre or `genreNames`
@@ -33,7 +34,7 @@ export async function openManagerAndCreateGame(
   browser: Browser,
   opts: CreateOpts,
 ): Promise<ManagerSession> {
-  const context = await browser.newContext();
+  const context = await browser.newContext(opts.contextOptions);
   const page = await context.newPage();
   await opts.preparePage?.(page);
 

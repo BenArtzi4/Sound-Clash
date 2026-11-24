@@ -155,10 +155,19 @@ function gameSetlist(): RpcResult {
   return { data: rows, error: null };
 }
 
-async function rpcImpl(fn: string, args?: Record<string, unknown>): Promise<RpcResult> {
+type MockRpcPromise = Promise<RpcResult> & {
+  abortSignal?: (signal: AbortSignal) => Promise<RpcResult>;
+};
+
+async function resolveRpc(fn: string, args?: Record<string, unknown>): Promise<RpcResult> {
   if (fn === "round_song") return roundSong(args);
   if (fn === "game_setlist") return gameSetlist();
   return state.rpcResponse;
+}
+
+function rpcImpl(fn: string, args?: Record<string, unknown>): MockRpcPromise {
+  const response = resolveRpc(fn, args);
+  return Object.assign(response, { abortSignal: vi.fn(() => response) });
 }
 
 export const supabaseMock = {
