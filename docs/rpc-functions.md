@@ -622,7 +622,7 @@ Not idempotent by design: the second call raises `setlist_exists` and leaves the
 
 ### Callers
 
-- FastAPI `POST /games` with a list, as the service role (`backend/app/routers/games.py::_save_pool_blocking`, `api-contracts.md §2.2`), right after it inserts the game. If the call raises, the backend deletes the game row again (its `game_secrets` row goes by `ON DELETE CASCADE`); `setlist_empty` becomes the same 400 `setlist_empty` as an empty match, any other failure a 5xx. Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. `SECURITY DEFINER`, so it does not depend on the service role holding grants on the two tables.
+- FastAPI `POST /games` with a list, as the service role (`backend/app/routers/games.py::_save_pool_blocking`, `api-contracts.md §2.2`), right after it inserts the game. If the call raises, the backend deletes the game row again, best effort (its `game_secrets` row goes by `ON DELETE CASCADE`; a failed delete is logged); `setlist_empty` becomes the same 400 `setlist_empty` as an empty match, and any other failure is mapped as every database error is (usually a 500). Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. `SECURITY DEFINER`, so it does not depend on the service role holding grants on the two tables.
 
 ## 3j. `pick_next_pool_song`: the custom-game picker (internal-only)
 
@@ -707,7 +707,7 @@ Not idempotent by design: every call counts its keys once more.
 
 ### Callers
 
-- FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`backend/app/routers/games.py::_record_demand_blocking`). It sends only the lines the matcher marked `not_in_catalog` (not `several_songs_share_this_name`), keyed by the matcher's `norm()` of the line, and skips an empty key, a key over 1,000 UTF-8 bytes (one key past the btree row limit would fail the whole call) and a line with a NUL character (Postgres text cannot hold one); with nothing left it makes no call. Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
+- FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`backend/app/routers/games.py::_record_demand_blocking`). It sends only the lines the matcher marked `not_in_catalog` (not `several_songs_share_this_name`), with one key per song: each side of the parsed line is cleaned (`clean_title`, then `norm()`), the empty pieces are dropped, and the rest are sorted and joined with one space, so numbering, a duration, a recording note, a CSV row's other cells and the artist/title order never change the key (`api-contracts.md §2.2`). It skips an empty key, a key over 1,000 UTF-8 bytes (one key past the btree row limit would fail the whole call) and a line with a NUL character (Postgres text cannot hold one); with nothing left it makes no call. Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 

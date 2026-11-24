@@ -286,6 +286,59 @@ async def test_create_with_setlist_records_demand(client, db) -> None:
     ]
 
 
+# A playlist export (Exportify's columns): the row is artist and title, and
+# its URI, album and duration cells are not part of the song.
+EXPORT_HEADER = "Track URI,Track Name,Artist Name(s),Album Name,Duration (ms)"
+
+
+async def test_one_missing_song_has_one_demand_key_however_it_is_written(client, db) -> None:
+    # Spec §13.5: the queue counts songs, so a numbered line, a timed line, the
+    # swapped order, a recording note and a CSV row all count for one key.
+    await _seed_setlist_catalog(db)
+    playable = "Velvet Comet - Paper Lanterns"
+    texts = [
+        f"{playable}\nNobody - Not A Real Song",
+        f"1. {playable}\n2. Nobody - Not A Real Song",
+        f"{playable} (4:02)\nNobody - Not A Real Song (3:51)",
+        f"{playable}\nNot A Real Song - Nobody",
+        f"{playable}\nNobody - Not A Real Song - Remastered 2011",
+        f"{EXPORT_HEADER}\n"
+        "spotify:track:aaa,Paper Lanterns,Velvet Comet,Lantern Days,201000\n"
+        "spotify:track:bbb,Not A Real Song,Nobody,Made Up Album,231000",
+    ]
+
+    for text in texts:
+        resp = await _create_from_list(client, text)
+        assert resp.status_code == 201, (text, resp.text)
+        assert resp.json()["setlist"] == {"list_songs": 1, "same_artist_songs": 1}, text
+
+    rows = await db.fetch("SELECT line_key, raw_line, request_count FROM song_demand")
+    assert [dict(row) for row in rows] == [
+        {
+            "line_key": "nobody not a real song",
+            "raw_line": "Nobody - Not A Real Song",  # the first line seen for the key
+            "request_count": len(texts),
+        }
+    ]
+
+
+async def test_one_create_naming_a_missing_song_twice_counts_it_once(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    text = "Velvet Comet - Paper Lanterns\n1. Not A Real Song - Nobody\nNobody - Not A Real Song"
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    rows = await db.fetch("SELECT line_key, raw_line, request_count FROM song_demand")
+    assert [dict(row) for row in rows] == [
+        {
+            "line_key": "nobody not a real song",
+            "raw_line": "1. Not A Real Song - Nobody",
+            "request_count": 1,
+        }
+    ]
+
+
 async def test_create_with_both_or_neither_is_a_400(client, db) -> None:
     genres = await fetch_genre_ids(db, slugs=["rock"])
     await _seed_setlist_catalog(db)
@@ -367,6 +420,9 @@ async def test_song_deleted_after_the_index_was_cached(client, db, change: str) 
     )
 
     assert resp.status_code == 201, resp.text
+    # Ruling Q: the answer gives the matcher's counts from the cached snapshot,
+    # so it still counts Paper Lanterns, which the saved pool left out.
+    assert resp.json()["setlist"] == {"list_songs": 2, "same_artist_songs": 1}
     assert await _pool(db, resp.json()["game_code"]) == {
         "Harbor Lights": 1,
         "Northern Static": 2,
@@ -420,7 +476,7 @@ async def test_failed_cleanup_still_answers_the_save_error(
             return getattr(self._query, name)
 
         def delete(self) -> Any:
-            raise FakeAPIError(code="XX000", message="connection reset")
+            raise FakeAPIError(code="08006", message="connection lost")
 
     def table(name: str) -> Any:
         query = real_table(name)
@@ -434,6 +490,7 @@ async def test_failed_cleanup_still_answers_the_save_error(
     assert resp.status_code == 500
     assert resp.json()["error"] == "internal_error"
     assert "could not delete game" in caplog.text
+    assert "08006 connection lost" in caplog.text  # the delete's own reason
     # The row left behind has no pool and no genres, so it can never start a
     # round; the 4-hour sweep removes it.
     assert await _count(db, "active_games") == 1
@@ -529,6 +586,8 @@ async def test_a_name_several_songs_share_is_not_recorded_as_demand(client, db) 
     resp = await _create_from_list(client, "Lucky Stone\nGlass Harbor - Harbor Lights")
 
     assert resp.status_code == 201, resp.text
+    # Only Harbor Lights matched: "Lucky Stone" really was a miss.
+    assert resp.json()["setlist"] == {"list_songs": 1, "same_artist_songs": 0}
     assert await _count(db, "song_demand") == 0
 
 

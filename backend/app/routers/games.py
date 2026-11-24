@@ -67,7 +67,7 @@ from app.models.games import (
 from app.services.codes import generate_unique_code
 from app.services.setlist_matcher import LineResult, SetlistMatch
 from app.services.setlist_reader import read_and_match
-from app.services.setlist_text import norm
+from app.services.setlist_text import ListLine, clean_title, norm
 
 router = APIRouter(tags=["games"])
 logger = logging.getLogger(__name__)
@@ -160,8 +160,12 @@ def _delete_game_quietly(client: SupabaseClientLike, code: str) -> None:
     """
     try:
         client.table("active_games").delete().eq("game_code", code).execute()
-    except Exception:
-        logger.warning("could not delete game %s after its song pool failed to save", code)
+    except Exception as exc:
+        logger.warning(
+            "could not delete game %s after its song pool failed to save: %s",
+            code,
+            _error_reason(exc),
+        )
 
 
 def _save_pool_blocking(
@@ -173,7 +177,7 @@ def _save_pool_blocking(
     rows in one call. It skips a song deleted or flagged since the catalog
     snapshot was cached, and raises ``setlist_empty`` (22023) when no song is
     left: that is the same 400 as an empty match. Any other failure is mapped
-    as every database error is (a 5xx).
+    as every database error is (usually a 500).
     """
     params = {
         "p_game_code": code,
@@ -191,17 +195,40 @@ def _save_pool_blocking(
         raise
 
 
+def _error_reason(exc: Exception) -> str:
+    """An error's SQLSTATE (or type) and message, for a log line. Never the
+    host's list: no log line here holds list text."""
+    sqlstate, message = sqlstate_and_message(exc)
+    return f"{sqlstate or type(exc).__name__} {message or ''}".rstrip()
+
+
+def _demand_key(line: ListLine) -> str:
+    """The ``song_demand`` key of a list line: one key per song (spec §13.5).
+
+    Built from the sides the matcher compares, not from the raw line: each
+    side cleaned as a title (``clean_title``, then ``norm``), empty pieces
+    dropped, the rest sorted and joined with one space. So numbering, a
+    duration, a recording note, a CSV row's other cells and the order of
+    artist and title never change the key: ``1. Nobody - Not A Real Song
+    (3:51)`` and ``Not A Real Song - Nobody`` are both ``nobody not a real song``.
+    """
+    sides = (line.left,) if line.right is None else (line.left, line.right)
+    pieces = (norm(clean_title(side)) for side in sides)
+    return " ".join(sorted(piece for piece in pieces if piece))
+
+
 def _demand_entry(result: LineResult) -> tuple[str, str] | None:
     """(line_key, raw_line) for a line the catalog lacks; None to skip it.
 
     Only ``not_in_catalog`` lines count: a song name several songs share is in
     the catalog. A key that is empty or over ``MAX_DEMAND_KEY_BYTES``, and a
     line with a NUL character (Postgres text cannot hold one), are skipped.
+    ``raw_line`` is the line as the host wrote it.
     """
     if result.reason != "not_in_catalog":
         return None
     raw = result.line.raw
-    key = norm(raw)
+    key = _demand_key(result.line)
     if not key or "\x00" in key or "\x00" in raw:
         return None
     if len(key.encode("utf-8")) > MAX_DEMAND_KEY_BYTES:
@@ -226,13 +253,7 @@ def _record_demand_blocking(
             {"p_keys": [key for key, _ in entries], "p_lines": [raw for _, raw in entries]},
         ).execute()
     except Exception as exc:
-        sqlstate, message = sqlstate_and_message(exc)
-        logger.warning(
-            "song demand not recorded for game %s: %s %s",
-            code,
-            sqlstate or type(exc).__name__,
-            message or "",
-        )
+        logger.warning("song demand not recorded for game %s: %s", code, _error_reason(exc))
 
 
 def _fetch_game_blocking(client: SupabaseClientLike, code: str) -> dict[str, Any]:
