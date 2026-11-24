@@ -48,13 +48,14 @@ _INVISIBLE = dict.fromkeys(
 
 # ----- comparing names ------------------------------------------------------
 
-# Punctuation that norm() turns into a space. Same set as
+# Punctuation that norm() turns into a space. The set of
 # tools/song-curation/requests/parse_requests.py, proven on the catalog:
 # ASCII punctuation, the acute accent, Hebrew geresh and gershayim, curly
-# quotes, en dash and em dash.
+# quotes, en dash and em dash; plus the Hebrew maqaf (U+05BE, the Hebrew
+# hyphen), so a name written with it equals the same name with "-".
 _PUNCT = frozenset(
     "'\"`\u00b4\u05f3\u05f4\u2019\u2018\u201c\u201d|,.!?/\\-\u2013\u2014_:;+*()[]{}&"
-)
+) | {chr(0x05BE)}
 
 
 def norm(s: str) -> str:
@@ -224,13 +225,15 @@ _NUMBERING = re.compile(
 # A trailing duration: "3:51", "(4:02)", "1:02:33". Not straight after a
 # separator, so a song called "12:51" keeps its title.
 _DURATION = re.compile(r"(?<![-\u2013\u2014\s])\s+[(\[]?\d{1,2}:\d{2}(?::\d{2})?[)\]]?$")
-_URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# A link: a web address, or a Spotify URI ("spotify:track:...").
+_URL = re.compile(r"(?:https?://|www\.|spotify:)\S+", re.IGNORECASE)
 # A comment: "#" then a space, another "#" or nothing. "#1 ..." and "#Word"
 # are song lines, so the host sees them if they cannot play.
 _COMMENT = re.compile(r"#(?:\s|#|$)")
 
-# A CSV or TSV export's header: a title column and an artist column.
-_TITLE_COLUMNS = frozenset({"track name", "title", "song"})
+# A CSV or TSV export's header: a title column and an artist column. Apple
+# Music's export (File > Library > Export Playlist) names its title "Name".
+_TITLE_COLUMNS = frozenset({"track name", "title", "song", "name"})
 # "Artist URI(s)" and "Artist ID" are not names.
 _NOT_A_NAME = re.compile(r"\b(?:uri|url|id)s?\b")
 
@@ -289,34 +292,49 @@ def _text_line(raw: str, body: str) -> ListLine | None:
 def parse_setlist_text(text: str) -> list[ListLine]:
     """Split a pasted song list into its song lines.
 
-    Drops the invisible marks, empty lines, ``# `` comments, numbering,
-    bullets and durations, and lines that are only a link or have no letter
-    or digit. A first line that is a CSV or TSV header turns every row into
-    artist and title. Raises ``SetlistError``: ``setlist_too_long`` (over
-    ``MAX_CHARS`` characters, checked first, or over ``MAX_LINES`` song
-    lines), ``setlist_links_only`` (only links) or ``setlist_no_songs``.
+    Drops the invisible marks and lone surrogates, and the empty lines,
+    ``# `` comments and lines that are only a link (a web address or a
+    ``spotify:`` URI) or have no letter or digit. Removes numbering, bullets
+    and a trailing duration from a line; the rest of the line is kept. A
+    first line that is a CSV or TSV header (a title column and an artist
+    column) turns every row into artist and title; it is a header even when
+    it starts with ``#`` (a track-number column), and a header below comment
+    lines counts too. Raises ``SetlistError``: ``setlist_too_long`` (over
+    ``MAX_CHARS`` characters, counted before anything is removed, or over
+    ``MAX_LINES`` song lines), ``setlist_links_only`` (only links) or
+    ``setlist_no_songs``.
     """
     if len(text) > MAX_CHARS:
         raise SetlistError("setlist_too_long", _TOO_LONG)
-    rows = [
-        row
-        for row in text.translate(_INVISIBLE).splitlines()
-        if row.strip() and not _COMMENT.match(row.lstrip())
-    ]
+    rows = [row for row in text.translate(_INVISIBLE).splitlines() if row.strip()]
+    # The header is looked for before comments are dropped: a table copied
+    # from a playlist page heads its track-number column "#", so its header
+    # ("#", a tab, "Song", ...) starts the way a comment does. Otherwise the
+    # header is the first line left once comments are dropped.
     columns = _csv_columns(rows[0]) if rows else None
     if columns is not None:
         rows = rows[1:]
+    rows = [row for row in rows if not _COMMENT.match(row.lstrip())]
+    if columns is None and rows:
+        columns = _csv_columns(rows[0])
+        if columns is not None:
+            rows = rows[1:]
 
     lines: list[ListLine] = []
     links = 0
     for row in rows:
         raw = row.strip()
-        body = _NUMBERING.sub("", raw)
-        if _URL.fullmatch(body):
-            links += 1
-            continue
+        # A CSV or TSV row is read by its cells: an export row can start with
+        # a spotify: URI and have no space in any cell.
         names = _row_names(row, columns)
-        line = _cells_line(raw, *names) if names is not None else _text_line(raw, body)
+        if names is not None:
+            line = _cells_line(raw, *names)
+        else:
+            body = _NUMBERING.sub("", raw)
+            if _URL.fullmatch(body):
+                links += 1
+                continue
+            line = _text_line(raw, body)
         if line is None:
             continue
         lines.append(line)

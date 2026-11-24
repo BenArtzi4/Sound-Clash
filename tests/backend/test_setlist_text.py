@@ -63,6 +63,19 @@ def test_artist_keys() -> None:
     assert artist_keys("סטטיק ובן אל תבורי") == ("סטטיק", "בן אל תבורי")
 
 
+def test_norm_reads_the_hebrew_maqaf_as_a_hyphen() -> None:
+    maqaf = chr(0x05BE)  # Hebrew punctuation maqaf, the Hebrew hyphen
+    assert norm(f"תל{maqaf}אביב") == norm("תל-אביב") == "תל אביב"
+
+
+def test_clean_title_drops_a_note_and_its_dash_at_the_start() -> None:
+    # Pins why clean_title collapses whitespace with re.sub after removing
+    # notes, not with " ".join(s.split()): removing "(Live)" leaves
+    # " - Bonus Remix", and only with its leading space kept does " - " split
+    # off the second note. With split() it would stay as "Bonus Remix".
+    assert clean_title("(Live) - Bonus Remix") == ""
+
+
 def test_skeleton_is_the_same_in_both_scripts() -> None:
     assert skeleton("Zohar Argov") == skeleton("זוהר ארגוב") == "zrgb"
     assert skeleton("Ha'perah Be'gani") == skeleton("הפרח בגני") == "prbgn"
@@ -218,6 +231,28 @@ def test_parse_drops_link_and_symbol_lines_among_songs() -> None:
     assert _pairs(text) == [("Moonfish", "Glass Harbor")]
 
 
+def test_parse_reads_spotify_uris_as_links() -> None:
+    # "Copy Song Link" in the Spotify desktop app can give spotify: URIs.
+    with pytest.raises(SetlistError) as e:
+        parse_setlist_text("spotify:track:4abcDEF\nSPOTIFY:track:5ghiJKL\nspotify:playlist:xyz\n")
+    assert e.value.code == "setlist_links_only"
+    assert _pairs("Moonfish - Glass Harbor\n1. spotify:track:4abcDEF\n") == [
+        ("Moonfish", "Glass Harbor")
+    ]
+
+
+def test_parse_export_row_with_a_uri_and_one_word_names_is_a_song() -> None:
+    # A row with no space in any cell is still read by its cells, not taken
+    # for a link because it starts with a spotify: URI. A row whose name cells
+    # have no letter or digit is dropped.
+    text = (
+        "Track URI,Track Name,Artist Name(s)\n"
+        "spotify:track:1,Moonfish,Otters\n"
+        "spotify:track:2,***,-\n"
+    )
+    assert _pairs(text) == [("Otters", "Moonfish")]
+
+
 def test_parse_line_cap_counts_song_lines_only() -> None:
     text = "Moonfish - Glass Harbor\n\n# note\nhttps://x.example/a\n" * MAX_LINES
     assert len(text) <= MAX_CHARS
@@ -243,6 +278,41 @@ def test_parse_tsv_header_and_short_rows() -> None:
         ("Neon Tide", None),
         ("Otters", None),
         ("Velvet Otters", "Slow Rain"),
+    ]
+
+
+def test_parse_table_whose_header_starts_with_a_number_column() -> None:
+    # A table copied from a playlist web page: its first column is the track
+    # number, headed "#". A first line that is a header is a header, even
+    # though "#" and a tab is also how a comment starts.
+    text = "#\tSong\tArtist\tAlbum\n1\tGlass Harbor\tMoonfish\tTides\n2\tNeon Tide\tOtters\tDusk\n"
+    assert _pairs(text) == [("Moonfish", "Glass Harbor"), ("Otters", "Neon Tide")]
+
+
+def test_parse_apple_music_export_header() -> None:
+    # File > Library > Export Playlist names the title column "Name".
+    text = (
+        "Name\tArtist\tComposer\tAlbum\n"
+        "Glass Harbor\tMoonfish\tM. Fish\tTides\n"
+        "Neon Tide\tVelvet Otters\t\tDusk\n"
+    )
+    assert _pairs(text) == [("Moonfish", "Glass Harbor"), ("Velvet Otters", "Neon Tide")]
+
+
+def test_parse_comment_first_line_is_still_a_comment() -> None:
+    assert _pairs("# my party\nMoonfish - Glass Harbor\nNeon Tide\n") == [
+        ("Moonfish", "Glass Harbor"),
+        ("Neon Tide", None),
+    ]
+    assert _pairs("# Song\tArtist\nMoonfish - Glass Harbor\n") == [("Moonfish", "Glass Harbor")]
+    # A comment above a header leaves the header the first song line, as before.
+    assert _pairs("# my export\nTitle\tArtist\nGlass Harbor\tMoonfish\n") == [
+        ("Moonfish", "Glass Harbor")
+    ]
+    # A hashtag song line first is still a song (Ruling T).
+    assert _pairs("#NEONTIDE - Velvet Otters\n#1 Moonfish - Glass Harbor\n") == [
+        ("#NEONTIDE", "Velvet Otters"),
+        ("#1 Moonfish", "Glass Harbor"),
     ]
 
 
