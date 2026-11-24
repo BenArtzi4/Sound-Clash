@@ -186,6 +186,23 @@ async def test_pool_picker_spaces_artists(db: asyncpg.Connection) -> None:
         assert (await db.fetchrow(PEEK, code, token))["song_id"] == b
 
 
+async def test_tier_beats_spacing_when_artists_are_shared(db: asyncpg.Connection) -> None:
+    """The tier comes before the spacing rule: the host's list plays out even
+    when the only list song left is by the artist heard just now. Spacing
+    first would pick B2 (tier 2): artist B was heard 2 rounds ago, artist A 1."""
+    code = await create_test_game(db, status="waiting")
+    token = await fetch_manager_token(db, code)
+    a1, a2 = await _song(db, "Artist A"), await _song(db, "Artist A")
+    b1, b2 = await _song(db, "Artist B"), await _song(db, "Artist B")
+    assert await db.fetchval(SAVE, code, [a1, a2, b1], [b2], 3) == 4
+    assert await db.fetchval(GUARDED, code, token, b1, 0) == b1
+    assert await db.fetchval(GUARDED, code, token, a1, 1) == a1
+    for _ in range(20):
+        assert (await db.fetchrow(PEEK, code, token))["song_id"] == a2
+    assert await _play(db, code, token) == a2
+    assert await _play(db, code, token) == b2
+
+
 async def test_anon_plays_a_custom_game_through_the_definers(
     db: asyncpg.Connection, anon_conn: asyncpg.Connection
 ) -> None:
@@ -236,6 +253,32 @@ async def test_save_empty_raises_and_writes_nothing(db: asyncpg.Connection) -> N
     assert await db.fetchval("SELECT count(*) FROM game_song_pool WHERE game_code = $1", code) == 0
 
 
+async def test_save_skips_flagged_songs(db: asyncpg.Connection) -> None:
+    """Spec §8: a catalog song flagged as unavailable counts as "cannot play",
+    so it is skipped like an unknown id and does not count in the pool size."""
+    code = await create_test_game(db)
+    playable, dead = await _song(db), await _song(db)
+    await db.execute("UPDATE songs SET unavailable_at = now() WHERE id = $1", dead)
+    assert await db.fetchval(SAVE, code, [playable, dead], [dead], 2) == 1
+    rows = await db.fetch("SELECT song_id, tier FROM game_song_pool WHERE game_code = $1", code)
+    assert {r["song_id"]: r["tier"] for r in rows} == {playable: 1}
+
+
+async def test_save_all_flagged_raises_setlist_empty(db: asyncpg.Connection) -> None:
+    """Every song flagged between Check and Create: a clear setlist_empty, and
+    nothing is written."""
+    code = await create_test_game(db)
+    listed, extra = await _song(db), await _song(db)
+    await db.execute(
+        "UPDATE songs SET unavailable_at = now() WHERE id = ANY ($1::uuid[])", [listed, extra]
+    )
+    with pytest.raises(asyncpg.PostgresError, match="setlist_empty") as exc:
+        await db.fetchval(SAVE, code, [listed], [extra], 1)
+    assert exc.value.sqlstate == "22023"
+    assert await db.fetchval("SELECT count(*) FROM game_setlists WHERE game_code = $1", code) == 0
+    assert await db.fetchval("SELECT count(*) FROM game_song_pool WHERE game_code = $1", code) == 0
+
+
 async def test_save_twice_raises_setlist_exists(db: asyncpg.Connection) -> None:
     code, _, ids1, ids2 = await _setlist_game(db, 2, 1)
     other = await _song(db)
@@ -266,7 +309,8 @@ async def test_pool_is_deleted_with_the_game(db: asyncpg.Connection) -> None:
 
 async def test_pool_tables_are_locked_down(db: asyncpg.Connection) -> None:
     """RLS on, no policy, nothing granted to anon or authenticated, and not in
-    the Realtime publication (players must never see the answers)."""
+    the Realtime publication (players must never see the answers).
+    service_role holds explicit base privileges, as for the 061 tables."""
     for table in ("game_setlists", "game_song_pool"):
         assert await db.fetchval(
             "SELECT relrowsecurity FROM pg_class WHERE oid = $1::regclass", f"public.{table}"
@@ -275,11 +319,14 @@ async def test_pool_tables_are_locked_down(db: asyncpg.Connection) -> None:
             "SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = $1",
             table,
         ) == []
-        for role in ("anon", "authenticated"):
-            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+        for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+            for role in ("anon", "authenticated"):
                 assert await db.fetchval(
                     "SELECT has_table_privilege($1, $2, $3)", role, f"public.{table}", privilege
                 ) is False, f"{role} must not have {privilege} on {table}"
+            assert await db.fetchval(
+                "SELECT has_table_privilege('service_role', $1, $2)", f"public.{table}", privilege
+            ) is True, f"service_role must hold {privilege} on {table}"
         assert await db.fetchval(
             "SELECT EXISTS (SELECT 1 FROM pg_publication_tables "
             "WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = $1)",

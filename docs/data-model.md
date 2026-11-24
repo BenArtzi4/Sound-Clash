@@ -418,6 +418,7 @@ Migration 060, custom setlists phase 1 (design: `docs/planning/2026-11-24-custom
 
 - `list_total` is the number of lines in the host's list, found or not; `game_pool_summary` returns it with the per-tier counts for the console line.
 - A song is in a pool once (`PRIMARY KEY (game_code, song_id)`); an id in both the list and the fill is tier 1.
+- `save_game_setlist` skips an id that is not in `songs` or is flagged unavailable (`unavailable_at IS NOT NULL`): a flagged song "cannot play" (design §8), so it never enters the pool and does not count in the pool size. A song flagged later stays in the pool, and the picker skips it.
 - **`active_games` is not changed at all.** That row goes to every phone on every buzz, so the pool lives in these two tables, which players cannot read (RLS on with no policy, base privileges revoked, not in the Realtime publication; see `security-rls.md` §2). Both cascade-delete with the game.
 
 See `rpc-functions.md` §3c, §3d and §3i-§3k.
@@ -530,7 +531,7 @@ At expected scale (100–1000 games/mo):
 - `active_games`: never more than ~30 rows at any moment (TTL prunes); ~1 KB each.
 - `game_teams`: max ~30 × 8 = ~240 rows; ~200 bytes each.
 - `game_rounds`: max ~30 × 30 = ~900 rows; ~300 bytes each.
-- `game_setlists` / `game_song_pool` (mig 060): one row per custom game, plus at most a few hundred pool rows each (a list holds up to 300 lines, plus same-artist songs); ~50 bytes per pool row.
+- `game_setlists` / `game_song_pool` (mig 060): one row per custom game, plus one pool row per song in its pool; ~50 bytes per pool row. A list holds up to 300 lines, but one artist line adds all that artist's songs (up to 35 today) and the same-artist fill adds more, so a list of artist names can pull most of the ~1,700-song catalog into one pool. Even then the table stays small (a few live games at a time) and is read by primary key only.
 - `artist_aliases` (mig 061): a few spellings per catalog artist, so hundreds to a few thousand rows; ~100 bytes each. Static between catalog uploads.
 - `song_demand` (mig 061): one row per distinct missing line, ~150 bytes each. It accumulates like `game_history*` (below), but a repeated request only raises a count.
 

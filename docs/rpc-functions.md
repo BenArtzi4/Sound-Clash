@@ -1,6 +1,6 @@
 # Sound Clash: Postgres RPC Functions
 
-The thirteen PL/pgSQL functions that hold the system's logic. Each is callable as a Postgres function and exposed via Supabase PostgREST RPC. Together they encode every state-changing operation in the game.
+The Postgres functions that hold the system's logic, one section each (most are PL/pgSQL; the song pickers and a few read-only lookups are plain SQL). Each is callable as a Postgres function; the browser-callable ones are exposed via Supabase PostgREST RPC, and the internal-only and service-role-only ones are revoked from `anon` (see each section's Callers). Together they encode every state-changing operation in the game.
 
 Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`. `db/migrations/060_game_song_pool.sql` added the custom-setlist functions `save_game_setlist` (§3i), `pick_next_pool_song` (§3j) and `game_pool_summary` (§3k), and the custom-game branch in `select_next_song` (§3c) and `peek_next_song` (§3d). `db/migrations/061_setlist_support_tables.sql` added `record_song_demand` (§3l), the writer of the durable `song_demand` queue.
 
@@ -605,7 +605,7 @@ SET search_path = public;
 
 Behavior:
 - Inserts the `game_setlists` row with `ready = true` and the `game_song_pool` rows **in the same call**, so a pool is either complete and ready or absent: `select_next_song` / `peek_next_song` can never start a round on a half-saved one.
-- Ids that are not in `songs` are skipped. An id in both arrays is tier 1. An id named twice is stored once (the pool's primary key is `(game_code, song_id)`). `NULL` arrays count as empty.
+- Ids that are not in `songs` are skipped, and so are songs flagged unavailable (`unavailable_at IS NOT NULL`, §5b): the spec counts a flagged song as "cannot play", so a song flagged between **Check my list** and **Create game** is left out exactly like a deleted one and does not count in the returned pool size. An id in both arrays is tier 1. An id named twice is stored once (the pool's primary key is `(game_code, song_id)`). `NULL` arrays count as empty.
 - Returns how many pool rows it wrote.
 
 ### Error semantics
@@ -614,7 +614,7 @@ Behavior:
 |---|---|
 | Game doesn't exist | `P0002 game_not_found` |
 | The game already has a setlist (a second call, or a concurrent one: `INSERT ... ON CONFLICT DO NOTHING` makes it wait for the first and then refuse) | `P0001 setlist_exists` |
-| No id is left after skipping unknown ones | `22023 setlist_empty`; the exception undoes the call, so neither table gets a row |
+| No id is left after skipping unknown and flagged ones | `22023 setlist_empty`; the exception undoes the call, so neither table gets a row |
 
 ### Idempotency
 

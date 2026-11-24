@@ -17,7 +17,8 @@
 --      and a song deleted from the catalog leaves every pool with it.
 --      Players must never read them (they are the answers): RLS on with no
 --      policy, everything revoked from anon/authenticated, and NOT in the
---      supabase_realtime publication. active_games is not changed at all.
+--      supabase_realtime publication. service_role is granted SELECT, INSERT,
+--      UPDATE and DELETE explicitly, as in 061. active_games is not changed.
 --   3. pick_next_pool_song(game_code): from the pool songs not played yet and
 --      still available, take the lowest tier, then apply pick_next_song's
 --      artist-spacing rule (mig 049/056) and draw at random. The spacing is a
@@ -45,7 +46,8 @@
 -- (game_setlists by game_code; game_song_pool by game_code, the PK's leading
 -- column, or by (game_code, song_id)). The one non-key read is the FK cascade
 -- when a catalog song is deleted, which scans game_song_pool; the table only
--- holds the pools of live games (a few hundred rows each), so that stays
+-- holds the pools of live games (a list of artist names can pull most of the
+-- catalog into one pool, but there are only a few live games), so that stays
 -- cheap and an index would only slow every save.
 --
 -- pick_next_song, buzz_in, award_attempt, release_buzz_lock, start_round,
@@ -53,7 +55,17 @@
 --
 -- Additive: two new tables, three new functions, and a branch that only a game
 -- with a game_setlists row can enter. Safe to apply before the backend and
--- frontend that use it.
+-- frontend that use it, but NOT while games are live: the two foreign keys
+-- (game_setlists -> active_games, game_song_pool -> songs) take SHARE ROW
+-- EXCLUSIVE on active_games and songs until COMMIT. That blocks buzz_in and
+-- start_round UPDATEs and every catalog write. The hold is milliseconds, but
+-- the wait to get the lock can queue every later buzz behind it, and an admin
+-- song DELETE can deadlock with it. So apply it only when
+--   SELECT count(*) FROM active_games WHERE ended_at IS NULL AND expires_at > now();
+-- returns 0 and no catalog write is running (admin song edits, a CSV upload,
+-- the availability scan's commit). lock_timeout 2 s (SET LOCAL below) turns a
+-- wait into an error instead of a queue; on a lock-timeout or deadlock error,
+-- simply rerun the file (it is idempotent).
 --
 -- Idempotent: CREATE TABLE IF NOT EXISTS, CREATE OR REPLACE FUNCTION and
 -- re-runnable REVOKE/GRANT. One transaction, so a caller sees the old state or
@@ -63,6 +75,8 @@
 -- docs/security-rls.md §2.
 
 BEGIN;
+
+SET LOCAL lock_timeout = '2s';
 
 -- ---------------------------------------------------------------------------
 -- 1-2. The pool tables
@@ -93,6 +107,10 @@ ALTER TABLE game_setlists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_song_pool ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON game_setlists FROM anon, authenticated;
 REVOKE ALL ON game_song_pool FROM anon, authenticated;
+-- service_role gets explicit base privileges, as migrations 030, 033 and 061
+-- do: the migrations-only `supabase start` stack does not auto-grant (a no-op
+-- on hosted Supabase, whose bootstrap already grants it).
+GRANT SELECT, INSERT, UPDATE, DELETE ON game_setlists, game_song_pool TO service_role;
 
 -- ---------------------------------------------------------------------------
 -- 3. pick_next_pool_song: the custom-game picker. The played / last_round /
@@ -179,8 +197,9 @@ GRANT EXECUTE ON FUNCTION pick_next_pool_song(text)
 
 -- ---------------------------------------------------------------------------
 -- 4. save_game_setlist: the backend writes a custom game's pool on "Create
---    game". Ids not in songs are skipped; an id in both arrays is tier 1; an
---    id named twice is stored once. Returns the pool size.
+--    game". Ids not in songs, or flagged unavailable (spec §8: "cannot
+--    play"), are skipped; an id in both arrays is tier 1; an id named twice is
+--    stored once. Returns the pool size.
 -- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION save_game_setlist(
@@ -219,6 +238,7 @@ BEGIN
       SELECT unnest(p_fill_song_ids), 2::smallint
     ) ids
     JOIN songs s ON s.id = ids.sid
+                AND s.unavailable_at IS NULL  -- flagged = cannot play (mig 045)
    GROUP BY s.id;
   GET DIAGNOSTICS v_pool_size = ROW_COUNT;
 
