@@ -8,7 +8,7 @@ Three categories of API:
 
 | Category | Transport | Endpoint | Authn |
 |---|---|---|---|
-| **REST (FastAPI)** | HTTPS | `https://api.soundclash.org` | `X-Manager-Token` for `/games/{code}/*` host actions (incl. the `rejoin-token` reveal); `X-Admin-Password` for `/admin/songs/*`; nothing for game creation, joining, `/games/{code}/rejoin` (the rejoin token in the body is the credential), or `/genres` |
+| **REST (FastAPI)** | HTTPS | `https://api.soundclash.org` | `X-Manager-Token` for `/games/{code}/*` host actions (incl. the `rejoin-token` reveal); `X-Admin-Password` for `/admin/songs/*`; nothing for game creation, the song-list check (`/setlists/check`), joining, `/games/{code}/rejoin` (the rejoin token in the body is the credential), or `/genres` |
 | **Postgres RPC (PostgREST)** | HTTPS | `https://<project>.supabase.co/rest/v1/rpc/<fn>` | Supabase **anon key** in `apikey` + `Authorization` headers |
 | **Realtime (Supabase)** | WebSocket | `wss://<project>.supabase.co/realtime/v1` | Supabase **anon key** |
 
@@ -18,7 +18,7 @@ All responses include the conventional fields:
 - Success: HTTP 2xx + body specified per endpoint.
 - Error: HTTP 4xx/5xx + `{ "error": "<machine_code>", "message": "<human readable>", "details": <optional> }`.
 
-Canonical error codes: `validation_error`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `gone`, `rate_limited`, `internal_error`.
+Canonical error codes: `validation_error`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `gone`, `rate_limited`, `internal_error`. A refused song list is a 400 with a code of its own: `setlist_too_long`, `setlist_links_only` or `setlist_no_songs` (§2.2a).
 
 ---
 
@@ -76,6 +76,48 @@ The `manager_token` is generated server-side (`gen_random_uuid()`, stored in `ga
 Game-code generation: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O, 1/I/L, no lowercase). On collision (UNIQUE violation), retry up to 5 times then 500.
 
 **Errors**: `validation_error` (400), `rate_limited` (429).
+
+---
+
+### 2.2a `POST /setlists/check`
+
+Check a host's pasted song list against the catalog before the game is created. **No auth.** Rate-limited 10/min/IP. The create page calls it on **Check my list**. It writes nothing: no game, no song pool and no `song_demand` row (the lines the catalog lacks are recorded only when the game is created).
+
+**Request body**:
+```json
+{ "text": "velvet comet - paper lanterns\nGlass Harbor\nNobody - Not A Real Song\nPaper Lanterns - Velvet Comet" }
+```
+
+Validation:
+- `text`: one song per line: `Artist - Title` or `Title - Artist` (each line is tried in both orders), a film, show or artist alone, or a song name alone. At most 20,000 characters and 300 song lines. Empty lines, `# ` comments, numbering, bullets, durations and lines that are only a link are dropped. A first line that is a CSV or TSV header with a title column and an artist column (a playlist export) turns each row into artist and title. No other field is allowed.
+- The length is checked when the list is read, not by the body model, so an over-long text is `setlist_too_long`, not `validation_error`.
+
+Matching follows section 7 of [the custom setlist design](planning/2026-11-24-custom-setlist-design.md) (`backend/app/services/setlist_matcher.py`), against a catalog snapshot the server keeps for 10 minutes: a song added, deleted or flagged unavailable (`songs.unavailable_at`) shows in the answer within 10 minutes. A flagged song never matches.
+
+**Response 200**:
+```json
+{
+  "lines_total": 4,
+  "ready": [
+    {"line": "velvet comet - paper lanterns", "title": "Paper Lanterns", "artist": "Velvet Comet", "songs": 1},
+    {"line": "Glass Harbor", "title": null, "artist": "Glass Harbor", "songs": 2},
+    {"line": "Paper Lanterns - Velvet Comet", "title": "Paper Lanterns", "artist": "Velvet Comet", "songs": 1}
+  ],
+  "not_found": [{"line": "Nobody - Not A Real Song", "reason": "not_in_catalog"}],
+  "list_songs": 3,
+  "same_artist_songs": 1,
+  "pool_size": 4
+}
+```
+
+- `lines_total`: the song lines read from the text. Each one is in `ready` or in `not_found`, in list order.
+- `ready[]`: `line` is the line as the host wrote it, trimmed. `title` and `artist` are the catalog's spelling of the song it matched (the first song when it matched more than one), and `songs` is how many catalog songs it matched. For a line that names a film, a show or an artist, `title` is `null` and `artist` is the catalog's spelling of that name (the credit of a song credited to it alone, else the first song's credit).
+- `not_found[].reason`: `not_in_catalog`, or `several_songs_share_this_name` for a song name alone that more than one catalog song has (the host adds the artist).
+- `list_songs`: the songs the list names, each counted once (they play first). `same_artist_songs`: the other catalog songs by the main artist of any line, found or not (they play after the list). `pool_size` is their sum. A pool of `0` is still a 200; the create page keeps Create disabled.
+
+**Catalogue protection.** The answer names songs by title and artist only, built field by field. It never holds a song id, a YouTube id or a start time.
+
+**Errors**: `setlist_too_long` (400; over 20,000 characters or 300 song lines; message `Your list is too long: at most 300 songs and 20,000 characters.`), `setlist_links_only` (400; nothing but links; `These are links, not song names.`), `setlist_no_songs` (400; no song line; `No song names found.`), `validation_error` (400; the body is not `{"text": "<string>"}`), `rate_limited` (429).
 
 ---
 
@@ -722,6 +764,7 @@ FastAPI uses `slowapi` (Redis-free, in-memory):
 | Endpoint | Limit | Reason |
 |---|---|---|
 | `POST /games` | 10 / minute / IP | Prevent game-code spam |
+| `POST /setlists/check` | 10 / minute / IP | Each call matches up to 300 lines; slows probing of the catalog |
 | `POST /games/*/teams` | 30 / minute / IP | Prevent team-spam DoS |
 | `POST /games/*/rejoin` | 30 / minute / IP | Prevent rejoin-token brute force |
 | `GET /games/*/teams/*/rejoin-token` | 100 / minute / IP | Host-only; conservative cap |
