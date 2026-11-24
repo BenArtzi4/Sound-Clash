@@ -1,9 +1,10 @@
 name: Catalog Backup
 
 # Disaster-recovery safety net for the durable song catalog (genres, songs,
-# song_genres) -- see docs/runbook.md §6.
+# song_genres) and the two durable setlist tables (artist_aliases, song_demand;
+# migration 061) -- see docs/runbook.md §6.
 #
-# Weekly (Mon 04:17 UTC) and on manual dispatch, this dumps the three catalog
+# Weekly (Mon 04:17 UTC) and on manual dispatch, this dumps those five
 # tables from PROD to deterministic CSVs, encrypts them with a passphrase
 # (AES-256, gpg symmetric) and keeps the result as a workflow artifact for 90
 # days. Nothing is committed to the repo: the repo is public and the curated
@@ -55,12 +56,18 @@ jobs:
           dump "SELECT * FROM genres ORDER BY id"                     genres
           dump "SELECT * FROM songs ORDER BY id"                      songs
           dump "SELECT * FROM song_genres ORDER BY song_id, genre_id" song_genres
+          dump "SELECT * FROM artist_aliases ORDER BY alias"          artist_aliases
+          dump "SELECT * FROM song_demand ORDER BY line_key"          song_demand
           cd "$RUNNER_TEMP/catalog"
           g=$(( $(wc -l < genres.csv) - 1 ))
           s=$(( $(wc -l < songs.csv) - 1 ))
           sg=$(( $(wc -l < song_genres.csv) - 1 ))
-          echo "Dumped: genres=$g songs=$s song_genres=$sg"
+          aa=$(( $(wc -l < artist_aliases.csv) - 1 ))
+          sd=$(( $(wc -l < song_demand.csv) - 1 ))
+          echo "Dumped: genres=$g songs=$s song_genres=$sg artist_aliases=$aa song_demand=$sd"
           # Guard: a partial/empty read must never replace a good backup.
+          # Only the catalog tables have a floor: the two setlist tables may
+          # rightly be empty (no alias uploaded yet, no host request yet).
           if [ "$g" -lt 5 ] || [ "$s" -lt 100 ] || [ "$sg" -lt 100 ]; then
             echo "::error::Implausibly small dump (genres=$g songs=$s song_genres=$sg); refusing to store it. Check prod."
             exit 1
@@ -70,7 +77,7 @@ jobs:
             echo ""
             echo "| table | rows | sha256 |"
             echo "|---|---|---|"
-            for t in genres songs song_genres; do
+            for t in genres songs song_genres artist_aliases song_demand; do
               echo "| $t | $(( $(wc -l < $t.csv) - 1 )) | \`$(sha256sum $t.csv | cut -c1-16)\` |"
             done
           } >> "$GITHUB_STEP_SUMMARY"
@@ -84,7 +91,7 @@ jobs:
             exit 1
           fi
           cd "$RUNNER_TEMP"
-          tar -C catalog -czf catalog.tar.gz genres.csv songs.csv song_genres.csv
+          tar -C catalog -czf catalog.tar.gz genres.csv songs.csv song_genres.csv artist_aliases.csv song_demand.csv
           out="catalog-$(date -u +%F).tar.gz.gpg"
           printf '%s' "$PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
             --symmetric --cipher-algo AES256 -o "$out" catalog.tar.gz
