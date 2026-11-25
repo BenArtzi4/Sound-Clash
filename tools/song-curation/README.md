@@ -8,7 +8,9 @@
 > requests, artists, charts or playlists: [`requests/`](./requests/README.md)) and
 > `audit-songs` (fix the songs already in the game: better videos, duplicates, names,
 > genres: [`audit/`](./audit/README.md)). Both play-test new videos with
-> [`playtest/playtest.mjs`](./playtest/playtest.mjs).
+> [`playtest/playtest.mjs`](./playtest/playtest.mjs). The artist alias table (Latin
+> spellings a host may type for Hebrew-script or symbol artist names) is built with
+> [`aliases/`](./aliases/README.md).
 
 
 A small, reusable workflow for adding popular songs to the Sound Clash catalog

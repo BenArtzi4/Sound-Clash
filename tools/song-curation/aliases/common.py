@@ -59,6 +59,16 @@ def supabase_rows(path: str | Path) -> list[dict[str, Any]]:
     return list(obj["rows"])
 
 
+def clean_alias(s: str) -> str:
+    """An alias as ``artist_aliases`` stores it: inner whitespace collapsed, trimmed, lower case.
+
+    The table's CHECK (``alias = lower(btrim(alias)) AND alias <> ''``)
+    accepts the result when it is not empty; ``str.lower()`` is the
+    production database's ``lower()`` (ICU provider, see ``setlist_text``).
+    """
+    return " ".join(s.split()).lower()
+
+
 def _genre_slugs(row: Mapping[str, Any]) -> list[str]:
     genres = row.get("genres") or ""
     return genres.split(";") if isinstance(genres, str) else list(genres)
