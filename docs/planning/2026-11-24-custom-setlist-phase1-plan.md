@@ -91,7 +91,7 @@ game_pool_summary(p_game_code text, p_manager_token uuid)
 
 Behaviour the tests pin:
 
-- `save_game_setlist`: `game_not_found` (P0002) for an unknown code; `setlist_exists` (P0001) on a second call; ids that are not in `songs` are skipped; an id in both arrays is tier 1; `setlist_empty` (22023) when no id is left, and then nothing is written; the `game_setlists` row is inserted with `ready = true` in the same call.
+- `save_game_setlist`: `game_not_found` (P0002) for an unknown code; `setlist_exists` (P0001) on a second call; ids that are not in `songs` are skipped, and so are ids of songs flagged unavailable (`unavailable_at` set); an id in both arrays is tier 1; `setlist_empty` (22023) when no id is left, and then nothing is written; the `game_setlists` row is inserted with `ready = true` in the same call.
 - `select_next_song` and `peek_next_song`, after the token check: read `game_setlists.ready` by key. Row found and `ready = false` → `setlist_not_ready` (P0001). Row found → skip the `no_genres_selected` check, pick with `pick_next_pool_song`, and in the guarded `p_song_id` path accept the song only if it is in the pool, not played and available (`song_no_longer_eligible` otherwise). No row → today's path, unchanged.
 - `game_pool_summary`: the token check of `peek_next_song`; zero rows for a game with no `game_setlists` row; `list_songs` counts tier 1, `list_left` counts tier 1 not played and available; the same for tier 2.
 
@@ -506,7 +506,7 @@ class CreateGameRequest:             # selected_genres: list[UUID] = [];  setlis
 class CreateGameResponse:            # + setlist: SetlistSummary | None = None
 ```
 
-Order inside the handler: parse and match first (no row exists yet) → pool empty: `SetlistError("setlist_empty", ...)` → insert the game as today with empty genres → `client.rpc("save_game_setlist", {...})` → if that fails, delete the game row and raise → `record_song_demand` for the lines that were not found (`line_key` = `norm` of the raw line), inside `try/except` that only logs: demand must never fail a create.
+Order inside the handler: parse and match first (no row exists yet) → pool empty: `SetlistError("setlist_empty", ...)` → insert the game as today with empty genres → `client.rpc("save_game_setlist", {...})` → if that fails, delete the game row and raise → `record_song_demand` for the lines that were not found (`line_key` = the demand key as built: `norm(clean_title(side))` of each of the line's two sides, empty pieces dropped, sorted, joined by one space; at most 100 keys per create, `raw_line` cut to 300 characters), inside `try/except` that only logs: demand must never fail a create.
 
 - [ ] **Step 1: Write the failing tests** (added to `test_games_create.py`; the existing tests stay as they are)
 
@@ -547,7 +547,7 @@ async def test_demand_failure_does_not_fail_the_create(client, db, monkeypatch)
 - [ ] **Step 4: The maintainer reads `review.md`** (the `unsure` and `wrong` rows, made by `gen_alias_sql.py --review`).
 - [ ] **Step 5: `gen_alias_sql.py`** writes `upload_aliases.sql` (`INSERT ... ON CONFLICT (alias) DO UPDATE SET artist_key = EXCLUDED.artist_key`, aliases lowercased and trimmed, written with `newline="\n"`) and `verify_aliases.sql` (row count, and no `artist_key` missing from `songs.artist_keys`).
 - [ ] **Step 6: `replay_pilot.py`** runs the 14 pilot lists through the product matcher with the alias file. Pass: each list reaches at least the pilot's count (27, 17, 4, 20, 11, 6, 15, 28, 5, 7, 13, 4, 26, 23 in file order), and none of the 17 refused traps in `_dumps/check_title_only.txt` becomes a match.
-- [ ] **Step 7: Upload.** The maintainer names the production write; then run `verify_aliases.sql`.
+- [ ] **Step 7: Upload.** The maintainer names the production write; then run `verify_aliases.sql`. The backend keeps the catalog and the aliases in memory for 10 minutes (`setlist_catalog.py`), so the new aliases reach `POST /setlists/check` within 10 minutes, or at once after a Render restart. Run the pilot replay against production only after that.
 - [ ] **Step 8: Commit the tool code and the skill step only:** `Add the offline tools that build the artist alias table`.
 
 ### Task 9: Frontend API, types and text helper

@@ -27,7 +27,12 @@ import pytest_asyncio
 
 ADMIN_PASSWORD = "test-admin-pw"
 
+# artist_aliases and song_demand (migration 061) are durable with no FK, so the
+# CASCADE that clears the other tables does not reach them: list them or alias
+# and demand rows leak between tests.
 ALL_TABLES = (
+    "artist_aliases",
+    "song_demand",
     "game_rounds",
     "game_teams",
     "active_games",
@@ -187,3 +192,13 @@ def _reset_rate_limiter() -> Iterator[None]:
     rate_limit.reset()
     yield
     rate_limit.reset()
+
+
+@pytest.fixture(autouse=True)
+def _reset_catalog_index_cache() -> Iterator[None]:
+    """Each test loads its own catalog snapshot, never another test's."""
+    from app.services.setlist_catalog import reset_catalog_index_cache
+
+    reset_catalog_index_cache()
+    yield
+    reset_catalog_index_cache()

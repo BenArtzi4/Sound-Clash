@@ -365,7 +365,7 @@ Behavior:
 - Then `no_genres_selected` (`22023`) if `selected_genres` is empty.
 - The random path calls the shared `pick_next_song` helper (§3cc). It raises `no_more_songs` (`22023`) when the eligible pool is empty.
 - **Decade filter (migration 032):** when `active_games.selected_decades` is non-empty, the helper's `eligible` set additionally requires `(songs.release_year / 10 * 10) = ANY(selected_decades)` — the song's decade must be one the host chose. The empty default imposes no year limit. A `NULL` `release_year` matches no specific decade, so unknown-year songs are excluded when a decade is selected and included when none is. `selected_decades` is optional; only `selected_genres` is required.
-- **Dead-video auto-skip (migration 045):** the helper's `eligible` set also requires `songs.unavailable_at IS NULL`, so a video the availability scan confirmed dead (see §5b) is never randomly picked — an all-flagged pool raises the same `no_more_songs`.
+- **Dead-video auto-skip (migration 045):** the helper's `eligible` set also requires `songs.unavailable_at IS NULL`, so a video the availability scan confirmed dead (see §5d) is never randomly picked — an all-flagged pool raises the same `no_more_songs`.
 - A guarded peek commit checks that its supplied song is still eligible for this game, including filters, availability and played history. It raises `song_no_longer_eligible` (`P0001`) on a mismatch. The three-argument signature remains available for older clients and deliberate manual overrides, where an explicit song only needs to exist.
 - **Custom setlist games (migration 060).** Right after the token check, one lookup by key in `game_setlists`. No row: a genre game, and everything above applies unchanged. Row found with `ready = false`: `setlist_not_ready` (`P0001`) on every path, before the advisory lock, so a half-saved pool can never start a round. Row found and ready: there is no `no_genres_selected` check (a custom game has no genres), the random path calls `pick_next_pool_song` (§3j) instead of `pick_next_song` (`no_more_songs` when it returns `NULL`), and the guarded commit accepts a song only if it is in this game's `game_song_pool`, not played in this game and `unavailable_at IS NULL` (any tier; `song_no_longer_eligible` otherwise). The unguarded explicit override (`p_expected_round` `NULL`, including the three-argument signature) is unchanged for custom games too: any catalog song that exists.
 - Delegates round creation to `start_round`, so the prior round is closed defensively, `round_number` advances, and `active_games.current_round_id` / `current_song_id` are wired up.
@@ -605,7 +605,7 @@ SET search_path = public;
 
 Behavior:
 - Inserts the `game_setlists` row with `ready = true` and the `game_song_pool` rows **in the same call**, so a pool is either complete and ready or absent: `select_next_song` / `peek_next_song` can never start a round on a half-saved one.
-- Ids that are not in `songs` are skipped, and so are songs flagged unavailable (`unavailable_at IS NOT NULL`, §5b): the spec counts a flagged song as "cannot play", so a song flagged between **Check my list** and **Create game** is left out exactly like a deleted one and does not count in the returned pool size. An id in both arrays is tier 1. An id named twice is stored once (the pool's primary key is `(game_code, song_id)`). `NULL` arrays count as empty.
+- Ids that are not in `songs` are skipped, and so are songs flagged unavailable (`unavailable_at IS NOT NULL`, §5d): the spec counts a flagged song as "cannot play", so a song flagged between **Check my list** and **Create game** is left out exactly like a deleted one and does not count in the returned pool size. An id in both arrays is tier 1. An id named twice is stored once (the pool's primary key is `(game_code, song_id)`). `NULL` arrays count as empty.
 - Returns how many pool rows it wrote.
 
 ### Error semantics
@@ -622,7 +622,7 @@ Not idempotent by design: the second call raises `setlist_exists` and leaves the
 
 ### Callers
 
-- No caller yet. Planned: FastAPI `POST /games` with a list, as the service role (`docs/planning/2026-11-24-custom-setlist-phase1-plan.md`, Task 7). Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. `SECURITY DEFINER`, so it does not depend on the service role holding grants on the two tables.
+- FastAPI `POST /games` with a list, as the service role (`backend/app/routers/games.py::_save_pool_blocking`, `api-contracts.md §2.2`), right after it inserts the game. If the call raises, the backend deletes the game row again, best effort (its `game_secrets` row goes by `ON DELETE CASCADE`; a failed delete is logged); `setlist_empty` becomes the same 400 `setlist_empty` as an empty match, and any other failure is mapped as every database error is (usually a 500). Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. `SECURITY DEFINER`, so it does not depend on the service role holding grants on the two tables.
 
 ## 3j. `pick_next_pool_song`: the custom-game picker (internal-only)
 
@@ -682,7 +682,7 @@ Added in migration 061 (custom setlists, phase 1). When a host creates a game fr
 
 ```sql
 CREATE OR REPLACE FUNCTION record_song_demand(
-  p_keys  text[],   -- the cleaned line, one per missing line (song_demand.line_key)
+  p_keys  text[],   -- one key per song: the line's cleaned sides, sorted (song_demand.line_key)
   p_lines text[]    -- the host's line as written, same order
 ) RETURNS integer   -- rows touched (inserted or counted)
 LANGUAGE plpgsql
@@ -707,7 +707,7 @@ Not idempotent by design: every call counts its keys once more.
 
 ### Callers
 
-- No caller yet. Planned: FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`docs/planning/2026-11-24-custom-setlist-phase1-plan.md`, Task 7). Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
+- FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`backend/app/routers/games.py::_record_demand_blocking`). It sends only the lines the matcher marked `not_in_catalog` (not `several_songs_share_this_name`), with one key per song: each side of the parsed line is cleaned (`clean_title`, then `norm()`), the empty pieces are dropped, and the rest are sorted and joined with one space, so numbering, a duration, a recording note, a CSV row's other cells and the artist/title order never change the key (`api-contracts.md §2.2`). It skips an empty key, a key over 1,000 UTF-8 bytes (one key past the btree row limit would fail the whole call) and a line with a NUL character (Postgres text cannot hold one); with nothing left it makes no call. One create sends at most 100 keys: the first 100 different songs in list order (a key named again keeps its first line and takes no second place). Each `raw_line` is cut to its first 300 characters (it is only shown to the maintainer); the key is never cut. Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -969,7 +969,53 @@ Idempotent on `(game_code, started_at)` — the existence check short-circuits a
 ## 5b. `mark_game_test`: flag a test game after the fact (service-role only)
 
 Migration 051. `mark_game_test(p_game_code text, p_started_at timestamptz DEFAULT NULL) RETURNS integer`. Sets `is_test = true` on the live `game_secrets` row (so the later archive copies it) and on any `game_history` row with that code, narrowed to one start instant when `p_started_at` is given (codes recycle after the TTL). Returns how many rows it flagged. `SECURITY DEFINER`, EXECUTE revoked from `anon`/`authenticated`, granted to `service_role`. No HTTP caller: run it from the Supabase SQL editor or `supabase db query --linked` for a test game that `POST /games` didn't catch.
-## 5b. `set_song_availability`: persist dead-video scan verdicts
+
+## 5c. `create_team_secret`: provision a per-team rejoin token (trigger)
+
+Added in migration 046 (issue #183). A trigger function, **not** an RPC — it has no
+HTTP caller and is not exposed to anon. It runs from an `AFTER INSERT` trigger on
+`game_teams` (`trg_create_team_secret`), in the **same transaction** as the team insert,
+so every team always has exactly one `team_secrets` row (its per-team `rejoin_token`) and
+the two can never diverge. `SECURITY DEFINER` so it succeeds regardless of which role
+inserts the team. Mirrors `create_game_secret` (mig 034, the `active_games` twin).
+
+```sql
+CREATE OR REPLACE FUNCTION create_team_secret() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO team_secrets (team_id, game_code)
+  VALUES (NEW.id, NEW.game_code)
+  ON CONFLICT (team_id) DO NOTHING;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_create_team_secret ON game_teams;
+CREATE TRIGGER trg_create_team_secret
+  AFTER INSERT ON game_teams
+  FOR EACH ROW EXECUTE FUNCTION create_team_secret();
+```
+
+**Team rejoin has no anon RPC.** Unlike the manager-token host actions (which validate
+the token inside SECURITY DEFINER functions), reconnecting a team is a pair of
+cold-start-tolerant **FastAPI endpoints** off the buzzer hot path: `POST
+/games/{code}/rejoin` (resolves the rejoin token back to the team row) and the
+manager-token-gated `GET /games/{code}/teams/{team_id}/rejoin-token` (reveals it to the
+host). Both read the anon-invisible `team_secrets` table with the service-role key; see
+`api-contracts.md §2.3a / §2.8a` and `security-rls.md §1`.
+
+### Idempotency
+
+Idempotent per team via `ON CONFLICT (team_id) DO NOTHING`; a re-fired trigger or the
+migration's one-time backfill of existing teams never double-inserts.
+
+### Callers
+
+- The `trg_create_team_secret` `AFTER INSERT` trigger on `game_teams`. No HTTP caller.
+
+## 5d. `set_song_availability`: persist dead-video scan verdicts
 
 Added in migration 045 (I-Liveness Phase 2, issue #248). Service-role only — called by
 `POST /admin/songs/check-availability` when the admin scan runs with `commit=true`
@@ -1017,51 +1063,6 @@ nothing and counts zero.
   anon/authenticated (an anon grant would let anyone bury the whole catalog) and GRANTs
   it to service_role, per the migration-020 pattern.
 
-## 5c. `create_team_secret`: provision a per-team rejoin token (trigger)
-
-Added in migration 046 (issue #183). A trigger function, **not** an RPC — it has no
-HTTP caller and is not exposed to anon. It runs from an `AFTER INSERT` trigger on
-`game_teams` (`trg_create_team_secret`), in the **same transaction** as the team insert,
-so every team always has exactly one `team_secrets` row (its per-team `rejoin_token`) and
-the two can never diverge. `SECURITY DEFINER` so it succeeds regardless of which role
-inserts the team. Mirrors `create_game_secret` (mig 034, the `active_games` twin).
-
-```sql
-CREATE OR REPLACE FUNCTION create_team_secret() RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO team_secrets (team_id, game_code)
-  VALUES (NEW.id, NEW.game_code)
-  ON CONFLICT (team_id) DO NOTHING;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS trg_create_team_secret ON game_teams;
-CREATE TRIGGER trg_create_team_secret
-  AFTER INSERT ON game_teams
-  FOR EACH ROW EXECUTE FUNCTION create_team_secret();
-```
-
-**Team rejoin has no anon RPC.** Unlike the manager-token host actions (which validate
-the token inside SECURITY DEFINER functions), reconnecting a team is a pair of
-cold-start-tolerant **FastAPI endpoints** off the buzzer hot path: `POST
-/games/{code}/rejoin` (resolves the rejoin token back to the team row) and the
-manager-token-gated `GET /games/{code}/teams/{team_id}/rejoin-token` (reveals it to the
-host). Both read the anon-invisible `team_secrets` table with the service-role key; see
-`api-contracts.md §2.3a / §2.8a` and `security-rls.md §1`.
-
-### Idempotency
-
-Idempotent per team via `ON CONFLICT (team_id) DO NOTHING`; a re-fired trigger or the
-migration's one-time backfill of existing teams never double-inserts.
-
-### Callers
-
-- The `trg_create_team_secret` `AFTER INSERT` trigger on `game_teams`. No HTTP caller.
-
 ## 6. Function ↔ Caller Reference Matrix
 
 | Function | Anon callable? | Service role callable? | Called by |
@@ -1076,9 +1077,9 @@ migration's one-time backfill of existing teams never double-inserts.
 | `game_setlist` | ✅ (no token; read-only, songs of that game only) | ✅ | Browser (end-of-game setlist on host console and team phones) |
 | `round_song` | ✅ (no token; read-only, one song of that game) | ✅ | Browser (host score panel, TV reveal) |
 | `game_pool_summary` | ✅ (token-gated, read-only) | ✅ | No caller yet (planned: host console's custom-setlist progress line) |
-| `save_game_setlist` | ❌ | ✅ | No caller yet (planned: FastAPI POST /games with a list) |
+| `save_game_setlist` | ❌ | ✅ | FastAPI POST /games with a list |
 | `pick_next_pool_song` | ❌ | ✅ | Internal call from `select_next_song` + `peek_next_song` for a custom setlist game. No HTTP caller. |
-| `record_song_demand` | ❌ | ✅ | No caller yet (planned: FastAPI POST /games with a list, for the lines it could not match) |
+| `record_song_demand` | ❌ | ✅ | FastAPI POST /games with a list, for the lines it could not match |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_manager_bonus` | ✅ (token-gated) | ✅ | Browser (manager bonus picker) |

@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
+from typing import Any
 
 import pytest
 
-from ._helpers import fetch_genre_ids
+from app.services.setlist_catalog import get_catalog_index
+
+from ._fake_supabase import FakeAPIError
+from ._helpers import fetch_genre_ids, insert_song
 
 pytestmark = pytest.mark.needs_docker
 
@@ -167,3 +172,527 @@ async def test_flag_does_not_change_the_response(client, db) -> None:
     )
     assert resp.status_code == 201
     assert "is_test" not in resp.json()
+
+
+# --- A game from a pasted song list (custom setlists, phase 1 Task 7) --------
+#
+# The server repeats the check's match and saves the result as the game's song
+# pool. Every name here is made up.
+
+SETLIST_CATALOG = {  # title: artist
+    "Paper Lanterns": "Velvet Comet",
+    "Northern Static": "Velvet Comet",
+    "Harbor Lights": "Glass Harbor",
+    "Night Ferry": "Pale Rowan",
+}
+SETLIST_EMPTY_MESSAGE = "None of the songs in your list can play."
+
+
+async def _seed_setlist_catalog(db) -> dict[str, uuid.UUID]:
+    """The made-up catalog the list tests play from; song id by title."""
+    return {
+        title: await insert_song(db, title=title, artist=artist)
+        for title, artist in SETLIST_CATALOG.items()
+    }
+
+
+async def _create_from_list(client, text: str, **extra: Any) -> Any:
+    return await client.post("/games", json={"setlist": {"text": text}, **extra})
+
+
+async def _pool(db, code: str) -> dict[str, int]:
+    """The game's song pool as {title: tier}."""
+    rows = await db.fetch(
+        """
+        SELECT s.title, p.tier
+          FROM game_song_pool p JOIN songs s ON s.id = p.song_id
+         WHERE p.game_code = $1
+        """,
+        code,
+    )
+    return {row["title"]: row["tier"] for row in rows}
+
+
+async def _count(db, table: str) -> int:
+    return int(await db.fetchval(f"SELECT count(*) FROM {table}"))  # noqa: S608
+
+
+def _fail_rpc(monkeypatch, fake, name: str) -> None:
+    """Make the fake client's ``name`` RPC fail as a dropped connection would."""
+    real_rpc = fake.rpc
+
+    class _Failing:
+        def execute(self) -> Any:
+            raise FakeAPIError(code="XX000", message="connection reset")
+
+    def rpc(fn: str, params: dict[str, Any] | None = None) -> Any:
+        return _Failing() if fn == name else real_rpc(fn, params)
+
+    monkeypatch.setattr(fake, "rpc", rpc)
+
+
+async def test_create_with_setlist_saves_the_pool(client, db) -> None:
+    await _seed_setlist_catalog(db)
+
+    resp = await _create_from_list(
+        client, "Velvet Comet - Paper Lanterns\nNobody - Not A Real Song"
+    )
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["setlist"] == {"list_songs": 1, "same_artist_songs": 1}
+    assert body["selected_genres"] == [] and body["selected_decades"] == []
+    code = body["game_code"]
+    setlist = await db.fetchrow(
+        "SELECT ready, list_total FROM game_setlists WHERE game_code = $1", code
+    )
+    assert setlist["ready"] is True
+    assert setlist["list_total"] == 2  # both song lines, found or not
+    assert await _pool(db, code) == {"Paper Lanterns": 1, "Northern Static": 2}
+    game = await db.fetchrow(
+        "SELECT selected_genres, selected_decades FROM active_games WHERE game_code = $1", code
+    )
+    assert game["selected_genres"] == [] and game["selected_decades"] == []
+
+
+async def test_create_with_setlist_answer_names_no_song(client, db) -> None:
+    song_ids = await _seed_setlist_catalog(db)
+    youtube_ids = [row["youtube_id"] for row in await db.fetch("SELECT youtube_id FROM songs")]
+
+    resp = await _create_from_list(client, "Velvet Comet\nGlass Harbor - Harbor Lights")
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["setlist"] == {"list_songs": 3, "same_artist_songs": 0}
+    for value in [*(str(song_id) for song_id in song_ids.values()), *youtube_ids]:
+        assert value not in resp.text
+    assert "youtube_id" not in resp.text and "start_time" not in resp.text
+
+
+async def test_create_with_setlist_records_demand(client, db) -> None:
+    await _seed_setlist_catalog(db)
+
+    resp = await _create_from_list(
+        client, "Velvet Comet - Paper Lanterns\nNobody - Not A Real Song"
+    )
+
+    assert resp.status_code == 201, resp.text
+    rows = await db.fetch("SELECT line_key, raw_line, request_count FROM song_demand")
+    assert [dict(row) for row in rows] == [
+        {
+            "line_key": "nobody not a real song",
+            "raw_line": "Nobody - Not A Real Song",
+            "request_count": 1,
+        }
+    ]
+
+
+# A playlist export (Exportify's columns): the row is artist and title, and
+# its URI, album and duration cells are not part of the song.
+EXPORT_HEADER = "Track URI,Track Name,Artist Name(s),Album Name,Duration (ms)"
+
+
+async def test_one_missing_song_has_one_demand_key_however_it_is_written(client, db) -> None:
+    # Spec §13.5: the queue counts songs, so a numbered line, a timed line, the
+    # swapped order, a recording note and a CSV row all count for one key.
+    await _seed_setlist_catalog(db)
+    playable = "Velvet Comet - Paper Lanterns"
+    texts = [
+        f"{playable}\nNobody - Not A Real Song",
+        f"1. {playable}\n2. Nobody - Not A Real Song",
+        f"{playable} (4:02)\nNobody - Not A Real Song (3:51)",
+        f"{playable}\nNot A Real Song - Nobody",
+        f"{playable}\nNobody - Not A Real Song - Remastered 2011",
+        f"{EXPORT_HEADER}\n"
+        "spotify:track:aaa,Paper Lanterns,Velvet Comet,Lantern Days,201000\n"
+        "spotify:track:bbb,Not A Real Song,Nobody,Made Up Album,231000",
+    ]
+
+    for text in texts:
+        resp = await _create_from_list(client, text)
+        assert resp.status_code == 201, (text, resp.text)
+        assert resp.json()["setlist"] == {"list_songs": 1, "same_artist_songs": 1}, text
+
+    rows = await db.fetch("SELECT line_key, raw_line, request_count FROM song_demand")
+    assert [dict(row) for row in rows] == [
+        {
+            "line_key": "nobody not a real song",
+            "raw_line": "Nobody - Not A Real Song",  # the first line seen for the key
+            "request_count": len(texts),
+        }
+    ]
+
+
+async def test_one_create_naming_a_missing_song_twice_counts_it_once(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    text = "Velvet Comet - Paper Lanterns\n1. Not A Real Song - Nobody\nNobody - Not A Real Song"
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    rows = await db.fetch("SELECT line_key, raw_line, request_count FROM song_demand")
+    assert [dict(row) for row in rows] == [
+        {
+            "line_key": "nobody not a real song",
+            "raw_line": "1. Not A Real Song - Nobody",
+            "request_count": 1,
+        }
+    ]
+
+
+async def test_create_with_both_or_neither_is_a_400(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    await _seed_setlist_catalog(db)
+    payloads: list[dict[str, Any]] = [
+        {"selected_genres": [str(genres[0])], "setlist": {"text": "Velvet Comet"}},
+        {},
+        {"setlist": None},
+        {"selected_genres": [], "selected_decades": [1980]},
+    ]
+
+    for payload in payloads:
+        resp = await client.post("/games", json=payload)
+        assert resp.status_code == 400, payload
+        assert resp.json()["error"] == "validation_error", payload
+
+    assert await _count(db, "active_games") == 0
+
+
+async def test_create_with_setlist_and_decades_is_a_400(client, db) -> None:
+    await _seed_setlist_catalog(db)
+
+    resp = await _create_from_list(client, "Velvet Comet", selected_decades=[1980])
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "validation_error"
+    assert await _count(db, "active_games") == 0
+
+
+async def test_a_refused_create_answers_none_of_the_list(client, db) -> None:
+    # The 400 of a refused create names what was wrong, never the body: it
+    # used to echo the whole list (a 2 MB list gave a 2 MB answer).
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    text = "Velvet Comet - Paper Lanterns\n" * 5000  # 150,000 characters
+
+    for extra in ({"selected_genres": [str(genres[0])]}, {"selected_decades": [1980]}):
+        resp = await _create_from_list(client, text, **extra)
+
+        assert resp.status_code == 400, extra
+        assert resp.json()["error"] == "validation_error", extra
+        assert "Velvet Comet" not in resp.text and "Paper Lanterns" not in resp.text
+        assert len(resp.content) < 1000, extra
+    assert await _count(db, "active_games") == 0
+
+
+async def test_setlist_with_no_playable_song_is_a_400_and_creates_nothing(client, db) -> None:
+    await _seed_setlist_catalog(db)
+
+    resp = await _create_from_list(client, "Nobody - Not A Real Song\nLucky Nobody")
+
+    assert resp.status_code == 400
+    assert resp.json() == {"error": "setlist_empty", "message": SETLIST_EMPTY_MESSAGE}
+    for table in ("active_games", "game_secrets", "game_setlists", "song_demand"):
+        assert await _count(db, table) == 0, table
+
+
+@pytest.mark.parametrize(
+    ("text", "error"),
+    [
+        pytest.param("x" * 20_001, "setlist_too_long", id="too-long"),
+        pytest.param("https://open.spotify.com/track/abc", "setlist_links_only", id="links-only"),
+        pytest.param("# my party list\n", "setlist_no_songs", id="no-songs"),
+    ],
+)
+async def test_a_refused_list_answers_its_400_without_the_catalog(
+    client, db, fake_supabase, monkeypatch, text: str, error: str
+) -> None:
+    # The list is read before the catalog loads: with the database down, a
+    # refused list still gets its own 400, not a 500.
+    def database_down(name: str) -> Any:
+        raise FakeAPIError(code="XX000", message="connection refused")
+
+    monkeypatch.setattr(fake_supabase, "table", database_down)
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == error
+    assert await _count(db, "active_games") == 0
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        pytest.param("DELETE FROM songs WHERE id = $1", id="deleted"),
+        pytest.param("UPDATE songs SET unavailable_at = now() WHERE id = $1", id="flagged"),
+    ],
+)
+async def test_song_deleted_after_the_index_was_cached(client, db, change: str) -> None:
+    song_ids = await _seed_setlist_catalog(db)
+    await get_catalog_index()  # the cached snapshot still holds Paper Lanterns
+    await db.execute(change, song_ids["Paper Lanterns"])
+
+    resp = await _create_from_list(
+        client, "Velvet Comet - Paper Lanterns\nGlass Harbor - Harbor Lights"
+    )
+
+    assert resp.status_code == 201, resp.text
+    # Ruling Q: the answer gives the matcher's counts from the cached snapshot,
+    # so it still counts Paper Lanterns, which the saved pool left out.
+    assert resp.json()["setlist"] == {"list_songs": 2, "same_artist_songs": 1}
+    assert await _pool(db, resp.json()["game_code"]) == {
+        "Harbor Lights": 1,
+        "Northern Static": 2,
+    }
+
+
+async def test_every_listed_song_gone_after_the_cache_is_a_400_and_removes_the_game(
+    client, db
+) -> None:
+    song_ids = await _seed_setlist_catalog(db)
+    await get_catalog_index()
+    await db.execute("DELETE FROM songs WHERE id = $1", song_ids["Night Ferry"])
+
+    # Pale Rowan's only song is gone: save_game_setlist raises setlist_empty.
+    resp = await _create_from_list(client, "Pale Rowan - Night Ferry\nNobody - Not A Real Song")
+
+    assert resp.status_code == 400
+    assert resp.json() == {"error": "setlist_empty", "message": SETLIST_EMPTY_MESSAGE}
+    for table in ("active_games", "game_secrets", "game_setlists", "song_demand"):
+        assert await _count(db, table) == 0, table
+
+
+async def test_failed_pool_save_removes_the_game(client, db, fake_supabase, monkeypatch) -> None:
+    await _seed_setlist_catalog(db)
+    _fail_rpc(monkeypatch, fake_supabase, "save_game_setlist")
+
+    resp = await _create_from_list(
+        client, "Velvet Comet - Paper Lanterns\nNobody - Not A Real Song"
+    )
+
+    assert resp.status_code == 500
+    assert resp.json()["error"] == "internal_error"
+    for table in ("active_games", "game_secrets", "game_setlists", "song_demand"):
+        assert await _count(db, table) == 0, table
+
+
+async def test_failed_cleanup_still_answers_the_save_error(
+    client, db, fake_supabase, monkeypatch, caplog
+) -> None:
+    await _seed_setlist_catalog(db)
+    _fail_rpc(monkeypatch, fake_supabase, "save_game_setlist")
+    real_table = fake_supabase.table
+
+    class _NoDelete:
+        """active_games whose delete fails; every other call is the real one."""
+
+        def __init__(self, query: Any) -> None:
+            self._query = query
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._query, name)
+
+        def delete(self) -> Any:
+            raise FakeAPIError(code="08006", message="connection lost")
+
+    def table(name: str) -> Any:
+        query = real_table(name)
+        return _NoDelete(query) if name == "active_games" else query
+
+    monkeypatch.setattr(fake_supabase, "table", table)
+
+    with caplog.at_level(logging.WARNING):
+        resp = await _create_from_list(client, "Velvet Comet - Paper Lanterns")
+
+    assert resp.status_code == 500
+    assert resp.json()["error"] == "internal_error"
+    assert "could not delete game" in caplog.text
+    assert "08006 connection lost" in caplog.text  # the delete's own reason
+    # The row left behind has no pool and no genres, so it can never start a
+    # round; the 4-hour sweep removes it.
+    assert await _count(db, "active_games") == 1
+    assert await _count(db, "game_setlists") == 0
+
+
+async def test_demand_failure_does_not_fail_the_create(
+    client, db, fake_supabase, monkeypatch, caplog
+) -> None:
+    await _seed_setlist_catalog(db)
+    _fail_rpc(monkeypatch, fake_supabase, "record_song_demand")
+
+    with caplog.at_level(logging.WARNING):
+        resp = await _create_from_list(
+            client, "Velvet Comet - Paper Lanterns\nNobody - Not A Real Song"
+        )
+
+    assert resp.status_code == 201, resp.text
+    assert await _pool(db, resp.json()["game_code"]) == {
+        "Paper Lanterns": 1,
+        "Northern Static": 2,
+    }
+    assert await _count(db, "song_demand") == 0
+    assert "song demand not recorded" in caplog.text
+    # The log names the error, never the host's list.
+    assert "Not A Real Song" not in caplog.text
+    assert "not a real song" not in caplog.text
+
+
+async def test_demand_skips_keys_over_1000_bytes(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    kept = "y" * 1000  # exactly 1,000 bytes
+    too_long = "\N{HEBREW LETTER ALEF}" * 501  # 501 characters, 1,002 bytes
+    text = "\n".join(["Velvet Comet - Paper Lanterns", kept, too_long, "Nobody - Not A Real Song"])
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    keys = {row["line_key"] for row in await db.fetch("SELECT line_key FROM song_demand")}
+    assert keys == {kept, "nobody not a real song"}
+
+
+async def test_demand_records_at_most_100_songs_per_create(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    # The first song is named 5 times: it counts once and takes one place.
+    missing = ["Nobody - Missing Song 0"] * 5 + [f"Nobody - Missing Song {i}" for i in range(120)]
+    text = "\n".join(["Velvet Comet - Paper Lanterns", *missing])
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    keys = {row["line_key"] for row in await db.fetch("SELECT line_key FROM song_demand")}
+    assert keys == {f"missing song {i} nobody" for i in range(100)}
+
+
+async def test_demand_cuts_a_long_raw_line_but_never_its_key(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    long_line = "Nobody - " + " ".join(["Long Song"] * 40)  # 408 characters
+    text = f"Velvet Comet - Paper Lanterns\n{long_line}"
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    rows = await db.fetch("SELECT line_key, raw_line FROM song_demand")
+    assert [dict(row) for row in rows] == [
+        {"line_key": " ".join(["long song"] * 40) + " nobody", "raw_line": long_line[:300]}
+    ]
+    assert len(rows[0]["raw_line"]) == 300
+
+
+async def test_demand_skips_a_line_with_a_nul_character(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    text = "Velvet Comet - Paper Lanterns\nNobody - Not\x00Real\nNobody - Not A Real Song"
+
+    resp = await _create_from_list(client, text)
+
+    assert resp.status_code == 201, resp.text
+    keys = {row["line_key"] for row in await db.fetch("SELECT line_key FROM song_demand")}
+    assert keys == {"nobody not a real song"}
+
+
+# The JSON escape for a lone UTF-16 high surrogate, built from chr(92) (a
+# backslash) so the character itself is never in this file or the request.
+LONE_SURROGATE = chr(92) + "ud800"
+
+
+@pytest.mark.parametrize(
+    ("text", "status", "demand"),
+    [
+        pytest.param(f"Abc {LONE_SURROGATE} def", 400, set(), id="nothing-playable"),
+        pytest.param(
+            f"Velvet Comet {LONE_SURROGATE} - Paper Lanterns\\nAbc {LONE_SURROGATE} def",
+            201,
+            {"abc def"},
+            id="playable-and-demand",
+        ),
+    ],
+)
+async def test_a_lone_surrogate_in_the_list_is_dropped_not_a_500(
+    client, db, text: str, status: int, demand: set[str]
+) -> None:
+    await _seed_setlist_catalog(db)
+    raw = ('{"setlist": {"text": "' + text + '"}}').encode("ascii")
+
+    resp = await client.post("/games", content=raw, headers={"Content-Type": "application/json"})
+
+    assert resp.status_code == status, resp.text
+    if status == 400:
+        assert resp.json() == {"error": "setlist_empty", "message": SETLIST_EMPTY_MESSAGE}
+    else:
+        assert resp.json()["setlist"] == {"list_songs": 1, "same_artist_songs": 1}
+    keys = {row["line_key"] for row in await db.fetch("SELECT line_key FROM song_demand")}
+    assert keys == demand
+
+
+@pytest.mark.parametrize(
+    "other_field",
+    [
+        pytest.param('"selected_genres": ["00000000-0000-4000-8000-000000000001"]', id="both"),
+        pytest.param('"selected_decades": [1980]', id="list-and-decades"),
+    ],
+)
+async def test_a_refused_create_with_a_lone_surrogate_is_a_400_not_a_500(
+    client, db, other_field: str
+) -> None:
+    # The refusal used to echo the body; UTF-8 cannot encode a lone surrogate,
+    # so writing the answer failed with a 500.
+    text = f"Velvet Comet {LONE_SURROGATE} - Paper Lanterns"
+    raw = ('{"setlist": {"text": "' + text + '"}, ' + other_field + "}").encode("ascii")
+
+    resp = await client.post("/games", content=raw, headers={"Content-Type": "application/json"})
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    assert "Velvet Comet" not in resp.text
+    assert await _count(db, "active_games") == 0
+
+
+async def test_a_name_several_songs_share_is_not_recorded_as_demand(client, db) -> None:
+    await _seed_setlist_catalog(db)
+    await insert_song(db, title="Lucky Stone", artist="Velvet Comet")
+    await insert_song(db, title="Lucky Stone", artist="Pale Rowan")
+
+    resp = await _create_from_list(client, "Lucky Stone\nGlass Harbor - Harbor Lights")
+
+    assert resp.status_code == 201, resp.text
+    # Only Harbor Lights matched: "Lucky Stone" really was a miss.
+    assert resp.json()["setlist"] == {"list_songs": 1, "same_artist_songs": 0}
+    assert await _count(db, "song_demand") == 0
+
+
+@pytest.mark.parametrize(
+    ("user_agent", "is_test"),
+    [pytest.param(PHONE_UA, False, id="phone"), pytest.param(HEADLESS_UA, True, id="headless")],
+)
+async def test_list_game_keeps_the_test_flag(client, db, user_agent: str, is_test: bool) -> None:
+    await _seed_setlist_catalog(db)
+
+    resp = await client.post(
+        "/games",
+        json={"setlist": {"text": "Velvet Comet - Paper Lanterns"}},
+        headers={"User-Agent": user_agent},
+    )
+
+    assert resp.status_code == 201, resp.text
+    flag = await db.fetchval(
+        "SELECT is_test FROM game_secrets WHERE game_code = $1", resp.json()["game_code"]
+    )
+    assert flag is is_test
+
+
+async def test_genre_game_answer_is_unchanged_but_for_a_null_setlist(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+
+    resp = await client.post("/games", json={"selected_genres": [str(genres[0])]})
+
+    assert resp.status_code == 201, resp.text
+    assert set(resp.json()) == {
+        "game_code",
+        "status",
+        "selected_genres",
+        "selected_decades",
+        "started_at",
+        "expires_at",
+        "manager_token",
+        "setlist",
+    }
+    assert resp.json()["setlist"] is None
+    assert await _count(db, "game_setlists") == 0

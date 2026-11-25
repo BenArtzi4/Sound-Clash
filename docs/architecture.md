@@ -43,7 +43,7 @@ This is the executive summary of the system. It points to the deeper docs rather
 │  │  • tables (songs, games...)   │◄─┼───┤  POST /games           │
 │  │  • PL/pgSQL RPC (buzz_in...)  │  │   │  POST /games/.../song  │
 │  │  • RLS policies               │  │   │  CRUD /admin/songs     │
-│  │  • pg_cron 4h cleanup         │  │   │                        │
+│  │  • pg_cron 4h cleanup         │  │   │  POST /setlists/check  │
 │  └──────────────┬────────────────┘  │   │   uses service-role    │
 │                 │ logical repl.     │   │   key (server-only)    │
 │                 ▼                   │   └────────────────────────┘

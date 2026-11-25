@@ -62,7 +62,7 @@ Two distinct shared secrets gate FastAPI endpoints. Both checked with `secrets.c
 
 **Custom setlist support tables (`artist_aliases`, `song_demand`, mig 061).** Both are durable and operator-only. `artist_aliases` names the catalog's artists, so its rows are private catalog data (never committed to git, uploaded like songs; they are in the encrypted weekly catalog backup, `.github/workflows/catalog-backup.yml`, as `song_demand` is); `song_demand` holds the list lines hosts asked for that the catalog lacks, for the maintainer. Both have RLS on with **no policy**, every base privilege revoked from `anon` and `authenticated` (a direct read or insert is `42501 permission denied`), and neither is in the `supabase_realtime` publication. As for the pool tables, `service_role` is granted `SELECT`, `INSERT`, `UPDATE`, `DELETE` on both explicitly (as migrations 030 and 033 do; a no-op on hosted Supabase); here it matters, because the backend's list matcher reads `artist_aliases` through PostgREST. Players only ever see the matcher's result, never these rows. `record_song_demand` is the one writer of `song_demand` from the app; it is service-role only, because it takes no token and anon could flood the queue.
 
-**Song catalog reads (`songs`, `song_genres`).** The browser only ever needs the songs of the game it is in. Since migration 053 it reads them only through two game-scoped `SECURITY DEFINER` functions: `game_setlist(p_game_code)` returns the songs a game's rounds played (from the archive once the game is swept) and `round_song(p_game_code, p_song_id)` returns one of them (see `rpc-functions.md` §3g-§3h). A caller gets a song only by naming a game that played it. **Migration 054 closed the tables to the browser:** it dropped the `anon_read_songs` / `anon_read_song_genres` policies and revoked `SELECT` on both tables from `anon` and `authenticated`, so a direct read now fails with `42501 permission denied` (PostgREST answers 401) instead of returning the catalog. It was applied on 2026-11-02, after Faro showed no direct `rest/v1/songs` read for 24 hours. Everything else that reads the catalog is `SECURITY DEFINER` (`select_next_song`, `peek_next_song`, `song_pool_counts`, `archive_game`, `set_song_availability`; `pick_next_song` runs inside them as their owner) or uses the service-role key (FastAPI, the admin API, the dead-video scan, the e2e fixtures). The rollback is a down script kept outside `db/migrations` that recreates the two policies and the grant as migration 006 made them. `genres` (names and slugs only) stays readable for the create page. What stays possible by design: a script that hosts many games can collect songs slowly through `select_next_song`, as a real host does.
+**Song catalog reads (`songs`, `song_genres`).** The browser only ever needs the songs of the game it is in. Since migration 053 it reads them only through two game-scoped `SECURITY DEFINER` functions: `game_setlist(p_game_code)` returns the songs a game's rounds played (from the archive once the game is swept) and `round_song(p_game_code, p_song_id)` returns one of them (see `rpc-functions.md` §3g-§3h). A caller gets a song only by naming a game that played it. **Migration 054 closed the tables to the browser:** it dropped the `anon_read_songs` / `anon_read_song_genres` policies and revoked `SELECT` on both tables from `anon` and `authenticated`, so a direct read now fails with `42501 permission denied` (PostgREST answers 401) instead of returning the catalog. It was applied on 2026-11-02, after Faro showed no direct `rest/v1/songs` read for 24 hours. Everything else that reads the catalog is `SECURITY DEFINER` (`select_next_song`, `peek_next_song`, `song_pool_counts`, `archive_game`, `set_song_availability`; `pick_next_song` runs inside them as their owner) or uses the service-role key (FastAPI, the admin API, the dead-video scan, the e2e fixtures). The rollback is a down script kept outside `db/migrations` that recreates the two policies and the grant as migration 006 made them. `genres` (names and slugs only) stays readable for the create page. What stays possible by design: a script that hosts many games can collect songs slowly through `select_next_song`, as a real host does. `POST /setlists/check` (FastAPI, service role) also tells any caller whether a named song, film or artist is in the catalog, which the create page needs; it answers titles and artists only (an artist line gives a song count, not titles), never a song id, a YouTube id or a start time, and takes at most 300 lines per call and 10 calls a minute per IP, so a caller learns the catalog only one guessed name at a time.
 
 | RPC function | anon EXECUTE | service_role EXECUTE |
 |---|---|---|
@@ -404,7 +404,12 @@ All API inputs validated with Pydantic (FastAPI auto-validates request bodies):
 
 ```python
 class CreateGameRequest(BaseModel):
-    selected_genres: conlist(UUID, min_length=1)
+    # Exactly one song source (a model_validator refuses both or neither):
+    # genres, or the host's pasted list (text read and capped at 20,000
+    # characters / 300 song lines by parse_setlist_text, not by the model).
+    selected_genres: list[UUID] = []
+    selected_decades: list[Decade] = []
+    setlist: SetlistInput | None = None
 
 class JoinTeamRequest(BaseModel):
     # TeamName = strip_whitespace + 1–30 chars, plus a BeforeValidator that
@@ -426,6 +431,7 @@ Reject anything that doesn't fit. Don't try to "fix" invalid input.
 - **Never log admin passwords from request headers**. The middleware reads the header, validates, then drops it from the request context.
 - **Game codes ARE logged** (low sensitivity; expires in 4h anyway).
 - **Team names ARE logged** (entered by users; non-PII assumption).
+- **A host's pasted song list is NOT logged.** When `POST /games` with a list cannot record the missing lines in `song_demand`, the warning carries the game code and the error's SQLSTATE and message only.
 - Sentry `beforeSend` hook scrubs known sensitive fields.
 
 ## 10. Auth Failure Modes
