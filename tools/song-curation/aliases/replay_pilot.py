@@ -1,5 +1,8 @@
 """Replay the setlist pilot's 14 playlists through the product's setlist matcher.
 
+Step 7 of the alias run, and the API replay of step 8 (README.md in this
+folder, which also lists the files the pilot folder must hold).
+
 The 2026-11-24 pilot matched 14 real playlists against the catalog offline,
 with a script of its own. This tool reads the same lists with the product's
 code (``setlist_text.parse_setlist_text``, ``setlist_matcher.match_setlist``)
@@ -15,12 +18,19 @@ PASS needs both:
   (``PILOT_COUNTS``) minus the file's entries in
   ``_dumps/by_design_losses.txt`` that the product does not match: pilot
   matches that a settled rule refuses by design. An absent file means no
-  exceptions; an entry for an unknown file or a line the file does not have
+  exceptions (stdout says so); an entry for an unknown file or a line the
+  file does not have, or a second entry for the same song line of a file,
   stops the run (exit code 2), so a stale list cannot lower a gate.
 - No refused trap (``_dumps/refused_traps.txt``: a title-only line whose
   catalog song is by another performer) matches anything.
 
-stdout gets one table (file names and numbers only), the trap totals and the
+A missing required file of the pilot folder (the 14 playlists and
+``_dumps/refused_traps.txt``; offline also ``_dumps/should_match.txt`` and
+``results/NN-*.detail.txt``) stops the run before anything is matched or
+sent, with one line naming the files (exit code 2).
+
+stdout gets one table (file names and numbers only), the trap totals, the
+lost / gained / other-song totals against the pilot (offline) and the
 verdict. The report file holds real names, so it lives in the git-ignored
 batch folder. It has the extra lines a list reads, the lines lost and gained
 against the pilot, the feat. notes on lines with no separator that matched by
@@ -37,7 +47,8 @@ How to run, from the worktree root::
 
 That venv belongs to the main tree; this imports the worktree's
 ``backend/app`` because common.py puts the worktree's backend first on
-``sys.path``. Exit code 0 on PASS, 1 on FAIL, 2 on a bad by-design list.
+``sys.path``. Exit code 0 on PASS, 1 on FAIL, 2 on a bad by-design list or a
+missing pilot file.
 """
 
 from __future__ import annotations
@@ -192,12 +203,14 @@ def read_by_design(path: Path, lines: Mapping[str, Sequence[ListLine]]) -> list[
     After ``#`` comment lines, one entry per line:
     ``<file> | <reason> | <song line>``. An entry for a file that is not one
     of the playlists, or a song line that file does not have (compared with
-    ``ListLine.raw``), or the same entry twice raises ``ByDesignError``, so a
-    stale list cannot lower a gate.
+    ``ListLine.raw``), or a second entry for the same song line of a file
+    (whatever its reason) raises ``ByDesignError``, so a stale list cannot
+    lower a gate and one loss is never excused twice.
     """
     if not path.exists():
         return None
     entries: list[ByDesign] = []
+    seen: set[tuple[str, str]] = set()  # (file, song line)
     for no, row in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not row.strip() or row.lstrip().startswith("#"):
             continue
@@ -210,8 +223,9 @@ def read_by_design(path: Path, lines: Mapping[str, Sequence[ListLine]]) -> list[
             raise ByDesignError(f"{where}: {entry.file!r} is not one of the playlist files")
         if entry.line not in {line.raw for line in lines[entry.file]}:
             raise ByDesignError(f"{where}: its song line is not a song line of {entry.file}")
-        if entry in entries:
-            raise ByDesignError(f"{where}: the same entry twice")
+        if (entry.file, entry.line) in seen:
+            raise ByDesignError(f"{where}: a second entry for the same song line of {entry.file}")
+        seen.add((entry.file, entry.line))
         entries.append(entry)
     return entries
 
@@ -450,6 +464,7 @@ class PilotDiff:
     lost_pilot: Counter[str]  # by the pilot's verdict
     gained: Counter[str]  # by the product's rule
     gained_pilot: Counter[str]  # by the pilot's verdict
+    other_song: int = 0  # both found, not the same catalog song
     unpaired: int = 0  # product song lines with no pilot line
     never_paired: int = 0  # pilot lines no product line paired with
 
@@ -462,6 +477,7 @@ class PilotDiff:
         self.lost_pilot.update(other.lost_pilot)
         self.gained.update(other.gained)
         self.gained_pilot.update(other.gained_pilot)
+        self.other_song += other.other_song
         self.unpaired += other.unpaired
         self.never_paired += other.never_paired
 
@@ -505,7 +521,7 @@ def against_pilot(
     never = [
         [f"      {p.verdict:<10} | {p.text}"] for i, p in enumerate(pilot_lines) if i not in used
     ]
-    diff.unpaired, diff.never_paired = len(unpaired), len(never)
+    diff.other_song, diff.unpaired, diff.never_paired = len(other), len(unpaired), len(never)
 
     out.append(
         f"[2] Against the pilot ({len(pilot_lines)} pilot lines): paired {via['text']} by text and"
@@ -646,6 +662,24 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
     refused = [run_trap(index, p) for p in unique_by_text(refused_lines)]
     should = [run_trap(index, p) for p in unique_by_text(should_lines)]
 
+    # The per-file sections first: their totals go to stdout too.
+    details: list[str] = []
+    totals = PilotDiff.empty()
+    for run in runs:
+        details.append(f"=== {run.path.name} ===")
+        if run.error:
+            details.append(f"    refused: {run.error}")
+        details.append(f"    {lines_by_rule(run)}")
+        by_design_section([(e, outcome(r), not r.songs) for e, r in run.by_design], details)
+        pilot_lines = read_pilot_lines(args.pilot / "results" / f"{run.path.stem}.detail.txt")
+        pairs = pair_lines(run, pilot_lines)
+        extra_lines(run, pilot_lines, pairs, details)
+        totals.add(against_pilot(run, pilot_lines, pairs, details))
+        details.append("    every song line:")
+        for no, (line, result) in enumerate(zip(run.lines, run.results, strict=True), 1):
+            details.append(f"      {no:>3} {line.raw}   [{outcome(result)}]")
+        details.append("")
+
     rows = [run_row(run) for run in runs]
     refused_hits = sum(t.matched for t in refused)
     stdout = [
@@ -656,6 +690,9 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
         + (" (must be 0)" if refused_hits else ""),
         f"should match (not gated): {len(should)} unique ({len(should_lines)} lines),"
         f" {sum(t.matched for t in should)} matched",
+        f"against the pilot (not gated; read each file's [2] in the report):"
+        f" lost {sum(totals.lost.values())}, gained {sum(totals.gained.values())},"
+        f" other song {totals.other_song}",
     ]
     stdout += [f"{run.path.name}: {run.error}" for run in runs if run.error]
     failed = [run.path.name for run in runs if not run.passed]
@@ -675,28 +712,13 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
         "",
         *stdout,
         "",
-    ]
-    totals = PilotDiff.empty()
-    for run in runs:
-        out.append(f"=== {run.path.name} ===")
-        if run.error:
-            out.append(f"    refused: {run.error}")
-        out.append(f"    {lines_by_rule(run)}")
-        by_design_section([(e, outcome(r), not r.songs) for e, r in run.by_design], out)
-        pilot_lines = read_pilot_lines(args.pilot / "results" / f"{run.path.stem}.detail.txt")
-        pairs = pair_lines(run, pilot_lines)
-        extra_lines(run, pilot_lines, pairs, out)
-        totals.add(against_pilot(run, pilot_lines, pairs, out))
-        out.append("    every song line:")
-        for no, (line, result) in enumerate(zip(run.lines, run.results, strict=True), 1):
-            out.append(f"      {no:>3} {line.raw}   [{outcome(result)}]")
-        out.append("")
-    out += [
+        *details,
         "== Against the pilot, all files ==",
         f"    lost {sum(totals.lost.values())}: product {dict(totals.lost.most_common())},"
         f" pilot {dict(totals.lost_pilot.most_common())}",
         f"    gained {sum(totals.gained.values())}: product {dict(totals.gained.most_common())},"
         f" pilot {dict(totals.gained_pilot.most_common())}",
+        f"    other song {totals.other_song}",
         f"    song lines unpaired {totals.unpaired}, pilot lines never paired {totals.never_paired}",
         "",
     ]
@@ -813,8 +835,18 @@ def run_api(args: argparse.Namespace, files: Sequence[Path], out: list[str]) -> 
     if status == 200 and isinstance(body, dict):
         ready = {r["line"].strip() for r in body.get("ready", [])}
         hits = [t for t in texts if t.strip() in ready]
-        trap_failure = f"{len(hits)} refused traps matched" if hits else None
-        trap_line = f"refused traps: {len(texts)} unique, {len(hits)} in ready" + (
+        read = body.get("lines_total")
+        problems = []
+        if read != len(texts):
+            # A trap the API did not read as its own song line was never checked.
+            problems.append(
+                f"the API read {read} song lines from the {len(texts)} refused traps sent"
+                " (must be equal: the trap check is not valid)"
+            )
+        if hits:
+            problems.append(f"{len(hits)} refused traps matched")
+        trap_failure = "; ".join(problems) or None
+        trap_line = f"refused traps: {len(texts)} sent, {read} read, {len(hits)} in ready" + (
             " (must be 0)" if hits else ""
         )
         out.append("=== refused traps ===")
@@ -858,13 +890,40 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return args
 
 
+def missing_pilot_files(pilot: Path, files: Sequence[Path], api: bool) -> list[str]:
+    """The required files of the pilot folder that are not there, as paths inside it.
+
+    Both modes read the 14 playlists and ``_dumps/refused_traps.txt``; the
+    offline mode also reads ``_dumps/should_match.txt`` and one
+    ``results/<playlist name>.detail.txt`` per playlist.
+    ``_dumps/by_design_losses.txt`` is optional (absent = no exceptions).
+    """
+    missing = []
+    if len(files) != len(PILOT_COUNTS):
+        missing.append(
+            f"playlists/NN-*.txt ({len(PILOT_COUNTS)} files 01 to 14, found {len(files)})"
+        )
+    needed = ["_dumps/refused_traps.txt"]
+    if not api:
+        needed.append("_dumps/should_match.txt")
+        if not (pilot / "results").is_dir():
+            missing.append("results/ (the folder)")
+        else:
+            needed += [f"results/{path.stem}.detail.txt" for path in files]
+    return [*missing, *(name for name in needed if not (pilot / name).is_file())]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     files = sorted((args.pilot / "playlists").glob("[0-9][0-9]-*.txt"))
-    if len(files) != len(PILOT_COUNTS):
-        raise SystemExit(
-            f"expected {len(PILOT_COUNTS)} playlists in {args.pilot}, found {len(files)}"
+    missing = missing_pilot_files(args.pilot, files, bool(args.api))
+    if missing:
+        print(
+            f"error: the pilot folder {args.pilot} lacks: {', '.join(missing)}"
+            " (README.md, step 7, lists what it must hold)",
+            file=sys.stderr,
         )
+        return 2
     out: list[str] = []
     try:
         code = run_api(args, files, out) if args.api else run_offline(args, files, out)
