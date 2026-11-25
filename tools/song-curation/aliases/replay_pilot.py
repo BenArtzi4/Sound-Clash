@@ -563,6 +563,9 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
         f"catalog: {args.catalog} ({len(index.songs)} playable songs)",
         f"aliases: {args.aliases or 'none (baseline)'} ({len(index.aliases)} in the index)",
         "pass count: distinct tier-1 songs of lines matched by any rule except artist_or_film",
+        "pairing with the pilot's results: norm() of the whole line text (the product's raw"
+        " line, the pilot's 'artist - title'), then the pilot's dedupe key"
+        " (norm(clean_title(title)), artist_keys(artist)) with the product's functions",
         "",
         *stdout,
         "",

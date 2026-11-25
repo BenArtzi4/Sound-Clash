@@ -27,7 +27,7 @@ sys.path.insert(0, str(BACKEND))
 import app  # noqa: E402
 from app.services.setlist_catalog import SOUNDTRACK_GENRE_SLUGS  # noqa: E402
 from app.services.setlist_matcher import CatalogIndex, CatalogSong  # noqa: E402
-from app.services.setlist_text import artist_keys  # noqa: E402
+from app.services.setlist_text import artist_keys, norm  # noqa: E402
 
 if Path(app.__file__).resolve().parent != BACKEND / "app":
     raise ImportError(f"app was imported from {app.__file__}, not from {BACKEND / 'app'}")
@@ -109,15 +109,22 @@ def load_aliases(path: str | Path) -> dict[str, str]:
 
     A row with a ``"verdict"`` (the checking step's output) is used only when
     the verdict is ``"confirmed"``. Aliases are kept lowercased and trimmed,
-    the form the upload writes and the table's unique key, so two spellings
-    that differ only in case are one alias. One alias with two different
-    artist keys raises ``ValueError`` naming it.
+    the form the upload writes and the table's unique key. One alias with two
+    different artist keys raises ``ValueError`` naming it. Both are compared
+    in ``norm()`` form, as ``CatalogIndex`` reads them: of two aliases that
+    norm alike (``"zed-kay"``, ``"zed kay"``) the index keeps only the first,
+    and the backend's first (rows sorted by alias) need not be this file's.
     """
     aliases: dict[str, str] = {}
+    first: dict[str, tuple[str, str]] = {}  # norm(alias) -> (alias, artist_key) of its first row
     for row in read_json(path):
         if "verdict" in row and row["verdict"] != "confirmed":
             continue
         alias, key = row["alias"].strip().lower(), row["artist_key"].strip()
-        if aliases.setdefault(alias, key) != key:
-            raise ValueError(f"alias {alias!r} has two artist keys: {aliases[alias]!r} and {key!r}")
+        seen_alias, seen_key = first.setdefault(norm(alias), (alias, key))
+        if norm(seen_key) != norm(key):
+            raise ValueError(
+                f"alias {alias!r} has two artist keys: {seen_key!r} (row {seen_alias!r}) and {key!r}"
+            )
+        aliases.setdefault(alias, key)
     return aliases
