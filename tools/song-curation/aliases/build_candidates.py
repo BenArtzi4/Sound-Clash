@@ -1,6 +1,6 @@
 """Find Latin spellings of the catalog's Hebrew-script and symbol artist keys on Wikidata.
 
-Step 1 of the alias run (README.md in this folder). An ``artist_aliases`` row
+Step 2 of the alias run (README.md in this folder). An ``artist_aliases`` row
 maps a spelling a host may type to one catalog artist key, a value of
 ``songs.artist_keys``. Two kinds of key need one:
 
