@@ -8,10 +8,15 @@ uploaded. It reads the backend read-only and writes only its report file.
 
 PASS needs both:
 
-- Every list's pass count reaches the pilot's count (``PILOT_COUNTS``). The
-  pass count is the distinct tier-1 songs of the lines matched by any rule
-  except ``artist_or_film``: a line that names a whole artist is not a song
-  the pilot counted.
+- Every list's pass count reaches its required count. The pass count is the
+  distinct tier-1 songs of the lines matched by any rule except
+  ``artist_or_film``: a line that names a whole artist is not a song the
+  pilot counted. The required count (Ruling X2) is the pilot's count
+  (``PILOT_COUNTS``) minus the file's entries in
+  ``_dumps/by_design_losses.txt`` that the product does not match: pilot
+  matches that a settled rule refuses by design. An absent file means no
+  exceptions; an entry for an unknown file or a line the file does not have
+  stops the run (exit code 2), so a stale list cannot lower a gate.
 - No refused trap (``_dumps/refused_traps.txt``: a title-only line whose
   catalog song is by another performer) matches anything.
 
@@ -32,7 +37,7 @@ How to run, from the worktree root::
 
 That venv belongs to the main tree; this imports the worktree's
 ``backend/app`` because common.py puts the worktree's backend first on
-``sys.path``. Exit code 0 on PASS, 1 on FAIL.
+``sys.path``. Exit code 0 on PASS, 1 on FAIL, 2 on a bad by-design list.
 """
 
 from __future__ import annotations
@@ -40,12 +45,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 import time
 import urllib.error
 import urllib.request
 from collections import Counter
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +76,7 @@ BATCHES = HERE.parent / "batches"
 DEFAULT_PILOT = BATCHES / "2026-11-24-setlist-pilot"
 DEFAULT_CATALOG = BATCHES / "2026-11-25-aliases" / "_dumps" / "catalog_raw.json"
 REPORT_NAME = "replay_report.txt"
+BY_DESIGN_NAME = "by_design_losses.txt"  # in <pilot>/_dumps/ (Ruling X2)
 
 # Per playlist, in file order (01 to 14): the songs the pilot found (its
 # in_game count), and its unique song lines (design doc section 2).
@@ -167,6 +174,53 @@ def outcome(result: LineResult) -> str:
 
 
 @dataclass(frozen=True)
+class ByDesign:
+    """A pilot match that a settled rule refuses by design (Ruling X2)."""
+
+    file: str  # the playlist's file name
+    reason: str  # e.g. one_word_soundtrack_title
+    line: str  # the song line as written in that playlist (ListLine.raw)
+
+
+class ByDesignError(ValueError):
+    """The by-design list names a file or a song line that the playlists do not have."""
+
+
+def read_by_design(path: Path, lines: Mapping[str, Sequence[ListLine]]) -> list[ByDesign] | None:
+    """The by-design list, checked against the playlists' song lines; None when absent.
+
+    After ``#`` comment lines, one entry per line:
+    ``<file> | <reason> | <song line>``. An entry for a file that is not one
+    of the playlists, or a song line that file does not have (compared with
+    ``ListLine.raw``), or the same entry twice raises ``ByDesignError``, so a
+    stale list cannot lower a gate.
+    """
+    if not path.exists():
+        return None
+    entries: list[ByDesign] = []
+    for no, row in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not row.strip() or row.lstrip().startswith("#"):
+            continue
+        where = f"{path}, line {no}"
+        parts = [part.strip() for part in row.split(" | ", 2)]
+        if len(parts) != 3 or not all(parts):
+            raise ByDesignError(f"{where}: expected '<file> | <reason> | <song line>'")
+        entry = ByDesign(*parts)
+        if entry.file not in lines:
+            raise ByDesignError(f"{where}: {entry.file!r} is not one of the playlist files")
+        if entry.line not in {line.raw for line in lines[entry.file]}:
+            raise ByDesignError(f"{where}: its song line is not a song line of {entry.file}")
+        if entry in entries:
+            raise ByDesignError(f"{where}: the same entry twice")
+        entries.append(entry)
+    return entries
+
+
+def file_entries(entries: Sequence[ByDesign] | None, path: Path) -> list[ByDesign]:
+    return [entry for entry in entries or () if entry.file == path.name]
+
+
+@dataclass(frozen=True)
 class FileRun:
     path: Path
     pilot_songs: int
@@ -174,6 +228,8 @@ class FileRun:
     lines: tuple[ListLine, ...] = ()
     match: SetlistMatch | None = None
     error: str | None = None
+    # This file's by-design entries, each with the product's result for its line.
+    by_design: tuple[tuple[ByDesign, LineResult], ...] = ()
 
     @property
     def results(self) -> tuple[LineResult, ...]:
@@ -192,16 +248,38 @@ class FileRun:
         return len(self.match.fill_song_ids) if self.match else 0
 
     @property
+    def excused(self) -> int:
+        """By-design entries the product does not match (any rule); a matched one already counts."""
+        return sum(1 for _, result in self.by_design if not result.songs)
+
+    @property
+    def required(self) -> int:
+        return self.pilot_count - self.excused
+
+    @property
     def passed(self) -> bool:
-        return self.pass_count >= self.pilot_count
+        return self.pass_count >= self.required
+
+
+def read_lines(path: Path) -> tuple[tuple[ListLine, ...], str | None]:
+    """A playlist's song lines as the product reads them, or its SetlistError."""
+    try:
+        return tuple(parse_setlist_text(path.read_text(encoding="utf-8"))), None
+    except SetlistError as err:
+        return (), f"{err.code}: {err.message}"
 
 
 def run_file(index: CatalogIndex, path: Path, pilot_songs: int, pilot_count: int) -> FileRun:
-    try:
-        lines = parse_setlist_text(path.read_text(encoding="utf-8"))
-    except SetlistError as err:
-        return FileRun(path, pilot_songs, pilot_count, error=f"{err.code}: {err.message}")
-    return FileRun(path, pilot_songs, pilot_count, tuple(lines), match_setlist(index, lines))
+    lines, error = read_lines(path)
+    if error:
+        return FileRun(path, pilot_songs, pilot_count, error=error)
+    return FileRun(path, pilot_songs, pilot_count, lines, match_setlist(index, lines))
+
+
+def with_by_design(run: FileRun, entries: Sequence[ByDesign] | None) -> FileRun:
+    result_of = {line.raw: result for line, result in zip(run.lines, run.results, strict=True)}
+    found = tuple((entry, result_of[entry.line]) for entry in file_entries(entries, run.path))
+    return replace(run, by_design=found)
 
 
 @dataclass(frozen=True)
@@ -233,6 +311,8 @@ COLUMNS = (
     "pilot songs",
     "pass count",
     "pilot count",
+    "by design",
+    "required",
     "tier 1",
     "tier 2",
     "pool",
@@ -259,6 +339,8 @@ def run_row(run: FileRun) -> tuple[object, ...]:
         run.pilot_songs,
         run.pass_count,
         run.pilot_count,
+        run.excused,
+        run.required,
         run.tier1,
         run.tier2,
         run.tier1 + run.tier2,
@@ -274,7 +356,7 @@ def total_row(rows: Sequence[Sequence[object]]) -> tuple[object, ...]:
 def verdict_lines(failed_files: Sequence[str], trap_failure: str | None) -> list[str]:
     reasons = []
     if failed_files:
-        reasons.append("below the pilot's count: " + ", ".join(failed_files))
+        reasons.append("below the required count: " + ", ".join(failed_files))
     if trap_failure:
         reasons.append(trap_failure)
     return ["verdict: FAIL", *(f"  {r}" for r in reasons)] if reasons else ["verdict: PASS"]
@@ -519,6 +601,24 @@ def trap_report(label: str, traps: Sequence[Trap], out: list[str]) -> None:
         out.extend(f"      {outcome(r)}" for r in trap.results)
 
 
+def by_design_summary(path: Path, entries: Sequence[ByDesign] | None, excused: int) -> str:
+    if entries is None:
+        return f"by design (Ruling X2): {path.name} is absent, so no exceptions"
+    return (
+        f"by design (Ruling X2): {len(entries)} entries in {path.name},"
+        f" {excused} not matched by the product (excused)"
+    )
+
+
+def by_design_section(items: Sequence[tuple[ByDesign, str, bool]], out: list[str]) -> None:
+    """A file's by-design entries: (entry, the product's result, excused)."""
+    excused = sum(1 for *_, is_excused in items if is_excused)
+    out.append(f"[0] By design (Ruling X2): {len(items)} entries, {excused} excused")
+    for entry, result, is_excused in items:
+        state = "excused" if is_excused else "matched (lowers nothing)"
+        out.append(f"    {state:<24} | {entry.reason} | {entry.line}   [{result}]")
+
+
 def lines_by_rule(run: FileRun) -> str:
     rules = Counter(str(r.rule) for r in run.results if r.songs)
     reasons = Counter(str(r.reason) for r in run.results if not r.songs)
@@ -538,6 +638,9 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
         for path, songs, count in zip(files, PILOT_SONGS, PILOT_COUNTS, strict=True)
     ]
     dumps = args.pilot / "_dumps"
+    by_design_path = dumps / BY_DESIGN_NAME
+    entries = read_by_design(by_design_path, {run.path.name: run.lines for run in runs})
+    runs = [with_by_design(run, entries) for run in runs]
     refused_lines = read_pilot_lines(dumps / "refused_traps.txt")
     should_lines = read_pilot_lines(dumps / "should_match.txt")
     refused = [run_trap(index, p) for p in unique_by_text(refused_lines)]
@@ -548,6 +651,7 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
     stdout = [
         *table([*rows, total_row(rows)]),
         "",
+        by_design_summary(by_design_path, entries, sum(run.excused for run in runs)),
         f"refused traps: {len(refused)} unique ({len(refused_lines)} lines), {refused_hits} matched"
         + (" (must be 0)" if refused_hits else ""),
         f"should match (not gated): {len(should)} unique ({len(should_lines)} lines),"
@@ -563,6 +667,8 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
         f"catalog: {args.catalog} ({len(index.songs)} playable songs)",
         f"aliases: {args.aliases or 'none (baseline)'} ({len(index.aliases)} in the index)",
         "pass count: distinct tier-1 songs of lines matched by any rule except artist_or_film",
+        f"required: the pilot count minus the file's entries in {by_design_path}"
+        " that the product does not match (Ruling X2)",
         "pairing with the pilot's results: norm() of the whole line text (the product's raw"
         " line, the pilot's 'artist - title'), then the pilot's dedupe key"
         " (norm(clean_title(title)), artist_keys(artist)) with the product's functions",
@@ -576,6 +682,7 @@ def run_offline(args: argparse.Namespace, files: Sequence[Path], out: list[str])
         if run.error:
             out.append(f"    refused: {run.error}")
         out.append(f"    {lines_by_rule(run)}")
+        by_design_section([(e, outcome(r), not r.songs) for e, r in run.by_design], out)
         pilot_lines = read_pilot_lines(args.pilot / "results" / f"{run.path.stem}.detail.txt")
         pairs = pair_lines(run, pilot_lines)
         extra_lines(run, pilot_lines, pairs, out)
@@ -630,11 +737,24 @@ def post(url: str, payload: dict[str, Any]) -> tuple[int, Any]:
     return status, body
 
 
+def api_result(line: str, reason_of: Mapping[str, str], ready: set[str]) -> tuple[str, bool]:
+    """What the API answered for a by-design line, and whether that excuses it."""
+    key = line.strip()
+    if key in reason_of:
+        return f"not found ({reason_of[key]})", True
+    return ("ready" if key in ready else "not in the answer"), False
+
+
 def run_api(args: argparse.Namespace, files: Sequence[Path], out: list[str]) -> int:
     url = args.api.rstrip("/") + "/setlists/check"
+    # The by-design list is checked against the lines as the product parses
+    # them here (no catalog needed) before any request is sent.
+    by_design_path = args.pilot / "_dumps" / BY_DESIGN_NAME
+    entries = read_by_design(by_design_path, {path.name: read_lines(path)[0] for path in files})
     rows: list[tuple[object, ...]] = []
     failed: list[str] = []
     errors: list[str] = []
+    excused_total = 0
     for i, (path, songs, count) in enumerate(zip(files, PILOT_SONGS, PILOT_COUNTS, strict=True)):
         if i:
             time.sleep(API_PAUSE_SECONDS)
@@ -645,14 +765,39 @@ def run_api(args: argparse.Namespace, files: Sequence[Path], out: list[str]) -> 
         answer: dict[str, Any] = body if ok else {}
         tier1 = int(answer.get("list_songs", 0))
         tier2 = int(answer.get("same_artist_songs", 0))
-        passed = tier1 >= count
+        # An entry is excused when the answer lists its line in not_found.
+        reason_of = {r["line"].strip(): r["reason"] for r in answer.get("not_found", [])}
+        ready = {r["line"].strip() for r in answer.get("ready", [])}
+        items = [
+            (entry, *api_result(entry.line, reason_of, ready))
+            for entry in file_entries(entries, path)
+        ]
+        excused = sum(1 for *_, is_excused in items if is_excused)
+        excused_total += excused
+        required = count - excused
+        passed = tier1 >= required
         if not passed:
             failed.append(path.name)
         pool = answer.get("pool_size", 0)
         lines_total = answer.get("lines_total", 0)
         result = "PASS" if passed else "FAIL"
-        rows.append((path.name, lines_total, songs, tier1, count, tier1, tier2, pool, result))
+        rows.append(
+            (
+                path.name,
+                lines_total,
+                songs,
+                tier1,
+                count,
+                excused,
+                required,
+                tier1,
+                tier2,
+                pool,
+                result,
+            )
+        )
         out.append(f"=== {path.name} ===")
+        by_design_section(items, out)
         for r in answer.get("ready", []):
             named = (
                 f"{r['artist']} - {r['title']}" if r["title"] else f"{r['artist']} (artist or film)"
@@ -685,6 +830,7 @@ def run_api(args: argparse.Namespace, files: Sequence[Path], out: list[str]) -> 
         " (list_songs), lines that name a whole artist included.",
         *table([*rows, total_row(rows)]),
         "",
+        by_design_summary(by_design_path, entries, excused_total),
         trap_line,
         *errors,
         *verdict_lines(failed, trap_failure),
@@ -720,7 +866,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"expected {len(PILOT_COUNTS)} playlists in {args.pilot}, found {len(files)}"
         )
     out: list[str] = []
-    code = run_api(args, files, out) if args.api else run_offline(args, files, out)
+    try:
+        code = run_api(args, files, out) if args.api else run_offline(args, files, out)
+    except ByDesignError as err:
+        print(f"error: the by-design list: {err}", file=sys.stderr)
+        return 2
     args.report.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
     print(f"report: {args.report}")
     return code
