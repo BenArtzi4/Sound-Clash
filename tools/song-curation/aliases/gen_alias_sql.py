@@ -24,8 +24,11 @@ to overwrite a review.md with a ticked box unless ``--force``.
 The default run keeps the confirmed pairs and the pairs ticked in
 review.md (read from the ticked line's text), minus every dropped pair, and
 writes ``upload_aliases.sql`` (one INSERT ... ON CONFLICT (alias) DO UPDATE),
-``aliases_final.json`` (the replay's ``--aliases`` input) and
-``verify_aliases.sql`` (one read-only SELECT).
+``aliases_final.json`` (this upload's rows) and ``verify_aliases.sql`` (one
+read-only SELECT). When ``<batch>/_dumps/aliases_raw.json`` exists (a dump of
+``select alias, artist_key from artist_aliases``: an incremental run), it
+also writes ``aliases_after_upload.json``: the whole table as it will be
+after the upload, which the pilot replay then reads.
 
 ``--check DUMP`` reads the CLI's JSON output of ``verify_aliases.sql`` and
 prints PASS or FAIL; exit code 0 or 1.
@@ -315,6 +318,21 @@ def verify_sql(rows: Sequence[Pair]) -> str:
     )
 
 
+def after_upload(
+    table: Iterable[Mapping[str, Any]], final: Sequence[Pair]
+) -> tuple[list[dict[str, str]], int]:
+    """The table as it will be after the upload, and how many of its rows the upload moves.
+
+    ``table`` is the dump of ``select alias, artist_key from artist_aliases``.
+    A final row replaces the table's row of the same alias, as ``ON CONFLICT
+    (alias) DO UPDATE`` does; every other row stays.
+    """
+    rows = {str(r["alias"]): str(r["artist_key"]) for r in table}
+    moved = sum(p.alias in rows and rows[p.alias] != p.artist_key for p in final)
+    rows.update((p.alias, p.artist_key) for p in final)
+    return [{"alias": a, "artist_key": k} for a, k in sorted(rows.items())], moved
+
+
 def write_sql(batch: Path) -> int:
     pairs, twice = load(batch)
     known = {p.ident: p for p in pairs}
@@ -350,6 +368,16 @@ def write_sql(batch: Path) -> int:
     if twice:
         print(f"checked twice with two verdicts: {twice}")
     print(f"wrote upload_aliases.sql, verify_aliases.sql, aliases_final.json in {batch}")
+    dump = batch / "_dumps" / "aliases_raw.json"
+    if dump.is_file():
+        table, moved = after_upload(common.supabase_rows(dump), final)
+        common.write_json(batch / "aliases_after_upload.json", table)
+        print(
+            f"table after the upload: {len(table)} rows, in aliases_after_upload.json;"
+            f" the upload moves {moved} of the dump's rows to another artist key"
+        )
+    else:
+        print("no _dumps/aliases_raw.json (a first upload): aliases_after_upload.json not written")
     return 0
 
 

@@ -155,19 +155,36 @@ PYTHONUTF8=1 $P tools/song-curation/aliases/gen_alias_sql.py --batch $B
 ```
 
 Keeps the confirmed pairs and the ticked ones, minus every rule drop, and writes
-`upload_aliases.sql` (one `INSERT ... ON CONFLICT (alias) DO UPDATE`), `aliases_final.json` and
-`verify_aliases.sql` (one read-only `SELECT`). It writes nothing when no pair is left.
+`upload_aliases.sql` (one `INSERT ... ON CONFLICT (alias) DO UPDATE`), `aliases_final.json`
+(this upload's rows) and `verify_aliases.sql` (one read-only `SELECT`). It writes nothing when no
+pair is left. In an incremental run (`$B/_dumps/aliases_raw.json` exists, step 1) it also writes
+`aliases_after_upload.json`: the dump's rows with this upload's rows replacing the same alias, as
+`ON CONFLICT` will. It prints how many rows that holds and how many of the dump's rows the upload
+moves to another artist key.
 
-In an incremental run the upload moves an alias that is already in the table to its new key.
-Check that no new row clashes with one already there; this must print 0:
+In an incremental run, check that no new row clashes with an alias already in the table (the same
+spelling in `norm()` form, another artist key); this must print 0:
 
 ```bash
-PYTHONUTF8=1 $P -c "import sys; sys.path.insert(0, 'tools/song-curation/aliases'); import common; from app.services.setlist_text import norm; old={norm(r['alias']): r['artist_key'] for r in common.supabase_rows('$B/_dumps/aliases_raw.json')}; new=common.read_json('$B/aliases_final.json'); print(sum(norm(r['alias']) in old and norm(old[norm(r['alias'])]) != norm(r['artist_key']) for r in new), 'new rows clash with an alias already in the table')"
+PYTHONUTF8=1 $P -c "import sys; sys.path.insert(0, 'tools/song-curation/aliases'); import common; from app.services.setlist_text import norm; old={norm(r['alias']): r for r in common.supabase_rows('$B/_dumps/aliases_raw.json')}; new=common.read_json('$B/aliases_final.json'); bad=[{'new': r, 'in_table': old[norm(r['alias'])]} for r in new if norm(r['alias']) in old and norm(old[norm(r['alias'])]['artist_key']) != norm(r['artist_key'])]; common.write_json('$B/_dumps/clashes.json', bad); print(len(bad), 'new rows clash with an alias already in the table (listed in _dumps/clashes.json)')"
 ```
+
+When it prints more than 0, read `$B/_dumps/clashes.json`. For each clash, fix that row's
+`artist_key` in `checked.json` or delete the row, then rerun step 6 (and step 5 first when the
+row was a ticked one: its line in review.md no longer matches). Keep a clash only when the alias
+is exactly the table's and the new key is a deliberate correction of the old one; then the
+upload moves it, and the step 6 summary counts it as moved.
 
 ### 7. The pilot replay must PASS before an upload
 
+The backend matches against the whole table, so the replay must read the table as it will be
+after the upload: in an incremental run `aliases_final.json` holds only the new rows, and the
+pilot lists that need earlier rows would fail without them.
+
 ```bash
+# incremental run ($B/_dumps/aliases_raw.json exists):
+PYTHONUTF8=1 $P tools/song-curation/aliases/replay_pilot.py --catalog $B/_dumps/catalog_raw.json --aliases $B/aliases_after_upload.json
+# first upload (no dump):
 PYTHONUTF8=1 $P tools/song-curation/aliases/replay_pilot.py --catalog $B/_dumps/catalog_raw.json --aliases $B/aliases_final.json
 ```
 
