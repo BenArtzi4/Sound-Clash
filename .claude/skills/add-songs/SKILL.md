@@ -125,6 +125,10 @@ before and not approved") and you ask the maintainer.
     - Playback: `node tools/song-curation/playtest/playtest.mjs <abs $B>/playtest_songs.json` from the repo
       root. It plays every new song in a copy of the game's embed setup (`YouTubePlayer.tsx`) on
       localhost; all must play (rerun failures once).
+    - **Alias rows:** when the batch added an artist whose name is in Hebrew script, or a Latin name
+      with a symbol (like a made-up `Bl!nk`), a host who types it in other letters finds it only through
+      an `artist_aliases` row. Follow `tools/song-curation/aliases/README.md` with a fresh snapshot and
+      `--existing`, so only the new keys are looked up.
     - Optional, for soundtrack rounds or unusual songs: a short live game on www forcing a few new songs
       with `select_next_song(..., p_song_id)` (`.claude/rules/lessons/song-curation.md`, Uploading).
     - Branch `feature/songs-<date>` off `origin/main`, add a `### Added` line to `CHANGELOG.md`, and open
