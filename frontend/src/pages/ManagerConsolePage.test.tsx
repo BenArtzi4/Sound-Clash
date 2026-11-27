@@ -572,6 +572,8 @@ describe("ManagerConsolePage", () => {
     );
     await waitFor(() => expect(screen.getByText("Wayne's World")).toBeInTheDocument());
     // Soundtrack rounds: show name is the only label; no "from X" subline.
+    // The e2e specs read the song line by its test id.
+    expect(screen.getByTestId("song-title")).toHaveTextContent(/^Wayne's World$/);
     expect(screen.getByTestId("soundtrack-badge")).toBeInTheDocument();
     // The year from select_next_song's row (mig 050) sits beside the film name.
     expect(screen.getByTestId("song-year")).toHaveTextContent("1992");
@@ -2301,7 +2303,7 @@ describe("ManagerConsolePage", () => {
 
   it("shows a clear toast when the song pool is exhausted (RpcError no_more_songs)", async () => {
     setHydrate({
-      game: makeActiveGame({ status: "playing", round_number: 1 }),
+      game: makeActiveGame({ status: "playing", round_number: 1, selected_genres: ["g1"] }),
       teams: [],
       rounds: [],
     });
@@ -2329,7 +2331,7 @@ describe("ManagerConsolePage", () => {
 
   it("says the mix has no songs, not 'all played', when Start game finds none (issue #375)", async () => {
     setHydrate({
-      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      game: makeActiveGame({ status: "waiting", round_number: 0, selected_genres: ["g1"] }),
       teams: [],
       rounds: [],
     });
@@ -2350,6 +2352,59 @@ describe("ManagerConsolePage", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByText(/have been played/i)).not.toBeInTheDocument();
+  });
+
+  // A game from the host's own songs has no genres (selected_genres is []):
+  // its no_more_songs speaks of the host's songs, not of genres.
+  it("says the host's songs have all been played when a list game runs out", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "playing", round_number: 4, selected_genres: [] }),
+      teams: [],
+      rounds: [],
+    });
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("no_more_songs", "22023"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    const next = screen.getByRole("button", { name: /^next round$/i });
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          /^All your songs have been played\. End the game or start a new one with more songs\.$/,
+        ),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/genres/i)).not.toBeInTheDocument();
+  });
+
+  it("says none of the host's songs can play when a list game's Start finds none", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0, selected_genres: [] }),
+      teams: [],
+      rounds: [],
+    });
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(new RpcError("no_more_songs", "22023"));
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start game/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/^None of the songs in your list can play\.$/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/genres and decades/i)).not.toBeInTheDocument();
   });
 
   it("says the host's songs are not ready when Start game comes before their pool is saved", async () => {
@@ -2426,6 +2481,17 @@ describe("ManagerConsolePage", () => {
     it("asks with the game code, the host's token and the round number", async () => {
       await renderGame("playing", 3);
       expect(useSetlistProgress).toHaveBeenLastCalledWith("ABCDEF", TOKEN, 3);
+    });
+
+    // A reload mid-game draws the console before the game has loaded, at
+    // round 0. The hook gets no token until the game is there, so it asks
+    // once, for the real round, and never for round 0 (Ruling AK).
+    it("asks nothing until the game has loaded, then once for its round", async () => {
+      await renderGame("playing", 3);
+      const calls = vi.mocked(useSetlistProgress).mock.calls;
+      expect(calls[0]).toEqual(["ABCDEF", null, 0]);
+      expect(calls.filter(([, token]) => token !== null)).not.toContainEqual(["ABCDEF", TOKEN, 0]);
+      expect(calls.at(-1)).toEqual(["ABCDEF", TOKEN, 3]);
     });
 
     it("shows how many of the host's songs are left", async () => {

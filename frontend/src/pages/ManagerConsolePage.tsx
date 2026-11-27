@@ -122,10 +122,12 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
     performEnd,
   } = scoring;
   // A game from the host's own songs: how many are left, asked again each
-  // round. Null for a normal game (one call per mount, then none).
+  // round. Null for a normal game (one call per mount, then none). No token
+  // until the game has loaded: a reload mid-game would otherwise ask for
+  // round 0 and then again for the real round.
   const setlistProgress = useSetlistProgress(
     gameCode,
-    managerToken,
+    state?.game ? managerToken : null,
     state?.game?.round_number ?? 0,
   );
 
@@ -407,7 +409,9 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
             <div className={styles.songBlock}>
               {isSoundtrackRound ? <SoundtrackBadge /> : null}
               <div className={styles.songLineRow}>
-                <p className={styles.songLine}>{songPrimaryLine}</p>
+                <p className={styles.songLine} data-testid="song-title">
+                  {songPrimaryLine}
+                </p>
                 {songYear != null ? (
                   <span className={styles.yearChip} data-testid="song-year">
                     <CalendarIcon />

@@ -1,7 +1,7 @@
 // A game from a pasted song list (Custom Setlist phase 1, Task 12), end to end:
 // the Host page's My own list tab, Check my list, Create game, the console's
 // "Your songs" line, the host's songs first, then one more song by the same
-// artist, then the existing "no more songs" message.
+// artist, then a list game's "no more songs" message.
 //
 // The list names three seed songs (db/seed/songs.sql) and one song that does
 // not exist. Tier 2 ("more by the same artists") needs one more song by
@@ -13,10 +13,11 @@
 //
 // The backend keeps the catalog for the matcher for 10 minutes
 // (backend/app/services/setlist_catalog.py) and an admin song write does not
-// reset it. Playwright starts a fresh backend, so a normal run is fine; but a
-// warm local backend (one reused on port 8000 that loaded the catalog before
-// "E2E Extra Song" existed) answers "0 more by the same artists" and this spec
-// fails at the check: restart that backend and run it again.
+// reset it. Playwright starts a fresh backend, so a normal run is fine. But a
+// backend reused on port 8000 that loaded the catalog in the last 10 minutes,
+// also during an earlier run of this spec (passing or failing), may not hold
+// this run's "E2E Extra Song" row: restart that backend before you run this
+// spec.
 //
 // Rounds are advanced with the fixture's advanceRound, which waits for the
 // round number that Realtime brings (committed state), not for a button flag.
@@ -88,7 +89,7 @@ async function songOnConsole(page: Page, candidates: string[]): Promise<string> 
   await expect
     .poll(
       async () => {
-        title = ((await page.locator("p[class*='songLine']").allTextContents())[0] ?? "").trim();
+        title = ((await page.getByTestId("song-title").allTextContents())[0] ?? "").trim();
         return title;
       },
       { message: `the console's song is one of: ${candidates.join(", ")}`, timeout: 15_000 },
@@ -169,21 +170,24 @@ test("a game from a pasted list plays the list first, then the same artist", asy
   await advanceRound(page);
   played.push(await songOnConsole(page, unplayed()));
   await expectProgress(page, "Your songs are done. Now: more by the same artists (1 left)");
-  expect([...played].sort()).toEqual([...LIST_TITLES].sort());
+  // songOnConsole takes only a list song not played yet, so rounds 1 to 3
+  // played the three list songs, each once, before any other song.
 
   // 5. Round 4: the one more song by the same artist.
   await advanceRound(page);
   await songOnConsole(page, [EXTRA_TITLE]);
   await expectProgress(page, "Your songs are done. Now: more by the same artists (0 left)");
 
-  // 6. Next round: nothing is left, so the existing "no more songs" message.
+  // 6. Next round: nothing is left, so a list game's "no more songs" message.
   await expect(page.getByTestId("score-bonus")).toBeEnabled({ timeout: 10_000 });
   await expect(page.getByTestId("start-round")).toBeEnabled();
   await page.getByTestId("start-round").click();
   await expect(
     page
       .getByRole("region", { name: "Notifications" })
-      .getByText(/^All songs in your selected genres have been played\./),
+      .getByText(
+        /^All your songs have been played\. End the game or start a new one with more songs\.$/,
+      ),
   ).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/Round 4$/i)).toBeVisible();
 
