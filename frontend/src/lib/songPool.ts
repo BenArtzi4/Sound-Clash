@@ -29,16 +29,27 @@ export function countSongsInMix(
 
 export type MixTone = "empty" | "small" | "ok";
 
-/** The line under the mix: "312 songs in this mix", or why it can't start. */
-export function describeMix(count: number): { text: string; tone: MixTone } {
+/** What the count is of: a genre + decade mix, or a game from a pasted list. */
+export type MixNoun = "mix" | "game";
+
+/**
+ * The line under the mix: "312 songs in this mix", or why it can't start.
+ * With "game" it is said of a game from a pasted list: "61 songs in this game".
+ */
+export function describeMix(count: number, noun: MixNoun = "mix"): { text: string; tone: MixTone } {
   if (count === 0) {
-    // Short enough for one line in the phone's sticky bar (360 px wide).
-    return { text: "No songs in this mix. Try more genres or years.", tone: "empty" };
+    // Short enough for one line in the phone's sticky bar (360 px wide). The
+    // list's line is the server's own message for such a game (setlist_empty).
+    const text =
+      noun === "game"
+        ? "None of the songs in your list can play."
+        : "No songs in this mix. Try more genres or years.";
+    return { text, tone: "empty" };
   }
   const songs = `${count.toLocaleString("en-US")} ${count === 1 ? "song" : "songs"}`;
   if (count < SMALL_MIX) {
     const rounds = count === 1 ? "1 round" : `${count} rounds`;
-    return { text: `Only ${songs} in this mix, enough for ${rounds}.`, tone: "small" };
+    return { text: `Only ${songs} in this ${noun}, enough for ${rounds}.`, tone: "small" };
   }
-  return { text: `${songs} in this mix`, tone: "ok" };
+  return { text: `${songs} in this ${noun}`, tone: "ok" };
 }

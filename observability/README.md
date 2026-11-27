@@ -44,7 +44,7 @@ Faro tags every signal `service_name="sound-clash-web"`,
 | `view` | event | `event_data_view` (route template). One per route reached |
 | `cta` | event | `event_data_id` (`home_host`, `landing_host`, `setlist_share`, ...) |
 | `team_joined` | event | `event_data_source` (`qr` / `link` / `typed`) |
-| `game_created` | event | `event_data_genres_count`, `event_data_decades_count`, `event_data_returning` |
+| `game_created` | event | `event_data_genres_count`, `event_data_decades_count`, `event_data_returning`. A game from a pasted list has `event_data_source=list`, `event_data_list_songs`, `event_data_pool_size`, `event_data_returning` instead |
 | web-vitals | measurement | `type="web-vitals"`, `lcp` / `inp` / `fcp` / `ttfb`, `context_rating` |
 | Tempo spans | — | `game.buzz.e2e` (`outcome`, `realtime.fanout_ms`), `game.score.e2e`, `game.song_start` (`preloaded`, always false since the standby went on 2026-10-31), `db.rpc` (`rpc.name`), `game.player_init` |
 

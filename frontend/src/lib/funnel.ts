@@ -174,21 +174,39 @@ export function trackTeamJoined(codeInUrl: boolean): void {
 }
 
 /**
- * A game was created. `returning` says whether this browser created one
- * before: a retention signal that needs no account. Never throws.
+ * Whether this browser created a game before (a retention signal that needs
+ * no account), and remember that it now has. Undefined when storage is
+ * blocked. Shared by genre games and list games.
  */
-export function trackGameCreated(genresCount: number, decadesCount: number): void {
-  let returning: boolean | undefined;
+function markHosted(): boolean | undefined {
   try {
-    returning = window.localStorage.getItem(HOSTED_KEY) !== null;
+    const returning = window.localStorage.getItem(HOSTED_KEY) !== null;
     window.localStorage.setItem(HOSTED_KEY, "1");
+    return returning;
   } catch {
-    returning = undefined;
+    return undefined;
   }
+}
+
+/** A game was created from genres and decades. Never throws. */
+export function trackGameCreated(genresCount: number, decadesCount: number): void {
   trackEvent("game_created", {
     genres_count: genresCount,
     decades_count: decadesCount,
-    returning,
+    returning: markHosted(),
+  });
+}
+
+/**
+ * A game was created from a pasted list: the same event, with `source: "list"`,
+ * the songs the list names and the game's whole pool. Never throws.
+ */
+export function trackSetlistGameCreated(listSongs: number, poolSize: number): void {
+  trackEvent("game_created", {
+    source: "list",
+    list_songs: listSongs,
+    pool_size: poolSize,
+    returning: markHosted(),
   });
 }
 
