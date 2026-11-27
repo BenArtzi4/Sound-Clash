@@ -107,9 +107,12 @@
 
 /* A fade and a round arrow on each side that has more mixes. They exist only
    while the row overflows (the page sets data-start / data-end then), so they
-   appear at once when the page opens and fade in and out as the row moves. */
+   appear at once when the page opens and fade in and out as the row moves.
+   isolation keeps their z-index inside the row, so the sticky Create game
+   bar, later in the page, still paints over them and takes its taps. */
 .presetsWrap {
   position: relative;
+  isolation: isolate;
 }
 
 .presetsWrap[data-start]::before,
