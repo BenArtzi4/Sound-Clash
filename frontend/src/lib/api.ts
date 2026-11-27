@@ -9,6 +9,7 @@ import type {
   CreateGameResponse,
   EndGameResponse,
   Genre,
+  SetlistCheckResponse,
   Song,
   SongListResponse,
   SongPoolCell,
@@ -36,10 +37,10 @@ interface RequestOptions {
   adminPassword?: string;
   body?: unknown;
   // Abort the request after this many ms via AbortSignal.timeout. Scoped to the
-  // two cold-start-prone Render POSTs (create game, join team) so a request that
-  // never returns surfaces as a retryable error instead of hanging the submit
-  // button forever. 45s sits above the ~30s cold-start ceiling so it never
-  // aborts a legitimate wake. All other calls stay untimed.
+  // cold-start-prone Render POSTs (create game, check a list, join team) so a
+  // request that never returns surfaces as a retryable error instead of
+  // hanging the submit button forever. 45s sits above the ~30s cold-start
+  // ceiling so it never aborts a legitimate wake. All other calls stay untimed.
   timeoutMs?: number;
   // Marks the request as a test run (X-Sound-Clash-Test: 1), so a game created
   // from a real browser during a check never counts as a real game (mig 051).
@@ -238,14 +239,23 @@ export function getTeamRejoinToken(
   });
 }
 
+// The songs of a new game come from exactly one source: genres (and decades),
+// or the host's pasted list (docs/api-contracts.md section 2.2).
+export type CreateGameBody =
+  { selected_genres: string[]; selected_decades: number[] } | { setlist: { text: string } };
+
 export function createGame(
-  body: {
-    selected_genres: string[];
-    selected_decades: number[];
-  },
+  body: CreateGameBody,
   opts: { testRun?: boolean } = {},
 ): Promise<CreateGameResponse> {
   return request("POST", "/games", { body, timeoutMs: 45000, testRun: opts.testRun });
+}
+
+// Match a pasted list against the catalog before the game is created (section
+// 2.2a). It creates nothing. A Render POST like createGame, so it gets the
+// same cold-start timeout; a refused list rejects with the server's message.
+export function checkSetlist(text: string): Promise<SetlistCheckResponse> {
+  return request("POST", "/setlists/check", { body: { text }, timeoutMs: 45000 });
 }
 
 export function awardBonus(

@@ -4,6 +4,7 @@ import {
   ApiError,
   awardBonus,
   bulkImportSongs,
+  checkSetlist,
   createGame,
   createSong,
   deleteSong,
@@ -238,6 +239,70 @@ describe("api - public routes", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers["X-Admin-Password"]).toBeUndefined();
     expect(headers["X-Manager-Token"]).toBeUndefined();
+  });
+
+  it("createGame sends a {setlist} body unchanged and returns the list's counts", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(201, {
+        game_code: "ABCDEF",
+        status: "waiting",
+        selected_genres: [],
+        selected_decades: [],
+        started_at: "2026-05-05T12:00:00Z",
+        expires_at: "2026-05-05T16:00:00Z",
+        manager_token: "11111111-1111-1111-1111-111111111111",
+        setlist: { list_songs: 3, same_artist_songs: 1 },
+      }),
+    );
+    const res = await createGame({ setlist: { text: "Queen - A\nFrozen" } });
+    expect(res.setlist).toEqual({ list_songs: 3, same_artist_songs: 1 });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/games");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ setlist: { text: "Queen - A\nFrozen" } });
+  });
+
+  it("checkSetlist POSTs only {text} to /setlists/check, with the create timeout", async () => {
+    const answer = {
+      lines_total: 2,
+      ready: [{ line: "Queen - A", title: "A", artist: "Queen", songs: 1 }],
+      not_found: [{ line: "Nobody - B", reason: "not_in_catalog" }],
+      list_songs: 1,
+      same_artist_songs: 4,
+      pool_size: 5,
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, answer));
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    try {
+      const res = await checkSetlist("Queen - A\nNobody - B");
+      expect(res).toEqual(answer);
+      expect(timeout).toHaveBeenCalledWith(45000);
+    } finally {
+      timeout.mockRestore();
+    }
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8000/setlists/check");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ text: "Queen - A\nNobody - B" });
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(headers["X-Manager-Token"]).toBeUndefined();
+    expect(headers["X-Sound-Clash-Test"]).toBeUndefined();
+  });
+
+  it("checkSetlist surfaces a refused list as an ApiError with the server's message", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, {
+        error: "setlist_links_only",
+        message: "These are links, not song names.",
+      }),
+    );
+    await expect(checkSetlist("https://open.spotify.com/track/a")).rejects.toMatchObject({
+      name: "ApiError",
+      code: "setlist_links_only",
+      message: "These are links, not song names.",
+      status: 400,
+    });
   });
 });
 
