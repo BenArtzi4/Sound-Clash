@@ -45,6 +45,8 @@ describe("viewName", () => {
     expect(viewName("/")).toBe("/");
     expect(viewName("/how-to-play/")).toBe("/how-to-play");
     expect(viewName("/manager/create")).toBe("/manager/create");
+    expect(viewName("/manager/create/list")).toBe("/manager/create/list");
+    expect(viewName("/manager/create/nope")).toBe("/other");
     expect(viewName("/hitster-alternative")).toBe("/hitster-alternative");
     expect(viewName("/wp-login.php")).toBe("/other");
   });

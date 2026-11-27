@@ -1,6 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../lib/funnel", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/funnel")>()),
+  trackSetlistGameCreated: vi.fn(),
+}));
+
+vi.mock("../lib/preloadError", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/preloadError")>();
+  return { ...actual, prefetchQuietly: vi.fn(actual.prefetchQuietly) };
+});
 
 vi.mock("../lib/api", () => ({
   ApiError: class ApiError extends Error {
@@ -17,21 +27,35 @@ vi.mock("../lib/api", () => ({
   listGenres: vi.fn(),
   getCachedGenres: vi.fn(() => null),
   createGame: vi.fn(),
+  checkSetlist: vi.fn(),
   getHealth: vi.fn(() => Promise.resolve({ status: "ok", version: "test", supabase: "ok" })),
   // song_pool_counts() (mig 052). Default: not available, as on a database
   // without the migration; the count tests below give it cells.
   loadSongPool: vi.fn(() => Promise.resolve(null)),
 }));
 
-import { createGame, getCachedGenres, getHealth, listGenres, loadSongPool } from "../lib/api";
+import {
+  ApiError,
+  checkSetlist,
+  createGame,
+  getCachedGenres,
+  getHealth,
+  listGenres,
+  loadSongPool,
+} from "../lib/api";
 import { ToastProvider } from "../context/ToastContext";
+import { trackSetlistGameCreated } from "../lib/funnel";
 import { getManagerToken } from "../lib/managerToken";
+import { prefetchQuietly } from "../lib/preloadError";
+import type { CreateGameResponse, SetlistCheckResponse } from "../lib/types";
 import { ManagerCreateGamePage } from "./ManagerCreateGamePage";
 
 beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(listGenres).mockReset();
   vi.mocked(createGame).mockReset();
+  vi.mocked(checkSetlist).mockReset();
+  vi.mocked(trackSetlistGameCreated).mockClear();
   vi.mocked(getHealth).mockClear();
   vi.mocked(loadSongPool).mockReset();
   vi.mocked(loadSongPool).mockResolvedValue(null);
@@ -41,15 +65,22 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+// The address bar, so a test can see where a tab change or a redirect went.
+function Where() {
+  const { pathname, search } = useLocation();
+  return <output data-testid="location">{pathname + search}</output>;
+}
+
 function renderPage(entry = "/manager/create") {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <ToastProvider>
         <Routes>
           <Route path="/" element={<div>home page</div>} />
-          <Route path="/manager/create" element={<ManagerCreateGamePage />} />
+          <Route path="/manager/create/:source?" element={<ManagerCreateGamePage />} />
           <Route path="/manager/game/:gameCode" element={<div>game console</div>} />
         </Routes>
+        <Where />
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -407,10 +438,10 @@ describe("ManagerCreateGamePage", () => {
       return screen.getByTestId("mix-count");
     }
 
-    it("says nothing until a genre is picked", async () => {
+    it("says to pick a genre until a genre is picked", async () => {
       const line = await renderWithPool();
       await waitFor(() => expect(loadSongPool).toHaveBeenCalled());
-      expect(line).toHaveTextContent("");
+      expect(line).toHaveTextContent(/^Pick at least one genre to start\.$/);
       expect(line).toHaveAttribute("role", "status");
     });
 
@@ -525,6 +556,301 @@ describe("ManagerCreateGamePage", () => {
       expect(screen.getByText(/still loading — hang tight/i)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+// Task 10b: the switch between Genres and My own list (one route,
+// /manager/create/:source?), and a game created from a pasted list.
+describe("ManagerCreateGamePage tabs", () => {
+  const ROCK = { id: "g1", name: "Rock", slug: "rock" };
+  // Made-up names only. The text is sent exactly as pasted.
+  const LIST = "  Moonfish - Glass Harbor\nVelvet Otters\n\nPaper Lanterns - Slow Rain  ";
+  const CHECKED: SetlistCheckResponse = {
+    lines_total: 3,
+    ready: [
+      { line: "Moonfish - Glass Harbor", title: "Glass Harbor", artist: "Moonfish", songs: 1 },
+      { line: "Velvet Otters", title: null, artist: "Velvet Otters", songs: 3 },
+    ],
+    not_found: [{ line: "Paper Lanterns - Slow Rain", reason: "not_in_catalog" }],
+    list_songs: 4,
+    same_artist_songs: 57,
+    pool_size: 61,
+  };
+  const GAME: CreateGameResponse = {
+    game_code: "LLLLLL",
+    status: "waiting",
+    selected_genres: [],
+    selected_decades: [],
+    started_at: "2026-11-27T12:00:00Z",
+    expires_at: "2026-11-27T16:00:00Z",
+    manager_token: "list-token",
+    setlist: { list_songs: 5, same_artist_songs: 50 },
+  };
+
+  function createButton() {
+    return screen.getByRole("button", { name: /create game/i });
+  }
+
+  // Opens My own list from the switch and waits for its lazy panel.
+  async function openList() {
+    fireEvent.click(screen.getByTestId("music-source-list"));
+    return screen.findByTestId("setlist-input");
+  }
+
+  async function pasteAndCheck(answer: SetlistCheckResponse = CHECKED) {
+    const input = await screen.findByTestId("setlist-input");
+    fireEvent.change(input, { target: { value: LIST } });
+    vi.mocked(checkSetlist).mockResolvedValueOnce(answer);
+    fireEvent.click(screen.getByTestId("setlist-check"));
+    await screen.findByTestId("setlist-result");
+  }
+
+  it("opens Genres at /manager/create and My own list at /manager/create/list", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    const { unmount } = renderPage("/manager/create");
+    await screen.findByText("Rock");
+    expect(screen.getByTestId("music-source-genres")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Release decade")).toBeInTheDocument();
+    expect(screen.queryByTestId("setlist-input")).not.toBeInTheDocument();
+    unmount();
+
+    renderPage("/manager/create/list");
+    expect(await screen.findByTestId("setlist-input")).toBeInTheDocument();
+    expect(screen.getByTestId("music-source-list")).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText("Release decade")).not.toBeInTheDocument();
+    expect(screen.getByTestId("music-source-panel")).toHaveAttribute("role", "tabpanel");
+  });
+
+  it("goes to /manager/create for an unknown tab", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage("/manager/create/nope?test=1");
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(/^\/manager\/create\?test=1$/),
+    );
+    expect(await screen.findByText("Rock")).toBeInTheDocument();
+    expect(screen.getByTestId("music-source-genres")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps the picked genres and the pasted text when the tab changes", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    await screen.findByText("Rock");
+    fireEvent.click(screen.getByLabelText(/^rock$/i));
+    fireEvent.click(screen.getByLabelText(/^80s$/i));
+
+    await openList();
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/manager\/create\/list$/);
+    await pasteAndCheck();
+
+    fireEvent.click(screen.getByTestId("music-source-genres"));
+    expect(await screen.findByLabelText(/^rock$/i)).toBeChecked();
+    expect(screen.getByLabelText(/^80s$/i)).toBeChecked();
+    expect(createButton()).toBeEnabled();
+
+    const input = await openList();
+    expect(input).toHaveValue(LIST);
+    expect(screen.getByTestId("setlist-result")).toBeInTheDocument();
+    expect(createButton()).toBeEnabled();
+  });
+
+  it("shows the fixed line under the title", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    const title = await screen.findByRole("heading", { level: 1, name: /host a game/i });
+    const header = title.parentElement as HTMLElement;
+    expect(header).toHaveTextContent("Choose how to pick the songs");
+    expect(header).not.toHaveTextContent(/pick at least one genre/i);
+    // The same line on every tab.
+    await openList();
+    expect(header).toHaveTextContent("Choose how to pick the songs");
+  });
+
+  it("puts the instruction in the bottom bar", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    vi.mocked(loadSongPool).mockResolvedValue([
+      { decade: 1980, genre_ids: ["g1"], song_count: 30 },
+    ]);
+    renderPage();
+    await screen.findByText("Rock");
+    const bar = screen.getByTestId("mix-count");
+    expect(bar).toHaveTextContent(/^Pick at least one genre to start\.$/);
+    fireEvent.click(screen.getByLabelText(/^rock$/i));
+    await waitFor(() => expect(bar).toHaveTextContent("30 songs in this mix"));
+
+    const input = await openList();
+    expect(bar).toHaveTextContent(/^Paste your songs to start\.$/);
+    // Links or comments are no song lines: still nothing to check.
+    fireEvent.change(input, { target: { value: "# my party\nhttps://open.spotify.com/track/x" } });
+    expect(bar).toHaveTextContent(/^Paste your songs to start\.$/);
+    fireEvent.change(input, { target: { value: LIST } });
+    expect(bar).toHaveTextContent(/^Check your list to see the songs$/);
+
+    let answer: (value: SetlistCheckResponse) => void = () => undefined;
+    vi.mocked(checkSetlist).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    fireEvent.click(screen.getByTestId("setlist-check"));
+    expect(bar).toHaveTextContent(/^Checking your list…$/);
+    await act(async () => answer(CHECKED));
+    expect(bar).toHaveTextContent(/^61 songs in this game$/);
+
+    // The genre tab's line is as the host left it.
+    fireEvent.click(screen.getByTestId("music-source-genres"));
+    await waitFor(() => expect(bar).toHaveTextContent("30 songs in this mix"));
+  });
+
+  it("warns in the bottom bar when the list makes a small game", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage("/manager/create/list");
+    await pasteAndCheck({ ...CHECKED, pool_size: 3 });
+    const bar = screen.getByTestId("mix-count");
+    expect(bar).toHaveTextContent("Only 3 songs in this game, enough for 3 rounds.");
+    expect(bar.className).toMatch(/mixSmall/);
+  });
+
+  it("does not animate the first content", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    await screen.findByText("Rock");
+    const first = screen.getByTestId("music-source-panel");
+    expect(first).toHaveAttribute("data-first");
+
+    // A later content enters from the side of its tab: a new element (keyed
+    // by the tab), with no data-first.
+    await openList();
+    const list = screen.getByTestId("music-source-panel");
+    expect(list).not.toBe(first);
+    expect(list).not.toHaveAttribute("data-first");
+    expect(list).toHaveAttribute("data-dir", "fwd");
+
+    fireEvent.click(screen.getByTestId("music-source-genres"));
+    await screen.findByText("Rock");
+    const genres = screen.getByTestId("music-source-panel");
+    expect(genres).not.toHaveAttribute("data-first");
+    expect(genres).toHaveAttribute("data-dir", "back");
+  });
+
+  it("creates a game from the list", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    vi.mocked(createGame).mockResolvedValueOnce(GAME);
+    renderPage("/manager/create/list?test=1");
+    await pasteAndCheck();
+    fireEvent.click(createButton());
+    await waitFor(() => expect(screen.getByText("game console")).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    expect(createGame).toHaveBeenCalledWith({ setlist: { text: LIST } }, { testRun: true });
+    expect(getManagerToken("LLLLLL")).toBe("list-token");
+    // The create answer's numbers: 5 from the list, 55 in the game.
+    expect(trackSetlistGameCreated).toHaveBeenCalledWith(5, 55);
+    expect(screen.getByText("Game LLLLLL created")).toBeInTheDocument();
+  });
+
+  it("counts a list game from its check when the answer has no list numbers", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    vi.mocked(createGame).mockResolvedValueOnce({ ...GAME, setlist: null });
+    renderPage("/manager/create/list");
+    await pasteAndCheck();
+    fireEvent.click(createButton());
+    await waitFor(() => expect(trackSetlistGameCreated).toHaveBeenCalledWith(4, 61));
+  });
+
+  it("keeps Create disabled until the check has songs", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage("/manager/create/list");
+    const input = await screen.findByTestId("setlist-input");
+    expect(createButton()).toBeDisabled();
+    fireEvent.change(input, { target: { value: LIST } });
+    expect(createButton()).toBeDisabled();
+
+    // No song of the list can play: the game would have nothing to play.
+    vi.mocked(checkSetlist).mockResolvedValueOnce({
+      ...CHECKED,
+      ready: [],
+      list_songs: 0,
+      same_artist_songs: 0,
+      pool_size: 0,
+    });
+    fireEvent.click(screen.getByTestId("setlist-check"));
+    await screen.findByTestId("setlist-result");
+    expect(screen.getByTestId("mix-count")).toHaveTextContent(
+      "None of the songs in your list can play.",
+    );
+    expect(createButton()).toBeDisabled();
+    fireEvent.click(createButton());
+    expect(createGame).not.toHaveBeenCalled();
+
+    // Checked again with songs: Create turns on.
+    vi.mocked(checkSetlist).mockResolvedValueOnce(CHECKED);
+    fireEvent.click(screen.getByTestId("setlist-check"));
+    await waitFor(() => expect(createButton()).toBeEnabled());
+
+    // One more check of the same text keeps the old answer while it runs,
+    // and Create stays off until the new answer is in.
+    let answer: (value: SetlistCheckResponse) => void = () => undefined;
+    vi.mocked(checkSetlist).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    fireEvent.click(screen.getByTestId("setlist-check"));
+    expect(createButton()).toBeDisabled();
+    await act(async () => answer({ ...CHECKED, pool_size: 0 }));
+    expect(createButton()).toBeDisabled();
+  });
+
+  it("turns Create off again when the list is edited after a check", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage("/manager/create/list");
+    await pasteAndCheck();
+    expect(createButton()).toBeEnabled();
+    fireEvent.change(screen.getByTestId("setlist-input"), {
+      target: { value: `${LIST}\nMoonfish` },
+    });
+    expect(createButton()).toBeDisabled();
+    expect(screen.getByTestId("mix-count")).toHaveTextContent(/^Check your list to see the songs$/);
+  });
+
+  it("shows the server's message when a game from the list is refused", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    const message = "None of the songs in your list can play.";
+    vi.mocked(createGame).mockRejectedValueOnce(new ApiError("setlist_empty", message, 400));
+    renderPage("/manager/create/list");
+    await pasteAndCheck();
+    fireEvent.click(createButton());
+    // In the toast only: the bottom bar still states the checked game.
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByTestId("mix-count")).toHaveTextContent(/^61 songs in this game$/);
+    await waitFor(() => expect(createButton()).toBeEnabled());
+    expect(trackSetlistGameCreated).not.toHaveBeenCalled();
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/manager\/create\/list$/);
+  });
+
+  it("fetches My own list's code when the page is idle", async () => {
+    const idle = vi.fn<(run: () => void) => number>(() => 7);
+    const cancel = vi.fn();
+    vi.stubGlobal("requestIdleCallback", idle);
+    vi.stubGlobal("cancelIdleCallback", cancel);
+    vi.mocked(prefetchQuietly).mockClear();
+    try {
+      vi.mocked(listGenres).mockResolvedValue([ROCK]);
+      const { unmount } = renderPage();
+      await screen.findByText("Rock");
+      expect(idle).toHaveBeenCalledTimes(1);
+      expect(prefetchQuietly).not.toHaveBeenCalled();
+
+      act(() => idle.mock.calls[0]?.[0]());
+      expect(prefetchQuietly).toHaveBeenCalledTimes(1);
+      const load = vi.mocked(prefetchQuietly).mock.calls[0]?.[0];
+      await expect(load?.()).resolves.toHaveProperty("SetlistPanel");
+
+      unmount();
+      expect(cancel).toHaveBeenCalledWith(7);
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 });

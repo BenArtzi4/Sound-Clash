@@ -56,6 +56,19 @@ describe("applyRouteHead", () => {
     expect(pageFor("/")?.path).toBe("/");
   });
 
+  // A tab of the Host page is the same page, so a tab change keeps its title.
+  it("gives My own list the Host page's head", () => {
+    const doc = blankDoc();
+    applyRouteHead("/manager/create/list", doc);
+    const host = pageFor("/manager/create");
+    expect(pageFor("/manager/create/list")).toBe(host);
+    expect(doc.title).toBe("Host a Game – Sound Clash");
+    expect(canonical(doc)).toBe(`${ORIGIN}/manager/create`);
+    expect(meta(doc, "property", "og:url")).toBe(`${ORIGIN}/manager/create`);
+    expect(meta(doc, "name", "description")).toBe(host?.description);
+    expect(pageFor("/manager/create/nope")).toBeUndefined();
+  });
+
   it.each(["/team/ABCDEF", "/join/ABCDEF", "/manager/game/ABCDEF", "/admin/songs", "/nope"])(
     "gives %s the brand title and the home page's head",
     (path) => {
@@ -121,11 +134,18 @@ describe("src/seo/pages.json", () => {
   // Route paths as declared in App.tsx, so an entry for a page that does not
   // exist (or was renamed) fails here rather than shipping a dead canonical.
   const appSource = readFileSync(join(import.meta.dirname, "..", "App.tsx"), "utf8");
-  const routes = new Set([...appSource.matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]));
+  // A route with an optional last segment (`/manager/create/:source?`) is also
+  // the path without it.
+  const routes = new Set(
+    [...appSource.matchAll(/<Route path="([^"]+)"/g)].map((m) =>
+      (m[1] ?? "").replace(/\/:[A-Za-z]+\?$/, ""),
+    ),
+  );
 
   it("finds App.tsx's routes", () => {
     expect(routes).toContain("/");
     expect(routes).toContain("/how-to-play");
+    expect(routes).toContain("/manager/create");
   });
 
   it("targets the canonical www origin", () => {

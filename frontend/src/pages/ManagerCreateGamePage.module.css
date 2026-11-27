@@ -18,6 +18,34 @@
   gap: var(--space-6);
 }
 
+/* The fixed line under the title stays on one line; the ellipsis is a guard. */
+.lead {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The open tab's content (host-music-choices section 7). A new one fades in
+   from the side of its tab, 12 px, while the old one is already gone; the
+   page's first content (data-first) appears at once. CSS only: a browser
+   without @starting-style shows it at once, and the reduced-motion rule
+   (styles.css) makes it instant. */
+.panel {
+  transition:
+    opacity var(--dur-state) var(--ease-arrive),
+    transform var(--dur-state) var(--ease-arrive);
+}
+
+@starting-style {
+  .panel:not([data-first]) {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  .panel[data-dir="back"] {
+    transform: translateX(-12px);
+  }
+}
+
 .field {
   display: flex;
   flex-direction: column;

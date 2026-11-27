@@ -73,6 +73,25 @@ describe("HowToPlayPage", () => {
     expect(screen.getByText(/one phone per team/i)).toBeInTheDocument();
   });
 
+  it("says a host can play their own playlist, with the Spotify exporter link", () => {
+    render(
+      <MemoryRouter>
+        <HowToPlayPage />
+      </MemoryRouter>,
+    );
+    const question = screen.getByText("Can I play my own playlist?");
+    expect(question.tagName.toLowerCase()).toBe("dt");
+    const answer = question.nextElementSibling as HTMLElement;
+    expect(answer).toHaveTextContent(
+      "Yes. On the Host page choose My own list and paste your songs, one per line. Films, shows and artists work too. The game plays your songs first, then more songs by the same artists. For a Spotify playlist, export the song names with Chosic's playlist exporter and paste them.",
+    );
+    const link = screen.getByRole("link", { name: "Chosic's playlist exporter" });
+    expect(answer).toContainElement(link);
+    expect(link).toHaveAttribute("href", "https://www.chosic.com/spotify-playlist-exporter/");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
   it("renders the hero image near the top", () => {
     render(
       <MemoryRouter>

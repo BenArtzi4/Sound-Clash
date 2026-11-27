@@ -19,12 +19,29 @@ const rules = redirects
 
 const routes = [...appSource.matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1] as string);
 
+// A route that ends in an optional segment (`/manager/create/:source?`) is
+// one page at several addresses: the path without the segment, and each value
+// the page knows. Its addresses are listed here; any other value must stay a
+// real 404, so it gets no rule.
+const OPTIONAL_SEGMENT_ADDRESSES: Record<string, string[]> = {
+  "/manager/create/:source?": ["/manager/create/list"],
+};
+const OPTIONAL_SEGMENT = /\/:[A-Za-z]+\?$/;
+
+function addresses(route: string): string[] {
+  if (OPTIONAL_SEGMENT.test(route)) {
+    return [route.replace(OPTIONAL_SEGMENT, ""), ...(OPTIONAL_SEGMENT_ADDRESSES[route] ?? [])];
+  }
+  // A param segment becomes a sample value, as a player's URL would be.
+  return [route.replace(/:[A-Za-z]+/g, "ABCDEF")];
+}
+
 function servedBy(path: string): string | undefined {
   if (seo.pages.some((p) => p.path === path)) return "file";
   for (const [from, to, status] of rules) {
-    if (status !== "200" || to !== "/spa-shell" || !from?.endsWith("/*")) continue;
-    const prefix = from.slice(0, -1);
-    if (path.startsWith(prefix)) return from;
+    if (status !== "200" || to !== "/spa-shell" || !from) continue;
+    // "/team/*" serves everything under /team/; any other rule its exact path.
+    if (from.endsWith("/*") ? path.startsWith(from.slice(0, -1)) : path === from) return from;
   }
   return undefined;
 }
@@ -32,12 +49,27 @@ function servedBy(path: string): string | undefined {
 describe("public/_redirects", () => {
   it("finds App.tsx's routes", () => {
     expect(routes).toContain("/team/:gameCode");
+    expect(routes).toContain("/manager/create/:source?");
+  });
+
+  it("lists the addresses of every route with an optional segment", () => {
+    for (const route of routes.filter((r) => OPTIONAL_SEGMENT.test(r))) {
+      expect(OPTIONAL_SEGMENT_ADDRESSES[route], route).toBeDefined();
+    }
   });
 
   it.each(routes.filter((r) => r !== "*"))("serves the route %s", (route) => {
-    // A param segment becomes a sample value, as a player's URL would be.
-    const sample = route.replace(/:[A-Za-z]+/g, "ABCDEF");
-    expect(servedBy(sample), route).toBeDefined();
+    for (const address of addresses(route)) {
+      expect(servedBy(address), address).toBeDefined();
+    }
+  });
+
+  it("serves My own list the SPA shell, and no other tab address", () => {
+    expect(rules).toContainEqual(["/manager/create/list", "/spa-shell", "200"]);
+    expect(servedBy("/manager/create/list")).toBe("/manager/create/list");
+    expect(servedBy("/manager/create")).toBe("file");
+    expect(servedBy("/manager/create/nope")).toBeUndefined();
+    expect(servedBy("/manager/create/list/more")).toBeUndefined();
   });
 
   it("has no catch-all, so unknown URLs are a real 404", () => {

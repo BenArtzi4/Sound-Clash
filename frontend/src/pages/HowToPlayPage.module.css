@@ -300,6 +300,12 @@
   font-weight: 600;
 }
 
+/* Underlined on touch screens too, where there is no hover to show it. */
+.faqDef a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Back link */
 
 .backRow {

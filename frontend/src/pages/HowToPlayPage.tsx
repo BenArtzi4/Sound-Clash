@@ -91,6 +91,24 @@ const FAQ: ReadonlyArray<{ term: string; def: React.ReactNode }> = [
     term: "One phone per team",
     def: "Disconnected? Just reload. Your team's seat is saved on the device.",
   },
+  {
+    term: "Can I play my own playlist?",
+    def: (
+      <>
+        Yes. On the Host page choose My own list and paste your songs, one per line. Films, shows
+        and artists work too. The game plays your songs first, then more songs by the same artists.
+        For a Spotify playlist, export the song names with{" "}
+        <a
+          href="https://www.chosic.com/spotify-playlist-exporter/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Chosic&apos;s playlist exporter
+        </a>{" "}
+        and paste them.
+      </>
+    ),
+  },
 ];
 
 function StepFlow({

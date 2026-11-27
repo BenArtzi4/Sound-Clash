@@ -53,6 +53,7 @@ const STATIC_VIEWS = new Set([
   "/join",
   "/display",
   "/manager/create",
+  "/manager/create/list",
   "/admin/songs",
   ...seo.pages.map((p) => p.path),
 ]);
