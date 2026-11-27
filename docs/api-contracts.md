@@ -283,6 +283,7 @@ players and the Display never see it. `peek_next_song` returns the same field.
 - `game_ended` (`P0001`) — game already ended.
 - `no_genres_selected` (`22023`) — game has no `selected_genres`.
 - `no_more_songs` (`22023`) — pool exhausted on the random path.
+- `setlist_not_ready` (`P0001`) — a game from the host's own songs whose song pool is not saved yet; the console shows "Your songs are not ready yet. Try again in a moment."
 - `song_not_found` (`P0002`) — manual pick referenced a missing song id.
 
 ---
@@ -577,7 +578,7 @@ The weekly `.github/workflows/dead-video-scan.yml` pages the catalog with `commi
 
 ## 3. Postgres RPC (PostgREST)
 
-Called by the **browser** with the anon key. Ten functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the six token-gated host RPCs `award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, and `extend_game` — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and three read-only ones: `song_pool_counts` (§3.2), `game_setlist` (§3.3) and `round_song` (§3.4). Every other RPC is revoked from anon (mig 020).
+Called by the **browser** with the anon key. Eleven functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the seven token-gated host RPCs `award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` and `game_pool_summary` (migration 060, read-only: the host console's progress line in a game from the host's own songs) — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and three read-only ones: `song_pool_counts` (§3.2), `game_setlist` (§3.3) and `round_song` (§3.4). Every other RPC is revoked from anon (mig 020).
 
 The browser gets song metadata only through `game_setlist` and `round_song` (migration 053); it does not read the `songs` or `song_genres` tables. Genre names come from the `genres` table, which stays anon-readable.
 

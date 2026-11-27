@@ -644,7 +644,7 @@ Behavior:
 
 ## 3k. `game_pool_summary`: how much of a custom game's list is left
 
-Added in migration 060. For the host console's line "Your list: N of M left" (and "Your list is done. Now: more by the same artists (N left)").
+Added in migration 060. For the host console's line "Your songs: N of M left" (and "Your songs are done. Now: more by the same artists (N left)").
 
 ```sql
 CREATE OR REPLACE FUNCTION game_pool_summary(
@@ -674,7 +674,7 @@ Read-only. `CREATE OR REPLACE` plus re-runnable `REVOKE EXECUTE ... FROM PUBLIC`
 
 ### Callers
 
-- No caller yet. Planned: the host console → Supabase PostgREST RPC, on mount and when the round changes; zero rows, a missing function or any error shows nothing (`docs/planning/2026-11-24-custom-setlist-phase1-plan.md`, Task 11).
+- Host console → Supabase PostgREST RPC (`frontend/src/hooks/useSetlistProgress.ts`), once when the console has loaded the game and again each time `active_games.round_number` changes. The console passes no token until the game has loaded, so a reload mid-game asks once, for the real round. After zero rows or `PGRST202` (the function is missing) it asks nothing more for that game, so a normal game makes one call per console mount and none per round; any other error shows nothing (no toast) and is tried again on the next round. The line (`data-testid="setlist-progress"`) is the last line of the round card, under the round buttons, so the phone player's height budget is unchanged.
 
 ## 3l. `record_song_demand`: count the list lines the catalog lacks (service-role only)
 
@@ -1076,7 +1076,7 @@ nothing and counts zero.
 | `song_pool_counts` | ✅ (no token; read-only aggregate, SECURITY DEFINER since 053) | ✅ | Browser (create-game page) |
 | `game_setlist` | ✅ (no token; read-only, songs of that game only) | ✅ | Browser (end-of-game setlist on host console and team phones) |
 | `round_song` | ✅ (no token; read-only, one song of that game) | ✅ | Browser (host score panel, TV reveal) |
-| `game_pool_summary` | ✅ (token-gated, read-only) | ✅ | No caller yet (planned: host console's custom-setlist progress line) |
+| `game_pool_summary` | ✅ (token-gated, read-only) | ✅ | Host console's progress line for a game from the host's own songs (`useSetlistProgress`: once on mount and on each round change, stops after zero rows or `PGRST202`) |
 | `save_game_setlist` | ❌ | ✅ | FastAPI POST /games with a list |
 | `pick_next_pool_song` | ❌ | ✅ | Internal call from `select_next_song` + `peek_next_song` for a custom setlist game. No HTTP caller. |
 | `record_song_demand` | ❌ | ✅ | FastAPI POST /games with a list, for the lines it could not match |

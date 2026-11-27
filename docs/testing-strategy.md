@@ -156,6 +156,8 @@ Playwright with multi-browser-context. Runs against a dedicated `Sound-Clash-Pre
 | `kick_team.spec.ts` | manager kicks team; team's tab redirects |
 | `host_recovery.spec.ts` | host wipes localStorage → locked out; the backup host link (`#mt=<token>`) re-authenticates, scrubs the fragment, re-persists the token, and the recovered console starts a round |
 | `mobile_team.spec.ts` | iPhone viewport; buzzer reachable + tappable |
+| `custom_setlist.spec.ts` | a game from a pasted list: My own list, Check my list, Create; the console's "Your songs" line round by round and after a reload; the host's songs first, then one more by the same artist (finds or creates "E2E Extra Song" through the admin API, deleted only after a passing run), then a list game's "no more songs" toast |
+| `host_page_layout.spec.ts` | the top of the Host page at 320 x 568: the fixed line and the switch labels on one line, genre tiles in two columns, Quick start's arrows and fades, a tap on a mix that does not move its row, and a reload on `/manager/create/list` |
 
 Multi-browser matrix: chromium + firefox + webkit. Each spec must pass in all three.
 
