@@ -162,7 +162,9 @@ describe("SetlistPanel", () => {
     await act(async () => answer.resolve(ANSWER));
     const result = await screen.findByTestId("setlist-result");
     expect(onChange).toHaveBeenLastCalledWith({ text: LIST, check: ANSWER, checking: false });
-    expect(checkButton()).toBeEnabled();
+    // The answer is for this text: nothing to check again until it changes
+    // (the endpoint is rate-limited).
+    expect(checkButton()).toBeDisabled();
     expect(checkButton()).toHaveTextContent(/^Check my list$/);
 
     expect(within(result).getByText("Your list: 4 lines")).toBeInTheDocument();
@@ -257,6 +259,7 @@ describe("SetlistPanel", () => {
   it("turns the check off when the text changes", () => {
     const { onChange } = renderPanel({ text: LIST, check: ANSWER });
     expect(screen.getByTestId("setlist-result")).toBeInTheDocument();
+    expect(checkButton()).toBeDisabled();
 
     typeList(`${LIST}\nGlass Harbor`);
     expect(onChange).toHaveBeenLastCalledWith({
@@ -265,6 +268,8 @@ describe("SetlistPanel", () => {
       checking: false,
     });
     expect(screen.queryByTestId("setlist-result")).not.toBeInTheDocument();
+    // The edited text can be checked.
+    expect(checkButton()).toBeEnabled();
   });
 
   it("drops a late answer when the text changed while the check ran", async () => {
@@ -373,6 +378,18 @@ describe("SetlistPanel", () => {
     // Song names: the links line goes.
     typeList("Moonfish - Glass Harbor");
     expect(within(help).queryByText(LINKS_LINE)).not.toBeInTheDocument();
+  });
+
+  it("opens the helper for links under a header or beside a line of stars", () => {
+    renderPanel();
+    typeList(`Track Name,Artist Name\n${SPOTIFY_LINKS}`);
+    expect(helpToggle()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(LINKS_LINE)).toBeInTheDocument();
+    expect(checkButton()).toBeDisabled();
+
+    fireEvent.click(helpToggle());
+    typeList(`${SPOTIFY_LINKS}\n***`);
+    expect(screen.getByText(LINKS_LINE)).toBeInTheDocument();
   });
 
   it("opens the helper when it comes back to a list of links", () => {

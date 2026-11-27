@@ -90,12 +90,14 @@
 
 /* The arrows' smooth slide comes from scroll-behavior, which the global
    reduced-motion rule turns back to instant. An arrow asks for 70% of the
-   row's width; the snap then settles it on the nearest chip. */
+   row's width; the snap then settles it on the nearest chip, 44px in (an
+   arrow's width), so that chip starts clear of the Previous arrow and fade. */
 .presetRow {
   display: flex;
   gap: var(--space-2);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scroll-padding-inline: 44px;
   scroll-behavior: smooth;
   scrollbar-width: none;
   padding-bottom: 2px;

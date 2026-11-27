@@ -120,8 +120,29 @@ describe("detectLinks", () => {
     expect(detectLinks("\n  \n# only a note")).toBeNull();
   });
 
-  it("is null when any line is not a link", () => {
+  it("is null when any line is a song line", () => {
     expect(detectLinks("Queen - A\nhttps://open.spotify.com/track/a")).toBeNull();
-    expect(detectLinks("https://open.spotify.com/track/a\n***")).toBeNull();
+    expect(
+      detectLinks(
+        "Track Name,Artist Name\nGlass Harbor,Moonfish\nhttps://open.spotify.com/track/a",
+      ),
+    ).toBeNull();
+  });
+
+  // As the server reads the list (setlist_links_only): every line it keeps
+  // that is no song line, and at least one link.
+  it("reads the links of a list with no song line, as the server does", () => {
+    expect(detectLinks("https://open.spotify.com/track/a\n***")).toBe("spotify");
+    expect(
+      detectLinks(
+        "Track Name,Artist Name\nhttps://open.spotify.com/track/a\nhttps://open.spotify.com/track/b",
+      ),
+    ).toBe("spotify");
+    expect(detectLinks("Title\tArtist\n# exported\nhttps://youtu.be/abc")).toBe("youtube");
+  });
+
+  it("is null when no line is a link", () => {
+    expect(detectLinks("***\n---")).toBeNull();
+    expect(detectLinks("Track Name,Artist Name")).toBeNull();
   });
 });

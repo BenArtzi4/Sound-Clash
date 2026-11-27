@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -20,6 +21,7 @@ import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
 import {
+  ApiError,
   createGame,
   getCachedGenres,
   listGenres,
@@ -28,7 +30,7 @@ import {
 } from "../lib/api";
 import { trackGameCreated, trackSetlistGameCreated } from "../lib/funnel";
 import { setManagerToken } from "../lib/managerToken";
-import { prefetchQuietly } from "../lib/preloadError";
+import { prefetchQuietly, whenIdle } from "../lib/preloadError";
 import { countSongsInMix, describeMix, type MixTone } from "../lib/songPool";
 import type { Genre, SongPoolCell } from "../lib/types";
 import { AgreeNote } from "../components/LegalLinks";
@@ -62,16 +64,6 @@ const PANEL_ID = "music-source-panel";
 
 function tabIndex(id: MusicSource): number {
   return MUSIC_SOURCE_TABS.findIndex((t) => t.id === id);
-}
-
-// As on Home: Safari has no requestIdleCallback, so a short timeout instead.
-function whenIdle(run: () => void): () => void {
-  if (typeof window.requestIdleCallback === "function") {
-    const id = window.requestIdleCallback(run, { timeout: 2000 });
-    return () => window.cancelIdleCallback(id);
-  }
-  const id = window.setTimeout(run, 800);
-  return () => window.clearTimeout(id);
 }
 
 // Decades are stored as their start year (the 80s = 1980); the picker floors a
@@ -227,6 +219,20 @@ export function ManagerCreateGamePage() {
     },
     [syncMore],
   );
+  // A pressed arrow hides once the row reaches its end: the focus goes to the
+  // other arrow, so a keyboard host keeps it, and the page does not scroll.
+  // Before paint, while the hidden arrow still has the focus.
+  const prevArrow = useRef<HTMLButtonElement | null>(null);
+  const nextArrow = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    const focused = document.activeElement;
+    if (focused === null) return;
+    if (focused === prevArrow.current && !more.start && more.end) {
+      nextArrow.current?.focus({ preventScroll: true });
+    } else if (focused === nextArrow.current && !more.end && more.start) {
+      prevArrow.current?.focus({ preventScroll: true });
+    }
+  }, [more]);
 
   // Wake the Render backend so the create-game POST is warm. HomePage already
   // pre-warms on landing; this covers a direct deep-link to /manager/create.
@@ -344,7 +350,7 @@ export function ManagerCreateGamePage() {
 
   // An arrow moves the row by 70% of its width: smooth through the row's
   // scroll-behavior in the CSS, so the reduced-motion rule makes it instant.
-  function slideMixes(side: number) {
+  function slideMixes(side: -1 | 1) {
     const row = presetRow.current;
     row?.scrollBy({ left: side * row.clientWidth * 0.7 });
   }
@@ -387,6 +393,12 @@ export function ManagerCreateGamePage() {
       await import("./ManagerConsolePage").catch(() => undefined);
       navigate(`/manager/game/${game.game_code}`);
     } catch (err) {
+      // A refusal of the list itself (setlist_empty when the catalog changed
+      // since the check, ...) makes the check wrong: Create turns off and the
+      // same text can be checked again. Any other failure keeps the check.
+      if (err instanceof ApiError && err.code.startsWith("setlist_")) {
+        setSetlist((s) => ({ ...s, check: null }));
+      }
       toast(err instanceof Error ? err.message : "Failed to create game", { variant: "error" });
     } finally {
       setBusy(false);
@@ -407,7 +419,9 @@ export function ManagerCreateGamePage() {
             </span>
           </div>
           {/* data-start / data-end only while the row overflows: the fades
-              and the arrows exist only then, so none shows on a desktop. */}
+              and the arrows exist only then, so none shows on a desktop.
+              The arrows sit around the row in the DOM as on screen, so the
+              tab order runs Previous, the mixes, More. */}
           <div
             className={styles.presetsWrap}
             {...(rowOverflows && {
@@ -415,6 +429,20 @@ export function ManagerCreateGamePage() {
               "data-end": String(more.end),
             })}
           >
+            {rowOverflows && (
+              <button
+                ref={prevArrow}
+                type="button"
+                className={`${styles.presetNav} ${styles.presetPrev}`}
+                data-testid="quick-start-prev"
+                aria-label="Previous mixes"
+                onClick={() => slideMixes(-1)}
+              >
+                <span>
+                  <ArrowLeftIcon />
+                </span>
+              </button>
+            )}
             <div ref={watchPresetRow} className={styles.presetRow} onScroll={syncMore}>
               {PRESETS.map((preset) => {
                 const active = isPresetActive(preset);
@@ -432,30 +460,18 @@ export function ManagerCreateGamePage() {
               })}
             </div>
             {rowOverflows && (
-              <>
-                <button
-                  type="button"
-                  className={`${styles.presetNav} ${styles.presetPrev}`}
-                  data-testid="quick-start-prev"
-                  aria-label="Previous mixes"
-                  onClick={() => slideMixes(-1)}
-                >
-                  <span>
-                    <ArrowLeftIcon />
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.presetNav} ${styles.presetNext}`}
-                  data-testid="quick-start-next"
-                  aria-label="More mixes"
-                  onClick={() => slideMixes(1)}
-                >
-                  <span>
-                    <ArrowRightIcon />
-                  </span>
-                </button>
-              </>
+              <button
+                ref={nextArrow}
+                type="button"
+                className={`${styles.presetNav} ${styles.presetNext}`}
+                data-testid="quick-start-next"
+                aria-label="More mixes"
+                onClick={() => slideMixes(1)}
+              >
+                <span>
+                  <ArrowRightIcon />
+                </span>
+              </button>
             )}
           </div>
         </div>

@@ -119,29 +119,19 @@ function csvColumns(header: string): Columns | null {
   return { delimiter, artist, title };
 }
 
-function isSongRow(row: string, columns: Columns | null): boolean {
-  // A table row is read by its artist and title cells; a row with too few
-  // cells is read as a plain line.
-  if (columns !== null) {
-    const cells = csvCells(row, columns.delimiter);
-    if (cells.length > Math.max(columns.artist, columns.title)) {
-      return [cells[columns.artist], cells[columns.title]].some(
-        (name) => name !== undefined && hasLetterOrDigit(name),
-      );
-    }
-  }
-  const body = row.trim().replace(NUMBERING, "");
-  if (LINK.test(body)) return false;
-  return hasLetterOrDigit(body.replace(/\s+/g, " ").trim().replace(DURATION, ""));
+function linkSite(link: string): LinkSite {
+  if (/^spotify:/i.test(link)) return "spotify";
+  const host = (LINK_HOST.exec(link)?.[1] ?? "").toLowerCase();
+  if (host === "open.spotify.com") return "spotify";
+  if (YOUTUBE_HOSTS.has(host)) return "youtube";
+  return "other";
 }
 
 /**
- * How many song lines the server reads in a pasted list: not the empty lines,
- * the "# " comments, the lines that are only a link or have no letter or
- * digit, nor the header of a CSV or TSV export. Numbering, bullets and a
- * trailing duration do not drop a line.
+ * The rows the server reads in a paste: no empty lines, no "# " comments and
+ * no CSV or TSV header, with the header's columns when there is one.
  */
-export function countSongLines(text: string): number {
+function listRows(text: string): { rows: string[]; columns: Columns | null } {
   let rows = pasteRows(text);
   // The header is looked for before comments are dropped: a table copied from
   // a playlist page heads its track-number column "#". Otherwise the header
@@ -155,31 +145,52 @@ export function countSongLines(text: string): number {
     columns = csvColumns(next);
     if (columns !== null) rows = rows.slice(1);
   }
-  return rows.filter((row) => isSongRow(row, columns)).length;
+  return { rows, columns };
 }
 
-function linkSite(link: string): LinkSite {
-  if (/^spotify:/i.test(link)) return "spotify";
-  const host = (LINK_HOST.exec(link)?.[1] ?? "").toLowerCase();
-  if (host === "open.spotify.com") return "spotify";
-  if (YOUTUBE_HOSTS.has(host)) return "youtube";
-  return "other";
+/** What the server reads in one row: a song line, a link (its site), or null. */
+function readRow(row: string, columns: Columns | null): "song" | LinkSite | null {
+  // A table row is read by its artist and title cells; a row with too few
+  // cells is read as a plain line.
+  if (columns !== null) {
+    const cells = csvCells(row, columns.delimiter);
+    if (cells.length > Math.max(columns.artist, columns.title)) {
+      const named = [cells[columns.artist], cells[columns.title]].some(
+        (name) => name !== undefined && hasLetterOrDigit(name),
+      );
+      return named ? "song" : null;
+    }
+  }
+  const body = row.trim().replace(NUMBERING, "");
+  if (LINK.test(body)) return linkSite(body);
+  return hasLetterOrDigit(body.replace(/\s+/g, " ").trim().replace(DURATION, "")) ? "song" : null;
 }
 
 /**
- * The site of a pasted list made only of links: "spotify" when every line is
- * a Spotify link, "youtube" when every line is a YouTube link, "other" for
- * any other links or a mix. Null when nothing is pasted or any line (not
- * empty, not a comment) is not a link.
+ * How many song lines the server reads in a pasted list: not the empty lines,
+ * the "# " comments, the lines that are only a link or have no letter or
+ * digit, nor the header of a CSV or TSV export. Numbering, bullets and a
+ * trailing duration do not drop a line.
+ */
+export function countSongLines(text: string): number {
+  const { rows, columns } = listRows(text);
+  return rows.filter((row) => readRow(row, columns) === "song").length;
+}
+
+/**
+ * The site of the links in a pasted list with no song line, which the server
+ * refuses as links only: "spotify" when every link is a Spotify link,
+ * "youtube" when every link is a YouTube link, "other" for any other links or
+ * a mix. Null when the list has a song line, or no link.
  */
 export function detectLinks(text: string): LinkSite | null {
+  const { rows, columns } = listRows(text);
   let found: LinkSite | null = null;
-  for (const row of pasteRows(text)) {
-    if (isComment(row)) continue;
-    const body = row.trim().replace(NUMBERING, "");
-    if (!LINK.test(body)) return null;
-    const site = linkSite(body);
-    found = found === null || found === site ? site : "other";
+  for (const row of rows) {
+    const read = readRow(row, columns);
+    if (read === "song") return null;
+    if (read === null) continue;
+    found = found === null || found === read ? read : "other";
   }
   return found;
 }

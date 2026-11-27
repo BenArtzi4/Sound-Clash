@@ -69,10 +69,12 @@ export function SetlistPanel({ value, onChange }: Props) {
   }
 
   // Only on the button: the endpoint is rate-limited (10 a minute per IP,
-  // shared with creating a game), so the panel never checks by itself.
+  // shared with creating a game), so the panel never checks by itself, and
+  // not again while the text has its answer (an edit clears the check).
+  const canCheck = !value.checking && value.check === null && songLines > 0;
   async function handleCheck() {
     const sent = value.text;
-    if (value.checking || songLines === 0) return;
+    if (!canCheck) return;
     onChange({ ...value, checking: true });
     try {
       const answer = await checkSetlist(sent);
@@ -119,7 +121,7 @@ export function SetlistPanel({ value, onChange }: Props) {
         <button
           type="button"
           className={`btn ${styles.check}`}
-          disabled={value.checking || songLines === 0}
+          disabled={!canCheck}
           onClick={() => void handleCheck()}
           data-testid="setlist-check"
         >

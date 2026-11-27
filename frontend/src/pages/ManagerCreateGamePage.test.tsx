@@ -783,23 +783,25 @@ describe("ManagerCreateGamePage tabs", () => {
     fireEvent.click(createButton());
     expect(createGame).not.toHaveBeenCalled();
 
-    // Checked again with songs: Create turns on.
-    vi.mocked(checkSetlist).mockResolvedValueOnce(CHECKED);
-    fireEvent.click(screen.getByTestId("setlist-check"));
-    await waitFor(() => expect(createButton()).toBeEnabled());
+    // The answer is for this text, so Check is off until the host edits it.
+    const check = screen.getByTestId("setlist-check");
+    expect(check).toBeDisabled();
+    fireEvent.change(input, { target: { value: `${LIST}\nMoonfish` } });
+    expect(check).toBeEnabled();
 
-    // One more check of the same text keeps the old answer while it runs,
-    // and Create stays off until the new answer is in.
+    // Checked again with songs: Create stays off while the check runs, then
+    // turns on.
     let answer: (value: SetlistCheckResponse) => void = () => undefined;
     vi.mocked(checkSetlist).mockReturnValueOnce(
       new Promise((resolve) => {
         answer = resolve;
       }),
     );
-    fireEvent.click(screen.getByTestId("setlist-check"));
+    fireEvent.click(check);
     expect(createButton()).toBeDisabled();
-    await act(async () => answer({ ...CHECKED, pool_size: 0 }));
-    expect(createButton()).toBeDisabled();
+    await act(async () => answer(CHECKED));
+    expect(createButton()).toBeEnabled();
+    expect(check).toBeDisabled();
   });
 
   it("turns Create off again when the list is edited after a check", async () => {
@@ -814,19 +816,49 @@ describe("ManagerCreateGamePage tabs", () => {
     expect(screen.getByTestId("mix-count")).toHaveTextContent(/^Check your list to see the songs$/);
   });
 
-  it("shows the server's message when a game from the list is refused", async () => {
+  // The catalog can change between Check and Create: a refusal of the list
+  // itself makes the old check wrong, so the host checks the same text again.
+  it("asks for a new check when the server refuses the list on create", async () => {
     vi.mocked(listGenres).mockResolvedValue([ROCK]);
     const message = "None of the songs in your list can play.";
     vi.mocked(createGame).mockRejectedValueOnce(new ApiError("setlist_empty", message, 400));
     renderPage("/manager/create/list");
     await pasteAndCheck();
+    expect(screen.getByTestId("setlist-check")).toBeDisabled();
     fireEvent.click(createButton());
-    // In the toast only: the bottom bar still states the checked game.
+    // The server's message, unchanged.
     expect(await screen.findByText(message)).toBeInTheDocument();
-    expect(screen.getByTestId("mix-count")).toHaveTextContent(/^61 songs in this game$/);
-    await waitFor(() => expect(createButton()).toBeEnabled());
+    const bar = screen.getByTestId("mix-count");
+    await waitFor(() => expect(bar).toHaveTextContent(/^Check your list to see the songs$/));
+    expect(screen.queryByTestId("setlist-result")).not.toBeInTheDocument();
+    expect(screen.getByTestId("setlist-input")).toHaveValue(LIST);
+    expect(createButton()).toBeDisabled();
+    expect(screen.getByTestId("setlist-check")).toBeEnabled();
     expect(trackSetlistGameCreated).not.toHaveBeenCalled();
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/manager\/create\/list$/);
+
+    // The same text, checked again.
+    vi.mocked(checkSetlist).mockResolvedValueOnce(CHECKED);
+    fireEvent.click(screen.getByTestId("setlist-check"));
+    expect(checkSetlist).toHaveBeenLastCalledWith(LIST);
+    await waitFor(() => expect(createButton()).toBeEnabled());
+  });
+
+  it.each([
+    ["rate_limited", "Too many requests. Wait a minute and try again.", 429],
+    ["internal_error", "Something went wrong.", 500],
+  ])("keeps the check when a create fails with %s", async (code, message, status) => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    vi.mocked(createGame).mockRejectedValueOnce(new ApiError(code, message, status));
+    renderPage("/manager/create/list");
+    await pasteAndCheck();
+    fireEvent.click(createButton());
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    // The list was not the problem: the host can press Create again.
+    expect(screen.getByTestId("mix-count")).toHaveTextContent(/^61 songs in this game$/);
+    expect(screen.getByTestId("setlist-result")).toBeInTheDocument();
+    await waitFor(() => expect(createButton()).toBeEnabled());
+    expect(trackSetlistGameCreated).not.toHaveBeenCalled();
   });
 
   it("fetches My own list's code when the page is idle", async () => {
@@ -933,6 +965,54 @@ describe("ManagerCreateGamePage Quick start row", () => {
     expect(scrollBy).toHaveBeenLastCalledWith({ left: 210 });
     fireEvent.click(screen.getByTestId("quick-start-prev"));
     expect(scrollBy).toHaveBeenLastCalledWith({ left: -210 });
+  });
+
+  it("puts Previous before the row and More after it, as on screen", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    const { row, scrollTo } = await stubRow(300, 900);
+    scrollTo(300);
+    const prev = screen.getByTestId("quick-start-prev");
+    const next = screen.getByTestId("quick-start-next");
+    expect(prev.compareDocumentPosition(row) & prev.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(row.compareDocumentPosition(next) & row.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // A pressed arrow hides when the row reaches its end; the focus goes to the
+  // other arrow, so a keyboard host does not lose it, and the page stays put.
+  it("gives the focus to the other arrow when the row reaches an end", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    const { scrollTo } = await stubRow(300, 900);
+    scrollTo(300);
+    const prev = screen.getByTestId("quick-start-prev");
+    const next = screen.getByTestId("quick-start-next");
+    const prevFocus = vi.spyOn(prev, "focus");
+    const nextFocus = vi.spyOn(next, "focus");
+
+    next.focus();
+    scrollTo(450);
+    expect(next).toHaveFocus();
+    scrollTo(600);
+    expect(prev).toHaveFocus();
+    expect(prevFocus).toHaveBeenLastCalledWith({ preventScroll: true });
+
+    scrollTo(0);
+    expect(next).toHaveFocus();
+    expect(nextFocus).toHaveBeenLastCalledWith({ preventScroll: true });
+  });
+
+  it("leaves the focus alone when no arrow has it", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    const { scrollTo } = await stubRow(300, 900);
+    scrollTo(300);
+    const mix = screen.getByRole("button", { name: /^everything$/i });
+    mix.focus();
+    scrollTo(0);
+    expect(mix).toHaveFocus();
+    scrollTo(600);
+    expect(mix).toHaveFocus();
   });
 
   it("does not move the row when a mix is tapped", async () => {
