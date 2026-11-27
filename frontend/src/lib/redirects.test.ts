@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { MUSIC_SOURCE_TABS } from "../components/MusicSourceSwitch";
 import { seo } from "./routeHead";
 
 // public/_redirects has no /* catch-all (unknown URLs get a real 404 from
@@ -22,9 +23,12 @@ const routes = [...appSource.matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]
 // A route that ends in an optional segment (`/manager/create/:source?`) is
 // one page at several addresses: the path without the segment, and each value
 // the page knows. Its addresses are listed here; any other value must stay a
-// real 404, so it gets no rule.
+// real 404, so it gets no rule. The Host page's come from its switch, so a
+// new tab without its _redirects line fails here.
+const HOST_PAGE = "/manager/create";
+const HOST_TAB_ADDRESSES = MUSIC_SOURCE_TABS.map((t) => t.to).filter((to) => to !== HOST_PAGE);
 const OPTIONAL_SEGMENT_ADDRESSES: Record<string, string[]> = {
-  "/manager/create/:source?": ["/manager/create/list"],
+  "/manager/create/:source?": HOST_TAB_ADDRESSES,
 };
 const OPTIONAL_SEGMENT = /\/:[A-Za-z]+\?$/;
 
@@ -65,11 +69,18 @@ describe("public/_redirects", () => {
   });
 
   it("serves My own list the SPA shell, and no other tab address", () => {
+    expect(HOST_TAB_ADDRESSES).toContain("/manager/create/list");
     expect(rules).toContainEqual(["/manager/create/list", "/spa-shell", "200"]);
     expect(servedBy("/manager/create/list")).toBe("/manager/create/list");
-    expect(servedBy("/manager/create")).toBe("file");
+    expect(servedBy(HOST_PAGE)).toBe("file");
     expect(servedBy("/manager/create/nope")).toBeUndefined();
     expect(servedBy("/manager/create/list/more")).toBeUndefined();
+  });
+
+  it.each(HOST_TAB_ADDRESSES)("serves the Host page's tab %s by its own exact line", (to) => {
+    expect(rules).toContainEqual([to, "/spa-shell", "200"]);
+    expect(servedBy(to)).toBe(to);
+    expect(servedBy(`${to}/more`)).toBeUndefined();
   });
 
   it("has no catch-all, so unknown URLs are a real 404", () => {

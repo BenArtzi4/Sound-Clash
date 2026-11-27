@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const tele = vi.hoisted(() => ({ trackEvent: vi.fn(), trackView: vi.fn() }));
 vi.mock("./telemetry", () => tele);
 
+import { MUSIC_SOURCE_TABS } from "../components/MusicSourceSwitch";
 import {
   _resetFunnel,
   captureLanding,
@@ -49,6 +50,12 @@ describe("viewName", () => {
     expect(viewName("/manager/create/nope")).toBe("/other");
     expect(viewName("/hitster-alternative")).toBe("/hitster-alternative");
     expect(viewName("/wp-login.php")).toBe("/other");
+  });
+
+  // Every tab the Host page's switch has: a new tab needs its STATIC_VIEWS
+  // entry, or its views would count as /other.
+  it.each(MUSIC_SOURCE_TABS.map((t) => t.to))("names the Host page's tab %s", (to) => {
+    expect(viewName(to)).toBe(to);
   });
 });
 

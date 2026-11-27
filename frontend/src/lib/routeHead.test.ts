@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { MUSIC_SOURCE_TABS } from "../components/MusicSourceSwitch";
 import { applyRouteHead, pageFor, seo } from "./routeHead";
 
 const ORIGIN = "https://www.soundclash.org";
@@ -57,15 +58,22 @@ describe("applyRouteHead", () => {
   });
 
   // A tab of the Host page is the same page, so a tab change keeps its title.
-  it("gives My own list the Host page's head", () => {
+  // Every tab the switch has (MUSIC_SOURCE_TABS): a new tab needs its line in
+  // routeHead's TAB_OF, or this fails.
+  it.each(MUSIC_SOURCE_TABS.map((t) => t.to))("gives the Host page's tab %s its head", (to) => {
     const doc = blankDoc();
-    applyRouteHead("/manager/create/list", doc);
+    applyRouteHead(to, doc);
     const host = pageFor("/manager/create");
-    expect(pageFor("/manager/create/list")).toBe(host);
+    expect(pageFor(to)).toBe(host);
     expect(doc.title).toBe("Host a Game – Sound Clash");
     expect(canonical(doc)).toBe(`${ORIGIN}/manager/create`);
     expect(meta(doc, "property", "og:url")).toBe(`${ORIGIN}/manager/create`);
     expect(meta(doc, "name", "description")).toBe(host?.description);
+  });
+
+  it("gives My own list the Host page's head, and no other address under it", () => {
+    expect(MUSIC_SOURCE_TABS.map((t) => t.to)).toContain("/manager/create/list");
+    expect(pageFor("/manager/create/list")).toBe(pageFor("/manager/create"));
     expect(pageFor("/manager/create/nope")).toBeUndefined();
   });
 
