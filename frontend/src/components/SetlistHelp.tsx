@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { CHOSIC_EXPORTER } from "../lib/chosic";
 import { ArrowRightIcon } from "./icons";
 import styles from "./SetlistPanel.module.css";
 
@@ -6,8 +7,7 @@ import styles from "./SetlistPanel.module.css";
 // (docs/planning/2026-11-24-custom-setlist-design.md, section 6). Spotify
 // copies only links, so the host exports the names with Chosic's playlist
 // exporter (no login) and pastes the text. These sites can change or close:
-// this text is the only thing in the game that depends on them.
-const CHOSIC_EXPORTER = "https://www.chosic.com/spotify-playlist-exporter/";
+// this text and How to play's answer are all that depend on them.
 
 interface Props {
   open: boolean;

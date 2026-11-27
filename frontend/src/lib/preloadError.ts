@@ -128,6 +128,20 @@ export async function prefetchQuietly(load: () => Promise<unknown>): Promise<voi
   }
 }
 
+/**
+ * Run `run` once the browser is idle, so a background fetch stays clear of
+ * the page's first paint; returns its cancel. Safari has no
+ * requestIdleCallback, so a short timeout there.
+ */
+export function whenIdle(run: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const id = window.requestIdleCallback(run, { timeout: 2000 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(run, 800);
+  return () => window.clearTimeout(id);
+}
+
 // Test-only: clear the persisted reload budget between tests. Deliberately does
 // NOT reset `installed`, so the single window listener registered by
 // `installPreloadErrorHandler` is never stacked.
