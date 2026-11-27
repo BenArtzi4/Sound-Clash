@@ -855,6 +855,108 @@ describe("ManagerCreateGamePage tabs", () => {
   });
 });
 
+// Task 10c: on a phone Quick start's row is wider than the screen, so a fade
+// and an arrow show on each side that has more mixes. jsdom has no layout, so
+// the row's sizes are stubbed.
+describe("ManagerCreateGamePage Quick start row", () => {
+  const ROCK = { id: "g1", name: "Rock", slug: "rock" };
+
+  // The row of mixes, with a stubbed width, content width and scroll offset.
+  async function stubRow(clientWidth: number, scrollWidth: number) {
+    const row = (await screen.findByRole("button", { name: /^everything$/i }))
+      .parentElement as HTMLElement;
+    let left = 0;
+    Object.defineProperty(row, "clientWidth", { configurable: true, get: () => clientWidth });
+    Object.defineProperty(row, "scrollWidth", { configurable: true, get: () => scrollWidth });
+    Object.defineProperty(row, "scrollLeft", {
+      configurable: true,
+      get: () => left,
+      set: (v: number) => {
+        left = v;
+      },
+    });
+    const scrollBy = vi.fn();
+    row.scrollBy = scrollBy as unknown as HTMLElement["scrollBy"];
+    const scrollTo = (x: number) => {
+      left = x;
+      fireEvent.scroll(row);
+    };
+    return { row, wrap: row.parentElement as HTMLElement, scrollBy, scrollTo };
+  }
+
+  it("says how many mixes Quick start has", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    expect(await screen.findByTestId("quick-start-count")).toHaveTextContent(/^6 mixes$/);
+  });
+
+  it("shows no fade and no arrow when the row fits", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    const { wrap, scrollTo } = await stubRow(700, 700);
+    scrollTo(0);
+    expect(wrap).not.toHaveAttribute("data-start");
+    expect(wrap).not.toHaveAttribute("data-end");
+    expect(screen.queryByTestId("quick-start-prev")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("quick-start-next")).not.toBeInTheDocument();
+  });
+
+  it("shows a fade and an arrow on each side that has more mixes", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    const { wrap, scrollTo } = await stubRow(288, 700);
+
+    scrollTo(0);
+    expect(wrap).toHaveAttribute("data-start", "false");
+    expect(wrap).toHaveAttribute("data-end", "true");
+    expect(screen.getByTestId("quick-start-next")).toHaveAccessibleName("More mixes");
+    expect(screen.getByTestId("quick-start-prev")).toHaveAccessibleName("Previous mixes");
+
+    // The left side shows only after the row has moved.
+    scrollTo(200);
+    expect(wrap).toHaveAttribute("data-start", "true");
+    expect(wrap).toHaveAttribute("data-end", "true");
+
+    // At the end (a few px short still counts: subpixel widths).
+    scrollTo(700 - 288 - 2);
+    expect(wrap).toHaveAttribute("data-start", "true");
+    expect(wrap).toHaveAttribute("data-end", "false");
+  });
+
+  it("moves the row by 70% of its width when an arrow is tapped", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    renderPage();
+    const { scrollBy, scrollTo } = await stubRow(300, 900);
+    scrollTo(300);
+
+    fireEvent.click(screen.getByTestId("quick-start-next"));
+    expect(scrollBy).toHaveBeenLastCalledWith({ left: 210 });
+    fireEvent.click(screen.getByTestId("quick-start-prev"));
+    expect(scrollBy).toHaveBeenLastCalledWith({ left: -210 });
+  });
+
+  it("does not move the row when a mix is tapped", async () => {
+    vi.mocked(listGenres).mockResolvedValue([ROCK]);
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    try {
+      renderPage();
+      const { row, scrollBy, scrollTo } = await stubRow(288, 700);
+      scrollTo(150);
+      const mix = screen.getByRole("button", { name: /^80s & 90s$/i });
+      fireEvent.click(mix);
+      expect(mix).toHaveAttribute("aria-pressed", "true");
+      expect(row.scrollLeft).toBe(150);
+      expect(scrollBy).not.toHaveBeenCalled();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      if (original) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", original);
+      else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+    }
+  });
+});
+
 // Home fetches the genre list on landing, so arriving from it the create page
 // can draw the real tiles on its first frame: screen changes are instant, and
 // a frame of placeholder tiles read as a flicker (10-touch-and-route-motion.md).

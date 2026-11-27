@@ -1,6 +1,15 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { CheckIcon } from "../components/icons";
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "../components/icons";
 import {
   MUSIC_SOURCE_TABS,
   MusicSourceSwitch,
@@ -44,6 +53,9 @@ const PasteStatus = lazy(() =>
 );
 
 const EMPTY_LIST: SetlistPanelState = { text: "", check: null, checking: false };
+
+// Which ends of Quick start's row have more mixes past the edge.
+const NO_MORE = { start: false, end: false };
 
 // The open tab's panel; each tab's id is `${PANEL_ID}-${tab}` (MusicSourceSwitch).
 const PANEL_ID = "music-source-panel";
@@ -185,6 +197,37 @@ export function ManagerCreateGamePage() {
     setShown({ id: tab.id, dir: tabIndex(tab.id) < tabIndex(shown.id) ? "back" : "fwd" });
   }
 
+  // On a phone Quick start's row is wider than the screen: each side that
+  // hides more mixes gets a fade and an arrow (host-music-choices section 7).
+  // Read on scroll and on a resize, and stored only when a side changes.
+  const presetRow = useRef<HTMLDivElement | null>(null);
+  const [more, setMore] = useState(NO_MORE);
+  const syncMore = useCallback(() => {
+    const row = presetRow.current;
+    if (!row) return;
+    const start = row.scrollLeft > 4;
+    const end = row.scrollLeft + row.clientWidth < row.scrollWidth - 4;
+    setMore((m) => (m.start === start && m.end === end ? m : { start, end }));
+  }, []);
+  // The first read is in the commit, before the first paint, so the arrows
+  // appear at once rather than fading in when the page opens.
+  const watchPresetRow = useCallback(
+    (row: HTMLDivElement | null) => {
+      presetRow.current = row;
+      if (!row) return;
+      syncMore();
+      const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(syncMore);
+      // The chips too: a web font arriving widens them, not the row.
+      for (const el of [row, ...row.children]) resized?.observe(el);
+      return () => {
+        resized?.disconnect();
+        presetRow.current = null;
+        setMore(NO_MORE);
+      };
+    },
+    [syncMore],
+  );
+
   // Wake the Render backend so the create-game POST is warm. HomePage already
   // pre-warms on landing; this covers a direct deep-link to /manager/create.
   usePrewarmBackend();
@@ -299,6 +342,13 @@ export function ManagerCreateGamePage() {
     setSelectedDecades(new Set(preset.decades));
   }
 
+  // An arrow moves the row by 70% of its width: smooth through the row's
+  // scroll-behavior in the CSS, so the reduced-motion rule makes it instant.
+  function slideMixes(side: number) {
+    const row = presetRow.current;
+    row?.scrollBy({ left: side * row.clientWidth * 0.7 });
+  }
+
   // Highlight the preset (if any) whose resolved genres + decades exactly match
   // the live selection, so the chips and the active preset stay in sync as the
   // host edits. An empty selection matches nothing (no preset is "all off").
@@ -345,26 +395,68 @@ export function ManagerCreateGamePage() {
 
   if (!tab) return <Navigate to={`/manager/create${search}`} replace />;
 
+  const rowOverflows = more.start || more.end;
   const genresContent = (
     <>
       {!genresLoading && genres.length > 0 && (
         <div className={styles.presets}>
-          <span className={styles.presetsLabel}>Quick start</span>
-          <div className={styles.presetRow}>
-            {PRESETS.map((preset) => {
-              const active = isPresetActive(preset);
-              return (
-                <button
-                  key={preset.label}
-                  type="button"
-                  className={`${styles.preset} ${active ? styles.presetActive : ""}`}
-                  aria-pressed={active}
-                  onClick={() => applyPreset(preset)}
-                >
-                  {preset.label}
-                </button>
-              );
+          <div className={styles.presetsHead}>
+            <span className={styles.presetsLabel}>Quick start</span>
+            <span className={styles.presetsCount} data-testid="quick-start-count">
+              {PRESETS.length} mixes
+            </span>
+          </div>
+          {/* data-start / data-end only while the row overflows: the fades
+              and the arrows exist only then, so none shows on a desktop. */}
+          <div
+            className={styles.presetsWrap}
+            {...(rowOverflows && {
+              "data-start": String(more.start),
+              "data-end": String(more.end),
             })}
+          >
+            <div ref={watchPresetRow} className={styles.presetRow} onScroll={syncMore}>
+              {PRESETS.map((preset) => {
+                const active = isPresetActive(preset);
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    className={`${styles.preset} ${active ? styles.presetActive : ""}`}
+                    aria-pressed={active}
+                    onClick={() => applyPreset(preset)}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+            {rowOverflows && (
+              <>
+                <button
+                  type="button"
+                  className={`${styles.presetNav} ${styles.presetPrev}`}
+                  data-testid="quick-start-prev"
+                  aria-label="Previous mixes"
+                  onClick={() => slideMixes(-1)}
+                >
+                  <span>
+                    <ArrowLeftIcon />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.presetNav} ${styles.presetNext}`}
+                  data-testid="quick-start-next"
+                  aria-label="More mixes"
+                  onClick={() => slideMixes(1)}
+                >
+                  <span>
+                    <ArrowRightIcon />
+                  </span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
