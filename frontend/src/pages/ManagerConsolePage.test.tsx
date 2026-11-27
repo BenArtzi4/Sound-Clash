@@ -48,6 +48,12 @@ vi.mock("../hooks/usePeekNextSong", () => ({
   peekNextSongDirect: vi.fn(),
 }));
 
+// The progress line of a game from the host's own songs. The hook's RPC
+// handling has its own tests; here it is just the numbers it would return.
+vi.mock("../hooks/useSetlistProgress", () => ({
+  useSetlistProgress: vi.fn(() => null),
+}));
+
 // Telemetry wrapper: assert the headline metrics (song-start, score-start) are
 // wired without touching real Faro. startSongStart returns a spy handle so the
 // page's songStart.rpcDone(...) calls don't crash.
@@ -188,6 +194,7 @@ import {
 import { _resetServerTime, observeServerTime } from "../hooks/useServerTime";
 import { selectNextSongDirect } from "../hooks/useSelectNextSong";
 import { peekNextSongDirect } from "../hooks/usePeekNextSong";
+import { useSetlistProgress } from "../hooks/useSetlistProgress";
 import type { ActiveGame, GameRound, SelectSongResponse, Team } from "../lib/types";
 import { ToastProvider } from "../context/ToastContext";
 import { setManagerToken, getManagerToken } from "../lib/managerToken";
@@ -231,6 +238,10 @@ beforeEach(() => {
   vi.mocked(extendGameDirect).mockReset();
   vi.mocked(awardBonusDirect).mockReset();
   vi.mocked(endGame).mockReset();
+  // A normal genre game unless a test says otherwise (afterEach's
+  // clearAllMocks drops the factory's implementation).
+  vi.mocked(useSetlistProgress).mockReset();
+  vi.mocked(useSetlistProgress).mockReturnValue(null);
   // Re-establish the telemetry handle impl (afterEach's clearAllMocks drops it).
   telemetry.startSongStart.mockReset();
   telemetry.startSongStart.mockImplementation(() => telemetry.handle);
@@ -2339,6 +2350,147 @@ describe("ManagerConsolePage", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByText(/have been played/i)).not.toBeInTheDocument();
+  });
+
+  it("says the host's songs are not ready when Start game comes before their pool is saved", async () => {
+    setHydrate({
+      game: makeActiveGame({ status: "waiting", round_number: 0 }),
+      teams: [],
+      rounds: [],
+    });
+    // select_next_song (mig 060) raises 'setlist_not_ready' (P0001) for a game
+    // from the host's own songs while its song pool is not saved yet.
+    const { RpcError } = await import("../hooks/useManagerActions");
+    vi.mocked(selectNextSongDirect).mockRejectedValueOnce(
+      new RpcError("setlist_not_ready", "P0001"),
+    );
+    renderConsole();
+    await act(async () => {
+      await fireSubscribed();
+    });
+    act(() => {
+      onReadyHandler?.();
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start game/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByText("Your songs are not ready yet. Try again in a moment."),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("setlist_not_ready")).not.toBeInTheDocument();
+    expect(telemetry.log).not.toHaveBeenCalledWith(
+      "error",
+      "manager_rpc_failed",
+      expect.anything(),
+    );
+  });
+
+  describe("the progress line of a game from the host's own songs", () => {
+    const LIST = { listTotal: 40, listSongs: 35, listLeft: 12, extraSongs: 20, extraLeft: 20 };
+
+    // `laptop` answers the console's two-column query; every other query
+    // reads false.
+    function stubLayout(laptop: boolean) {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: vi.fn((query: string) => ({
+          matches: query === "(min-width: 1024px)" ? laptop : false,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        })),
+      });
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, "matchMedia");
+    });
+
+    async function renderGame(status: "waiting" | "playing", roundNumber: number) {
+      setHydrate({
+        game: makeActiveGame({ status, round_number: roundNumber }),
+        teams: [makeTeam({ id: "t1", name: "Team 1" })],
+        rounds: roundNumber > 0 ? [makeRound({ round_number: roundNumber })] : [],
+      });
+      renderConsole();
+      await act(async () => {
+        await fireSubscribed();
+      });
+    }
+
+    function follows(a: HTMLElement, b: HTMLElement): boolean {
+      return Boolean(a.compareDocumentPosition(b) & a.DOCUMENT_POSITION_FOLLOWING);
+    }
+
+    it("asks with the game code, the host's token and the round number", async () => {
+      await renderGame("playing", 3);
+      expect(useSetlistProgress).toHaveBeenLastCalledWith("ABCDEF", TOKEN, 3);
+    });
+
+    it("shows how many of the host's songs are left", async () => {
+      vi.mocked(useSetlistProgress).mockReturnValue(LIST);
+      await renderGame("playing", 3);
+      expect(screen.getByTestId("setlist-progress")).toHaveTextContent(
+        /^Your songs: 12 of 35 left$/,
+      );
+    });
+
+    it("says the host's songs are done once only same-artist songs are left", async () => {
+      vi.mocked(useSetlistProgress).mockReturnValue({ ...LIST, listLeft: 0, extraLeft: 7 });
+      await renderGame("playing", 36);
+      expect(screen.getByTestId("setlist-progress")).toHaveTextContent(
+        /^Your songs are done\. Now: more by the same artists \(7 left\)$/,
+      );
+    });
+
+    it("keeps the count when the list is done and has no same-artist songs", async () => {
+      vi.mocked(useSetlistProgress).mockReturnValue({
+        ...LIST,
+        listLeft: 0,
+        extraSongs: 0,
+        extraLeft: 0,
+      });
+      await renderGame("playing", 35);
+      expect(screen.getByTestId("setlist-progress")).toHaveTextContent(
+        /^Your songs: 0 of 35 left$/,
+      );
+    });
+
+    it("shows nothing for a normal game", async () => {
+      await renderGame("playing", 3);
+      expect(screen.queryByTestId("setlist-progress")).not.toBeInTheDocument();
+      expect(screen.queryByText(/your songs/i)).not.toBeInTheDocument();
+    });
+
+    // The phone player is sized from the height of everything above the round
+    // buttons (ManagerConsolePage.module.css), so the line sits under them.
+    it.each([
+      ["phone", false],
+      ["laptop", true],
+    ])("on a %s, sits in the round card below the round buttons", async (_name, laptop) => {
+      stubLayout(laptop);
+      vi.mocked(useSetlistProgress).mockReturnValue(LIST);
+      await renderGame("playing", 3);
+
+      const line = screen.getByTestId("setlist-progress");
+      expect(screen.getByTestId("score-title").closest("section")).toContainElement(line);
+      expect(follows(screen.getByTestId("yt-player"), line)).toBe(true);
+      expect(follows(screen.getByTestId("continue-round"), line)).toBe(true);
+      expect(follows(screen.getByTestId("start-round"), line)).toBe(true);
+    });
+
+    it("on a phone before the game, sits in the round card under the player", async () => {
+      stubLayout(false);
+      vi.mocked(useSetlistProgress).mockReturnValue({ ...LIST, listLeft: 35 });
+      await renderGame("waiting", 0);
+
+      const line = screen.getByTestId("setlist-progress");
+      expect(line).toHaveTextContent(/^Your songs: 35 of 35 left$/);
+      expect(screen.getByTestId("score-title").closest("section")).toContainElement(line);
+      expect(follows(screen.getByTestId("start-round"), line)).toBe(true);
+      expect(follows(screen.getByTestId("yt-player"), line)).toBe(true);
+    });
   });
 
   // ---- the next song: peek_next_song + an in-tap load on the one player ----

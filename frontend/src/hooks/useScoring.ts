@@ -313,6 +313,12 @@ export function useScoring(
         });
         return;
       }
+      // A game from the host's own songs whose song pool is not saved yet
+      // (migration 060): select_next_song starts no round until it is.
+      if (err.message === "setlist_not_ready") {
+        toast("Your songs are not ready yet. Try again in a moment.", { variant: "info" });
+        return;
+      }
       log("error", "manager_rpc_failed", { message: err.message });
       toast(err.message, { variant: "error" });
       return;

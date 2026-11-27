@@ -436,6 +436,19 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A game from the host's own songs: "Your songs: 12 of 35 left". The last
+   line of the round card, under the round buttons, never above them: the
+   phone player's width is worked out from the height of everything above the
+   lowest round button (.playerStack below), and a normal game renders no
+   line at all. */
+.setlistProgress {
+  margin: 0.6rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
 .bonusPicker {
   display: flex;
   flex-direction: column;

@@ -29,6 +29,7 @@ import { usePlayerReady } from "../hooks/usePlayerReady";
 import { useResumeOnVisible } from "../hooks/useResumeOnVisible";
 import { useHostPlayer } from "../hooks/useHostPlayer";
 import { useScoring } from "../hooks/useScoring";
+import { useSetlistProgress } from "../hooks/useSetlistProgress";
 import { parseRecoveryHash } from "../lib/managerToken";
 import {
   ARTIST_POINTS,
@@ -120,6 +121,13 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
     handleBonus,
     performEnd,
   } = scoring;
+  // A game from the host's own songs: how many are left, asked again each
+  // round. Null for a normal game (one call per mount, then none).
+  const setlistProgress = useSetlistProgress(
+    gameCode,
+    managerToken,
+    state?.game?.round_number ?? 0,
+  );
 
   // When we get the buzz lock signal, pause playback on the live player.
   // (Handled inside useScoring so the pause fires alongside the pending-flag
@@ -317,6 +325,16 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
         {scoreFeedback.pending && ` · ${scoreFeedback.pending}`}
       </p>
     ) : null;
+
+  // Last in the round card, under the round buttons: the phone player is
+  // sized from the height of everything above them (ManagerConsolePage.module.css).
+  const setlistLine = setlistProgress ? (
+    <p className={styles.setlistProgress} data-testid="setlist-progress">
+      {setlistProgress.listLeft === 0 && setlistProgress.extraSongs > 0
+        ? `Your songs are done. Now: more by the same artists (${setlistProgress.extraLeft} left)`
+        : `Your songs: ${setlistProgress.listLeft} of ${setlistProgress.listSongs} left`}
+    </p>
+  ) : null;
 
   return (
     <main className={styles.shell}>
@@ -574,6 +592,7 @@ function ManagerConsole({ gameCode }: { gameCode: string }) {
             </div>
           )}
           {laptopLayout ? null : scoreReadout}
+          {setlistLine}
         </section>
 
         <footer className={styles.endGameFooter}>
