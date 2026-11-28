@@ -27,12 +27,14 @@ import pytest_asyncio
 
 ADMIN_PASSWORD = "test-admin-pw"
 
-# artist_aliases and song_demand (migration 061) are durable with no FK, so the
-# CASCADE that clears the other tables does not reach them: list them or alias
-# and demand rows leak between tests.
+# artist_aliases and song_demand (migration 061) and artist_whole_names
+# (migration 062) are durable with no FK, so the CASCADE that clears the other
+# tables does not reach them: list them or alias, demand and whole-name rows
+# leak between tests.
 ALL_TABLES = (
     "artist_aliases",
     "song_demand",
+    "artist_whole_names",
     "game_rounds",
     "game_teams",
     "active_games",

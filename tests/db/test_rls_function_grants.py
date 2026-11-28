@@ -2,7 +2,7 @@
 
 Spec: docs/security-rls.md §2.
 
-Eleven RPCs are callable by anon. Eight check the caller inside the function
+Thirteen RPCs are callable by anon. Eight check the caller inside the function
 body before performing any work, so the function-level EXECUTE grant is safe:
 ``buzz_in`` (since migration 006; it checks the game and the team), and seven
 that check the per-game manager token -- ``award_attempt`` and
@@ -11,15 +11,18 @@ overloads retired by migration 023), ``select_next_song`` (as of migration
 022), ``peek_next_song`` (the read-only prebuffer probe, as of migration 029),
 ``extend_game`` (the "keep playing" TTL bump, as of migration 039),
 ``award_manager_bonus`` (migration 055) and ``game_pool_summary`` (the custom
-setlist's progress line, migration 060). Three more take no token and write
+setlist's progress line, migration 060). Five more take no token and write
 nothing: ``song_pool_counts`` (migration 052; SECURITY DEFINER since 053), a
-read-only aggregate of song counts, and ``game_setlist`` / ``round_song``
+read-only aggregate of song counts, ``game_setlist`` / ``round_song``
 (migration 053), which return song metadata only for songs the given game
-played. The twelve backend-only RPCs -- ``start_round``, ``end_round``,
-``award_bonus``, ``end_game``, ``cleanup_expired_games``, ``archive_game``,
-``set_song_availability``, ``pick_next_song``, ``song_artist_keys``,
-``pick_next_pool_song``, ``save_game_setlist`` and ``record_song_demand`` --
-must still reject anon.
+played, and ``list_pickable_artists`` / ``artist_pick_status`` (migration
+062), which return artist names, kinds and spellings, or ready plus a coarse
+level -- never a song or a song count. The fifteen backend-only RPCs --
+``start_round``, ``end_round``, ``award_bonus``, ``end_game``,
+``cleanup_expired_games``, ``archive_game``, ``set_song_availability``,
+``pick_next_song``, ``song_artist_keys``, ``pick_next_pool_song``,
+``save_game_setlist``, ``record_song_demand``, ``artist_game_rule``,
+``pickable_credits`` and ``save_game_artists`` -- must still reject anon.
 """
 
 from __future__ import annotations
@@ -279,6 +282,42 @@ async def test_anon_cannot_execute_record_song_demand(
 
 
 @pytest.mark.asyncio
+async def test_anon_can_execute_the_artist_pick_rpcs(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 062: anon CAN call list_pickable_artists and
+    artist_pick_status (the Pick artists tab). Both are SECURITY DEFINER, so
+    they read the catalog although anon cannot; neither answer holds a song or
+    a song count (pinned in test_pick_artists.py)."""
+    await create_test_song(db, artist="Zed Band", youtube_id=uuid.uuid4().hex[:11])
+    rows = await anon_conn.fetch("SELECT * FROM list_pickable_artists()")
+    assert [dict(r) for r in rows] == [
+        {"artist_key": "zed band", "name": "Zed Band", "kind": "en", "aliases": []}
+    ]
+    status = await anon_conn.fetchrow(
+        "SELECT * FROM artist_pick_status($1::text[])", ["zed band"]
+    )
+    assert dict(status) == {"ready": False, "level": 1, "levels": 4, "min_artists": 5}
+
+
+@pytest.mark.asyncio
+async def test_anon_cannot_execute_the_artist_game_helpers(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 062: the rule, the credit splitter (it returns song ids) and
+    the pool writer the backend calls on "Create game" take no token, so the
+    browser must not reach them."""
+    game_code = await create_test_game(db)
+    for sql, args in (
+        ("SELECT save_game_artists($1, $2::text[])", (game_code, ["zed band"])),
+        ("SELECT * FROM artist_game_rule()", ()),
+        ("SELECT * FROM pickable_credits()", ()),
+    ):
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await anon_conn.fetch(sql, *args)
+
+
+@pytest.mark.asyncio
 async def test_anon_can_execute_game_pool_summary_but_token_check_runs(
     anon_conn: asyncpg.Connection,
 ) -> None:
@@ -351,6 +390,11 @@ async def test_anon_peek_reaches_the_revoked_helper_through_the_definer(
         # Migration 061: the demand-queue writer the backend calls after
         # "Create game" with a list.
         "record_song_demand",
+        # Migration 062: the ready rule, the credit splitter behind the artist
+        # list (it returns song ids) and the artist-game pool writer.
+        "artist_game_rule",
+        "pickable_credits",
+        "save_game_artists",
     ],
 )
 async def test_backend_rpc_grant_matrix(db: asyncpg.Connection, proname: str) -> None:
@@ -496,12 +540,17 @@ async def test_award_attempt_integer_overload_dropped(db: asyncpg.Connection) ->
         # is left. Same anon-grant + in-function token-check model as
         # peek_next_song.
         ("game_pool_summary", "p_game_code text, p_manager_token uuid"),
+        # list_pickable_artists / artist_pick_status (migration 062): the Pick
+        # artists tab's list of names and its ready sign. No token: names,
+        # kinds and spellings, or ready plus a level; never a song count.
+        ("list_pickable_artists", ""),
+        ("artist_pick_status", "p_keys text[]"),
     ],
 )
 async def test_anon_executable_rpc_grant_matrix(
     db: asyncpg.Connection, proname: str, args: str
 ) -> None:
-    """The eleven RPCs the browser calls direct must keep anon EXECUTE on the
+    """The thirteen RPCs the browser calls direct must keep anon EXECUTE on the
     exact overload signature the browser sends."""
     anon_exec = await db.fetchval(
         """
