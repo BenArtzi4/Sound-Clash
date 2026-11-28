@@ -1,6 +1,6 @@
 # Next session — start here
 
-_Last updated: 2026-09-22 (the **UI redesign is complete, live and validated** — all 12 tasks, PRs #303-#320, plus the Home colour pass #323/#324; its final validation ran 2026-09-22 → GO, fix PRs #329-#334 + #339 merged. This file was two months stale and had been pointing sessions at X-DarkRoom #243, which the redesign's dark base theme already delivered. Everything below is re-verified against `git log origin/main`.)_
+_Last updated: 2026-11-28 (**Custom setlist phase 1 is live**: hosts can paste their own song list on the Host page — see "Custom setlist" below and `TASKS.md` §A). Before that, 2026-09-22 (the **UI redesign is complete, live and validated** — all 12 tasks, PRs #303-#320, plus the Home colour pass #323/#324; its final validation ran 2026-09-22 → GO, fix PRs #329-#334 + #339 merged. This file was two months stale and had been pointing sessions at X-DarkRoom #243, which the redesign's dark base theme already delivered. Everything below is re-verified against `git log origin/main`.)_
 
 ## Start the next session with ONE line
 
@@ -12,7 +12,8 @@ To point it at a specific task, add a few words, e.g. **`/next-task do X-Recap`*
 
 ## One-glance state (verified against code/git 2026-07-14)
 
-- **Phases 1–7 ✅ complete + live on prod** (`https://www.soundclash.org`). Migrations through **046** applied to prod (046 = `team_secrets`, host-only team rejoin, PR #260, 2026-07-12).
+- **Phases 1–7 ✅ complete + live on prod** (`https://www.soundclash.org`). Migrations through **061** applied to prod (060 + 061 = the custom setlist song pool, alias and demand tables, 2026-11-24).
+- **Custom setlist (2026-11-28):** phase 1 (pasted song names) is live — PRs #442, #444, #445, #447, #448; the Host page has a `Genres | My own list` switch (`/manager/create/list`) and the console shows "Your songs: N of M left". Open: the maintainer's full-game validation on production after all phases (decided 2026-11-28), latency check #449 (due 2026-12-05; a rise blocks phase 2), one real Chosic TXT export by hand. Next: the Pick artists plan (`2026-11-24-pick-artists-plan.md`, migration 062), then the phase 2 plan (YouTube playlist links). These run as one guide session plus one builder session per PR; the SDD ledger is `.superpowers/sdd/2026-11-24-custom-setlist-phase1-plan/progress.md` in the build worktree (git-ignored, so it exists only on the maintainer's machine).
 - **Phase 8 🟡 in progress** — shipped: X-Presets (#241), X-Recovery (`HostRecoveryLink`), X-Extend (mig 039 + `ExpiryCountdown`), team rejoin/reconnect (#183 → PR #260). Vetoed by maintainer (don't build): X-AutoRelease, X-Practice, X-Streaks.
 - **Recent UX polish shipped 2026-07-13:** manager console fits one phone screen (#177 → PR #264, CSS-only); Display board capped to top 5 + per-player standing chip (#179 → PRs #268/#275); Final Results top-5 + polish (#180 → PRs #266/#272); scroll-to-top on navigation (#181 → #267); standing "Ends at" hint removed from the manager console (#276 — the last-20-min warning banner + "Keep playing +1h" remain).
 - **Observability:** Faro re-enabled on prod (#258); the I-Vitals layer is built + merged (#262 — `observability/` dashboard JSON, #254 alert, stale-buzz-lock scan Action); the **Supabase metrics scrape is live since 2026-07-13** (PR #269 — `supabase-soundclash` job in `grafanacloud-prom`). Maintainer still owes the apply steps (dashboard import, contact point + alert rule, `LOKI_READ_TOKEN` secret, which replaced `GRAFANA_READ_TOKEN` on 2026-10-09) — see `TASKS.md` §C.
