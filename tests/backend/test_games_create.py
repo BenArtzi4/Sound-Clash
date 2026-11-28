@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from app.models.games import CreateGameRequest
 from app.services.setlist_catalog import get_catalog_index
 
 from ._fake_supabase import FakeAPIError
@@ -696,3 +697,75 @@ async def test_genre_game_answer_is_unchanged_but_for_a_null_setlist(client, db)
     }
     assert resp.json()["setlist"] is None
     assert await _count(db, "game_setlists") == 0
+
+
+# --- Length limits on the genre and decade lists (issue #446) ----------------
+#
+# At most 100 genres and 30 decades. Production has 11 genres and songs in 10
+# decades.
+
+# The 21 decade start years in the legal range (1900, 1910, ..., 2100). The
+# limit counts entries, not distinct values, so a longer list repeats them.
+LEGAL_DECADES = list(range(1900, 2101, 10))
+
+
+def _decades(count: int) -> list[int]:
+    return [LEGAL_DECADES[i % len(LEGAL_DECADES)] for i in range(count)]
+
+
+def _genre_ids(count: int) -> list[str]:
+    """Valid genre UUIDs; no genre row has them."""
+    return [str(uuid.uuid4()) for _ in range(count)]
+
+
+async def test_101_genres_is_a_400(client, db) -> None:
+    resp = await client.post("/games", json={"selected_genres": _genre_ids(101)})
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    assert await _count(db, "active_games") == 0
+
+
+async def test_31_decades_is_a_400(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+
+    resp = await client.post(
+        "/games", json={"selected_genres": [str(genres[0])], "selected_decades": _decades(31)}
+    )
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    assert await _count(db, "active_games") == 0
+
+
+async def test_the_largest_real_request_still_creates_a_game(client, db) -> None:
+    # The fixture seeds migration 008's genres; made-up ones make up the 11.
+    genre_ids = [row["id"] for row in await db.fetch("SELECT id FROM genres ORDER BY slug")]
+    for i in range(len(genre_ids), 11):
+        genre_ids.append(
+            await db.fetchval(
+                "INSERT INTO genres (name, slug) VALUES ($1, $2) RETURNING id",
+                f"Made Up Genre {i}",
+                f"made-up-genre-{i}",
+            )
+        )
+    decades = list(range(1950, 2041, 10))  # 1950, 1960, ..., 2040
+    assert len(genre_ids) == 11 and len(decades) == 10
+
+    resp = await client.post(
+        "/games",
+        json={"selected_genres": [str(g) for g in genre_ids], "selected_decades": decades},
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert sorted(resp.json()["selected_genres"]) == sorted(str(g) for g in genre_ids)
+    assert sorted(resp.json()["selected_decades"]) == decades
+
+
+def test_100_genres_and_30_decades_are_accepted_by_the_model() -> None:
+    body = CreateGameRequest.model_validate(
+        {"selected_genres": _genre_ids(100), "selected_decades": _decades(30)}
+    )
+
+    assert len(body.selected_genres) == 100
+    assert len(body.selected_decades) == 30

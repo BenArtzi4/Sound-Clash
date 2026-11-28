@@ -81,8 +81,10 @@ class CreateGameRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    selected_genres: list[UUID] = Field(default_factory=list)
-    selected_decades: list[Decade] = Field(default_factory=list)
+    # Production has 11 genres and songs in 10 decades; the limits keep a
+    # bad body small (issue #446).
+    selected_genres: list[UUID] = Field(default_factory=list, max_length=100)
+    selected_decades: list[Decade] = Field(default_factory=list, max_length=30)
     setlist: SetlistInput | None = None
 
     @model_validator(mode="after")
