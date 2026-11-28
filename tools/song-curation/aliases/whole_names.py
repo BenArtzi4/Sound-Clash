@@ -19,10 +19,12 @@ two or more values. Columns: ``credit`` (the group's most common
 (``lower(btrim(artist))``), ``pieces`` (the credit cut as
 ``song_artist_keys`` cuts it, trimmed, joined with `` | ``), ``songs``, ``kind``
 (``film`` when every song has a soundtrack genre, else ``he`` when the name
-holds a Hebrew letter, else ``en``) and ``solo`` (per piece: ``yes`` when its
-key is a key of another credit group too). Most songs first, then the credit in
-byte order. The credits where the Python split and the dump's keys disagree
-also go to ``<out stem>.mismatch.tsv``.
+holds a Hebrew letter, else ``en``) and ``solo`` (per piece: ``yes`` when a
+playable song's ``artist_keys`` hold the piece's key but not all of this
+credit's keys, so the piece has songs of its own; a longer credit by the same
+act does not count). Most songs first, then the credit in byte order. The
+credits where the Python split and the dump's keys disagree also go to
+``<out stem>.mismatch.tsv``.
 
 ``sql REVIEWED OUT`` reads that TSV with four more columns (``research`` and
 ``check``: ``one`` or ``several``; ``source`` and ``check_note``: short notes)
@@ -114,7 +116,8 @@ class Group:
     name: str
     song_id: str  # one song of the group, for messages
     spellings: Counter[str] = field(default_factory=Counter)  # btrim(artist) -> songs
-    db_keys: set[str] = field(default_factory=set)  # the dump's artist_keys
+    db_keys: set[str] = field(default_factory=set)  # the dump's artist_keys, all songs
+    song_keys: list[frozenset[str]] = field(default_factory=list)  # each song's artist_keys
     songs: int = 0
     all_soundtrack: bool = True
 
@@ -149,6 +152,7 @@ def playable_groups(rows: Iterable[Mapping[str, Any]]) -> dict[str, Group]:
         group = groups.setdefault(credit.lower(), Group(credit.lower(), sid))
         group.spellings[credit] += 1
         group.db_keys.update(keys)
+        group.song_keys.append(frozenset(keys))
         group.songs += 1
         if not any(slug in SOUNDTRACK_GENRE_SLUGS for slug in common._genre_slugs(row)):
             group.all_soundtrack = False
@@ -159,6 +163,17 @@ def kind(group: Group) -> str:
     if group.all_soundtrack:
         return "film"
     return "he" if is_hebrew(group.name) else "en"
+
+
+def solo_mark(songs_with_piece: Iterable[frozenset[str]], credit_keys: set[str]) -> str:
+    """``yes`` when a song holds the piece's key but not all of the credit's keys.
+
+    ``songs_with_piece`` are the key sets of the playable songs that hold the
+    piece's key. A song that holds every key of the credit (the credit itself, or
+    a longer credit by the same act) does not show that the piece has songs of
+    its own.
+    """
+    return "no" if all(credit_keys <= keys for keys in songs_with_piece) else "yes"
 
 
 def tsv_line(cells: Sequence[str], where: str) -> str:
@@ -175,10 +190,11 @@ def write_lines(path: Path, lines: Sequence[str]) -> None:
 
 def write_candidates(dump: Path, out: Path) -> int:
     groups = playable_groups(common.supabase_rows(dump))
-    groups_of_key: dict[str, set[str]] = {}
+    songs_of_key: dict[str, list[frozenset[str]]] = {}  # key -> the playable songs' key sets
     for group in groups.values():
-        for key in group.db_keys:
-            groups_of_key.setdefault(key, set()).add(group.name)
+        for keys in group.song_keys:
+            for key in keys:
+                songs_of_key.setdefault(key, []).append(keys)
 
     listed = sorted(
         (g for g in groups.values() if len(g.db_keys) >= 2), key=lambda g: (-g.songs, g.credit)
@@ -186,9 +202,7 @@ def write_candidates(dump: Path, out: Path) -> int:
     lines = [tsv_line(CANDIDATE_COLUMNS, "header")]
     for group in listed:
         pieces = pieces_of(group.credit)
-        solo = [
-            "yes" if groups_of_key.get(p.lower(), set()) - {group.name} else "no" for p in pieces
-        ]
+        solo = [solo_mark(songs_of_key.get(p.lower(), []), group.db_keys) for p in pieces]
         cells = [group.credit, group.name, JOIN.join(pieces), str(group.songs), kind(group)]
         lines.append(tsv_line([*cells, JOIN.join(solo)], f"the credit of song {group.song_id}"))
 
@@ -296,7 +310,7 @@ def note(text: str) -> str:
 def review_text(upload: Sequence[Reviewed], disagree: Sequence[Reviewed]) -> list[str]:
     out = [f"One artist (will be uploaded): {len(upload)}"]
     out += [
-        f"{r.credit} instead of {', '.join(pieces_of(r.credit))} {DASH}"
+        f"{r.credit} instead of {JOIN.join(pieces_of(r.credit))} {DASH}"
         f" {note(r.source) or '(no source)'}"
         for r in upload
     ]

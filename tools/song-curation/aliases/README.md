@@ -302,8 +302,8 @@ up the new rows.
 ## Whole names (whole_names.py)
 
 The database cuts an artist credit into its artists (`song_artist_keys`, migration 049), so the
-Pick artists list counts the made-up duet `Zed Band & Ann Lee` for `Zed Band` and for `Ann Lee`.
-That is right for a duet. A few credits are one act whose name holds `&`, a comma or a Hebrew
+Pick artists list counts the made-up duet `Zed Band & Nia Quillfeather` for `Zed Band` and for
+`Nia Quillfeather`. That is right for a duet. A few credits are one act whose name holds `&`, a comma or a Hebrew
 word that starts with ו (made-up examples: the band `Salt & Pepper Co`, the film
 `The Lamp, the Owl and the Kettle`). A row in the private table `artist_whole_names` (`name` =
 the credit in lower case, trimmed) makes the list count that credit as one name. This tool finds
@@ -323,7 +323,9 @@ PYTHONUTF8=1 $P tools/song-curation/aliases/whole_names.py candidates $W/_dumps/
 One row per credit of the playable songs that the dump's `artist_keys` cut into two or more keys,
 most songs first. Columns: `credit` (the most common spelling), `name` (lower case, trimmed),
 `pieces`, `songs`, `kind` (`film`: every song has a soundtrack genre; `he`: Hebrew; `en`) and
-`solo` (for each piece: `yes` when it also has songs of its own). Credits where the Python split
+`solo` (for each piece: `yes` when it has songs of its own, that is, a playable song whose
+`artist_keys` hold the piece's key but not all the keys of this credit; a longer credit by the same
+act, such as `Salt & Pepper Co feat. Zed Band`, does not count). Credits where the Python split
 and the dump's keys disagree also go to `$W/candidates.mismatch.tsv`, with the count on stdout.
 The database's keys decide which credits are listed.
 
@@ -349,10 +351,12 @@ It writes five files in the folder of the SQL file:
 - `whole_names.sql`: one `INSERT ... ON CONFLICT DO NOTHING`. A second run changes nothing.
 - `undo_whole_names.sql`: one `DELETE` of exactly the uploaded names.
 - `verify_whole_names.sql`: one read-only `SELECT`, one row per uploaded name with `present`.
-- `review.txt`: for the maintainer. The names to upload (each with the pieces it replaces and the
-  source), then the rows the two agents did not agree on.
+- `review.txt`: for the maintainer. One line per name to upload,
+  `<credit> instead of <piece 1> | <piece 2> — <source>` (the pieces joined with ` | `, so a
+  comma cut shows), then the rows the two agents did not agree on.
 - `contained.txt`: credits that are not uploaded but hold an uploaded name as a part (made up:
-  `zed & co feat. ann lee` holds `zed & co`). They stay cut: the table matches whole credits only.
+  `zed & co feat. nia quillfeather` holds `zed & co`). They stay cut: the table matches whole
+  credits only.
 
 With no row to upload it writes no SQL file and says so (exit 1). The maintainer reads
 `review.txt` before anything is uploaded.

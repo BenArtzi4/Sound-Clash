@@ -45,13 +45,13 @@ def song(
 def base_rows() -> list[dict[str, Any]]:
     return [
         # A duet: both artists also have songs of their own. Two of the three playable songs
-        # spell it "Zed Band & Ann Lee"; the byte-smaller all-capitals spelling has one.
-        song("a01", "Zed Band & Ann Lee"),
-        song("a02", "ZED BAND & ANN LEE"),
-        song("a03", "Zed Band & Ann Lee"),
-        song("a04", "Zed Band & Ann Lee", unavailable=True),
+        # spell it "Zed Band & Nia Quillfeather"; the byte-smaller all-capitals spelling has one.
+        song("a01", "Zed Band & Nia Quillfeather"),
+        song("a02", "ZED BAND & NIA QUILLFEATHER"),
+        song("a03", "Zed Band & Nia Quillfeather"),
+        song("a04", "Zed Band & Nia Quillfeather", unavailable=True),
         song("a05", "Zed Band"),
-        song("a06", "Ann Lee"),
+        song("a06", "Nia Quillfeather"),
         # One band with "&"; once trimmed, two spellings with one song each (a tie). One of
         # the songs has no soundtrack genre, so it is not a film.
         song("b01", "Salt & pepper co"),
@@ -72,9 +72,11 @@ def extra_rows() -> list[dict[str, Any]]:
     """Rows the sql tests add: a quote, two credits that hold a whole name, a near miss."""
     return [
         song("g01", "Jo's Kettle & Co"),
-        song("h01", "Salt & Pepper Co feat. Ann Lee"),
+        song("h01", "Salt & Pepper Co feat. Nia Quillfeather"),
         song("h02", "Pim Tobble, the Lamp, the Owl and the Kettle"),
-        song("h03", "Salt & Pepper Cola & Ann Lee"),  # "salt & pepper co" then "la": not held
+        song(
+            "h03", "Salt & Pepper Cola & Nia Quillfeather"
+        ),  # "salt & pepper co" then "la": not held
     ]
 
 
@@ -110,7 +112,14 @@ def test_candidates_file_rows_and_order(tmp_path: Path) -> None:
     out = run_candidates(tmp_path, base_rows())
     assert read_tsv(out) == [
         CANDIDATE_HEADER,
-        ["Zed Band & Ann Lee", "zed band & ann lee", "Zed Band | Ann Lee", "3", "en", "yes | yes"],
+        [
+            "Zed Band & Nia Quillfeather",
+            "zed band & nia quillfeather",
+            "Zed Band | Nia Quillfeather",
+            "3",
+            "en",
+            "yes | yes",
+        ],
         ["Salt & Pepper Co", "salt & pepper co", "Salt | Pepper Co", "2", "en", "no | no"],
         [FILM, FILM.lower(), "The Lamp | the Owl and the Kettle", "2", "film", "no | no"],
         ["Kettle Duo", "kettle duo", "Kettle Duo", "1", "en", "no"],
@@ -122,8 +131,8 @@ def test_candidates_file_rows_and_order(tmp_path: Path) -> None:
 
 
 def test_duet_whose_artists_have_songs_of_their_own(listed: dict[str, dict[str, str]]) -> None:
-    row = listed["zed band & ann lee"]
-    assert row["pieces"] == "Zed Band | Ann Lee"
+    row = listed["zed band & nia quillfeather"]
+    assert row["pieces"] == "Zed Band | Nia Quillfeather"
     assert row["solo"] == "yes | yes"
     assert row["kind"] == "en"
 
@@ -133,6 +142,20 @@ def test_band_with_ampersand(listed: dict[str, dict[str, str]]) -> None:
     assert row["pieces"] == "Salt | Pepper Co"
     assert row["solo"] == "no | no"
     assert row["kind"] == "en"  # one of its songs has no soundtrack genre
+
+
+def test_solo_needs_a_song_without_the_rest_of_the_credit(tmp_path: Path) -> None:
+    def solo(rows: list[dict[str, Any]]) -> str:
+        header, *found = read_tsv(run_candidates(tmp_path, rows))
+        by_name = {row[1]: dict(zip(header, row, strict=True)) for row in found}
+        return by_name["salt & pepper co"]["solo"]
+
+    # A longer credit by the same act holds "salt" and "pepper co" together: still no.
+    longer = [*base_rows(), song("h01", "Salt & Pepper Co feat. Nia Quillfeather")]
+    assert solo(longer) == "no | no"
+    # A song by "Salt" alone, or with someone else, is a song of its own: yes.
+    assert solo([*longer, song("s01", "Salt")]) == "yes | no"
+    assert solo([*longer, song("s02", "Pepper Co & Zed Band")]) == "no | yes"
 
 
 def test_film_title_with_a_comma(listed: dict[str, dict[str, str]]) -> None:
@@ -153,17 +176,17 @@ def test_hebrew_credit_cut_at_a_word_that_starts_with_vav(
 
 def test_credit_with_one_key_is_not_listed(listed: dict[str, dict[str, str]]) -> None:
     assert "zed band" not in listed
-    assert "ann lee" not in listed
+    assert "nia quillfeather" not in listed
 
 
 def test_unavailable_songs_do_not_count(listed: dict[str, dict[str, str]]) -> None:
-    assert listed["zed band & ann lee"]["songs"] == "3"
+    assert listed["zed band & nia quillfeather"]["songs"] == "3"
     assert "gone & away" not in listed
 
 
 def test_most_common_spelling_then_byte_order(listed: dict[str, dict[str, str]]) -> None:
-    # 2 to 1 beats the byte-smaller "ZED BAND & ANN LEE".
-    assert listed["zed band & ann lee"]["credit"] == "Zed Band & Ann Lee"
+    # 2 to 1 beats the byte-smaller "ZED BAND & NIA QUILLFEATHER".
+    assert listed["zed band & nia quillfeather"]["credit"] == "Zed Band & Nia Quillfeather"
     # Trimmed, "Salt & Pepper Co" and "Salt & pepper co" tie 1 to 1: "P" sorts before "p".
     assert listed["salt & pepper co"]["credit"] == "Salt & Pepper Co"
 
@@ -188,7 +211,7 @@ def test_candidates_stdout_names_no_artist(
 ) -> None:
     run_candidates(tmp_path, base_rows() + extra_rows())
     stdout = capsys.readouterr().out.lower()
-    for word in ("zed", "ann lee", "salt", "lamp", "kettle", "tobble", "זוטי"):
+    for word in ("zed", "nia quillfeather", "salt", "lamp", "kettle", "tobble", "זוטי"):
         assert word not in stdout
 
 
@@ -213,10 +236,10 @@ def test_tab_or_line_break_is_refused(tmp_path: Path, artist: str) -> None:
 @pytest.mark.parametrize(
     "credit",
     [
-        "Zed Band & Ann Lee",
+        "Zed Band & Nia Quillfeather",
         FILM,
         HEBREW,
-        "Salt & Pepper Co feat. Ann Lee",
+        "Salt & Pepper Co feat. Nia Quillfeather",
         "A x B ft. C, D vs. E",
         "Zed & zed & Ann",
         "  Padded & Name  ",
@@ -340,9 +363,9 @@ def test_review_txt(sql_files: Path) -> None:
     assert read(sql_files, "review.txt") == "\n".join(
         [
             "One artist (will be uploaded): 3",
-            f"Salt & Pepper Co instead of Salt, Pepper Co {DASH} A made-up band page",
-            f"{FILM} instead of The Lamp, the Owl and the Kettle {DASH} A made-up film page",
-            f"Jo's Kettle & Co instead of Jo's Kettle, Co {DASH} (no source)",
+            f"Salt & Pepper Co instead of Salt | Pepper Co {DASH} A made-up band page",
+            f"{FILM} instead of The Lamp | the Owl and the Kettle {DASH} A made-up film page",
+            f"Jo's Kettle & Co instead of Jo's Kettle | Co {DASH} (no source)",
             "",
             "The agents did not agree (not uploaded): 2",
             f"Kettle Duo {DASH} first: several, second: one {DASH} a made-up shop page",
@@ -359,18 +382,18 @@ def test_contained_txt_finds_a_longer_credit_that_holds_an_uploaded_name(
         [
             "Credits that hold a whole name inside (they stay cut): 2",
             f"Pim Tobble, the Lamp, the Owl and the Kettle {DASH} holds {FILM.lower()}",
-            f"Salt & Pepper Co feat. Ann Lee {DASH} holds salt & pepper co",
+            f"Salt & Pepper Co feat. Nia Quillfeather {DASH} holds salt & pepper co",
             "",
         ]
     )
 
 
 def test_holds_needs_a_separator_on_each_side() -> None:
-    assert whole_names.holds("zed & co feat. ann lee", "zed & co")
-    assert whole_names.holds("ann lee & zed & co", "zed & co")
-    assert whole_names.holds("ann lee, zed & co, max", "zed & co")
-    assert not whole_names.holds("zed & cola & ann lee", "zed & co")
-    assert not whole_names.holds("razed & co & ann lee", "zed & co")
+    assert whole_names.holds("zed & co feat. nia quillfeather", "zed & co")
+    assert whole_names.holds("nia quillfeather & zed & co", "zed & co")
+    assert whole_names.holds("nia quillfeather, zed & co, max", "zed & co")
+    assert not whole_names.holds("zed & cola & nia quillfeather", "zed & co")
+    assert not whole_names.holds("razed & co & nia quillfeather", "zed & co")
     assert not whole_names.holds("zed & co", "zed & co")
 
 
@@ -437,5 +460,5 @@ def test_sql_stdout_names_no_artist(tmp_path: Path, capsys: pytest.CaptureFixtur
     run_sql(tmp_path, reviewed_file(tmp_path))
     stdout = capsys.readouterr().out.lower()
     assert "uploaded" in stdout
-    for word in ("zed", "ann lee", "salt", "lamp", "kettle", "tobble", "זוטי"):
+    for word in ("zed", "nia quillfeather", "salt", "lamp", "kettle", "tobble", "זוטי"):
         assert word not in stdout
