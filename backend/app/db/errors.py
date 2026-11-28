@@ -40,7 +40,7 @@ class SetlistError(DomainError):
 
     The code names the reason and is set per instance, so one class serves
     every refusal: ``setlist_too_long``, ``setlist_links_only``,
-    ``setlist_no_songs`` and ``setlist_empty`` for a pasted list, and later
+    ``setlist_no_songs`` and ``setlist_empty`` for a pasted list, and
     ``artists_not_enough`` for the Pick artists game. The message is the short
     plain-English text the host sees.
     """

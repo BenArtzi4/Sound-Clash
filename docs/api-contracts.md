@@ -685,7 +685,7 @@ The Pick artists tab's list of names (migration 062, `rpc-functions.md §3o`). N
 - `artist_key` is the value `POST /games` takes in `artists.names` (§2.2) and `artist_pick_status` takes in `p_keys` (§3.6).
 - `name` is the most common spelling in the catalog. `kind` is `film` when every playable song of the artist is in the `soundtracks` or `israeli-soundtracks` genre, else `he` when the key holds a Hebrew letter, else `en`. `aliases` are the other spellings a host may type (`artist_aliases`, migration 061), lower case, sorted; `[]` when none.
 - There is no count column, and the answer holds no song title, song id, YouTube id or start time. The song count only orders the list.
-- PostgREST's `db-max-rows` cap (1,000 on hosted Supabase) applies to a set-returning RPC, so one call is cut silently once the catalog passes the cap. The browser reads the list in pages: `.range(from, from + size - 1)`, then the next page, until a page comes back shorter than `size`.
+- PostgREST's `db-max-rows` cap (1,000 on hosted Supabase) applies to a set-returning RPC, so one call is cut silently once the catalog passes the cap. The browser must read the list in pages: `.range(from, from + size - 1)`, then the next page, until a page comes back shorter than `size`.
 
 ### 3.6 `POST /rest/v1/rpc/artist_pick_status`
 

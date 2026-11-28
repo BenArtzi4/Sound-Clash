@@ -56,7 +56,10 @@
 --      once). level = levels when ready; 0 when no key is known; otherwise
 --      greatest(1, least(levels - 1, ceil(levels * least(songs / min_songs,
 --      artists / min_artists)))). Anon-callable, no token: the answer is
---      ready, level, levels and min_artists, never a count.
+--      ready, level, levels and min_artists, with no count in it, but a
+--      caller who tries many choices can still work out rough song counts
+--      from ready and the levels, and that is accepted (the hidden counts
+--      are about what the host sees, host-music-choices §9).
 --   6. save_game_artists(game_code, keys): the backend's writer on "Create
 --      game" with artists. When the status of keys is not ready:
 --      artists_not_enough (22023), checked FIRST, and nothing is written.

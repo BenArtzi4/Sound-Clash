@@ -623,6 +623,7 @@ Not idempotent by design: the second call raises `setlist_exists` and leaves the
 ### Callers
 
 - FastAPI `POST /games` with a list, as the service role (`backend/app/routers/games.py::_save_pool_blocking`, `api-contracts.md §2.2`), right after it inserts the game. If the call raises, the backend deletes the game row again, best effort (its `game_secrets` row goes by `ON DELETE CASCADE`; a failed delete is logged); `setlist_empty` becomes the same 400 `setlist_empty` as an empty match, and any other failure is mapped as every database error is (usually a 500). Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. `SECURITY DEFINER`, so it does not depend on the service role holding grants on the two tables.
+- `save_game_artists` (§3q, migration 062), which saves an artist game's pool through it, every song in tier 1, for FastAPI `POST /games` with artists.
 
 ## 3j. `pick_next_pool_song`: the custom-game picker (internal-only)
 
@@ -715,7 +716,7 @@ Added in migration 062 (Pick artists: the host ticks artists and the game plays 
 
 ```sql
 CREATE OR REPLACE FUNCTION artist_game_rule()
-RETURNS TABLE(min_songs integer, min_artists integer, levels integer)  -- one row: 60, 5, 4
+RETURNS TABLE(min_songs integer, min_artists integer, levels integer)  -- one row
 LANGUAGE sql IMMUTABLE
 SET search_path = public;
 ```
@@ -796,7 +797,7 @@ Behavior:
 - `ready = artists >= min_artists AND songs >= min_songs`.
 - `level` is `levels` when ready, `0` when no key is known, and otherwise `greatest(1, least(levels - 1, ceil(levels * least(songs / min_songs, artists / min_artists))))`, so a choice that is not ready never shows the full sign.
 - `NULL` or empty `p_keys`: `(false, 0, levels, min_artists)`.
-- The answer is exactly these four columns: no song count leaves the server, and the coarse levels are the decided answer (no rate limit or noise is added).
+- The answer is exactly these four columns, with no count in it. A caller who tries many choices can still work out rough song counts from `ready` and the levels; that is accepted, because the hidden counts are about what the host sees (host-music-choices §9), so no rate limit or noise is added.
 
 ### Error semantics
 
@@ -812,6 +813,10 @@ Read-only. `CREATE OR REPLACE` plus re-runnable `REVOKE EXECUTE ... FROM PUBLIC`
 
 - The create page's Pick artists tab, direct through Supabase PostgREST, as the host ticks (plan PR 2, not built yet).
 - FastAPI `POST /games` with artists, as the service role, before it creates the game (plan Task 2); `save_game_artists` (§3q) checks it again itself.
+
+### Cost
+
+The list (§3o) and the status (§3p) each run `pickable_credits` once per call. Only the credits the splitter cuts are split by a regular expression (once each); a credit that is its own only key, most of them, is not split (§3n). Nothing is cached in a function. Target: under 30 ms each on 2,000 songs by 900 artists; the plan measures the median of 20 calls on the local stack. If either is over, the fix is a precomputed table refreshed when the catalog changes.
 
 ## 3q. `save_game_artists`: save an artist game's song pool (service-role only)
 
@@ -849,10 +854,6 @@ Not idempotent by design: a second call raises `setlist_exists`, as §3i does.
 ### Callers
 
 - FastAPI `POST /games` with artists, as the service role, right after it inserts the game (plan Task 2). Not anon-callable (no token): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
-
-### Cost
-
-The list (§3o) and the status (§3p) each run `pickable_credits` once per call: one regular-expression split per playable song. Nothing is cached in a function. Target: under 30 ms each on 2,000 songs by 900 artists; the plan measures the median of 20 calls on the local stack. If either is over, the fix is a precomputed table refreshed when the catalog changes.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -1222,13 +1223,13 @@ nothing and counts zero.
 | `game_setlist` | ✅ (no token; read-only, songs of that game only) | ✅ | Browser (end-of-game setlist on host console and team phones) |
 | `round_song` | ✅ (no token; read-only, one song of that game) | ✅ | Browser (host score panel, TV reveal) |
 | `game_pool_summary` | ✅ (token-gated, read-only) | ✅ | Host console's progress line for a game from the host's own songs (`useSetlistProgress`: once on mount and on each round change, stops after zero rows or `PGRST202`) |
-| `save_game_setlist` | ❌ | ✅ | FastAPI POST /games with a list |
+| `save_game_setlist` | ❌ | ✅ | FastAPI POST /games with a list, and `save_game_artists` (POST /games with artists) |
 | `pick_next_pool_song` | ❌ | ✅ | Internal call from `select_next_song` + `peek_next_song` for a custom setlist game. No HTTP caller. |
 | `record_song_demand` | ❌ | ✅ | FastAPI POST /games with a list, for the lines it could not match |
 | `list_pickable_artists` | ✅ (no token; read-only: artist names, kinds and spellings, no count) | ✅ | Browser (create page's Pick artists tab, plan PR 2) |
 | `artist_pick_status` | ✅ (no token; read-only: ready plus a level, no count) | ✅ | Browser (Pick artists tab, plan PR 2) and FastAPI POST /games with artists |
 | `save_game_artists` | ❌ | ✅ | FastAPI POST /games with artists |
-| `artist_game_rule` | ❌ | ✅ | Internal call from `artist_pick_status`. No HTTP caller. |
+| `artist_game_rule` | ❌ | ✅ | Internal call from `artist_pick_status` + `save_game_artists`. No HTTP caller. |
 | `pickable_credits` | ❌ | ✅ | Internal call from `list_pickable_artists`, `artist_pick_status` + `save_game_artists`. No HTTP caller. |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
