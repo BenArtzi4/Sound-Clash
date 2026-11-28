@@ -891,8 +891,8 @@ async def test_create_answer_has_today_s_keys_only(client, db) -> None:
 @pytest.mark.parametrize(
     ("names", "flag_one"),
     [
-        pytest.param(list(READY_ARTISTS[:4]), False, id="four-artists"),
-        pytest.param(list(READY_ARTISTS), True, id="59-songs"),
+        pytest.param(list(READY_ARTISTS[:4]), False, id="one-artist-short"),
+        pytest.param(list(READY_ARTISTS), True, id="one-song-short"),
         pytest.param(["Nobody At All"], False, id="unknown-artist"),
     ],
 )
