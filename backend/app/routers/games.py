@@ -27,6 +27,13 @@ pool with the service-role-only RPC ``save_game_setlist``; if that save fails,
 the game row is deleted again. Then ``record_song_demand`` counts the lines
 the catalog lacks, and a failure there is only logged. The backend touches
 ``game_setlists`` / ``game_song_pool`` only through these RPCs.
+
+A game from chosen artists (Pick artists, migration 062): create-game asks
+``artist_pick_status`` before any row exists and refuses a choice that is not
+ready as ``artists_not_enough``; otherwise it inserts the game with no genres
+and no decades and saves every playable song of the artists as the pool, all
+in tier 1, with the service-role-only RPC ``save_game_artists``, which checks
+the rule again itself. If that save fails, the game row is deleted again.
 """
 
 from __future__ import annotations
@@ -73,6 +80,8 @@ router = APIRouter(tags=["games"])
 logger = logging.getLogger(__name__)
 
 SETLIST_EMPTY_MESSAGE = "None of the songs in your list can play."
+# No number in it: no song count leaves the server through Pick artists.
+ARTISTS_NOT_ENOUGH_MESSAGE = "Pick more artists to start."
 # A demand key over this many UTF-8 bytes is skipped, not cut: song_demand's
 # primary key is a btree, and one key past its row limit (about 2,700 bytes)
 # fails the whole record_song_demand call.
@@ -174,6 +183,30 @@ def _delete_game_quietly(client: SupabaseClientLike, code: str) -> None:
         )
 
 
+def _save_or_delete_game(
+    client: SupabaseClientLike,
+    code: str,
+    function: str,
+    params: dict[str, Any],
+    refusal: SetlistError,
+) -> None:
+    """Call the RPC that saves the game's song pool, or delete the game and
+    raise.
+
+    The RPC's own refusal, ``refusal.code`` with SQLSTATE 22023, is raised as
+    ``refusal`` (a 400 the host has a message for). Any other failure is
+    mapped as every database error is (usually a 500).
+    """
+    try:
+        with mapped_postgrest_errors():
+            client.rpc(function, params).execute()
+    except DomainError as err:
+        _delete_game_quietly(client, code)
+        if sqlstate_and_message(err.__cause__) == ("22023", refusal.code):
+            raise refusal from err
+        raise
+
+
 def _save_pool_blocking(
     client: SupabaseClientLike, code: str, match: SetlistMatch, list_total: int
 ) -> None:
@@ -191,14 +224,34 @@ def _save_pool_blocking(
         "p_fill_song_ids": list(match.fill_song_ids),
         "p_list_total": list_total,
     }
-    try:
-        with mapped_postgrest_errors():
-            client.rpc("save_game_setlist", params).execute()
-    except DomainError as err:
-        _delete_game_quietly(client, code)
-        if sqlstate_and_message(err.__cause__) == ("22023", "setlist_empty"):
-            raise SetlistError("setlist_empty", SETLIST_EMPTY_MESSAGE) from err
-        raise
+    refusal = SetlistError("setlist_empty", SETLIST_EMPTY_MESSAGE)
+    _save_or_delete_game(client, code, "save_game_setlist", params, refusal)
+
+
+def _artists_ready_blocking(client: SupabaseClientLike, names: list[str]) -> bool:
+    """Whether the chosen artists are enough for a game, by the rule the
+    database holds (``artist_game_rule``). Only ``ready`` of the status is
+    read; the level is the create page's."""
+    with mapped_postgrest_errors():
+        resp = client.rpc("artist_pick_status", {"p_keys": names}).execute()
+    # A RETURNS TABLE function: PostgREST answers a list of one row.
+    rows = resp.data or []
+    return bool(rows) and rows[0].get("ready") is True
+
+
+def _save_artists_blocking(client: SupabaseClientLike, code: str, names: list[str]) -> None:
+    """Save every playable song of the chosen artists as the game's pool, all
+    in tier 1, or delete the game and raise.
+
+    ``save_game_artists`` checks the rule again before it writes, and once
+    more on the pool as saved. So a choice that shrank since the status was
+    read (a song flagged or deleted in between, or during the save itself) is
+    refused as ``artists_not_enough`` (22023) with no pool row kept: the same
+    400 as a small choice.
+    """
+    params = {"p_game_code": code, "p_keys": names}
+    refusal = SetlistError("artists_not_enough", ARTISTS_NOT_ENOUGH_MESSAGE)
+    _save_or_delete_game(client, code, "save_game_artists", params, refusal)
 
 
 def _error_reason(exc: Exception) -> str:
@@ -463,6 +516,8 @@ async def create_game(request: Request, body: CreateGameRequest) -> CreateGameRe
     is_test = is_test_request(request)
     if body.setlist is not None:
         return await _create_list_game(client, body.setlist.text, is_test)
+    if body.artists is not None:
+        return await _create_artist_game(client, body.artists.names, is_test)
 
     genre_ids = [str(g) for g in body.selected_genres]
     decades = list(body.selected_decades)
@@ -495,6 +550,27 @@ async def _create_list_game(
         "same_artist_songs": len(match.fill_song_ids),
     }
     return CreateGameResponse.model_validate({**inserted, "setlist": summary})
+
+
+async def _create_artist_game(
+    client: SupabaseClientLike, names: list[str], is_test: bool
+) -> CreateGameResponse:
+    """Create a game from the artists the host ticked (Pick artists).
+
+    The database decides at once, from the catalog as it is now (no snapshot,
+    no cache): ``artist_pick_status`` is asked before any row exists, so a
+    choice that is not enough writes nothing. Then the game is inserted with
+    no genres and no decades, and ``save_game_artists`` saves its pool. The
+    answer is a genre game's, with ``setlist`` null: it holds no count. No log
+    line here holds the names, a count or the status.
+    """
+    ready = await anyio.to_thread.run_sync(_artists_ready_blocking, client, names)
+    if not ready:
+        raise SetlistError("artists_not_enough", ARTISTS_NOT_ENOUGH_MESSAGE)
+
+    inserted = await _insert_new_game(client, [], [], is_test)
+    await anyio.to_thread.run_sync(_save_artists_blocking, client, inserted["game_code"], names)
+    return CreateGameResponse.model_validate(inserted)
 
 
 @router.post(

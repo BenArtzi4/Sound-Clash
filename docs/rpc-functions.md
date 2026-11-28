@@ -2,7 +2,7 @@
 
 The Postgres functions that hold the system's logic, one section each (most are PL/pgSQL; the song pickers and a few read-only lookups are plain SQL). Each is callable as a Postgres function; the browser-callable ones are exposed via Supabase PostgREST RPC, and the internal-only and service-role-only ones are revoked from `anon` (see each section's Callers). Together they encode every state-changing operation in the game.
 
-Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`. `db/migrations/060_game_song_pool.sql` added the custom-setlist functions `save_game_setlist` (§3i), `pick_next_pool_song` (§3j) and `game_pool_summary` (§3k), and the custom-game branch in `select_next_song` (§3c) and `peek_next_song` (§3d). `db/migrations/061_setlist_support_tables.sql` added `record_song_demand` (§3l), the writer of the durable `song_demand` queue.
+Functions live in `db/migrations/005_rpc_functions.sql` (the original five), `db/migrations/014_scoring_revamp.sql` (added `award_bonus`, retired `source/timeout` shape of the old award function), `db/migrations/016_multi_buzz_rounds.sql` (replaced the one-shot `award_points` with multi-buzz `award_attempt` + `end_round`), `db/migrations/018_split_attempt_release.sql` (split scoring from buzz-lock release: added `release_buzz_lock` and scoped `award_attempt`'s lock-clear to the wrong-buzz path), `db/migrations/019_refresh_locked_at_on_correct.sql` (`award_attempt` refreshes `locked_at` on a correct attempt so the floor-holding team's answer countdown restarts for the remaining token), `db/migrations/035_buzz_in_drop_round_update.sql` (dropped the now-dead `game_rounds.buzzed_team_id` mirror-write from `buzz_in` to halve buzz-path Realtime fan-out), `db/migrations/036_award_attempt_collapse_writes.sql` (collapsed `award_attempt`'s per-round writes into one combined `UPDATE … RETURNING`), `db/migrations/039_extend_game.sql` (added `extend_game`, the token-gated TTL bump behind the manager console's expiry warning banner), `db/migrations/043_award_attempt_boolean_overload.sql` (T7.1: added a boolean overload of `award_attempt` that derives the point magnitudes server-side, alongside the integer one), `db/migrations/044_drop_award_attempt_integer_overload.sql` (dropped the integer overload once the boolean-sending frontend had soaked, leaving the boolean signature as the sole `award_attempt` overload), and `db/migrations/046_team_secrets.sql` (added the `create_team_secret` trigger function that provisions a per-team `rejoin_token` for host-only team reconnect — issue #183; team rejoin itself is a FastAPI endpoint, not an anon RPC). `db/migrations/052_song_pool_counts.sql` added `song_pool_counts`, a read-only SQL function behind the create page's song count (§3f). `db/migrations/053_catalogue_rpcs.sql` added `game_setlist` (§3g) and `round_song` (§3h), the game-scoped song lookups the browser uses instead of reading the `songs` table, and made `song_pool_counts` `SECURITY DEFINER`. `db/migrations/060_game_song_pool.sql` added the custom-setlist functions `save_game_setlist` (§3i), `pick_next_pool_song` (§3j) and `game_pool_summary` (§3k), and the custom-game branch in `select_next_song` (§3c) and `peek_next_song` (§3d). `db/migrations/061_setlist_support_tables.sql` added `record_song_demand` (§3l), the writer of the durable `song_demand` queue. `db/migrations/062_pick_artists.sql` added the Pick artists functions `artist_game_rule` (§3m), `pickable_credits` (§3n), `list_pickable_artists` (§3o), `artist_pick_status` (§3p) and `save_game_artists` (§3q).
 
 ## 0. Conventions
 
@@ -623,6 +623,7 @@ Not idempotent by design: the second call raises `setlist_exists` and leaves the
 ### Callers
 
 - FastAPI `POST /games` with a list, as the service role (`backend/app/routers/games.py::_save_pool_blocking`, `api-contracts.md §2.2`), right after it inserts the game. If the call raises, the backend deletes the game row again, best effort (its `game_secrets` row goes by `ON DELETE CASCADE`; a failed delete is logged); `setlist_empty` becomes the same 400 `setlist_empty` as an empty match, and any other failure is mapped as every database error is (usually a 500). Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern. `SECURITY DEFINER`, so it does not depend on the service role holding grants on the two tables.
+- `save_game_artists` (§3q, migration 062), which saves an artist game's pool through it, every song in tier 1, for FastAPI `POST /games` with artists.
 
 ## 3j. `pick_next_pool_song`: the custom-game picker (internal-only)
 
@@ -708,6 +709,151 @@ Not idempotent by design: every call counts its keys once more.
 ### Callers
 
 - FastAPI `POST /games` with a list, as the service role, after the game and its pool are saved, inside a `try` that only logs: demand never fails a create (`backend/app/routers/games.py::_record_demand_blocking`). It sends only the lines the matcher marked `not_in_catalog` (not `several_songs_share_this_name`), with one key per song: each side of the parsed line is cleaned (`clean_title`, then `norm()`), the empty pieces are dropped, and the rest are sorted and joined with one space, so numbering, a duration, a recording note, a CSV row's other cells and the artist/title order never change the key (`api-contracts.md §2.2`). It skips an empty key, a key over 1,000 UTF-8 bytes (one key past the btree row limit would fail the whole call) and a line with a NUL character (Postgres text cannot hold one); with nothing left it makes no call. One create sends at most 100 keys: the first 100 different songs in list order (a key named again keeps its first line and takes no second place). Each `raw_line` is cut to its first 300 characters (it is only shown to the maintainer); the key is never cut. Not anon-callable (it takes no token, so anon could flood the queue): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
+
+## 3m. `artist_game_rule`: the ready rule's numbers (service-role only)
+
+Added in migration 062 (Pick artists: the host ticks artists and the game plays every catalog song by them; plan `docs/planning/2026-11-24-pick-artists-plan.md`). The **one place** that holds the rule: an artist game can be created only when the choice holds at least `min_songs` different songs by at least `min_artists` artists, and the ready sign has `levels` steps. The functions below read the numbers from here; no other file holds them (tests use them as data).
+
+```sql
+CREATE OR REPLACE FUNCTION artist_game_rule()
+RETURNS TABLE(min_songs integer, min_artists integer, levels integer)  -- one row
+LANGUAGE sql IMMUTABLE
+SET search_path = public;
+```
+
+Not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`. The browser learns `levels` and `min_artists` from `artist_pick_status` (§3p) and never `min_songs`.
+
+## 3n. `pickable_credits`: which artists each playable song counts for (service-role only)
+
+Added in migration 062. The source of the artist list (§3o), the status (§3p) and the save (§3q).
+
+```sql
+CREATE OR REPLACE FUNCTION pickable_credits()
+RETURNS TABLE(song_id uuid, artist_key text, shown text)
+LANGUAGE plpgsql STABLE
+SET search_path = public;
+```
+
+Behavior:
+- One row per playable song (`unavailable_at IS NULL`) and each artist it counts for; a song counts once per artist.
+- A song whose `lower(btrim(artist))` is a row of `artist_whole_names` (`data-model.md`) counts for that one name, and `shown` is `btrim(artist)`. Only a whole credit matches: the same name inside a longer credit ("… ft. …") is still cut.
+- Every other song counts for each value of its `artist_keys`: the credit is cut with `song_artist_keys`' regular expression (migration 049), copied into this function, and `shown` is the piece whose `lower(btrim())` is the key (the first such piece when a credit names the same artist twice). `tests/db/test_pick_artists.py::test_shown_pieces_agree_with_artist_keys` checks on tricky credits that the keys are exactly `songs.artist_keys`; **if `song_artist_keys` ever changes, change this copy with it.**
+- Set-based: at most one `regexp_split_to_table` per song in a `LATERAL` (skipped when the credit is its own only key, i.e. `artist_keys = ARRAY[lower(btrim(artist))]`: most credits), a join to `artist_whole_names`, one byte-order sort for the `DISTINCT ON`. No per-row subquery, nothing cached. It runs with `SET jit = off`: the planner takes the split for 1,000 rows per song, so the estimated cost passed the JIT thresholds and LLVM compiling took ~120 ms per call for ~15 ms of work (2,000 songs, testcontainer, 2026-11-28).
+- Whole names change only what the artist list shows and counts: `songs.artist_keys`, the song pickers and the list matcher (`POST /setlists/check`) keep the cut keys.
+- It returns song ids, so it is not anon-callable: `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`. The two `SECURITY DEFINER` callers run it as their owner.
+
+## 3o. `list_pickable_artists`: the Pick artists list of names
+
+Added in migration 062. Every artist the host can tick, with how to show and file it. No count.
+
+```sql
+CREATE OR REPLACE FUNCTION list_pickable_artists()
+RETURNS TABLE(
+  artist_key text,    -- the key artist_pick_status / save_game_artists take
+  name       text,    -- the most common spelling in the catalog
+  kind       text,    -- 'film', 'he' or 'en'
+  aliases    text[]   -- the artist_aliases spellings, sorted; '{}' when none
+) LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- One row per `artist_key` of `pickable_credits` (§3n). **All** names: the server does not cut the list (under 1,000 keys on 2026-11-28; see Callers for PostgREST's row cap).
+- `name` is the most common `shown` of the key; a tie goes to the smallest in byte order (`COLLATE "C"`).
+- `kind` is `film` when every playable song of the key is in a genre with the slug `soundtracks` or `israeli-soundtracks`; else `he` when the key holds a Hebrew letter (U+05D0 to U+05EA); else `en`.
+- `aliases` are the `artist_aliases.alias` values (migration 061) whose `artist_key` is the key, sorted in byte order.
+- Order: most songs first, then `name` in byte order. The song count only orders the list; **there is no count column**, and no song title, song id, video id or start time is in the answer (`tests/db/test_pick_artists.py` pins the four columns).
+- Read-only, no arguments, no token. `SECURITY DEFINER`, so it reads the catalog although anon cannot (migration 054).
+
+### Idempotency
+
+Read-only. `CREATE OR REPLACE` plus re-runnable `REVOKE EXECUTE ... FROM PUBLIC` and `GRANT EXECUTE ... TO anon, authenticated, service_role`.
+
+### Callers
+
+- The create page's Pick artists tab, direct through Supabase PostgREST (plan PR 2, not built yet). PostgREST applies `db-max-rows` (1,000 on hosted Supabase) to a set-returning RPC, so the browser must read the list in pages (`.range()` until a short page) or it is cut silently once the catalog passes 1,000 names.
+
+## 3p. `artist_pick_status`: ready plus a coarse level for a choice of artists
+
+Added in migration 062. The Pick artists tab's ready sign, and the backend's check before it saves an artist game.
+
+```sql
+CREATE OR REPLACE FUNCTION artist_pick_status(p_keys text[])
+RETURNS TABLE(
+  ready       boolean,  -- the game can be created with this choice
+  level       integer,  -- 0 .. levels
+  levels      integer,  -- artist_game_rule().levels
+  min_artists integer   -- artist_game_rule().min_artists, for "Pick at least N artists"
+) LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- Keys are compared after `lower(btrim())`. A repeated key, a `NULL` element and a key that `pickable_credits` does not have (unknown, or only flagged songs) are ignored. `artists` is the number of known keys; `songs` is the number of **different** songs they have, so a duet of two chosen artists counts once.
+- `ready = artists >= min_artists AND songs >= min_songs`.
+- `level` is `levels` when ready, `0` when no key is known, and otherwise `greatest(1, least(levels - 1, ceil(levels * least(songs / min_songs, artists / min_artists))))`, so a choice that is not ready never shows the full sign.
+- `NULL` or empty `p_keys`: `(false, 0, levels, min_artists)`.
+- The answer is exactly these four columns, with no count in it. A caller who tries many choices can still work out rough song counts from `ready` and the levels; that is accepted, because the hidden counts are about what the host sees (host-music-choices §9), so no rate limit or noise is added.
+
+### Error semantics
+
+| Failure | Exception |
+|---|---|
+| `p_keys` has more than 200 elements (repeats and `NULL`s count) | `22023 too_many_artists` |
+
+### Idempotency
+
+Read-only. `CREATE OR REPLACE` plus re-runnable `REVOKE EXECUTE ... FROM PUBLIC` and `GRANT EXECUTE ... TO anon, authenticated, service_role`.
+
+### Callers
+
+- The create page's Pick artists tab, direct through Supabase PostgREST, as the host ticks (plan PR 2, not built yet).
+- FastAPI `POST /games` with artists, as the service role, before it creates the game (plan Task 2); `save_game_artists` (§3q) checks it again itself.
+
+### Cost
+
+The list (§3o) and the status (§3p) each run `pickable_credits` once per call. Only the credits the splitter cuts are split by a regular expression (once each); a credit that is its own only key, most of them, is not split (§3n). Nothing is cached in a function. Target: under 30 ms each on 2,000 songs by 900 artists; the plan measures the median of 20 calls on the local stack. If either is over, the fix is a precomputed table refreshed when the catalog changes.
+
+## 3q. `save_game_artists`: save an artist game's song pool (service-role only)
+
+Added in migration 062. An artist game is a custom setlist game (§3i-§3k) whose pool holds every playable song of the chosen artists, all in tier 1. Nothing in the round path changes: `select_next_song` / `peek_next_song` play it through `pick_next_pool_song` (§3j) like any pool.
+
+```sql
+CREATE OR REPLACE FUNCTION save_game_artists(
+  p_game_code text,
+  p_keys      text[]
+) RETURNS integer   -- the pool size
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+```
+
+Behavior:
+- **The ready rule first:** when `artist_pick_status(p_keys)` (§3p) is not ready it raises `artists_not_enough` before anything else, even for a game that does not exist, and writes nothing.
+- Otherwise it calls `save_game_setlist(p_game_code, <the playable songs of the known keys>, '{}', <the number of known keys>)` (§3i): every song is tier 1, the `game_setlists` row is `ready = true` with `list_total` = the number of artists, in one call.
+- **Then the rule is checked again on the saved pool:** its size (the result of `save_game_setlist`) must be at least `min_songs`, and the chosen artists among its songs at least `min_artists`. The status, the song read and the pool `INSERT` each take their own snapshot, so a song flagged or deleted in between is left out of the pool and can take it below the rule; then it raises `artists_not_enough`, which undoes the whole call (the `game_setlists` row and the pool rows). The check reuses the song read's (song, artist) pairs: no extra `pickable_credits` read.
+- Returns the pool size.
+
+### Error semantics
+
+| Failure | Exception |
+|---|---|
+| The choice is not ready (too few artists or songs, or no key), before the save or on the saved pool | `22023 artists_not_enough`; nothing is written (a refusal on the saved pool undoes the call) |
+| `p_keys` has more than 200 elements | `22023 too_many_artists` (from §3p) |
+| Game doesn't exist (and the choice is ready) | `P0002 game_not_found` (from §3i) |
+| The game already has a pool | `P0001 setlist_exists` (from §3i) |
+
+### Idempotency
+
+Not idempotent by design: a second call raises `setlist_exists`, as §3i does.
+
+### Callers
+
+- FastAPI `POST /games` with artists, as the service role, right after it inserts the game (plan Task 2). Not anon-callable (no token): `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated`, `GRANT ... TO service_role`, per the migration-020 pattern.
 
 ## 3a. `award_bonus`: host-discretion bonus to a chosen team
 
@@ -1077,9 +1223,14 @@ nothing and counts zero.
 | `game_setlist` | ✅ (no token; read-only, songs of that game only) | ✅ | Browser (end-of-game setlist on host console and team phones) |
 | `round_song` | ✅ (no token; read-only, one song of that game) | ✅ | Browser (host score panel, TV reveal) |
 | `game_pool_summary` | ✅ (token-gated, read-only) | ✅ | Host console's progress line for a game from the host's own songs (`useSetlistProgress`: once on mount and on each round change, stops after zero rows or `PGRST202`) |
-| `save_game_setlist` | ❌ | ✅ | FastAPI POST /games with a list |
+| `save_game_setlist` | ❌ | ✅ | FastAPI POST /games with a list, and `save_game_artists` (POST /games with artists) |
 | `pick_next_pool_song` | ❌ | ✅ | Internal call from `select_next_song` + `peek_next_song` for a custom setlist game. No HTTP caller. |
 | `record_song_demand` | ❌ | ✅ | FastAPI POST /games with a list, for the lines it could not match |
+| `list_pickable_artists` | ✅ (no token; read-only: artist names, kinds and spellings, no count) | ✅ | Browser (create page's Pick artists tab, plan PR 2) |
+| `artist_pick_status` | ✅ (no token; read-only: ready plus a level, no count) | ✅ | Browser (Pick artists tab, plan PR 2) and FastAPI POST /games with artists |
+| `save_game_artists` | ❌ | ✅ | FastAPI POST /games with artists |
+| `artist_game_rule` | ❌ | ✅ | Internal call from `artist_pick_status` + `save_game_artists`. No HTTP caller. |
+| `pickable_credits` | ❌ | ✅ | Internal call from `list_pickable_artists`, `artist_pick_status` + `save_game_artists`. No HTTP caller. |
 | `start_round` | ❌ | ✅ | Internal call from `select_next_song`. No HTTP caller. |
 | `end_round` | ❌ | ✅ | Internal cleanup from `start_round` (which `select_next_song` invokes). No HTTP caller. |
 | `award_manager_bonus` | ✅ (token-gated) | ✅ | Browser (manager bonus picker) |
@@ -1090,7 +1241,7 @@ nothing and counts zero.
 | `set_song_availability` | ❌ | ✅ | FastAPI POST /admin/songs/check-availability with `commit=true` |
 | `create_team_secret` | ❌ | ✅ | Trigger only (`AFTER INSERT` on `game_teams`). No HTTP caller. Team rejoin is a FastAPI endpoint, not an anon RPC. |
 
-`buzz_in` checks the game code. Seven manager RPCs check the per-game token (migration 060 added `game_pool_summary`). The three read-only RPCs without a token return catalog counts or song metadata scoped to a game.
+`buzz_in` checks the game code. Seven manager RPCs check the per-game token (migration 060 added `game_pool_summary`). The five read-only RPCs without a token return catalog counts, song metadata scoped to a game, or artist names and a coarse ready level (migration 062).
 
 ## 7. Why Functions, Not Just Direct UPDATEs?
 

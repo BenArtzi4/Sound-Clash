@@ -2,14 +2,17 @@
 
 5xx responses must not leak internal/DB error detail (table/column/constraint
 names); 4xx responses keep their human-facing message. A validation error's
-details never echo the request body.
+details never echo the request body and hold at most 10 errors.
 """
 
 from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.exceptions import RequestValidationError
+
+from ._helpers import fetch_genre_ids
 
 
 async def test_internal_error_envelope_is_generic() -> None:
@@ -126,3 +129,62 @@ async def test_validation_envelope_cuts_long_names_and_drops_lone_surrogates() -
         {"type": "extra_forbidden", "loc": ["body", "a?"], "msg": "b?"},
         {"type": "missing", "loc": ["body", "selected_genres", 0], "msg": "Field required"},
     ]
+
+
+# ----- validation errors: at most the first 10 ---------------------------------
+#
+# A body with many bad parts got one error for each: 60 KB of bad genre ids gave
+# an answer of about 2.4 MB (issue #446). The envelope keeps the first 10, in
+# pydantic's order, and has no other key.
+
+
+async def test_validation_envelope_keeps_only_the_first_10_errors() -> None:
+    errors: list[dict[str, object]] = [
+        {"type": "extra_forbidden", "loc": ("body", f"field_{i}"), "msg": "Extra inputs"}
+        for i in range(25)
+    ]
+
+    status, raw = await _validation_body(errors)
+
+    assert status == 400
+    assert json.loads(raw) == {
+        "error": "validation_error",
+        "message": "invalid request body",
+        "details": {
+            "errors": [
+                {"type": "extra_forbidden", "loc": ["body", f"field_{i}"], "msg": "Extra inputs"}
+                for i in range(10)
+            ]
+        },
+    }
+
+
+@pytest.mark.needs_docker
+async def test_create_with_1000_bad_genre_ids_answers_at_most_10_errors(client) -> None:
+    body = {"selected_genres": [f"not-a-uuid-{i}" for i in range(1000)]}
+
+    resp = await client.post("/games", json=body)
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "validation_error"
+    assert len(resp.json()["details"]["errors"]) <= 10
+
+
+@pytest.mark.needs_docker
+async def test_create_with_50_unknown_keys_answers_exactly_10_errors(client, db) -> None:
+    # The list limits cannot hide these: each unknown key is one
+    # extra_forbidden error of its own.
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    body: dict[str, object] = {"selected_genres": [str(genres[0])]}
+    body.update({f"unknown_{i}": i for i in range(50)})
+
+    resp = await client.post("/games", json=body)
+
+    assert resp.status_code == 400
+    envelope = resp.json()
+    assert envelope["error"] == "validation_error"
+    assert set(envelope) == {"error", "message", "details"}
+    assert set(envelope["details"]) == {"errors"}
+    errors = envelope["details"]["errors"]
+    assert len(errors) == 10
+    assert {error["type"] for error in errors} == {"extra_forbidden"}

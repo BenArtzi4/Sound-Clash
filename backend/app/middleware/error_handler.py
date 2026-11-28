@@ -48,6 +48,10 @@ _PUBLIC_ERROR_KEYS = ("type", "loc", "msg", "url")
 # A "loc" can hold a field name from the body (an unknown field), so its text
 # is cut too.
 _MAX_ERROR_TEXT = 200
+# The envelope keeps only the first errors, in pydantic's order: a body with
+# many bad parts (a long list of bad ids, many unknown fields) got one error
+# for each, an answer many times the size of the request (issue #446).
+_MAX_ERRORS = 10
 
 
 def _safe_text(text: str) -> str:
@@ -71,7 +75,7 @@ async def request_validation_error_handler(request: Request, exc: Exception) -> 
         status=400,
         code="validation_error",
         message="invalid request body",
-        details={"errors": [_public_error(error) for error in exc.errors()]},
+        details={"errors": [_public_error(error) for error in exc.errors()[:_MAX_ERRORS]]},
     )
 
 

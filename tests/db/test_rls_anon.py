@@ -180,6 +180,26 @@ async def test_anon_cannot_read_or_write_the_setlist_support_tables(
 
 
 @pytest.mark.asyncio
+async def test_anon_cannot_read_or_write_artist_whole_names(
+    db: asyncpg.Connection, anon_conn: asyncpg.Connection
+) -> None:
+    """Migration 062: the whole-names table is private catalog data (each row
+    names a catalog artist). anon is refused outright ("permission denied"),
+    even with a row in the table, and cannot add, change or delete a row."""
+    await db.execute("INSERT INTO artist_whole_names (name) VALUES ('salt, pepper & co')")
+    for sql in (
+        "SELECT * FROM artist_whole_names",
+        "INSERT INTO artist_whole_names (name) VALUES ('x')",
+        "UPDATE artist_whole_names SET name = 'x'",
+        "DELETE FROM artist_whole_names",
+    ):
+        with pytest.raises(
+            (asyncpg.InsufficientPrivilegeError, asyncpg.exceptions.InsufficientPrivilegeError)
+        ):
+            await anon_conn.execute(sql)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("table", CATALOG_TABLES)
 async def test_catalog_has_no_anon_policy_or_select_grant(
     table: str, db: asyncpg.Connection
