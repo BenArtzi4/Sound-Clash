@@ -241,7 +241,7 @@ def test_tab_or_line_break_is_refused(tmp_path: Path, artist: str) -> None:
         HEBREW,
         "Salt & Pepper Co feat. Nia Quillfeather",
         "A x B ft. C, D vs. E",
-        "Zed & zed & Ann",
+        "Zed & zed & Nia",
         "  Padded & Name  ",
     ],
 )

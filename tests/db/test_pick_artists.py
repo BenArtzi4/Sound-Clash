@@ -122,7 +122,7 @@ async def _columns(conn: asyncpg.Connection, sql: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-async def test_rule_is_60_songs_5_artists_4_levels(db: asyncpg.Connection) -> None:
+async def test_rule_numbers(db: asyncpg.Connection) -> None:
     assert dict(await db.fetchrow(RULE)) == {"min_songs": 60, "min_artists": 5, "levels": 4}
 
 
@@ -132,10 +132,10 @@ async def test_rule_is_60_songs_5_artists_4_levels(db: asyncpg.Connection) -> No
 
 
 async def test_list_has_no_count_and_orders_by_most_songs(db: asyncpg.Connection) -> None:
-    await _songs(db, "Ann Lee", 1)
+    await _songs(db, "Nia Quillfeather", 1)
     await _songs(db, "Zed Band", 3)
     assert await _columns(db, LIST) == ["artist_key", "name", "kind", "aliases"]
-    assert [r["artist_key"] for r in await _list(db)] == ["zed band", "ann lee"]
+    assert [r["artist_key"] for r in await _list(db)] == ["zed band", "nia quillfeather"]
 
 
 async def test_list_ties_sort_by_name_in_byte_order(db: asyncpg.Connection) -> None:
@@ -149,7 +149,7 @@ async def test_list_ties_sort_by_name_in_byte_order(db: asyncpg.Connection) -> N
 
 
 async def test_list_skips_unavailable_songs(db: asyncpg.Connection) -> None:
-    await _songs(db, "Ann Lee", 1, unavailable=True)
+    await _songs(db, "Nia Quillfeather", 1, unavailable=True)
     await _songs(db, "Zed Band", 1)
     await _songs(db, "Zed Band", 1, unavailable=True)
     assert [r["artist_key"] for r in await _list(db)] == ["zed band"]
@@ -173,7 +173,7 @@ async def test_list_kinds(db: asyncpg.Connection) -> None:
     await _songs(db, "Dee Fox", 1, genre=films)
     await _songs(db, "Dee Fox", 1, genre=rock, unavailable=True)
     # en: a song in no genre at all
-    await _songs(db, "Ann Lee", 1)
+    await _songs(db, "Nia Quillfeather", 1)
 
     kinds = {k: r["kind"] for k, r in (await _by_key(db)).items()}
     assert kinds == {
@@ -182,7 +182,7 @@ async def test_list_kinds(db: asyncpg.Connection) -> None:
         HE_NAME: "he",
         "zed band": "en",
         "dee fox": "film",
-        "ann lee": "en",
+        "nia quillfeather": "en",
     }
 
 
@@ -191,19 +191,19 @@ async def test_list_name_is_the_most_common_spelling(db: asyncpg.Connection) -> 
     await _songs(db, "  Zed Band ", 1)  # padding is not part of the spelling
     await _songs(db, "ZED BAND", 1)
     # A tie: the smallest in byte order ("A" before "a").
-    await _songs(db, "ann lee", 1)
-    await _songs(db, "Ann Lee", 1)
+    await _songs(db, "nia quillfeather", 1)
+    await _songs(db, "Nia Quillfeather", 1)
     names = {k: r["name"] for k, r in (await _by_key(db)).items()}
-    assert names == {"zed band": "Zed Band", "ann lee": "Ann Lee"}
+    assert names == {"zed band": "Zed Band", "nia quillfeather": "Nia Quillfeather"}
 
 
 async def test_list_carries_aliases(db: asyncpg.Connection) -> None:
     await _songs(db, "Zed Band", 1)
-    await _songs(db, "Ann Lee", 1)
+    await _songs(db, "Nia Quillfeather", 1)
     await db.execute(ADD_ALIAS, "zed band alt", "zed band")
     by_key = await _by_key(db)
     assert by_key["zed band"]["aliases"] == ["zed band alt"]
-    assert by_key["ann lee"]["aliases"] == []
+    assert by_key["nia quillfeather"]["aliases"] == []
 
     # Sorted in byte order (Python's str order is code-point order, the same
     # for UTF-8); an alias of a key with no playable song lists nothing.
@@ -217,12 +217,12 @@ async def test_list_carries_aliases(db: asyncpg.Connection) -> None:
 
 
 async def test_duet_counts_for_both_artists(db: asyncpg.Connection) -> None:
-    await _songs(db, "Zed Band & Ann Lee", 1)
+    await _songs(db, "Zed Band & Nia Quillfeather", 1)
     await _songs(db, "Zed Band", 1)
     rows = await _list(db)
     assert [(r["artist_key"], r["name"]) for r in rows] == [
         ("zed band", "Zed Band"),
-        ("ann lee", "Ann Lee"),
+        ("nia quillfeather", "Nia Quillfeather"),
     ]
 
 
@@ -245,8 +245,14 @@ async def test_whole_name_is_one_artist(db: asyncpg.Connection) -> None:
     assert set(by_key) == {"salt, pepper & co"}
     assert by_key["salt, pepper & co"]["name"] == "Salt, Pepper & Co"
 
-    await _songs(db, "Salt, Pepper & Co ft. Ann Lee", 1)
-    assert set(await _by_key(db)) == {"salt, pepper & co", "salt", "pepper", "co", "ann lee"}
+    await _songs(db, "Salt, Pepper & Co ft. Nia Quillfeather", 1)
+    assert set(await _by_key(db)) == {
+        "salt, pepper & co",
+        "salt",
+        "pepper",
+        "co",
+        "nia quillfeather",
+    }
 
 
 async def test_whole_name_must_be_lowercase_and_trimmed(db: asyncpg.Connection) -> None:
@@ -269,26 +275,26 @@ async def test_shown_pieces_agree_with_artist_keys(db: asyncpg.Connection) -> No
         "Zed Band",
         "Zed Band,",
         HE_NAME,
-        "Zed Band & Ann Lee",
-        "Zed Band ft. Ann Lee",
-        "Zed Band Ft Ann Lee",
-        "Zed Band feat. Ann Lee",
-        "Zed Band FEAT Ann Lee",
-        "Zed Band featuring Ann Lee",
-        "Zed Band vs. Ann Lee",
-        "Zed Band vs Ann Lee",
-        "Zed Band x Ann Lee",
-        "Zed X & Ann Lee",
+        "Zed Band & Nia Quillfeather",
+        "Zed Band ft. Nia Quillfeather",
+        "Zed Band Ft Nia Quillfeather",
+        "Zed Band feat. Nia Quillfeather",
+        "Zed Band FEAT Nia Quillfeather",
+        "Zed Band featuring Nia Quillfeather",
+        "Zed Band vs. Nia Quillfeather",
+        "Zed Band vs Nia Quillfeather",
+        "Zed Band x Nia Quillfeather",
+        "Zed X & Nia Quillfeather",
         "X Zed",
-        "Zed Band, Ann Lee",
-        "Zed Band,Ann Lee",
-        "Zed Band  &  Ann Lee",
-        "Zed Band & & Ann Lee",
+        "Zed Band, Nia Quillfeather",
+        "Zed Band,Nia Quillfeather",
+        "Zed Band  &  Nia Quillfeather",
+        "Zed Band & & Nia Quillfeather",
         "  Padded Zed  ",
-        "Zed Band & Ann Lee ft. Cora Vale",
+        "Zed Band & Nia Quillfeather ft. Cora Vale",
         "Zed Band & ZED BAND",
         "זד בנד וזד",
-        f"{HE_NAME} ft. Ann Lee",
+        f"{HE_NAME} ft. Nia Quillfeather",
         " , ",
         "Salt, Pepper & Co",
     ]
@@ -337,7 +343,7 @@ async def test_status_ready_needs_both_rules(db: asyncpg.Connection) -> None:
 
 
 async def test_status_levels(db: asyncpg.Connection) -> None:
-    small = await _band(db, [1], "Ann Lee")
+    small = await _band(db, [1], "Nia Quillfeather")
     thirty = await _band(db, [6, 6, 6, 6, 6], "Kite Club")
     fifty_nine = await _band(db, [12, 12, 12, 12, 11], "Moss Row")
     four = await _band(db, [20, 20, 20, 20], "Dee Fox")
@@ -363,11 +369,11 @@ async def test_status_levels(db: asyncpg.Connection) -> None:
 
 async def test_status_counts_a_duet_once(db: asyncpg.Connection) -> None:
     keys = await _band(db, [11, 11, 11, 11], "Zed Band")  # 44 songs
-    await _songs(db, "Zed Band 1 & Ann Lee", 15)  # 59 different songs, 74 credits
-    keys.append("ann lee")
+    await _songs(db, "Zed Band 1 & Nia Quillfeather", 15)  # 59 different songs, 74 credits
+    keys.append("nia quillfeather")
     status = await _status(db, keys)
     assert (status["ready"], status["level"]) == (False, 3)
-    await _songs(db, "Ann Lee ft. Zed Band 2", 1)  # 60 different songs
+    await _songs(db, "Nia Quillfeather ft. Zed Band 2", 1)  # 60 different songs
     assert (await _status(db, keys))["ready"] is True
 
 
@@ -375,13 +381,13 @@ async def test_status_ignores_unknown_and_repeated_keys(db: asyncpg.Connection) 
     """Review Focus 3: unknown keys, repeats, other case or padding and NULL
     elements add nothing; a key whose only song is flagged is unknown."""
     keys = await _band(db, [15, 15, 15, 15], "Zed Band")  # 4 artists, 60 songs
-    await _songs(db, "Ann Lee", 1, unavailable=True)
+    await _songs(db, "Nia Quillfeather", 1, unavailable=True)
     noisy: list[str | None] = [
         *keys,
         keys[0],
         " ZED BAND 2 ",
         "nobody here",
-        "ann lee",
+        "nia quillfeather",
         None,
     ]
     assert (await _status(db, noisy))["ready"] is False
@@ -409,7 +415,7 @@ async def test_status_columns_hold_no_count(db: asyncpg.Connection) -> None:
 async def test_save_fills_tier_one_and_marks_ready(db: asyncpg.Connection) -> None:
     keys = await _band(db, [12, 12, 12, 12, 12], "Zed Band")
     await _songs(db, "Zed Band 1", 1, unavailable=True)  # cannot play: not in the pool
-    await _songs(db, "Ann Lee", 3)  # not chosen
+    await _songs(db, "Nia Quillfeather", 3)  # not chosen
     code = await create_test_game(db, status="waiting")
     expected = {
         r["id"]
@@ -468,7 +474,7 @@ async def test_save_whole_name_game(db: asyncpg.Connection) -> None:
 
 async def test_artist_game_plays_only_its_pool(db: asyncpg.Connection) -> None:
     keys = await _band(db, [12, 12, 12, 12, 12], "Zed Band")
-    await _songs(db, "Ann Lee", 5)  # in the catalog, not in the game
+    await _songs(db, "Nia Quillfeather", 5)  # in the catalog, not in the game
     code = await create_test_game(db, status="waiting")
     token = await fetch_manager_token(db, code)
     assert await db.fetchval(SAVE, code, keys) == 60
