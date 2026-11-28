@@ -1046,15 +1046,37 @@ async def test_more_than_200_names_is_a_400(client, db) -> None:
     await _assert_no_game(db)
 
 
+# JSON escapes, built from chr(92) (a backslash) like LONE_SURROGATE, so no
+# control character is in this file. The body goes as raw ASCII bytes: the
+# client cannot encode a lone surrogate.
+NUL_ESCAPE = chr(92) + "u0000"
+TAB_ESCAPE = chr(92) + "t"
+DEL_ESCAPE = chr(92) + "u007f"
+
+
 @pytest.mark.parametrize(
     "name",
-    [pytest.param("x" * 121, id="121-characters"), pytest.param("", id="empty")],
+    [
+        pytest.param("x" * 121, id="121-characters"),
+        pytest.param("", id="empty"),
+        # A NUL reached PostgREST and gave a 500 (Postgres text cannot hold it).
+        pytest.param(f"Zed{NUL_ESCAPE}Band", id="nul"),
+        pytest.param(f"Zed{TAB_ESCAPE}Band", id="tab-inside"),
+        pytest.param(f"Zed{DEL_ESCAPE}Band", id="del"),
+        pytest.param(f"Zed {LONE_SURROGATE}Band", id="lone-surrogate"),
+    ],
 )
 async def test_a_name_over_120_characters_or_empty_is_a_400(client, db, name: str) -> None:
-    resp = await _create_from_artists(client, ["Zed Band", name])
+    raw = ('{"artists": {"names": ["Zed Band", "' + name + '"]}}').encode("ascii")
+
+    resp = await client.post("/games", content=raw, headers={"Content-Type": "application/json"})
 
     assert resp.status_code == 400, resp.text
-    assert resp.json()["error"] == "validation_error"
+    envelope = resp.json()
+    assert envelope["error"] == "validation_error"
+    # The envelope echoes no input: no name of the body, no "input" key.
+    assert "Zed" not in resp.text
+    assert all("input" not in error for error in envelope["details"]["errors"])
     await _assert_no_game(db)
 
 

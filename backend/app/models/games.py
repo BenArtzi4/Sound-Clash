@@ -8,6 +8,7 @@ from typing import Annotated, Self
 from uuid import UUID
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -72,10 +73,32 @@ TeamName = Annotated[
 # songs.release_year CHECK; the picker floors release_year to its decade and
 # matches by membership (migration 032).
 Decade = Annotated[int, Field(ge=1900, le=2100)]
+# Characters an artist name must not hold: the C0 control characters
+# (U+0000-U+001F), DEL (U+007F) and the UTF-16 surrogates (U+D800-U+DFFF).
+# Postgres text cannot store a NUL (it reached PostgREST and gave a 500), no
+# catalog name holds the others, and UTF-8 cannot encode a lone surrogate
+# (pydantic already refuses one as string_unicode; this is the backstop).
+# Built from code points so the source carries no invisible character.
+_REFUSED_ARTIST_NAME_CHARS = re.compile(
+    "[{}-{}{}{}-{}]".format(*map(chr, (0x00, 0x1F, 0x7F, 0xD800, 0xDFFF)))
+)
+
+
+def _refuse_control_characters(value: str) -> str:
+    if _REFUSED_ARTIST_NAME_CHARS.search(value):
+        # PydanticCustomError: the 400 envelope's message names no input.
+        raise PydanticCustomError("artist_name", "an artist name cannot hold a control character")
+    return value
+
+
 # An artist's key as list_pickable_artists gives it (migration 062). It is
 # passed to the database as given: the database lowercases and trims it,
 # ignores a repeat and a name it does not know.
-ArtistName = Annotated[str, StringConstraints(min_length=1, max_length=120)]
+ArtistName = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=120),
+    AfterValidator(_refuse_control_characters),
+]
 
 
 class ArtistsInput(BaseModel):
