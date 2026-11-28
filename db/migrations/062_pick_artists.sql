@@ -62,9 +62,12 @@
 --      artists_not_enough (22023), checked FIRST, and nothing is written.
 --      Otherwise save_game_setlist(game_code, <the songs of the known keys>,
 --      '{}', <the number of known keys>): every song in tier 1, the
---      game_setlists row ready = true, in one call. A missing game raises
---      save_game_setlist's game_not_found (P0002). Returns the pool size.
---      Service-role only.
+--      game_setlists row ready = true, in one call. Then the rule is checked
+--      again on the pool as saved (its songs, and the chosen artists among
+--      them): a song flagged between the reads and the INSERT can leave it
+--      below the rule, and then artists_not_enough undoes the whole call. A
+--      missing game raises save_game_setlist's game_not_found (P0002).
+--      Returns the pool size. Service-role only.
 --
 -- Performance: the list and the status are read while the host picks, so
 -- pickable_credits is set-based -- at most one regexp split per song
@@ -294,9 +297,14 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_ready    boolean;
-  v_song_ids uuid[];
-  v_artists  integer;
+  v_rule          record;
+  v_ready         boolean;
+  v_pair_songs    uuid[];
+  v_pair_keys     text[];
+  v_song_ids      uuid[];
+  v_artists       integer;
+  v_pool_size     integer;
+  v_saved_artists integer;
 BEGIN
   -- The ready rule first (Review Focus 1): a small choice writes nothing,
   -- whatever the game. artist_pick_status raises too_many_artists itself.
@@ -305,14 +313,37 @@ BEGIN
     RAISE EXCEPTION 'artists_not_enough' USING ERRCODE = '22023';
   END IF;
 
-  -- The same known keys as the status, and every playable song they have.
-  SELECT array_agg(DISTINCT pc.song_id), count(DISTINCT pc.artist_key)
-    INTO v_song_ids, v_artists
+  -- The same known keys as the status: every playable song they have, and
+  -- each (song, key) pair for the check on the saved pool below. The two
+  -- pair arrays share one ORDER BY, so their elements stay paired.
+  SELECT array_agg(pc.song_id ORDER BY pc.song_id, pc.artist_key COLLATE "C"),
+         array_agg(pc.artist_key ORDER BY pc.song_id, pc.artist_key COLLATE "C"),
+         array_agg(DISTINCT pc.song_id),
+         count(DISTINCT pc.artist_key)
+    INTO v_pair_songs, v_pair_keys, v_song_ids, v_artists
     FROM pickable_credits() pc
    WHERE pc.artist_key IN (SELECT lower(btrim(u.k)) FROM unnest(p_keys) AS u(k));
 
   -- game_not_found, setlist_exists and setlist_empty come from here.
-  RETURN save_game_setlist(p_game_code, v_song_ids, '{}'::uuid[], v_artists);
+  v_pool_size := save_game_setlist(p_game_code, v_song_ids, '{}'::uuid[], v_artists);
+
+  -- The rule again, on the pool as saved. The status, the read above and
+  -- save_game_setlist's INSERT each take their own snapshot, so a song
+  -- flagged (or deleted) in between is left out of the pool and can take it
+  -- below the rule. The raise undoes the whole call: the game_setlists row
+  -- and the pool rows.
+  SELECT count(DISTINCT c.akey)
+    INTO v_saved_artists
+    FROM game_song_pool g
+    JOIN unnest(v_pair_songs, v_pair_keys) AS c(sid, akey) ON c.sid = g.song_id
+   WHERE g.game_code = p_game_code;
+
+  SELECT r.min_songs, r.min_artists INTO v_rule FROM artist_game_rule() r;
+  IF v_pool_size < v_rule.min_songs OR v_saved_artists < v_rule.min_artists THEN
+    RAISE EXCEPTION 'artists_not_enough' USING ERRCODE = '22023';
+  END IF;
+
+  RETURN v_pool_size;
 END $$;
 
 -- ---------------------------------------------------------------------------

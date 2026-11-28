@@ -829,13 +829,15 @@ SET search_path = public;
 
 Behavior:
 - **The ready rule first:** when `artist_pick_status(p_keys)` (§3p) is not ready it raises `artists_not_enough` before anything else, even for a game that does not exist, and writes nothing.
-- Otherwise it calls `save_game_setlist(p_game_code, <the playable songs of the known keys>, '{}', <the number of known keys>)` (§3i) and returns its result: every song is tier 1, the `game_setlists` row is `ready = true` with `list_total` = the number of artists, in one call.
+- Otherwise it calls `save_game_setlist(p_game_code, <the playable songs of the known keys>, '{}', <the number of known keys>)` (§3i): every song is tier 1, the `game_setlists` row is `ready = true` with `list_total` = the number of artists, in one call.
+- **Then the rule is checked again on the saved pool:** its size (the result of `save_game_setlist`) must be at least `min_songs`, and the chosen artists among its songs at least `min_artists`. The status, the song read and the pool `INSERT` each take their own snapshot, so a song flagged or deleted in between is left out of the pool and can take it below the rule; then it raises `artists_not_enough`, which undoes the whole call (the `game_setlists` row and the pool rows). The check reuses the song read's (song, artist) pairs: no extra `pickable_credits` read.
+- Returns the pool size.
 
 ### Error semantics
 
 | Failure | Exception |
 |---|---|
-| The choice is not ready (too few artists or songs, or no key) | `22023 artists_not_enough`; nothing is written |
+| The choice is not ready (too few artists or songs, or no key), before the save or on the saved pool | `22023 artists_not_enough`; nothing is written (a refusal on the saved pool undoes the call) |
 | `p_keys` has more than 200 elements | `22023 too_many_artists` (from §3p) |
 | Game doesn't exist (and the choice is ready) | `P0002 game_not_found` (from §3i) |
 | The game already has a pool | `P0001 setlist_exists` (from §3i) |

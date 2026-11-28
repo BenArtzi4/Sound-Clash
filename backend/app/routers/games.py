@@ -243,9 +243,11 @@ def _save_artists_blocking(client: SupabaseClientLike, code: str, names: list[st
     """Save every playable song of the chosen artists as the game's pool, all
     in tier 1, or delete the game and raise.
 
-    ``save_game_artists`` checks the rule again first, so a choice that shrank
-    since the status was read (a song flagged or deleted in between) is
-    refused as ``artists_not_enough`` (22023): the same 400 as a small choice.
+    ``save_game_artists`` checks the rule again before it writes, and once
+    more on the pool as saved. So a choice that shrank since the status was
+    read (a song flagged or deleted in between, or during the save itself) is
+    refused as ``artists_not_enough`` (22023) with no pool row kept: the same
+    400 as a small choice.
     """
     params = {"p_game_code": code, "p_keys": names}
     refusal = SetlistError("artists_not_enough", ARTISTS_NOT_ENOUGH_MESSAGE)

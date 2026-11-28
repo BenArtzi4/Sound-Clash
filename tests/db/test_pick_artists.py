@@ -15,8 +15,9 @@ artist_whole_names / artist_aliases are private and never committed.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +116,30 @@ async def _columns(conn: asyncpg.Connection, sql: str) -> list[str]:
     """The answer's column names, read from the statement (works with 0 rows)."""
     stmt = await conn.prepare(sql)
     return [a.name for a in stmt.get_attributes()]
+
+
+@contextlib.asynccontextmanager
+async def _pool_insert_skips(conn: asyncpg.Connection, song_id: uuid.UUID) -> AsyncIterator[None]:
+    """A test-only BEFORE INSERT trigger on game_song_pool that drops the row
+    of one song. It stands for the availability scan flagging that song after
+    save_game_artists read the choice and before save_game_setlist's INSERT.
+    The db suite shares one database, so the trigger and its function are
+    dropped again whatever the test does."""
+    try:
+        await conn.execute(
+            "CREATE FUNCTION test_skip_one_pool_row() RETURNS trigger "
+            "LANGUAGE plpgsql AS $$ BEGIN "
+            f"IF NEW.song_id = '{song_id}'::uuid THEN RETURN NULL; END IF; "
+            "RETURN NEW; END $$"
+        )
+        await conn.execute(
+            "CREATE TRIGGER test_skip_one_pool_row BEFORE INSERT ON game_song_pool "
+            "FOR EACH ROW EXECUTE FUNCTION test_skip_one_pool_row()"
+        )
+        yield
+    finally:
+        await conn.execute("DROP TRIGGER IF EXISTS test_skip_one_pool_row ON game_song_pool")
+        await conn.execute("DROP FUNCTION IF EXISTS test_skip_one_pool_row()")
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +474,42 @@ async def test_save_refuses_a_small_choice_and_writes_nothing(db: asyncpg.Connec
         await db.fetchval(SAVE, code, [f"nobody {i}" for i in range(201)])
     assert await db.fetchval("SELECT count(*) FROM game_setlists") == 0
     assert await db.fetchval("SELECT count(*) FROM game_song_pool") == 0
+
+
+async def _assert_save_refused(conn: asyncpg.Connection, code: str, keys: list[str]) -> None:
+    """The save raises artists_not_enough and leaves no row for the game."""
+    with pytest.raises(asyncpg.PostgresError, match="artists_not_enough") as exc:
+        await conn.fetchval(SAVE, code, keys)
+    assert exc.value.sqlstate == "22023"
+    for table in ("game_setlists", "game_song_pool"):
+        count = await conn.fetchval(f"SELECT count(*) FROM {table} WHERE game_code = $1", code)
+        assert count == 0, table
+
+
+async def test_save_refuses_a_pool_that_lost_a_song_while_saved(db: asyncpg.Connection) -> None:
+    """The server checks the rule on the pool as saved: a song flagged after
+    the status was read leaves a pool one song short, and the game is not
+    created."""
+    keys = await _band(db, [12, 12, 12, 12, 12], "Zed Band")  # exactly the rule
+    assert (await _status(db, keys))["ready"] is True
+    lost = await db.fetchval("SELECT id FROM songs WHERE artist = 'Zed Band 1' LIMIT 1")
+    code = await create_test_game(db, status="waiting")
+    async with _pool_insert_skips(db, lost):
+        await _assert_save_refused(db, code, keys)
+
+
+async def test_save_refuses_a_pool_that_lost_an_artist_while_saved(
+    db: asyncpg.Connection,
+) -> None:
+    """The same for the artist rule: the flagged song is the only song of one
+    of the artists, so the saved pool has enough songs but one artist too few."""
+    keys = await _band(db, [15, 15, 15, 15], "Zed Band")  # 4 artists, 60 songs
+    (lost,) = await _songs(db, "Cora Vale", 1)
+    keys.append("cora vale")
+    assert (await _status(db, keys))["ready"] is True
+    code = await create_test_game(db, status="waiting")
+    async with _pool_insert_skips(db, lost):
+        await _assert_save_refused(db, code, keys)
 
 
 async def test_save_unknown_game_raises_game_not_found(db: asyncpg.Connection) -> None:
