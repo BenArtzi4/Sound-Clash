@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const tele = vi.hoisted(() => ({ trackEvent: vi.fn(), trackView: vi.fn() }));
 vi.mock("./telemetry", () => tele);
 
+import { MUSIC_SOURCE_TABS } from "../components/MusicSourceSwitch";
 import {
   _resetFunnel,
   captureLanding,
@@ -12,6 +13,7 @@ import {
   trackCta,
   trackGameCreated,
   trackRoute,
+  trackSetlistGameCreated,
   trackTeamJoined,
   viewName,
 } from "./funnel";
@@ -44,8 +46,16 @@ describe("viewName", () => {
     expect(viewName("/")).toBe("/");
     expect(viewName("/how-to-play/")).toBe("/how-to-play");
     expect(viewName("/manager/create")).toBe("/manager/create");
+    expect(viewName("/manager/create/list")).toBe("/manager/create/list");
+    expect(viewName("/manager/create/nope")).toBe("/other");
     expect(viewName("/hitster-alternative")).toBe("/hitster-alternative");
     expect(viewName("/wp-login.php")).toBe("/other");
+  });
+
+  // Every tab the Host page's switch has: a new tab needs its STATIC_VIEWS
+  // entry, or its views would count as /other.
+  it.each(MUSIC_SOURCE_TABS.map((t) => t.to))("names the Host page's tab %s", (to) => {
+    expect(viewName(to)).toBe(to);
   });
 });
 
@@ -198,5 +208,45 @@ describe("events", () => {
       returning: undefined,
     });
     get.mockRestore();
+  });
+
+  it("sends a game from a list as game_created with its source and counts", () => {
+    trackSetlistGameCreated(12, 40);
+    trackSetlistGameCreated(3, 9);
+    expect(tele.trackEvent.mock.calls).toEqual([
+      ["game_created", { source: "list", list_songs: 12, pool_size: 40, returning: false }],
+      ["game_created", { source: "list", list_songs: 3, pool_size: 9, returning: true }],
+    ]);
+  });
+
+  it("marks a list game returning after a genre game, and the other way round", () => {
+    trackGameCreated(2, 0);
+    trackSetlistGameCreated(5, 30);
+    window.localStorage.clear();
+    trackSetlistGameCreated(5, 30);
+    trackGameCreated(2, 0);
+    expect(tele.trackEvent.mock.calls).toEqual([
+      ["game_created", { genres_count: 2, decades_count: 0, returning: false }],
+      ["game_created", { source: "list", list_songs: 5, pool_size: 30, returning: true }],
+      ["game_created", { source: "list", list_songs: 5, pool_size: 30, returning: false }],
+      ["game_created", { genres_count: 2, decades_count: 0, returning: true }],
+    ]);
+  });
+
+  it("still counts a list game when storage is blocked", () => {
+    const proto = Object.getPrototypeOf(window.localStorage) as {
+      setItem: (key: string, value: string) => void;
+    };
+    const set = vi.spyOn(proto, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    trackSetlistGameCreated(7, 25);
+    expect(tele.trackEvent).toHaveBeenCalledWith("game_created", {
+      source: "list",
+      list_songs: 7,
+      pool_size: 25,
+      returning: undefined,
+    });
+    set.mockRestore();
   });
 });

@@ -259,9 +259,18 @@ export function useScoring(
   // no_more_songs before round 1 means the game's mix never had a song (the
   // create page now blocks that, issue #375, but a game made before it, or
   // while the counts were unavailable, can still get here). "All played" is
-  // only true once a round has been played.
+  // only true once a round has been played. A game from the host's own songs
+  // has no genres (selected_genres is [], docs/api-contracts.md; a genre game
+  // needs at least one), so its texts speak of the host's songs; round 0
+  // there is the server's setlist_empty text for the same state.
   function noMoreSongsMessage(): string {
-    if ((state?.game.round_number ?? 0) === 0) {
+    const firstRound = (state?.game.round_number ?? 0) === 0;
+    if (state?.game.selected_genres.length === 0) {
+      return firstRound
+        ? "None of the songs in your list can play."
+        : "All your songs have been played. End the game or start a new one with more songs.";
+    }
+    if (firstRound) {
       return "No songs match this game's genres and decades. Start a new game with more genres or Any year.";
     }
     return "All songs in your selected genres have been played. End the game or start a new one with more genres.";
@@ -311,6 +320,12 @@ export function useScoring(
         toast("That song is no longer available. Tap Next round to try again.", {
           variant: "info",
         });
+        return;
+      }
+      // A game from the host's own songs whose song pool is not saved yet
+      // (migration 060): select_next_song starts no round until it is.
+      if (err.message === "setlist_not_ready") {
+        toast("Your songs are not ready yet. Try again in a moment.", { variant: "info" });
         return;
       }
       log("error", "manager_rpc_failed", { message: err.message });

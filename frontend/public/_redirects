@@ -7,7 +7,9 @@
 # how-to-play.html, join.html, ...), which Pages serves before any rule here.
 # There is deliberately no /* catch-all: any other URL gets dist/404.html with
 # a real 404 status, so a missing page is never a soft 200 to search engines.
-# A new client-side route with a URL parameter needs its line here.
+# A new client-side route with a URL parameter needs its line here. A tab of
+# the Host page is one exact line, so any other /manager/create/... stays a 404.
+/manager/create/list   /spa-shell   200
 /join/*           /spa-shell   200
 /team/*           /spa-shell   200
 /manager/game/*   /spa-shell   200

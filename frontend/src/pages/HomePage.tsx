@@ -7,7 +7,7 @@ import { SiteFooter } from "../components/SiteFooter";
 import { ArrowRightIcon, HostIcon, PhoneIcon, TvIcon } from "../components/icons";
 import { getHealth, listGenres } from "../lib/api";
 import { trackCta } from "../lib/funnel";
-import { prefetchQuietly } from "../lib/preloadError";
+import { prefetchQuietly, whenIdle } from "../lib/preloadError";
 import styles from "./HomePage.module.css";
 
 // The visible title is the short role word (decision 4); `name` is the
@@ -52,17 +52,6 @@ const NEXT_PAGES = [
   () => import("./DisplayPage"),
   () => import("./HowToPlayPage"),
 ];
-
-// Safari has no requestIdleCallback; a short timeout keeps the fetch clear of
-// Home's own first paint and its two warm-up requests.
-function whenIdle(run: () => void): () => void {
-  if (typeof window.requestIdleCallback === "function") {
-    const id = window.requestIdleCallback(run, { timeout: 2000 });
-    return () => window.cancelIdleCallback(id);
-  }
-  const id = window.setTimeout(run, 800);
-  return () => window.clearTimeout(id);
-}
 
 // The fade-up greets someone opening the site on Home. Coming back must not
 // replay it: remounting at opacity 0 blanked the first frame after a

@@ -316,6 +316,61 @@ def test_parse_comment_first_line_is_still_a_comment() -> None:
     ]
 
 
+# Chosic's playlist exporter (https://www.chosic.com/spotify-playlist-exporter/),
+# the converter the host page's helper names (Task 10). Its TXT download, as
+# seen on 2026-11-27: one "Artist,Artist2 - Title" line per track, no header,
+# the artists joined by "," with no space, UTF-8 with no BOM, and a CRLF after
+# every line, the last one too. Made-up names in the same layout.
+CHOSIC_TXT = (
+    "Mira Solenne - Paper Lanterns\r\n"
+    "Dax Corvin,Lila Moon - Northern Wires\r\n"
+    "The Velvet Orchards - Kite Season - 2019 Remaster\r\n"
+)
+
+# Its CSV download: a header whose first column is "#" (the track number),
+# then one row per track, the artists in one cell joined by ",".
+CHOSIC_CSV = (
+    "#,Song,Artist,BPM,Camelot,Energy,Added at,Duration,Popularity,Genres,Album,Album Date,"
+    "Dance,Acoustic,Instrumental,Valence,Speech,Live,Loud (db),Key,Time Signature,"
+    "Spotify Track Id,ISRC,Explicit\n"
+    '1,"Paper Lanterns","Mira Solenne",118,8B,71,2026-11-20,3:24,64,"indie pop,dream pop",'
+    '"Invented Album",2024-05-17,62,12,0,48,4,11,-6,C Major,4,0abcdefghijklmnopqrstu,XX0002400001,\n'
+    '2,"Northern Wires","Dax Corvin,Lila Moon",118,8B,71,2026-11-20,3:24,64,"indie pop,dream pop",'
+    '"Invented Album",2024-05-17,62,12,0,48,4,11,-6,C Major,4,0abcdefghijklmnopqrstu,XX0002400001,'
+)
+
+
+def test_parse_chosic_txt_export() -> None:
+    assert parse_setlist_text(CHOSIC_TXT) == [
+        ListLine(raw="Mira Solenne - Paper Lanterns", left="Mira Solenne", right="Paper Lanterns"),
+        ListLine(
+            raw="Dax Corvin,Lila Moon - Northern Wires",
+            left="Dax Corvin,Lila Moon",
+            right="Northern Wires",
+        ),
+        ListLine(
+            raw="The Velvet Orchards - Kite Season - 2019 Remaster",
+            left="The Velvet Orchards",
+            right="Kite Season - 2019 Remaster",
+        ),
+    ]
+    # The comma with no space still splits the credit, and the remaster note
+    # comes off the title when the matcher compares it.
+    assert artist_keys("Dax Corvin,Lila Moon") == ("dax corvin", "lila moon")
+    assert clean_title("Kite Season - 2019 Remaster") == "Kite Season"
+
+
+def test_parse_chosic_csv_export() -> None:
+    # The "#" header is read as a header, not as a comment, so each row gives
+    # its Artist cell and its Song cell.
+    lines = parse_setlist_text(CHOSIC_CSV)
+    assert [(line.left, line.right) for line in lines] == [
+        ("Mira Solenne", "Paper Lanterns"),
+        ("Dax Corvin,Lila Moon", "Northern Wires"),
+    ]
+    assert [line.raw for line in lines] == CHOSIC_CSV.splitlines()[1:]
+
+
 def test_parse_csv_header_skips_uri_columns() -> None:
     text = (
         "Track URI,Track Name,Artist URI(s),Artist Name(s)\n"

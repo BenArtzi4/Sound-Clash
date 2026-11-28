@@ -1,0 +1,90 @@
+/* The music source switch (host-music-choices section 7, colours from section
+   9): a track with 4 px of padding, and a light block that slides inside it.
+   The row of labels is drawn twice; the second copy (.on) has the block's
+   colours and is clipped to the open tab, so moving the clip slides the block
+   and changes each label's colour exactly at the block's edge. No measuring,
+   no script timing: the position is data-n (tabs) and data-i (the open one).
+   The switch is the container, so its labels shrink on a narrow switch. */
+.switch {
+  container-type: inline-size;
+  margin-top: var(--space-4);
+}
+
+.track {
+  position: relative;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.row {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+}
+
+/* 44 px high, one line each. */
+.tab,
+.label {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* The global focus ring (2 px, 2 px out) falls in the track's padding, so the
+   block does not cover it. */
+.tab {
+  border-radius: 6px;
+  color: var(--text-muted);
+  touch-action: manipulation;
+}
+
+.on {
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  background: var(--bone);
+  color: var(--bg);
+  border-radius: 6px;
+  clip-path: inset(0 50% 0 0 round 6px);
+  transition: clip-path var(--dur-state) var(--ease-move);
+}
+
+.on[data-n="2"][data-i="1"] {
+  clip-path: inset(0 0 0 50% round 6px);
+}
+
+.on[data-n="3"][data-i="0"] {
+  clip-path: inset(0 66.667% 0 0 round 6px);
+}
+
+.on[data-n="3"][data-i="1"] {
+  clip-path: inset(0 33.333% 0 33.333% round 6px);
+}
+
+.on[data-n="3"][data-i="2"] {
+  clip-path: inset(0 0 0 66.667% round 6px);
+}
+
+@container (width < 340px) {
+  .tab,
+  .label {
+    font-size: 0.86rem;
+  }
+}
+
+/* Pointer-only hover (#282); the global a:hover underline is not for a tab. */
+@media (hover: hover) {
+  .tab:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+}

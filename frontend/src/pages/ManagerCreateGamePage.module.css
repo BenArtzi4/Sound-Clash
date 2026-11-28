@@ -18,6 +18,34 @@
   gap: var(--space-6);
 }
 
+/* The fixed line under the title stays on one line; the ellipsis is a guard. */
+.lead {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The open tab's content (host-music-choices section 7). A new one fades in
+   from the side of its tab, 12 px, while the old one is already gone; the
+   page's first content (data-first) appears at once. CSS only: a browser
+   without @starting-style shows it at once, and the reduced-motion rule
+   (styles.css) makes it instant. */
+.panel {
+  transition:
+    opacity var(--dur-state) var(--ease-arrive),
+    transform var(--dur-state) var(--ease-arrive);
+}
+
+@starting-style {
+  .panel:not([data-first]) {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  .panel[data-dir="back"] {
+    transform: translateX(-12px);
+  }
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -47,17 +75,123 @@
   gap: var(--space-3);
 }
 
+/* `6 mixes` at the right of the label (host-music-choices section 7). */
+.presetsHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.presetsCount {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* The arrows' smooth slide comes from scroll-behavior, which the global
+   reduced-motion rule turns back to instant. An arrow asks for 70% of the
+   row's width; the snap then settles it on the nearest chip, 44px in (an
+   arrow's width), so that chip starts clear of the Previous arrow and fade. */
 .presetRow {
   display: flex;
   gap: var(--space-2);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scroll-padding-inline: 44px;
+  scroll-behavior: smooth;
   scrollbar-width: none;
   padding-bottom: 2px;
 }
 
 .presetRow::-webkit-scrollbar {
   display: none;
+}
+
+/* A fade and a round arrow on each side that has more mixes. They exist only
+   while the row overflows (the page sets data-start / data-end then), so they
+   appear at once when the page opens and fade in and out as the row moves.
+   isolation keeps their z-index inside the row, so the sticky Create game
+   bar, later in the page, still paints over them and takes its taps. */
+.presetsWrap {
+  position: relative;
+  isolation: isolate;
+}
+
+.presetsWrap[data-start]::before,
+.presetsWrap[data-end]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 2px;
+  z-index: 1;
+  width: 64px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-micro) var(--ease-move);
+}
+
+.presetsWrap::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg) 30%, transparent);
+}
+
+.presetsWrap::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg) 30%, transparent);
+}
+
+/* A hidden arrow is visibility: hidden after its fade, so it is out of the
+   tab order and the accessibility tree and takes no tap. */
+.presetNav {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bone);
+  opacity: 0;
+  visibility: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    opacity var(--dur-micro) var(--ease-move),
+    visibility 0s var(--dur-micro);
+}
+
+.presetNav span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 16px;
+}
+
+.presetPrev {
+  left: -6px;
+  justify-content: flex-start;
+}
+
+.presetNext {
+  right: -6px;
+  justify-content: flex-end;
+}
+
+.presetsWrap[data-start="true"]::before,
+.presetsWrap[data-end="true"]::after,
+.presetsWrap[data-start="true"] .presetPrev,
+.presetsWrap[data-end="true"] .presetNext {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 /* touch-action: manipulation + a transparent tap-highlight keep the #282 fix:
@@ -177,6 +311,25 @@
 
 .genreSelected .genreCheck svg path {
   stroke-dashoffset: 0;
+}
+
+/* Phone: two tiles per line (host-music-choices section 9), with the
+   mockup's narrower frame so a long name takes two lines; a word wider than
+   its tile breaks rather than leaving it. */
+@media (max-width: 600px) {
+  .field:has(> .genres) {
+    padding: 16px 12px;
+  }
+  .genres {
+    grid-template-columns: 1fr 1fr;
+  }
+  .genre {
+    gap: 7px;
+    padding: 10px;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Decades are a small closed set, so they read as a segmented control: one
@@ -392,5 +545,8 @@
   .presetActive:hover {
     background: #ff8f2b;
     border-color: #ff8f2b;
+  }
+  .presetNav:hover span {
+    border-color: var(--bone);
   }
 }

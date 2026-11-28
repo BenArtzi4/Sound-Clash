@@ -135,6 +135,39 @@ export interface CreateGameResponse {
   started_at: string;
   expires_at: string;
   manager_token: string;
+  // A game from a pasted list: the matcher's counts. Null for a genre game.
+  setlist?: SetlistSummary | null;
+}
+
+// POST /setlists/check (docs/api-contracts.md section 2.2a): a host's pasted
+// list matched against the catalog. Songs are named by title and artist only.
+export interface SetlistReadyItem {
+  line: string; // the line as the host wrote it, trimmed
+  title: string | null; // null when the line names a film, a show or an artist
+  artist: string;
+  songs: number; // how many catalog songs the line matched
+}
+
+export type SetlistMissReason = "not_in_catalog" | "several_songs_share_this_name";
+
+export interface SetlistMissItem {
+  line: string;
+  reason: SetlistMissReason;
+}
+
+export interface SetlistCheckResponse {
+  lines_total: number;
+  ready: SetlistReadyItem[];
+  not_found: SetlistMissItem[];
+  list_songs: number; // the songs the list names (they play first)
+  same_artist_songs: number; // more songs by the same artists (they play after)
+  pool_size: number;
+}
+
+// The setlist part of POST /games' answer for a game from a list.
+export interface SetlistSummary {
+  list_songs: number;
+  same_artist_songs: number;
 }
 
 export interface SelectSongResponse {

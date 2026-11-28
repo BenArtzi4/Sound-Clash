@@ -233,7 +233,7 @@ init.
 | `view` | every route change (also sets Faro's view, so later events carry `view_name`) | `view`: `/`, `/join/*`, `/manager/game/*`, a landing-page path, or `/other` |
 | `cta` | a click that moves a visitor along | `id`: `home_host` / `home_play` / `home_display` / `home_howto`, `home_video_play` (Home's how-to-play video started), `landing_host` / `landing_join`, `setlist_share` / `setlist_play_all` / `setlist_save`, and the host console's invite: `invite_qr_enlarge` (lobby QR tapped), `invite_open` (in-game Invite button), `invite_share` (share sheet, phones) / `invite_copy` (Copy link, laptops), `invite_whatsapp` |
 | `team_joined` | a team joined through the form | `source`: `qr` (the Display's QR), `host-qr` (the QR on the host console), `host-share` (a link the host shared or copied), `link` (another `/join/<CODE>` link), `typed` |
-| `game_created` | `POST /games` succeeded | `genres_count`, `decades_count`, `returning` (this browser created a game before; `localStorage` key `sound-clash:hosted-before`) |
+| `game_created` | `POST /games` succeeded | a genre game: `genres_count`, `decades_count`, `returning` (this browser created a game before, either kind; `localStorage` key `sound-clash:hosted-before`). A game from a pasted list: `source` (`list`), `list_songs` (the songs the list names), `pool_size` (with the same-artist songs), `returning` |
 
 Privacy: the referrer's hostname only, tags cut to short plain tokens, route
 templates instead of game codes, no names. `captureLanding` takes `ref`, `src`,

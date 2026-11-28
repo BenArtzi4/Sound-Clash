@@ -65,3 +65,32 @@ describe("describeMix", () => {
     expect(describeMix(1715).text).toBe("1,715 songs in this mix");
   });
 });
+
+// A game from a pasted list (Task 10, Ruling AE): the same counts, said of the game.
+describe("describeMix for a game", () => {
+  it("states the songs in the game, and leaves the mix wording as it was", () => {
+    expect(describeMix(61, "game")).toEqual({ text: "61 songs in this game", tone: "ok" });
+    expect(describeMix(1715, "game").text).toBe("1,715 songs in this game");
+    expect(describeMix(61).text).toBe("61 songs in this mix");
+    expect(describeMix(61, "mix")).toEqual(describeMix(61));
+  });
+
+  it("says when no song of the list can play", () => {
+    expect(describeMix(0, "game")).toEqual({
+      text: "None of the songs in your list can play.",
+      tone: "empty",
+    });
+  });
+
+  it("warns below a game's worth of songs", () => {
+    expect(describeMix(1, "game")).toEqual({
+      text: "Only 1 song in this game, enough for 1 round.",
+      tone: "small",
+    });
+    expect(describeMix(SMALL_MIX - 1, "game")).toEqual({
+      text: "Only 19 songs in this game, enough for 19 rounds.",
+      tone: "small",
+    });
+    expect(describeMix(SMALL_MIX, "game").tone).toBe("ok");
+  });
+});

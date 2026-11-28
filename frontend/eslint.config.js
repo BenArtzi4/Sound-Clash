@@ -81,6 +81,7 @@ export default [
         HTMLIFrameElement: "readonly",
         HTMLInputElement: "readonly",
         HTMLOListElement: "readonly",
+        HTMLTextAreaElement: "readonly",
         KeyboardEvent: "readonly",
         Event: "readonly",
         ErrorEvent: "readonly",

@@ -13,7 +13,7 @@ This is the reusable distillation of the full validation run performed before th
 
 ## 0. Ground truth (expected values)
 
-**URLs / routes:** Live app `https://www.soundclash.org` · API `https://api.soundclash.org` · Home `/` · Join `/join` and `/join/<CODE>` · Team `/team/<CODE>` · Create `/manager/create` · Console `/manager/game/<CODE>` · Display `/display` and `/display/<CODE>`.
+**URLs / routes:** Live app `https://www.soundclash.org` · API `https://api.soundclash.org` · Home `/` · Join `/join` and `/join/<CODE>` · Team `/team/<CODE>` · Create `/manager/create` (My own list `/manager/create/list`) · Console `/manager/game/<CODE>` · Display `/display` and `/display/<CODE>`.
 
 **Formats:** Game code = 6 chars, A–Z + digits 2–9 (no 0/1/O/I), case-insensitive on entry. Team name = 1–30 chars, unique per game (duplicate → 409). One phone per team.
 

@@ -69,7 +69,10 @@ export function AppRoutes() {
             <Route path="/join" element={<JoinTeamPage />} />
             <Route path="/join/:gameCode" element={<JoinTeamPage />} />
             <Route path="/team/:gameCode" element={<TeamGameplayPage />} />
-            <Route path="/manager/create" element={<ManagerCreateGamePage />} />
+            {/* One route for every tab of the Host page (no source = Genres,
+                "list" = My own list), so the page stays mounted when the
+                tab changes and keeps each tab's state. */}
+            <Route path="/manager/create/:source?" element={<ManagerCreateGamePage />} />
             <Route path="/manager/game/:gameCode" element={<ManagerConsolePage />} />
             <Route path="/admin/songs" element={<AdminSongsPage />} />
             <Route path="/display" element={<DisplayPage />} />

@@ -150,7 +150,7 @@ A separate manager action, independent of round and buzz state.
 - **Genre variety.** The picker draws one of the allowed genres at random, giving genres heard in the previous round half weight. The same genre can still play consecutively. A song tagged in several genres is eligible through any of its selected tags.
 - **Artist variety.** Within the chosen genre, the picker favors artists absent from the last eight rounds, or the longest time since a repeat when every artist was heard recently. Among the tied songs it favors artists with fewer plays in that game. Collaborations count toward each credited artist.
 - **Rematches.** Each new game starts with the full eligible pool. Smaller pools and long games make some overlap between games likely.
-- If all matching songs are exhausted: the function raises `no_more_songs` (sqlstate `22023`); the manager UI surfaces a friendly "All songs in your selected genres have been played" toast.
+- If all matching songs are exhausted: the function raises `no_more_songs` (sqlstate `22023`); the manager UI surfaces a friendly "All songs in your selected genres have been played" toast. In a game from the host's own songs (no `selected_genres`) the toast says "All your songs have been played. End the game or start a new one with more songs.", or "None of the songs in your list can play." when it happens before round 1.
 
 ## 6. Buzzer Rules
 

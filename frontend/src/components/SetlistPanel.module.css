@@ -1,0 +1,244 @@
+/* "My own list" on the Host page (Task 10). The box and the result are cards
+   in the look of the page's sections (ManagerCreateGamePage.module.css .field),
+   with the site's tokens only. Mobile first: it fits a 320 px wide phone. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.box,
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  min-width: 0;
+}
+
+/* The section label of the page ("GENRES", "RELEASE DECADE"). */
+.label {
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* The global textarea style (styles.css), full width and a few lines high. */
+.input {
+  width: 100%;
+  min-height: 10rem;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.found {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* A plain button: orange is kept for what the host picked and Create game.
+   Full width on a phone, its own width on wider screens. */
+.check {
+  width: 100%;
+}
+
+@media (min-width: 601px) {
+  .check {
+    width: auto;
+    align-self: flex-start;
+  }
+}
+
+/* The busy state's spinner (as on Create game); the label carries the state,
+   and the site's reduced-motion rule stops the turn. */
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ----- the Spotify helper (SetlistHelp) ----- */
+
+.help {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.linksLine {
+  font-weight: 600;
+  color: var(--warning);
+}
+
+/* Quiet, like the console's "Backup host link": help, not a game action.
+   44 px high, so it is easy to tap. */
+.helpToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: left;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-micro) var(--ease-move);
+}
+
+.helpArrow {
+  flex: none;
+  transition: transform var(--dur-micro) var(--ease-move);
+}
+
+.helpToggle[aria-expanded="true"] .helpArrow {
+  transform: rotate(90deg);
+}
+
+.helpBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: 1.5em;
+  color: var(--text);
+}
+
+.steps a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.helpNote {
+  font-size: 0.85rem;
+}
+
+/* ----- the result card ----- */
+
+.resultTitle {
+  font-size: var(--text-title);
+  font-weight: 600;
+}
+
+.counts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.readyIcon {
+  flex: none;
+  color: var(--positive);
+}
+
+.cannotIcon {
+  flex: none;
+  color: var(--negative-text);
+}
+
+/* A 44 px tap target that does not make its line taller. */
+.show {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -10px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--bone);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.missing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  list-style: none;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.miss {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A pasted line can be one long word: break it rather than widen the page. */
+.missLine {
+  overflow-wrap: anywhere;
+}
+
+.missReason {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.more {
+  color: var(--text-muted);
+}
+
+.pool {
+  font-weight: 600;
+}
+
+.poolSmall {
+  color: var(--warning);
+}
+
+.poolEmpty {
+  color: var(--negative-text);
+}
+
+/* Hover only where a pointer hovers (#282). */
+@media (hover: hover) {
+  .helpToggle:hover {
+    color: var(--bone);
+  }
+}

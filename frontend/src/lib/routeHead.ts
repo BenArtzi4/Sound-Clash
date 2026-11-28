@@ -44,13 +44,19 @@ const home = seo.pages.find((p) => p.path === "/");
 if (!home) throw new Error('src/seo/pages.json has no "/" page');
 const HOME: SeoPage = home;
 
+// A tab of a page is the same page: its own address, the page's head (so a
+// tab change keeps the title and the canonical). It has no file of its own;
+// _redirects serves it the SPA shell.
+const TAB_OF: Record<string, string> = { "/manager/create/list": "/manager/create" };
+
 function normalize(pathname: string): string {
   return pathname.replace(/\/+$/, "") || "/";
 }
 
 export function pageFor(pathname: string): SeoPage | undefined {
   const path = normalize(pathname);
-  return seo.pages.find((p) => p.path === path);
+  const page = TAB_OF[path] ?? path;
+  return seo.pages.find((p) => p.path === page);
 }
 
 function setMeta(doc: Document, attr: "name" | "property", key: string, content: string) {

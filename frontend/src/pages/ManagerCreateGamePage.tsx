@@ -1,17 +1,70 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { CheckIcon } from "../components/icons";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "../components/icons";
+import {
+  MUSIC_SOURCE_TABS,
+  MusicSourceSwitch,
+  type MusicSource,
+} from "../components/MusicSourceSwitch";
+import type { SetlistPanelState } from "../components/SetlistPanel";
 import { Skeleton } from "../components/Skeleton";
 import { useToast } from "../context/useToast";
 import { usePrewarmBackend, useSlowPending } from "../hooks/useBackendWarmup";
-import { createGame, getCachedGenres, listGenres, loadSongPool } from "../lib/api";
-import { trackGameCreated } from "../lib/funnel";
+import {
+  ApiError,
+  createGame,
+  getCachedGenres,
+  listGenres,
+  loadSongPool,
+  type CreateGameBody,
+} from "../lib/api";
+import { trackGameCreated, trackSetlistGameCreated } from "../lib/funnel";
 import { setManagerToken } from "../lib/managerToken";
-import { countSongsInMix, describeMix } from "../lib/songPool";
+import { prefetchQuietly, whenIdle } from "../lib/preloadError";
+import { countSongsInMix, describeMix, type MixTone } from "../lib/songPool";
 import type { Genre, SongPoolCell } from "../lib/types";
 import { AgreeNote } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import styles from "./ManagerCreateGamePage.module.css";
+
+// "My own list" is its own chunk, so the page's first load does not grow: the
+// page fetches it while idle (below), and React.lazy uses the same import.
+const loadSetlistPanel = () => import("../components/SetlistPanel");
+const SetlistPanel = lazy(() => loadSetlistPanel().then((m) => ({ default: m.SetlistPanel })));
+
+const PASTE_LINE = "Paste your songs to start.";
+
+// The bottom bar of My own list before a check: the song-line counter comes
+// in My own list's chunk (lib/setlistText), and until it is there the panel
+// is not either, so nothing is pasted yet and PASTE_LINE is right.
+const PasteStatus = lazy(() =>
+  import("../lib/setlistText").then(({ countSongLines }) => ({
+    default: ({ text }: { text: string }) =>
+      countSongLines(text) > 0 ? "Check your list to see the songs" : PASTE_LINE,
+  })),
+);
+
+const EMPTY_LIST: SetlistPanelState = { text: "", check: null, checking: false };
+
+// Which ends of Quick start's row have more mixes past the edge.
+const NO_MORE = { start: false, end: false };
+
+// The open tab's panel; each tab's id is `${PANEL_ID}-${tab}` (MusicSourceSwitch).
+const PANEL_ID = "music-source-panel";
+
+function tabIndex(id: MusicSource): number {
+  return MUSIC_SOURCE_TABS.findIndex((t) => t.id === id);
+}
 
 // Decades are stored as their start year (the 80s = 1980); the picker floors a
 // song's release_year to its decade and matches by membership (migration 032).
@@ -100,9 +153,17 @@ function sameMembers<T>(a: Set<T>, b: Iterable<T>): boolean {
 export function ManagerCreateGamePage() {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { search } = useLocation();
   // `?test=1` marks this game as a test run (a check on the live site), so it
   // never counts as a real game. Harnesses are caught by their user agent.
-  const testRun = new URLSearchParams(useLocation().search).get("test") === "1";
+  const testRun = new URLSearchParams(search).get("test") === "1";
+  // The address decides the tab (one route, /manager/create/:source?, so the
+  // page stays mounted and keeps every tab's state): no source is Genres,
+  // "list" is My own list, and any other address goes to /manager/create.
+  const { source } = useParams();
+  const tab = MUSIC_SOURCE_TABS.find(
+    (t) => t.to === (source === undefined ? "/manager/create" : `/manager/create/${source}`),
+  );
 
   // Arriving from Home, the genres are usually cached already: draw them on
   // the first frame rather than behind a frame of placeholder tiles.
@@ -115,6 +176,63 @@ export function ManagerCreateGamePage() {
   // "N songs in this mix" line. null while loading or if it could not load:
   // then the page shows no count and blocks nothing, as before the count.
   const [songPool, setSongPool] = useState<SongPoolCell[] | null>(null);
+  // My own list: the pasted text and its check, kept while another tab is open.
+  const [setlist, setSetlist] = useState<SetlistPanelState>(EMPTY_LIST);
+  // The tab on screen, and the side the last change came from: none for the
+  // page's first content (it does not animate in), "back" when the new tab is
+  // left of the old one. Updated during render, so the new content's first
+  // frame already carries it.
+  const [shown, setShown] = useState<{ id: MusicSource; dir?: "fwd" | "back" }>({
+    id: tab?.id ?? "genres",
+  });
+  if (tab && tab.id !== shown.id) {
+    setShown({ id: tab.id, dir: tabIndex(tab.id) < tabIndex(shown.id) ? "back" : "fwd" });
+  }
+
+  // On a phone Quick start's row is wider than the screen: each side that
+  // hides more mixes gets a fade and an arrow (host-music-choices section 7).
+  // Read on scroll and on a resize, and stored only when a side changes.
+  const presetRow = useRef<HTMLDivElement | null>(null);
+  const [more, setMore] = useState(NO_MORE);
+  const syncMore = useCallback(() => {
+    const row = presetRow.current;
+    if (!row) return;
+    const start = row.scrollLeft > 4;
+    const end = row.scrollLeft + row.clientWidth < row.scrollWidth - 4;
+    setMore((m) => (m.start === start && m.end === end ? m : { start, end }));
+  }, []);
+  // The first read is in the commit, before the first paint, so the arrows
+  // appear at once rather than fading in when the page opens.
+  const watchPresetRow = useCallback(
+    (row: HTMLDivElement | null) => {
+      presetRow.current = row;
+      if (!row) return;
+      syncMore();
+      const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(syncMore);
+      // The chips too: a web font arriving widens them, not the row.
+      for (const el of [row, ...row.children]) resized?.observe(el);
+      return () => {
+        resized?.disconnect();
+        presetRow.current = null;
+        setMore(NO_MORE);
+      };
+    },
+    [syncMore],
+  );
+  // A pressed arrow hides once the row reaches its end: the focus goes to the
+  // other arrow, so a keyboard host keeps it, and the page does not scroll.
+  // Before paint, while the hidden arrow still has the focus.
+  const prevArrow = useRef<HTMLButtonElement | null>(null);
+  const nextArrow = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    const focused = document.activeElement;
+    if (focused === null) return;
+    if (focused === prevArrow.current && !more.start && more.end) {
+      nextArrow.current?.focus({ preventScroll: true });
+    } else if (focused === nextArrow.current && !more.end && more.start) {
+      prevArrow.current?.focus({ preventScroll: true });
+    }
+  }, [more]);
 
   // Wake the Render backend so the create-game POST is warm. HomePage already
   // pre-warms on landing; this covers a direct deep-link to /manager/create.
@@ -131,8 +249,11 @@ export function ManagerCreateGamePage() {
   // App.tsx requests the same chunk — Vite dedupes it), and the route
   // transition never has to wait on a cold import. Same pattern as
   // JoinTeamPage's TeamGameplayPage prefetch.
+  // My own list's code is fetched the same way once the page is idle, so its
+  // tab opens with no wait; a failed fetch must not reload the page.
   useEffect(() => {
     void import("./ManagerConsolePage");
+    return whenIdle(() => void prefetchQuietly(loadSetlistPanel));
   }, []);
 
   useEffect(() => {
@@ -172,6 +293,34 @@ export function ManagerCreateGamePage() {
   const mix = songCount === null ? null : describeMix(songCount);
   // An empty mix would create a game whose first Start fails (issue #375).
   const mixEmpty = songCount === 0;
+  const onList = shown.id === "list";
+  // A list game needs a check of exactly this text (an edit clears it) with
+  // songs to play, and no check running.
+  const canCreate =
+    !busy &&
+    (onList
+      ? !setlist.checking && (setlist.check?.pool_size ?? 0) > 0
+      : selected.size > 0 && !mixEmpty);
+
+  // The bottom bar says what to do next on the open tab, then what the game
+  // holds; the same tones on both tabs.
+  let status: ReactNode = mix?.text;
+  let tone: MixTone | undefined = mix?.tone;
+  if (onList) {
+    const listMix = setlist.check ? describeMix(setlist.check.pool_size, "game") : null;
+    tone = setlist.checking ? undefined : listMix?.tone;
+    status = setlist.checking ? (
+      "Checking your list…"
+    ) : listMix ? (
+      listMix.text
+    ) : (
+      <Suspense fallback={PASTE_LINE}>
+        <PasteStatus text={setlist.text} />
+      </Suspense>
+    );
+  } else if (selected.size === 0) {
+    status = "Pick at least one genre to start.";
+  }
 
   function toggleGenre(id: string) {
     setSelected((prev) => {
@@ -199,6 +348,13 @@ export function ManagerCreateGamePage() {
     setSelectedDecades(new Set(preset.decades));
   }
 
+  // An arrow moves the row by 70% of its width: smooth through the row's
+  // scroll-behavior in the CSS, so the reduced-motion rule makes it instant.
+  function slideMixes(side: -1 | 1) {
+    const row = presetRow.current;
+    row?.scrollBy({ left: side * row.clientWidth * 0.7 });
+  }
+
   // Highlight the preset (if any) whose resolved genres + decades exactly match
   // the live selection, so the chips and the active preset stay in sync as the
   // host edits. An empty selection matches nothing (no preset is "all off").
@@ -210,18 +366,25 @@ export function ManagerCreateGamePage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (selected.size === 0 || mixEmpty || busy) return;
+    if (!canCreate) return;
+    const listCheck = setlist.check;
+    // A list game sends the text exactly as pasted.
+    const body: CreateGameBody = onList
+      ? { setlist: { text: setlist.text } }
+      : { selected_genres: Array.from(selected), selected_decades: Array.from(selectedDecades) };
     setBusy(true);
     try {
-      const game = await createGame(
-        {
-          selected_genres: Array.from(selected),
-          selected_decades: Array.from(selectedDecades),
-        },
-        { testRun },
-      );
+      const game = await createGame(body, { testRun });
       setManagerToken(game.game_code, game.manager_token);
-      trackGameCreated(selected.size, selectedDecades.size);
+      if (onList) {
+        // The create answer's counts, or the check's if it has none.
+        const counts = game.setlist ?? listCheck;
+        if (counts) {
+          trackSetlistGameCreated(counts.list_songs, counts.list_songs + counts.same_artist_songs);
+        }
+      } else {
+        trackGameCreated(selected.size, selectedDecades.size);
+      }
       toast(`Game ${game.game_code} created`, { variant: "success" });
       // Fetch the console's code first: the router would hold this page while
       // it downloads, and `finally` below would re-enable the button meanwhile,
@@ -230,27 +393,57 @@ export function ManagerCreateGamePage() {
       await import("./ManagerConsolePage").catch(() => undefined);
       navigate(`/manager/game/${game.game_code}`);
     } catch (err) {
+      // A refusal of the list itself (setlist_empty when the catalog changed
+      // since the check, ...) makes the check wrong: Create turns off and the
+      // same text can be checked again. Any other failure keeps the check.
+      if (err instanceof ApiError && err.code.startsWith("setlist_")) {
+        setSetlist((s) => ({ ...s, check: null }));
+      }
       toast(err instanceof Error ? err.message : "Failed to create game", { variant: "error" });
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <main className={styles.shell}>
-      <header>
-        <div className={styles.brand}>
-          <Logo size="small" />
-        </div>
-        <h1>Host a game</h1>
-        <p className="muted">Pick at least one genre to start.</p>
-      </header>
+  if (!tab) return <Navigate to={`/manager/create${search}`} replace />;
 
-      <form className="stack" onSubmit={handleSubmit}>
-        {!genresLoading && genres.length > 0 && (
-          <div className={styles.presets}>
+  const rowOverflows = more.start || more.end;
+  const genresContent = (
+    <>
+      {!genresLoading && genres.length > 0 && (
+        <div className={styles.presets}>
+          <div className={styles.presetsHead}>
             <span className={styles.presetsLabel}>Quick start</span>
-            <div className={styles.presetRow}>
+            <span className={styles.presetsCount} data-testid="quick-start-count">
+              {PRESETS.length} mixes
+            </span>
+          </div>
+          {/* data-start / data-end only while the row overflows: the fades
+              and the arrows exist only then, so none shows on a desktop.
+              The arrows sit around the row in the DOM as on screen, so the
+              tab order runs Previous, the mixes, More. */}
+          <div
+            className={styles.presetsWrap}
+            {...(rowOverflows && {
+              "data-start": String(more.start),
+              "data-end": String(more.end),
+            })}
+          >
+            {rowOverflows && (
+              <button
+                ref={prevArrow}
+                type="button"
+                className={`${styles.presetNav} ${styles.presetPrev}`}
+                data-testid="quick-start-prev"
+                aria-label="Previous mixes"
+                onClick={() => slideMixes(-1)}
+              >
+                <span>
+                  <ArrowLeftIcon />
+                </span>
+              </button>
+            )}
+            <div ref={watchPresetRow} className={styles.presetRow} onScroll={syncMore}>
               {PRESETS.map((preset) => {
                 const active = isPresetActive(preset);
                 return (
@@ -266,98 +459,144 @@ export function ManagerCreateGamePage() {
                 );
               })}
             </div>
+            {rowOverflows && (
+              <button
+                ref={nextArrow}
+                type="button"
+                className={`${styles.presetNav} ${styles.presetNext}`}
+                data-testid="quick-start-next"
+                aria-label="More mixes"
+                onClick={() => slideMixes(1)}
+              >
+                <span>
+                  <ArrowRightIcon />
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.field}>
+        <span className={styles.label}>
+          Genres <span className="muted">({selected.size} selected)</span>
+        </span>
+        {genresLoading ? (
+          <div className={styles.genres}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} height={44} />
+            ))}
+          </div>
+        ) : (
+          <div className={styles.genres}>
+            {genres.map((g) => {
+              const isSel = selected.has(g.id);
+              return (
+                <label
+                  key={g.id}
+                  className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
+                >
+                  <input type="checkbox" checked={isSel} onChange={() => toggleGenre(g.id)} />
+                  <span className={styles.genreCheck} aria-hidden="true">
+                    <CheckIcon />
+                  </span>
+                  {g.name}
+                </label>
+              );
+            })}
           </div>
         )}
+      </div>
 
-        <div className={styles.field}>
-          <span className={styles.label}>
-            Genres <span className="muted">({selected.size} selected)</span>
-          </span>
-          {genresLoading ? (
-            <div className={styles.genres}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} height={44} />
-              ))}
-            </div>
-          ) : (
-            <div className={styles.genres}>
-              {genres.map((g) => {
-                const isSel = selected.has(g.id);
+      <div className={styles.field}>
+        <span className={styles.label}>Release decade</span>
+        <div className={styles.decades}>
+          <div className={styles.decadeRow}>
+            {/* Checked exactly when no decade is picked; ticking it clears
+                  the decades, and ticking it again leaves it on. */}
+            <label
+              className={`${styles.decade} ${styles.decadeAny} ${anyYear ? styles.decadeSelected : ""}`}
+            >
+              <input
+                type="checkbox"
+                checked={anyYear}
+                onChange={() => setSelectedDecades(new Set())}
+              />
+              Any year
+            </label>
+          </div>
+          {DECADE_ROWS.map((row, i) => (
+            <div key={i} className={styles.decadeRow}>
+              {row.map((d) => {
+                const isSel = selectedDecades.has(d);
                 return (
                   <label
-                    key={g.id}
-                    className={`${styles.genre} ${isSel ? styles.genreSelected : ""}`}
+                    key={d}
+                    className={`${styles.decade} ${isSel ? styles.decadeSelected : ""}`}
                   >
-                    <input type="checkbox" checked={isSel} onChange={() => toggleGenre(g.id)} />
-                    <span className={styles.genreCheck} aria-hidden="true">
-                      <CheckIcon />
-                    </span>
-                    {g.name}
+                    <input type="checkbox" checked={isSel} onChange={() => toggleDecade(d)} />
+                    {decadeLabel(d)}
                   </label>
                 );
               })}
             </div>
-          )}
+          ))}
         </div>
+      </div>
+    </>
+  );
 
-        <div className={styles.field}>
-          <span className={styles.label}>Release decade</span>
-          <div className={styles.decades}>
-            <div className={styles.decadeRow}>
-              {/* Checked exactly when no decade is picked; ticking it clears
-                  the decades, and ticking it again leaves it on. */}
-              <label
-                className={`${styles.decade} ${styles.decadeAny} ${anyYear ? styles.decadeSelected : ""}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={anyYear}
-                  onChange={() => setSelectedDecades(new Set())}
-                />
-                Any year
-              </label>
-            </div>
-            {DECADE_ROWS.map((row, i) => (
-              <div key={i} className={styles.decadeRow}>
-                {row.map((d) => {
-                  const isSel = selectedDecades.has(d);
-                  return (
-                    <label
-                      key={d}
-                      className={`${styles.decade} ${isSel ? styles.decadeSelected : ""}`}
-                    >
-                      <input type="checkbox" checked={isSel} onChange={() => toggleDecade(d)} />
-                      {decadeLabel(d)}
-                    </label>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+  return (
+    <main className={styles.shell}>
+      <header>
+        <div className={styles.brand}>
+          <Logo size="small" />
+        </div>
+        <h1>Host a game</h1>
+        <p className={`muted ${styles.lead}`}>Choose how to pick the songs</p>
+        <MusicSourceSwitch tabs={MUSIC_SOURCE_TABS} active={shown.id} panelId={PANEL_ID} />
+      </header>
+
+      <form className="stack" onSubmit={handleSubmit}>
+        {/* Keyed by the tab: a new tab's content is a new element, so it
+            enters with @starting-style, and the old one leaves at once. */}
+        <div
+          key={shown.id}
+          id={PANEL_ID}
+          role="tabpanel"
+          aria-labelledby={`${PANEL_ID}-${shown.id}`}
+          className={`stack ${styles.panel}`}
+          data-testid="music-source-panel"
+          data-first={shown.dir ? undefined : ""}
+          data-dir={shown.dir}
+        >
+          {onList ? (
+            <Suspense fallback={<Skeleton height={320} />}>
+              <SetlistPanel value={setlist} onChange={setSetlist} />
+            </Suspense>
+          ) : (
+            genresContent
+          )}
         </div>
 
         <div className={styles.actions}>
           <Link to="/" className="btn btn-ghost">
             Cancel
           </Link>
-          {/* Live song count for the mix, in the bar that stays on screen while
-              the host taps, so an empty mix is flagged the moment it is picked.
-              Always mounted (empty until there is a count) so screen readers
-              announce each change. */}
+          {/* What to do next, then the game's song count, in the bar that
+              stays on screen while the host taps, so an empty mix is flagged
+              the moment it is picked. Always mounted (empty while the counts
+              load) so screen readers announce each change. */}
           <p
             className={`${styles.mixCount} ${
-              mix?.tone === "empty" ? styles.mixEmpty : mix?.tone === "small" ? styles.mixSmall : ""
+              tone === "empty" ? styles.mixEmpty : tone === "small" ? styles.mixSmall : ""
             }`}
             role="status"
             data-testid="mix-count"
           >
-            {mix?.text}
+            {status}
           </p>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={selected.size === 0 || mixEmpty || busy}
-          >
+          <button type="submit" className="btn btn-primary" disabled={!canCreate}>
             {busy ? (
               <>
                 <span className={styles.spinner} data-testid="submit-spinner" aria-hidden="true" />
