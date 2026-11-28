@@ -16,6 +16,7 @@ maintainer step.
 | `build_candidates.py` | step 2: Wikidata candidates for every Hebrew or symbol key |
 | `gen_alias_sql.py` | steps 5 and 6: `review.md` for the maintainer, then the upload, verify and undo SQL; `--check` in step 8 |
 | `replay_pilot.py` | step 7: the 14 pilot playlists through the product's matcher, with the table as it will be after the upload; step 8: the same lists against the API |
+| `whole_names.py` | Pick artists: lists the credits the database cuts into two or more artists, then writes the `artist_whole_names` upload, undo and verify SQL and the maintainer's review file (see "Whole names" at the end) |
 
 **Private data.** The rows name the catalog's artists. Snapshots, candidates, agent outputs,
 `review.md`, the SQL and the reports stay in the batch folder under `tools/song-curation/batches/`
@@ -94,8 +95,9 @@ One background `general-purpose` agent per packet, `model: "opus"`, at most 3 at
 this prompt (fill in the paths):
 
 > Input: `<abs $B>/research_in_pN.json`, a JSON list of catalog artist keys (Hebrew-script names,
-> or Latin names with a symbol) and nothing else. For each key: find the Latin spelling the
-> artist (or band) uses on their own official pages: official website, verified YouTube channel,
+> or Latin names with a symbol) and nothing else. Read no other file in that folder. For each key:
+> find the Latin spelling the artist (or band) uses on their own official pages: official
+> website, verified YouTube channel,
 > verified Spotify / Apple Music artist page, or their own social pages; record the exact page as
 > `source_url`. For a Latin name with a symbol, look for the plain-letter spelling those pages
 > also use. Several real spellings in use → one row each. No official Latin spelling found → no
@@ -126,7 +128,8 @@ One new background `general-purpose` agent per packet (never a research agent), 
 at most 3 at once:
 
 > Input: `<abs $B>/check_in_pN.json`, a JSON list of `{"artist_key", "alias", "source_url"}`
-> pairs only. For each pair: open the source (and search if needed) and decide whether the alias
+> pairs only. Read no other file in that folder. For each pair: open the source (and search if
+> needed) and decide whether the alias
 > is a real spelling of the SAME artist or band as the catalog key. `confirmed` = a source shows
 > that this artist uses or is credited under this spelling; `wrong` = a different person or band,
 > a translation of a film or show name, or a misspelling nobody uses; `unsure` = could not verify.
@@ -295,3 +298,78 @@ dump shows, which is why step 1's dumps are taken again right before step 6.
 
 Nothing in `$B` is committed. Commit only tool code. The weekly encrypted catalog backup picks
 up the new rows.
+
+## Whole names (whole_names.py)
+
+The database cuts an artist credit into its artists (`song_artist_keys`, migration 049), so the
+Pick artists list counts the made-up duet `Zed Band & Ann Lee` for `Zed Band` and for `Ann Lee`.
+That is right for a duet. A few credits are one act whose name holds `&`, a comma or a Hebrew
+word that starts with ו (made-up examples: the band `Salt & Pepper Co`, the film
+`The Lamp, the Owl and the Kettle`). A row in the private table `artist_whole_names` (`name` =
+the credit in lower case, trimmed) makes the list count that credit as one name. This tool finds
+the credits the database cuts and, after people mark them, writes the SQL. It never connects to a
+database or the network.
+
+Everything stays in a git-ignored batch folder: `$W` =
+`C:/.../tools/song-curation/batches/<YYYY-MM-DD>-whole-names` (absolute). Nothing in it is
+committed.
+
+**1. Candidates.** Take the catalog dump of step 1 above into `$W/_dumps/catalog_raw.json`, then:
+
+```bash
+PYTHONUTF8=1 $P tools/song-curation/aliases/whole_names.py candidates $W/_dumps/catalog_raw.json $W/candidates.tsv
+```
+
+One row per credit of the playable songs that the dump's `artist_keys` cut into two or more keys,
+most songs first. Columns: `credit` (the most common spelling), `name` (lower case, trimmed),
+`pieces`, `songs`, `kind` (`film`: every song has a soundtrack genre; `he`: Hebrew; `en`) and
+`solo` (for each piece: `yes` when it also has songs of its own). Credits where the Python split
+and the dump's keys disagree also go to `$W/candidates.mismatch.tsv`, with the count on stdout.
+The database's keys decide which credits are listed.
+
+**2. Marks.** A research agent and then a second, checking agent mark each row. The controller
+adds four tab-separated columns to the file: `research` and `check` (`one` or `several`), `source`
+and `check_note` (short notes, may be empty).
+
+- `one`: one act that performs under that name (a band, a duo known by one name, a show or film
+  title), or a piece alone is not a name a host would know.
+- `several`: each piece is an artist with songs of their own.
+
+Only a row with `one` in both `research` and `check` is uploaded. Any other value in those two
+columns stops the tool.
+
+**3. SQL and review.**
+
+```bash
+PYTHONUTF8=1 $P tools/song-curation/aliases/whole_names.py sql $W/reviewed.tsv $W/whole_names.sql
+```
+
+It writes five files in the folder of the SQL file:
+
+- `whole_names.sql`: one `INSERT ... ON CONFLICT DO NOTHING`. A second run changes nothing.
+- `undo_whole_names.sql`: one `DELETE` of exactly the uploaded names.
+- `verify_whole_names.sql`: one read-only `SELECT`, one row per uploaded name with `present`.
+- `review.txt`: for the maintainer. The names to upload (each with the pieces it replaces and the
+  source), then the rows the two agents did not agree on.
+- `contained.txt`: credits that are not uploaded but hold an uploaded name as a part (made up:
+  `zed & co feat. ann lee` holds `zed & co`). They stay cut: the table matches whole credits only.
+
+With no row to upload it writes no SQL file and says so (exit 1). The maintainer reads
+`review.txt` before anything is uploaded.
+
+**4. Upload, verify, undo.** Each is one statement, run from the checkout with the Supabase link
+(absolute paths), and the upload only when the maintainer names it:
+
+```bash
+supabase db query --linked -f "C:/abs/path/whole_names.sql"
+supabase db query --linked -f "C:/abs/path/verify_whole_names.sql"
+```
+
+`present` must be true on every row. The undo, `undo_whole_names.sql`, also runs only when the
+maintainer names it; then `verify_whole_names.sql` shows `present` false on every row.
+
+The tests use made-up credits and need no database or network:
+
+```bash
+PYTHONUTF8=1 $P -m pytest tools/song-curation/aliases/test_whole_names.py -p no:cov -q
+```
