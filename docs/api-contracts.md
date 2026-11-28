@@ -18,7 +18,7 @@ All responses include the conventional fields:
 - Success: HTTP 2xx + body specified per endpoint.
 - Error: HTTP 4xx/5xx + `{ "error": "<machine_code>", "message": "<human readable>", "details": <optional> }`.
 
-Canonical error codes: `validation_error`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `gone`, `rate_limited`, `internal_error`. A refused song list is a 400 with a code of its own: `setlist_too_long`, `setlist_links_only` or `setlist_no_songs` (§2.2a), and `setlist_empty` when a game is created from a list in which no song can play (§2.2).
+Canonical error codes: `validation_error`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `gone`, `rate_limited`, `internal_error`. A refused song list is a 400 with a code of its own: `setlist_too_long`, `setlist_links_only` or `setlist_no_songs` (§2.2a), and `setlist_empty` when a game is created from a list in which no song can play (§2.2). A refused choice of artists is a 400 `artists_not_enough` (§2.2).
 
 A `validation_error` (400, message `invalid request body`) has `details.errors`: one entry per problem with its `type`, `loc` (where in the body, each name cut to 200 characters), `msg` and, when pydantic gives one, `url`. The list holds at most the first 10 problems, in pydantic's order, and nothing says how many more there were. It never echoes the request body: no `input` and no `ctx`, so a refused song list is never sent back.
 
@@ -43,7 +43,7 @@ Liveness probe. No auth.
 
 Create a new game. **No auth.** Anyone can host. Rate-limited 10/min/IP.
 
-The songs come from exactly one source: genres (optionally narrowed by decades), or the host's pasted list.
+The songs come from exactly one source: genres (optionally narrowed by decades), the host's pasted list, or the artists the host ticked.
 
 **Request body**, a genre game:
 ```json
@@ -58,16 +58,24 @@ The songs come from exactly one source: genres (optionally narrowed by decades),
 { "setlist": { "text": "velvet comet - paper lanterns\nGlass Harbor\nNobody - Not A Real Song" } }
 ```
 
+**Request body**, a game from chosen artists (Pick artists, migration 062):
+```json
+{ "artists": { "names": ["zed band", "nia quillfeather", "orla thistlewick", "brindle moth ensemble", "pemberly static"] } }
+```
+
 Validation:
-- Exactly one of `selected_genres` (not empty) and `setlist`. Both, or neither (`{}`, `"selected_genres": []`, `"setlist": null`), is a `validation_error`.
-- `selected_genres`: genre UUIDs, at most 100. Omitted or empty only with a `setlist`.
-- `selected_decades` (optional, genre games only): array of decade start-years (the 80s = `1980`), each in `[1900, 2100]`, at most 30 entries. Omitted or empty means no year limit (the create page's default **Any year** choice). The song picker (`select_next_song`) serves only songs whose `release_year` falls in one of these decades; see `rpc-functions.md §3c`. A game from a list has no genres and no decades: a `setlist` with a non-empty `selected_decades` is a `validation_error`.
+- Exactly one of `selected_genres` (not empty), `setlist` and `artists`. Two or three of them, or none (`{}`, `"selected_genres": []`, `"setlist": null`, `"artists": null`), is a `validation_error`.
+- `selected_genres`: genre UUIDs, at most 100. Omitted or empty only with a `setlist` or `artists`.
+- `selected_decades` (optional, genre games only): array of decade start-years (the 80s = `1980`), each in `[1900, 2100]`, at most 30 entries. Omitted or empty means no year limit (the create page's default **Any year** choice). The song picker (`select_next_song`) serves only songs whose `release_year` falls in one of these decades; see `rpc-functions.md §3c`. A game from a list or from artists has no genres and no decades: a `setlist` or `artists` with a non-empty `selected_decades` is a `validation_error`.
 - `setlist.text`: the same text, rules and limits as `POST /setlists/check` (§2.2a), and the same 400s when it is refused (`setlist_too_long`, `setlist_links_only`, `setlist_no_songs`). The text is read before the catalog is, so a refused text never waits on the database.
+- `artists.names`: the `artist_key` values of `list_pickable_artists` (§3.5), 1 to 200 strings, each 1 to 120 characters. `artists` takes no other key. A wrong shape, a key it does not have, an empty list, more than 200 names or a name outside 1 to 120 characters is a `validation_error`. The names go to the database as given: it compares them after lower case and trimming, and ignores a repeat and a name it does not know.
 - A genre game's pool is not checked here: a mix with no songs is accepted, and its first `select_next_song` fails with `no_more_songs`. The create page prevents that from the song counts (§3.2).
 
 **A game from a list.** The server repeats the check's match (same catalog snapshot, cached for 10 minutes) before any row exists. When the list matches no song at all, the answer is `setlist_empty` and nothing is written. Otherwise it creates the game as above with no genres and no decades, and saves the match as the game's song pool with `save_game_setlist` (`rpc-functions.md §3i`): the songs the list names (tier 1, played first), then more songs by the same main artists (tier 2). A song deleted or flagged unavailable since the snapshot was cached is left out; when that leaves no song, the game is deleted again (best effort) and the answer is `setlist_empty`. If the save fails for any other reason, the game is deleted again (best effort) and the answer is an error, usually `internal_error` (500); the database errors map as everywhere else (§1), so a refusal can also come back as `conflict` (409) or `not_found` (404). A game row the delete could not remove has no pool and no genres, so it can never start a round, and the 4-hour sweep removes it.
 
 Then the lines with the reason `not_in_catalog` are counted in `song_demand` (`record_song_demand`, `rpc-functions.md §3l`; a line `several_songs_share_this_name` is not counted). The key (`line_key`) is one key per song, however the line was written: each side of the line as the matcher reads it (the artist and the title, or the one name of a line with no separator; for a CSV or TSV row, its artist and title cells) is cleaned as a title (recording notes such as `- Remastered 2011` or `(Live)` dropped, then lower case with accents and punctuation removed), the empty pieces are dropped, and the rest are sorted and joined with one space. So `Nobody - Not A Real Song`, `1. Nobody - Not A Real Song (3:51)`, `Not A Real Song - Nobody` and an export row with title `Not A Real Song` and artist `Nobody` all count for `nobody not a real song`. `raw_line` is the line as the host wrote it, the first one seen for its key, cut to its first 300 characters (the key is never cut). An empty key, a key over 1,000 UTF-8 bytes and a line with a NUL character are skipped. One create records at most 100 songs: the first 100 different keys in list order. A failure there is only logged (the game code and the error, never the list): it never fails the create.
+
+**A game from artists.** The database decides at once, from the catalog as it is now (no snapshot, no cache). The server asks `artist_pick_status` (§3.6, `rpc-functions.md §3p`) before any row exists; when the choice is not ready (too few songs or too few artists by the rule in `artist_game_rule`, `rpc-functions.md §3m`), the answer is `artists_not_enough` and nothing is written. Otherwise it creates the game as above with no genres and no decades, and saves every playable song of the chosen artists as the game's song pool, all in tier 1, with `save_game_artists` (`rpc-functions.md §3q`). That function checks the rule again first, so a choice that shrank in between (a song flagged or deleted) is the same `artists_not_enough`, and the game row is deleted again (best effort). If the save fails for any other reason, the game is deleted again (best effort) and the answer is the mapped error, as for a list game: usually `internal_error` (500), or `conflict` (409) or `not_found` (404). Nothing is counted in `song_demand`, and no log line holds the names, a count or the status.
 
 Games run for as many rounds as the host wants and end only when the host calls `POST /games/{code}/end`. There is no per-game round limit.
 
@@ -87,13 +95,13 @@ Games run for as many rounds as the host wants and end only when the host calls 
 }
 ```
 
-`setlist` is `null` for a genre game. For a game from a list it is `{"list_songs": 3, "same_artist_songs": 1}`: the matcher's counts, as `POST /setlists/check` gives them (§2.2a), and `selected_genres` and `selected_decades` are `[]`. The answer never holds a song id, a YouTube id or a start time.
+`setlist` is `null` for a genre game. For a game from a list it is `{"list_songs": 3, "same_artist_songs": 1}`: the matcher's counts, as `POST /setlists/check` gives them (§2.2a), and `selected_genres` and `selected_decades` are `[]`. A game from artists has the keys of a genre game's answer, with `"setlist": null`, `"selected_genres": []` and `"selected_decades": []`: no song count leaves the server for it. The answer never holds a song id, a YouTube id or a start time.
 
 The `manager_token` is generated server-side (`gen_random_uuid()`, stored in `game_secrets`) and is the host's credential for every host-only call. The host's browser stores it in `localStorage` under `game:<code>:manager-token` and presents it as `X-Manager-Token` on the remaining host-only REST endpoints (`bonus`, `end`, kick-team) and as the `p_manager_token` argument on the browser-direct RPCs (`award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game`). The token stays on the host's device unless the host deliberately exports it via the console's **Backup host link** (`/manager/game/<code>#mt=<token>`, URL fragment — see `security-rls.md` §1), which is how a wiped or second browser recovers host access.
 
 Game-code generation: 6 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O, 1/I/L, no lowercase). On collision (UNIQUE violation), retry up to 5 times then 500.
 
-**Errors**: `validation_error` (400; a malformed body, over 100 genres or 30 decades, both sources or neither, or a `setlist` with `selected_decades`), `setlist_too_long`, `setlist_links_only`, `setlist_no_songs` (400; the text is refused, with the messages of §2.2a), `setlist_empty` (400; no song in the list can play: none matched, or every matched song was deleted or flagged after the snapshot was cached; message `None of the songs in your list can play.`; the game row is deleted again, best effort), `rate_limited` (429), `internal_error` (500; for a list game, usually: the pool save failed and the game row was deleted again, best effort; a mapped database refusal can instead be `conflict` (409) or `not_found` (404)).
+**Errors**: `validation_error` (400; a malformed body or a key it does not have, over 100 genres or 30 decades, two sources or none, a bad `artists.names`, or a `setlist` or `artists` with `selected_decades`; the answer never echoes the body), `setlist_too_long`, `setlist_links_only`, `setlist_no_songs` (400; the text is refused, with the messages of §2.2a), `setlist_empty` (400; no song in the list can play: none matched, or every matched song was deleted or flagged after the snapshot was cached; message `None of the songs in your list can play.`; the game row is deleted again, best effort), `artists_not_enough` (400; the chosen artists are not enough for a game, checked before the game is created and again when its pool is saved; message `Pick more artists to start.`, with no number in it; in the second case the game row is deleted again, best effort), `rate_limited` (429), `internal_error` (500; for a list or artist game, usually: the pool save failed and the game row was deleted again, best effort; a mapped database refusal can instead be `conflict` (409) or `not_found` (404)).
 
 ---
 
@@ -578,7 +586,7 @@ The weekly `.github/workflows/dead-video-scan.yml` pages the catalog with `commi
 
 ## 3. Postgres RPC (PostgREST)
 
-Called by the **browser** with the anon key. Eleven functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the seven token-gated host RPCs `award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` and `game_pool_summary` (migration 060, read-only: the host console's progress line in a game from the host's own songs) — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and three read-only ones: `song_pool_counts` (§3.2), `game_setlist` (§3.3) and `round_song` (§3.4). Every other RPC is revoked from anon (mig 020).
+Called by the **browser** with the anon key. Thirteen functions are exposed to anon: `buzz_in` (the hot buzzer path, documented below), the seven token-gated host RPCs `award_attempt`, `award_manager_bonus`, `release_buzz_lock`, `select_next_song`, `peek_next_song`, `extend_game` and `game_pool_summary` (migration 060, read-only: the host console's progress line in a game from the host's own songs) — each validates the per-game `manager_token` in-body (full signatures in `rpc-functions.md`) — and five read-only ones: `song_pool_counts` (§3.2), `game_setlist` (§3.3), `round_song` (§3.4), `list_pickable_artists` (§3.5) and `artist_pick_status` (§3.6). Every other RPC is revoked from anon (mig 020).
 
 The browser gets song metadata only through `game_setlist` and `round_song` (migration 053); it does not read the `songs` or `song_genres` tables. Genre names come from the `genres` table, which stays anon-readable.
 
@@ -660,6 +668,42 @@ One round's song, for the host console's score panel (after a refresh) and the T
 ```
 
 **Response 200**: `[]` or one row with the §3.3 columns minus `round_number`. A song comes back only if that game played it (live or archived), so `[]` means "not this game's song" or "deleted since". The browser asks only for the `song_id` of a round it has already received, so the round's song is always found; it retries errors (500 ms, 1 s, 2 s, 4 s), never an empty result.
+
+### 3.5 `POST /rest/v1/rpc/list_pickable_artists`
+
+The Pick artists tab's list of names (migration 062, `rpc-functions.md §3o`). No arguments, no token: `supabase.rpc("list_pickable_artists")`, from the create page's Pick artists tab (plan PR 2, not built yet).
+
+**Response 200**: one row per artist the host can tick. Every pickable name is in the list (the server does not cut it), most songs first, then `name` in byte order:
+```json
+[
+  { "artist_key": "zed band", "name": "Zed Band", "kind": "en", "aliases": ["the zed band", "zed"] },
+  { "artist_key": "salt & pepper co", "name": "Salt & Pepper Co", "kind": "en", "aliases": [] },
+  { "artist_key": "brindle moth: the movie", "name": "Brindle Moth: The Movie", "kind": "film", "aliases": [] }
+]
+```
+
+- `artist_key` is the value `POST /games` takes in `artists.names` (§2.2) and `artist_pick_status` takes in `p_keys` (§3.6).
+- `name` is the most common spelling in the catalog. `kind` is `film` when every playable song of the artist is in the `soundtracks` or `israeli-soundtracks` genre, else `he` when the key holds a Hebrew letter, else `en`. `aliases` are the other spellings a host may type (`artist_aliases`, migration 061), lower case, sorted; `[]` when none.
+- There is no count column, and the answer holds no song title, song id, YouTube id or start time. The song count only orders the list.
+- PostgREST's `db-max-rows` cap (1,000 on hosted Supabase) applies to a set-returning RPC, so one call is cut silently once the catalog passes the cap. The browser reads the list in pages: `.range(from, from + size - 1)`, then the next page, until a page comes back shorter than `size`.
+
+### 3.6 `POST /rest/v1/rpc/artist_pick_status`
+
+The Pick artists tab's ready sign for a choice (migration 062, `rpc-functions.md §3p`). No token: `supabase.rpc("artist_pick_status", { p_keys })`, from the create page's Pick artists tab as the host ticks (plan PR 2, not built yet). `POST /games` asks it too before it creates an artist game (§2.2).
+
+**Body**:
+```json
+{ "p_keys": ["zed band", "nia quillfeather"] }
+```
+
+**Response 200**: one row (PostgREST returns an array) with exactly four columns:
+- `ready` (boolean): `POST /games` accepts this choice.
+- `level` (integer, `0` to `levels`): a coarse sign of how far the choice is. It is `levels` only when `ready`, and `0` when no key is known.
+- `levels` and `min_artists` (integers): the rule's number of steps and fewest artists, from `artist_game_rule` (`rpc-functions.md §3m`), so the tab can say "Pick at least {min_artists} artists" without holding the number.
+
+Keys are compared after lower case and trimming; a repeat, a `null` and a key the catalog does not have (unknown, or with only flagged songs) are ignored. `null` or empty `p_keys` gives `ready: false`, `level: 0`. No song count is in the answer.
+
+**Errors**: more than 200 elements in `p_keys` (repeats and `null`s count) is `22023 too_many_artists`.
 
 ---
 

@@ -72,12 +72,26 @@ TeamName = Annotated[
 # songs.release_year CHECK; the picker floors release_year to its decade and
 # matches by membership (migration 032).
 Decade = Annotated[int, Field(ge=1900, le=2100)]
+# An artist's key as list_pickable_artists gives it (migration 062). It is
+# passed to the database as given: the database lowercases and trims it,
+# ignores a repeat and a name it does not know.
+ArtistName = Annotated[str, StringConstraints(min_length=1, max_length=120)]
+
+
+class ArtistsInput(BaseModel):
+    """The artists a host ticked on the Pick artists tab. At most 200, the
+    most ``artist_pick_status`` takes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    names: list[ArtistName] = Field(min_length=1, max_length=200)
 
 
 class CreateGameRequest(BaseModel):
     """A game's songs come from exactly one source: genres (optionally narrowed
-    by decades) or the host's pasted list. A list game has no genres and no
-    decades (design spec §8)."""
+    by decades), the host's pasted list, or the artists the host ticked. A
+    list game and an artist game have no genres and no decades (design spec
+    §8)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -86,20 +100,28 @@ class CreateGameRequest(BaseModel):
     selected_genres: list[UUID] = Field(default_factory=list, max_length=100)
     selected_decades: list[Decade] = Field(default_factory=list, max_length=30)
     setlist: SetlistInput | None = None
+    artists: ArtistsInput | None = None
 
     @model_validator(mode="after")
     def _exactly_one_song_source(self) -> Self:
-        # One entry per song source. A new source is one more entry here (the
-        # Pick artists plan adds `artists`: `bool(self.artists)`).
-        sources = [bool(self.selected_genres), self.setlist is not None]
+        # One entry per song source.
+        sources = [
+            bool(self.selected_genres),
+            self.setlist is not None,
+            self.artists is not None,
+        ]
         if sources.count(True) != 1:
             # PydanticCustomError, not ValueError: its error has no exception
             # object in ctx, so the 400 envelope's details stay JSON.
             raise PydanticCustomError(
-                "song_source", "choose genres or a song list: exactly one of them"
+                "song_source", "choose genres, a song list or artists: exactly one of them"
             )
-        if self.setlist is not None and self.selected_decades:
-            raise PydanticCustomError("song_source", "a game from a song list has no decades")
+        # Decades narrow genres only: with one source, no genres means a list
+        # or artists.
+        if self.selected_decades and not self.selected_genres:
+            raise PydanticCustomError(
+                "song_source", "a game from a song list or from artists has no decades"
+            )
         return self
 
 

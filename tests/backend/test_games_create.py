@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -218,13 +219,16 @@ async def _count(db, table: str) -> int:
     return int(await db.fetchval(f"SELECT count(*) FROM {table}"))  # noqa: S608
 
 
-def _fail_rpc(monkeypatch, fake, name: str) -> None:
-    """Make the fake client's ``name`` RPC fail as a dropped connection would."""
+def _fail_rpc(
+    monkeypatch, fake, name: str, code: str = "XX000", message: str = "connection reset"
+) -> None:
+    """Make the fake client's ``name`` RPC fail; by default as a dropped
+    connection would, or with the given SQLSTATE and message."""
     real_rpc = fake.rpc
 
     class _Failing:
         def execute(self) -> Any:
-            raise FakeAPIError(code="XX000", message="connection reset")
+            raise FakeAPIError(code=code, message=message)
 
     def rpc(fn: str, params: dict[str, Any] | None = None) -> Any:
         return _Failing() if fn == name else real_rpc(fn, params)
@@ -769,3 +773,315 @@ def test_100_genres_and_30_decades_are_accepted_by_the_model() -> None:
 
     assert len(body.selected_genres) == 100
     assert len(body.selected_decades) == 30
+
+
+# --- A game from chosen artists (Pick artists plan, Task 2) ------------------
+#
+# The host ticks artists and the game plays every playable catalog song by
+# them, all in tier 1. The database decides whether the choice is enough
+# (artist_game_rule, migration 062: 60 songs by 5 artists). Every name here is
+# made up.
+
+READY_ARTISTS = (
+    "Zed Band",
+    "Nia Quillfeather",
+    "Orla Thistlewick",
+    "Brindle Moth Ensemble",
+    "Pemberly Static",
+)
+SONGS_PER_ARTIST = 12  # 5 artists x 12 songs = 60: just ready
+ARTISTS_NOT_ENOUGH = {"error": "artists_not_enough", "message": "Pick more artists to start."}
+
+
+async def _seed_artist_catalog(db) -> dict[str, list[uuid.UUID]]:
+    """Twelve playable songs by each ready artist, a flagged song by Zed Band
+    and a song by an artist nobody picks; the playable song ids by artist."""
+    songs = {
+        artist: [
+            await insert_song(db, title=f"{artist} Song {i}", artist=artist)
+            for i in range(SONGS_PER_ARTIST)
+        ]
+        for artist in READY_ARTISTS
+    }
+    flagged = await insert_song(db, title="Zed Band Lost Song", artist="Zed Band")
+    await db.execute("UPDATE songs SET unavailable_at = now() WHERE id = $1", flagged)
+    await insert_song(db, title="Salt And Pepper Song", artist="Salt & Pepper Co")
+    return songs
+
+
+async def _create_from_artists(client, names: list[str], **extra: Any) -> Any:
+    return await client.post("/games", json={"artists": {"names": names}, **extra})
+
+
+def _record_rpcs(monkeypatch, fake) -> list[tuple[str, dict[str, Any]]]:
+    """Record the fake client's RPC calls as (name, params), in call order."""
+    calls: list[tuple[str, dict[str, Any]]] = []
+    real_rpc = fake.rpc
+
+    def rpc(fn: str, params: dict[str, Any] | None = None) -> Any:
+        calls.append((fn, dict(params or {})))
+        return real_rpc(fn, params)
+
+    monkeypatch.setattr(fake, "rpc", rpc)
+    return calls
+
+
+async def _assert_no_game(db) -> None:
+    for table in ("active_games", "game_secrets", "game_setlists", "game_song_pool"):
+        assert await _count(db, table) == 0, table
+
+
+async def test_create_with_artists_saves_the_pool(client, db, fake_supabase, monkeypatch) -> None:
+    await _seed_artist_catalog(db)
+    calls = _record_rpcs(monkeypatch, fake_supabase)
+    # As a browser may send them: any case, spaces, a repeat and a name the
+    # catalog does not have. The server passes them on; the database cleans them.
+    names = [
+        "zed band",
+        "  NIA QUILLFEATHER ",
+        "Orla Thistlewick",
+        "brindle moth ensemble",
+        "pemberly static",
+        "Zed Band",
+        "Nobody At All",
+    ]
+
+    resp = await _create_from_artists(client, names)
+
+    assert resp.status_code == 201, resp.text
+    code = resp.json()["game_code"]
+    assert calls == [
+        ("artist_pick_status", {"p_keys": names}),
+        ("save_game_artists", {"p_game_code": code, "p_keys": names}),
+    ]
+    assert await db.fetchval("SELECT ready FROM game_setlists WHERE game_code = $1", code) is True
+    # Every playable song of the five, all tier 1; not the flagged song, not
+    # the song of the artist nobody picked.
+    assert await _pool(db, code) == {
+        f"{artist} Song {i}": 1 for artist in READY_ARTISTS for i in range(SONGS_PER_ARTIST)
+    }
+    game = await db.fetchrow(
+        "SELECT selected_genres, selected_decades FROM active_games WHERE game_code = $1", code
+    )
+    assert game["selected_genres"] == [] and game["selected_decades"] == []
+
+
+async def test_create_answer_has_today_s_keys_only(client, db) -> None:
+    song_ids = await _seed_artist_catalog(db)
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    genre_game = await client.post("/games", json={"selected_genres": [str(genres[0])]})
+    assert genre_game.status_code == 201, genre_game.text
+
+    resp = await _create_from_artists(client, list(READY_ARTISTS))
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert set(body) == set(genre_game.json())
+    assert body["setlist"] is None
+    assert body["selected_genres"] == [] and body["selected_decades"] == []
+    # No count: not one value of the answer is a number.
+    assert not any(isinstance(value, int | float) for value in body.values())
+    # No song: no song id, YouTube id or start time.
+    youtube_ids = [row["youtube_id"] for row in await db.fetch("SELECT youtube_id FROM songs")]
+    for value in [*(str(i) for ids in song_ids.values() for i in ids), *youtube_ids]:
+        assert value not in resp.text
+    assert "youtube_id" not in resp.text and "start_time" not in resp.text
+
+
+@pytest.mark.parametrize(
+    ("names", "flag_one"),
+    [
+        pytest.param(list(READY_ARTISTS[:4]), False, id="four-artists"),
+        pytest.param(list(READY_ARTISTS), True, id="59-songs"),
+        pytest.param(["Nobody At All"], False, id="unknown-artist"),
+    ],
+)
+async def test_small_choice_is_a_400_and_creates_nothing(
+    client, db, fake_supabase, monkeypatch, names: list[str], flag_one: bool
+) -> None:
+    songs = await _seed_artist_catalog(db)
+    if flag_one:
+        await db.execute(
+            "UPDATE songs SET unavailable_at = now() WHERE id = $1", songs["Zed Band"][0]
+        )
+    calls = _record_rpcs(monkeypatch, fake_supabase)
+
+    resp = await _create_from_artists(client, names)
+
+    assert resp.status_code == 400
+    assert resp.json() == ARTISTS_NOT_ENOUGH
+    assert [fn for fn, _ in calls] == ["artist_pick_status"]  # asked first, never saved
+    await _assert_no_game(db)
+
+
+async def test_choice_shrinks_between_status_and_save(
+    client, db, fake_supabase, monkeypatch
+) -> None:
+    await _seed_artist_catalog(db)
+    real_rpc = fake_supabase.rpc
+    real_table = fake_supabase.table
+    calls: list[str] = []
+
+    def rpc(fn: str, params: dict[str, Any] | None = None) -> Any:
+        calls.append(fn)
+        if fn == "save_game_artists":
+            # Zed Band's songs are flagged after the status said ready, so the
+            # save's own check of the rule refuses the choice.
+            real_table("songs").update({"unavailable_at": datetime.now(UTC)}).eq(
+                "artist", "Zed Band"
+            ).execute()
+        return real_rpc(fn, params)
+
+    monkeypatch.setattr(fake_supabase, "rpc", rpc)
+
+    resp = await _create_from_artists(client, list(READY_ARTISTS))
+
+    assert resp.status_code == 400
+    assert resp.json() == ARTISTS_NOT_ENOUGH
+    assert calls == ["artist_pick_status", "save_game_artists"]
+    await _assert_no_game(db)
+
+
+@pytest.mark.parametrize(
+    ("code", "message", "status", "error"),
+    [
+        pytest.param("XX000", "connection reset", 500, "internal_error", id="dropped"),
+        pytest.param("P0002", "game_not_found", 404, "not_found", id="game-gone"),
+        # Only artists_not_enough is the host's 400; another 22023 is not.
+        pytest.param("22023", "setlist_empty", 500, "internal_error", id="other-22023"),
+    ],
+)
+async def test_failed_artist_pool_save_removes_the_game(
+    client,
+    db,
+    fake_supabase,
+    monkeypatch,
+    caplog,
+    code: str,
+    message: str,
+    status: int,
+    error: str,
+) -> None:
+    await _seed_artist_catalog(db)
+    _fail_rpc(monkeypatch, fake_supabase, "save_game_artists", code, message)
+
+    with caplog.at_level(logging.DEBUG):
+        resp = await _create_from_artists(client, list(READY_ARTISTS))
+
+    assert resp.status_code == status
+    assert resp.json()["error"] == error
+    await _assert_no_game(db)
+    # No log line names the choice.
+    for name in READY_ARTISTS:
+        assert name not in caplog.text and name.lower() not in caplog.text
+
+
+async def test_failed_status_check_creates_nothing(client, db, fake_supabase, monkeypatch) -> None:
+    await _seed_artist_catalog(db)
+    _fail_rpc(monkeypatch, fake_supabase, "artist_pick_status")
+
+    resp = await _create_from_artists(client, list(READY_ARTISTS))
+
+    assert resp.status_code == 500
+    assert resp.json()["error"] == "internal_error"
+    await _assert_no_game(db)
+
+
+async def test_exactly_one_source(client, db) -> None:
+    genres = await fetch_genre_ids(db, slugs=["rock"])
+    await _seed_artist_catalog(db)
+    artists = {"names": list(READY_ARTISTS)}
+    payloads: list[dict[str, Any]] = [
+        {"selected_genres": [str(genres[0])], "artists": artists},
+        {"setlist": {"text": "Zed Band"}, "artists": artists},
+        {"selected_genres": [str(genres[0])], "setlist": {"text": "Zed Band"}, "artists": artists},
+        {},
+        {"artists": None},
+        {"artists": artists, "selected_decades": [1980]},
+        {"artists": {**artists, "songs": 60}},  # a key the body does not have
+        {"artists": list(READY_ARTISTS)},  # names without the object
+        {"artists": {"names": []}},
+    ]
+
+    for payload in payloads:
+        resp = await client.post("/games", json=payload)
+        assert resp.status_code == 400, payload
+        assert resp.json()["error"] == "validation_error", payload
+        assert "Zed Band" not in resp.text, payload  # the refusal never echoes the body
+
+    await _assert_no_game(db)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        pytest.param({}, "choose genres, a song list or artists: exactly one of them", id="none"),
+        pytest.param(
+            {"artists": {"names": ["Zed Band"]}, "selected_decades": [1980]},
+            "a game from a song list or from artists has no decades",
+            id="artists-and-decades",
+        ),
+        pytest.param(
+            {"setlist": {"text": "Zed Band"}, "selected_decades": [1980]},
+            "a game from a song list or from artists has no decades",
+            id="list-and-decades",
+        ),
+    ],
+)
+async def test_a_refused_source_names_its_reason(
+    client, db, payload: dict[str, Any], message: str
+) -> None:
+    resp = await client.post("/games", json=payload)
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    assert [entry["msg"] for entry in resp.json()["details"]["errors"]] == [message]
+
+
+async def test_more_than_200_names_is_a_400(client, db) -> None:
+    resp = await _create_from_artists(client, [f"Made Up Artist {i}" for i in range(201)])
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    await _assert_no_game(db)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [pytest.param("x" * 121, id="121-characters"), pytest.param("", id="empty")],
+)
+async def test_a_name_over_120_characters_or_empty_is_a_400(client, db, name: str) -> None:
+    resp = await _create_from_artists(client, ["Zed Band", name])
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "validation_error"
+    await _assert_no_game(db)
+
+
+def test_200_names_of_120_characters_are_accepted_by_the_model() -> None:
+    names = [f"{i:03d}".ljust(120, "x") for i in range(200)]
+
+    body = CreateGameRequest.model_validate({"artists": {"names": names}})
+
+    assert body.artists is not None
+    assert body.artists.names == names
+
+
+@pytest.mark.parametrize(
+    ("user_agent", "is_test"),
+    [pytest.param(PHONE_UA, False, id="phone"), pytest.param(HEADLESS_UA, True, id="headless")],
+)
+async def test_artist_game_keeps_the_test_flag(client, db, user_agent: str, is_test: bool) -> None:
+    await _seed_artist_catalog(db)
+
+    resp = await client.post(
+        "/games",
+        json={"artists": {"names": list(READY_ARTISTS)}},
+        headers={"User-Agent": user_agent},
+    )
+
+    assert resp.status_code == 201, resp.text
+    flag = await db.fetchval(
+        "SELECT is_test FROM game_secrets WHERE game_code = $1", resp.json()["game_code"]
+    )
+    assert flag is is_test
